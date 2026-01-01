@@ -1843,7 +1843,7 @@
                         
                         // Exact collision or within 1 tile (lag compensation)
                         if (dx <= 1 && dy <= 1 && dx + dy <= 1) {
-                            console.log('[PVP] Collision!', { myPos: {x: wrappedX, y: wrappedY}, theirSeg: seg, segIdx: i, player: otherPlayer.name });
+                            // Collision detected
                             
                             if (i === 0) {
                                 // Head-to-head collision!
@@ -1870,18 +1870,7 @@
                     }
                 }
                 
-                // Log nearby players for debugging
-                if (Math.random() < 0.02) { // 2% of frames
-                    for (const [pid, op] of Multiplayer.otherPlayers) {
-                        if (op.segments && op.segments.length > 0) {
-                            const oh = op.segments[0];
-                            const dist = Math.abs(wrappedX - oh.x) + Math.abs(wrappedY - oh.y);
-                            if (dist < 10) {
-                                console.log('[PVP] Near player:', op.name, 'dist:', dist, 'myPos:', {x: wrappedX, y: wrappedY}, 'theirHead:', oh);
-                            }
-                        }
-                    }
-                }
+                
             }
 
             return false;
