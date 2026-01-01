@@ -739,7 +739,8 @@
         let cameraX = 0, cameraY = 0, targetCameraX = 0, targetCameraY = 0;
         let cameraZoom = 2, targetZoom = 2; // Start zoomed in
         let gameState = 'start';
-        let teamMode = true; // All players on same team vs AI
+        let teamMode = true;
+        let playerTeam = 'blue'; // Player's team (blue or red)
         let score = 0, wave = 1, lastTime = 0, moveTimer = 0, MOVE_INTERVAL = 70; // Faster!
         let aimAngle = 0, isAiming = false;
         let mouseX = 0, mouseY = 0, isMouseAiming = false;
@@ -1434,13 +1435,23 @@
             }
             
             enemies.push({
-                segments, dir: startDir, nextDir: startDir, color,
+                // Assign team to balance (alternate)
+                team: enemies.filter(e => e.team === 'blue').length <= enemies.filter(e => e.team === 'red').length ? 'blue' : 'red',
+                segments, dir: startDir, nextDir: startDir,
                 baseSpeed: 8 + wave * 0.5, damage: 10 + wave * 2,
                 moveTimer: Math.random() * 500, // Stagger movement
                 lastFired: 0, fireRate: 1200 - wave * 40,
                 score: 10 * length, personality,
                 targetPos: null, avoidPos: null, lastDecision: 0,
                 decisionInterval: 300 + Math.random() * 200
+            });
+            // Set color based on team in team mode
+            const newEnemy = enemies[enemies.length - 1];
+            if (teamMode) newEnemy.color = newEnemy.team === "blue" ? "#0af" : "#f55";
+            else newEnemy.color = color;
+            
+        }
+        enemies.push({ // This wont run
             });
         }
         
@@ -1850,13 +1861,20 @@
             }
             
             enemies.push({
-                segments, dir: startDir, nextDir: startDir, color,
+                // Assign team to balance (alternate)
+                team: enemies.filter(e => e.team === 'blue').length <= enemies.filter(e => e.team === 'red').length ? 'blue' : 'red',
+                segments, dir: startDir, nextDir: startDir,
                 baseSpeed: 8 + wave * 0.5, damage: 10 + wave * 2,
                 moveTimer: 0, lastFired: 0, fireRate: 1200 - wave * 40,
                 score: 10 * trainLength, personality,
                 targetPos: null, avoidPos: null, lastDecision: 0,
                 decisionInterval: 300 + Math.random() * 200
             });
+            // Set color based on team in team mode
+            const newEnemy = enemies[enemies.length - 1];
+            if (teamMode) newEnemy.color = newEnemy.team === "blue" ? "#0af" : "#f55";
+            else newEnemy.color = color;
+            
         }
         
         function updateSnake() {
@@ -2355,7 +2373,8 @@
                     }
                 }
                 
-                // Collisions - skip fatal ones during invincibility or grace period
+                // Collisions - skip fatal ones during invincibility, grace period, or same team
+                if (teamMode && e.team === playerTeam) continue; // Same team, no collision
                 // Grace: for 500ms after shield drops, head collisions just push through
                 if (head.x === playerHead.x && head.y === playerHead.y) {
                     // If player only has head (no body), any collision is instant death
@@ -2528,7 +2547,8 @@
                 const p = enemyProjectiles[i];
                 p.x += p.vx * dt * 0.2; p.y += p.vy * dt * 0.2; p.life -= dt;
                 
-                // Check hit on player (skip if invincible, reduced damage during grace)
+                // Check hit on player (skip if invincible, same team, or reduced damage during grace)
+                if (teamMode && p.owner && p.owner.team === playerTeam) { /* skip - same team */ } else
                 if (invincibleTimer <= 0) {
                     for (const seg of snake) {
                         const sx = seg.x * GRID + GRID/2, sy = seg.y * GRID + GRID/2;
@@ -2547,6 +2567,7 @@
                 if (p.life > 0) {
                     for (const e of enemies) {
                         if (e === p.owner || !e.segments) continue;
+                        if (teamMode && p.owner && e.team === p.owner.team) continue; // Same team
                         for (const seg of e.segments) {
                             const sx = seg.x * GRID + GRID/2, sy = seg.y * GRID + GRID/2;
                             const dist = Math.sqrt((p.x - sx)**2 + (p.y - sy)**2);
@@ -2574,6 +2595,7 @@
                             segments: op.segments.map(s => ({ x: s.x, y: s.y, hp: 999, maxHp: 999 })),
                             color: op.color,
                             isPlayer: true,
+                            team: teamMode ? "blue" : null, // All human players on blue in team mode
                             playerId: playerId
                         });
                     }
@@ -2586,6 +2608,8 @@
                 
                 // Hit any target (enemies or players)
                 outer: for (const e of allTargets) {
+                    // Skip same team in team mode
+                    if (teamMode && e.team === playerTeam) continue;
                     if (!e.segments) continue;
                     for (const seg of e.segments) {
                         const sx = seg.x * GRID + GRID/2, sy = seg.y * GRID + GRID/2;
