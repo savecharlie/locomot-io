@@ -3007,11 +3007,11 @@
                 ctx.shadowBlur = 0;
 
                 // Health bar for damaged cars
-                if (i > 0 && seg.hp < seg.maxHp) {
+                if (i > 0 && seg.hp !== undefined && seg.maxHp > 0 && seg.hp < seg.maxHp) {
                     const bw = 16, bh = 3;
                     ctx.fillStyle = '#300';
                     ctx.fillRect(x - bw/2, y - GRID/2 - 10, bw, bh);
-                    const pct = seg.hp / seg.maxHp;
+                    const pct = Math.max(0, Math.min(1, seg.hp / seg.maxHp));
                     ctx.fillStyle = pct > 0.5 ? '#0f0' : pct > 0.25 ? '#ff0' : '#f00';
                     ctx.fillRect(x - bw/2, y - GRID/2 - 10, bw * pct, bh);
                 }
@@ -3218,12 +3218,13 @@
                     ctx.shadowBlur = 0;
 
                     // Health bar
-                    if (i > 0 && seg.hp < seg.maxHp) {
+                    if (i > 0 && seg.hp !== undefined && seg.maxHp > 0 && seg.hp < seg.maxHp) {
                         const bw = 10;
+                        const pct = Math.max(0, Math.min(1, seg.hp / seg.maxHp));
                         ctx.fillStyle = '#400';
                         ctx.fillRect(x - bw/2, y - GRID/2 - 8, bw, 2);
                         ctx.fillStyle = '#f44';
-                        ctx.fillRect(x - bw/2, y - GRID/2 - 8, bw * (seg.hp / seg.maxHp), 2);
+                        ctx.fillRect(x - bw/2, y - GRID/2 - 8, bw * pct, 2);
                     }
                 }
 
