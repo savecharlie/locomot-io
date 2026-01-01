@@ -750,8 +750,14 @@
         const generatedNames = new Set();
         
         async function generateTrainName() {
+            // Try Cloudflare tunnel first, then localhost
+            const endpoints = [
+                'https://regarded-incoming-sink-yorkshire.trycloudflare.com/api/generate',
+                'http://localhost:11434/api/generate'
+            ];
+            for (const endpoint of endpoints) {
             try {
-                const res = await fetch('http://localhost:11434/api/generate', {
+                const res = await fetch(endpoint, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
@@ -772,7 +778,8 @@
                         }
                     }
                 }
-            } catch (e) { /* Ollama offline */ }
+            } catch (e) { continue; }
+            }
             return FALLBACK_NAMES[Math.floor(Math.random() * FALLBACK_NAMES.length)] + Math.floor(Math.random() * 999);
         }
         
