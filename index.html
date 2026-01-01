@@ -61,8 +61,8 @@
         .kill-feed-entry.fade { opacity: 0; }
         .invite-link { position: absolute; bottom: 10px; left: 10px; font-size: 6px; color: #666; z-index: 20; background: rgba(0,0,0,0.5); padding: 4px 8px; border-radius: 4px; }
         .invite-link span { color: #0f0; cursor: pointer; }
-        .feedback-btn { position: absolute; bottom: 35px; left: 10px; font-size: 10px; color: #0f0; z-index: 100; background: rgba(0,0,0,0.8); padding: 8px 12px; border-radius: 4px; border: 1px solid #0f0; cursor: pointer; }
-        .feedback-btn:hover { background: #0f0; color: #000; }
+        
+        
         .shake { animation: shake 0.3s ease-in-out; }
         @keyframes shake { 0%, 100% { transform: translateX(0); } 25% { transform: translateX(-10px) rotate(-1deg); } 75% { transform: translateX(10px) rotate(1deg); } }
     </style>
@@ -84,7 +84,7 @@
         <button class="debug-btn-fixed" id="debugBtn">🐛</button>
         <div class="kill-feed" id="killFeed"></div>
         <div class="invite-link">INVITE: <span id="inviteLink" onclick="copyInvite()">loading...</span></div>
-        <button class="feedback-btn" onclick="submitIdea()">💡 SUBMIT IDEA</button>
+        
         
         <div class="overlay start-screen" id="startScreen">
             <h2>LOCOMOT.IO</h2>
@@ -133,6 +133,7 @@
             <button class="start-btn" id="restartBtn">TRY AGAIN</button>
             <button class="start-btn" id="uploadCollectiveBtn" style="background: #0a6; margin-top: 10px; font-size: 9px;">🧠 UPLOAD TO COLLECTIVE</button>
             <button class="start-btn" id="copyDeathBtn" style="background: #5af; margin-top: 10px; font-size: 9px;">📋 COPY DEBUG</button>
+            <button class="start-btn" id="submitIdeaBtn" style="background: #f80; margin-top: 10px; font-size: 9px;">💡 SUBMIT IDEA</button>
         </div>
     </div>
 
@@ -657,12 +658,13 @@
         setTimeout(updateInviteLink, 100);
         
         // === IDEA SUBMISSION ===
+        document.getElementById('submitIdeaBtn')?.addEventListener('click', submitIdea);
         function submitIdea() {
             const idea = prompt('Got an idea for LOCOMOT.IO? Share it!');
             if (idea && idea.trim()) {
                 const subject = encodeURIComponent('LOCOMOT.IO Idea');
                 const body = encodeURIComponent('IDEA: ' + idea + '\n\n---\nSent from locomot.io');
-                window.open('mailto:savecharlie@gmail.com?subject=' + subject + '&body=' + body);
+                window.location.href = 'mailto:savecharlie@gmail.com?subject=' + subject + '&body=' + body);
             }
         }
         
