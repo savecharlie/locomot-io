@@ -744,6 +744,38 @@
         let gameState = 'start';
         let currentMVP = null; // Track most interesting player for spectating
         let mvpScore = 0;
+        
+        // Qwen AI name generator - generates realistic player names
+        const FALLBACK_NAMES = ['xX_Pro_Xx', 'NoobMaster', 'ShadowKing', 'DarkWolf', 'IceQueen', 'BlazeFury', 'NightOwl', 'StormRider', 'Ninja99', 'ProSniper', 'GhostRider', 'DeathBlade'];
+        const generatedNames = new Set();
+        
+        async function generateTrainName() {
+            try {
+                const res = await fetch('http://localhost:11434/api/generate', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        model: 'qwen2.5:0.5b',
+                        prompt: 'Gaming usernames: xXShadowXx, NightWolf99, BlazeMaster, IceKing2000,',
+                        stream: false,
+                        options: { num_predict: 10, temperature: 1.2 }
+                    }),
+                    signal: AbortSignal.timeout(5000)
+                });
+                const data = await res.json();
+                const matches = data.response.match(/[A-Za-z][A-Za-z0-9_]{2,11}/g);
+                if (matches) {
+                    for (const name of matches) {
+                        if (!generatedNames.has(name) && name.length >= 3) {
+                            generatedNames.add(name);
+                            return name;
+                        }
+                    }
+                }
+            } catch (e) { /* Ollama offline */ }
+            return FALLBACK_NAMES[Math.floor(Math.random() * FALLBACK_NAMES.length)] + Math.floor(Math.random() * 999);
+        }
+        
         let teamMode = true;
         let playerTeam = 'blue'; // Player's team (blue or red)
         let score = 0, wave = 1, lastTime = 0, moveTimer = 0, MOVE_INTERVAL = 70; // Faster!
