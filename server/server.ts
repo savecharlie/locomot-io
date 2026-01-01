@@ -171,5 +171,3 @@ export default class LocomotServer implements Party.Server {
   //   await this.room.storage.setAlarm(Date.now() + 100);
   // }
 }
-
-export { LocomotServer as default };

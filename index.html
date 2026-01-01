@@ -424,7 +424,7 @@
             playerId: null,
             roomId: null,
             otherPlayers: new Map(), // id -> player state
-            serverUrl: 'locomot-io.ivyxav.partykit.dev', // Will be set after deploy
+            serverUrl: 'locomot-io.savecharlie.partykit.dev',
 
             connect(roomId = 'main') {
                 this.roomId = roomId;
@@ -561,11 +561,11 @@
             }
         };
 
-        // Auto-connect if URL has room param
+        // Auto-connect to multiplayer
         const urlParams = new URLSearchParams(window.location.search);
-        const roomParam = urlParams.get('room');
-        // Multiplayer disabled until server deployed
-        // if (roomParam) Multiplayer.connect(roomParam);
+        const roomParam = urlParams.get('room') || 'main';
+        // Connect when game starts
+        setTimeout(() => Multiplayer.connect(roomParam), 1000);
 
         // ==================== GAME CODE ====================
         const canvas = document.getElementById('gameCanvas');
@@ -1576,9 +1576,15 @@
                     pickups.splice(i, 1);
                 }
             }
+
+            // Send position to multiplayer server
+            if (Multiplayer.connected) {
+                Multiplayer.sendUpdate(snake[0].x, snake[0].y, snake, score);
+            }
+
             return false;
         }
-        
+
         function updateEnemies(dt) {
             const playerHead = snake[0];
             const playerLen = snake.length;
@@ -2592,7 +2598,7 @@
                 }
                 
                 ctx.save(); ctx.scale(cameraZoom, cameraZoom); ctx.translate(-cameraX, -cameraY);
-                drawGrid(); drawPickups(time); drawEnemies(); drawSnake(); drawAimLine(); drawProjectiles(); drawParticles();
+                drawGrid(); drawPickups(time); drawEnemies(); Multiplayer.drawOtherPlayers(ctx); drawSnake(); drawAimLine(); drawProjectiles(); drawParticles();
                 ctx.restore(); drawScanlines(); drawPatternFlash(ctx);
             } catch (err) { console.error('Game loop error:', err); }
             requestAnimationFrame(gameLoop);
