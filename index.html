@@ -2326,6 +2326,11 @@
                 // Collisions - skip fatal ones during invincibility or grace period
                 // Grace: for 500ms after shield drops, head collisions just push through
                 if (head.x === playerHead.x && head.y === playerHead.y) {
+                    // If player only has head (no body), any collision is instant death
+                    if (playerLen <= 1 && invincibleTimer <= 0) {
+                        deathReason = 'Head-only collision - no protection!';
+                        return true;
+                    }
                     if (invincibleTimer > -2000) {
                         // During invincibility or 2 second grace period, just pass through
                         // But deal significant damage to the enemy for touching us
