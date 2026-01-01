@@ -728,7 +728,7 @@
                     this.mediaRecorder.onstop = () => this.saveClip();
                     this.startRecording();
                     this.updateClipUI(); // Show UI immediately
-                    console.log('🎬 Highlight recorder initialized - auto-save:', this.autoDownload ? 'ON' : 'OFF');
+                    // Silent highlight recorder initialized
                 } catch (e) {
                     console.log('Highlight recorder not available:', e);
                 }
@@ -880,6 +880,8 @@
             },
 
             updateClipUI() {
+                // Silent mode - no visible UI
+                return;
                 let container = document.getElementById('clipContainer');
                 if (!container) {
                     container = document.createElement('div');
