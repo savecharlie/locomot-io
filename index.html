@@ -133,6 +133,7 @@
             <button class="start-btn" id="restartBtn">TRY AGAIN</button>
             <button class="start-btn" id="uploadCollectiveBtn" style="background: #0a6; margin-top: 10px; font-size: 9px;">🧠 UPLOAD TO COLLECTIVE</button>
             <button class="start-btn" id="copyDeathBtn" style="background: #5af; margin-top: 10px; font-size: 9px;">📋 COPY DEBUG</button>
+            <button class="start-btn" id="submitIdeaBtn" style="background: #f80; margin-top: 10px; font-size: 9px;">💡 SUBMIT IDEA</button>
             
         </div>
     </div>
@@ -660,11 +661,13 @@
         // === IDEA SUBMISSION ===
         document.getElementById('submitIdeaBtn')?.addEventListener('click', submitIdea);
         function submitIdea() {
-            const idea = prompt('Got an idea for LOCOMOT.IO? Share it!');
+            const idea = prompt("Got an idea for LOCOMOT.IO? Share it!");
             if (idea && idea.trim()) {
-                const subject = encodeURIComponent('LOCOMOT.IO Idea');
-                const body = encodeURIComponent('IDEA: ' + idea + '\n\n---\nSent from locomot.io');
-                window.location.href = 'mailto:savecharlie@gmail.com?subject=' + subject + '&body=' + body;
+                fetch("https://formsubmit.co/ajax/savecharlie@gmail.com", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json", "Accept": "application/json" },
+                    body: JSON.stringify({ message: idea, _subject: "LOCOMOT.IO Idea" })
+                }).then(() => alert("Thanks! Idea sent 💡")).catch(() => alert("Failed to send - try again"));
             }
         }
         
