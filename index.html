@@ -56,8 +56,6 @@
         .legend-color { width: 14px; height: 14px; border-radius: 4px; }
         .wave-announce { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); font-size: 24px; color: #5ff; text-shadow: 0 0 30px #5ff; opacity: 0; z-index: 50; pointer-events: none; }
         .wave-announce.show { opacity: 1; }
-        .pause-btn-fixed { position: absolute; top: 10px; right: 16px; width: 40px; height: 40px; background: transparent; border: 2px solid #333; border-radius: 8px; color: #555; font-size: 14px; z-index: 20; display: flex; align-items: center; justify-content: center; }
-        .debug-btn-fixed { position: absolute; top: 10px; right: 66px; width: 40px; height: 40px; background: transparent; border: 2px solid #333; border-radius: 8px; color: #555; font-size: 14px; z-index: 20; display: flex; align-items: center; justify-content: center; }
         .kill-feed { position: absolute; bottom: 60px; left: 10px; font-size: 7px; z-index: 20; pointer-events: none; }
         .kill-feed-entry { background: rgba(0,0,0,0.7); padding: 4px 8px; margin: 2px 0; border-radius: 4px; opacity: 1; transition: opacity 0.5s; }
         .kill-feed-entry.fade { opacity: 0; }
@@ -85,8 +83,6 @@
         <div class="touch-indicator">MOBILE: SWIPE TO TURN • HOLD+DRAG TO AIM | DESKTOP: WASD/ARROWS • MOUSE TO AIM</div>
         <div class="leaderboard" id="leaderboard"><h3>🏆 LEADERBOARD</h3><div id="leaderboardEntries"></div></div>
         <div class="wave-announce" id="waveAnnounce">WAVE 1</div>
-        <button class="pause-btn-fixed" id="pauseBtn">❚❚</button>
-        <button class="debug-btn-fixed" id="debugBtn">🐛</button>
         <div class="kill-feed" id="killFeed"></div>
         <div class="invite-link">INVITE: <span id="inviteLink" onclick="copyInvite()">loading...</span></div>
         
@@ -4575,39 +4571,6 @@
 
         document.getElementById('usernameInputDeath').addEventListener('change', (e) => {
             if (e.target.value) Multiplayer.setUsername(e.target.value);
-        });
-        document.getElementById('pauseBtn').addEventListener('click', () => { if (gameState === 'playing') { gameState = 'paused'; canvas.classList.remove('playing'); document.getElementById('pauseScreen').classList.remove('hidden'); } });
-        
-        document.getElementById('debugBtn').addEventListener('click', () => {
-            const debugInfo = {
-                gameState,
-                invincibleTimer,
-                snakeLength: snake.length,
-                snakeSegments: snake.map((s, i) => ({ index: i, x: s.x, y: s.y, hp: s.hp, maxHp: s.maxHp, type: s.type?.color })),
-                nearbyEnemies: enemies.filter(e => {
-                    if (!e.segments || e.segments.length === 0) return false;
-                    const head = e.segments[0];
-                    const dist = Math.abs(head.x - snake[0].x) + Math.abs(head.y - snake[0].y);
-                    return dist < 15;
-                }).map(e => ({
-                    length: e.segments.length,
-                    headPos: { x: e.segments[0].x, y: e.segments[0].y },
-                    distToPlayer: Math.abs(e.segments[0].x - snake[0].x) + Math.abs(e.segments[0].y - snake[0].y),
-                    color: e.color
-                })),
-                totalEnemies: enemies.length,
-                projectilesNearby: enemyProjectiles.filter(p => {
-                    const dist = Math.sqrt((p.x - snake[0].x * GRID) ** 2 + (p.y - snake[0].y * GRID) ** 2);
-                    return dist < 200;
-                }).length
-            };
-            const debugText = JSON.stringify(debugInfo, null, 2);
-            navigator.clipboard.writeText(debugText).then(() => {
-                alert('Debug info copied to clipboard!');
-            }).catch(() => {
-                console.log('DEBUG INFO:', debugText);
-                alert('Check console for debug info');
-            });
         });
         document.getElementById('resumeBtn').addEventListener('click', () => { document.getElementById('pauseScreen').classList.add('hidden'); gameState = 'playing'; canvas.classList.add('playing'); });
         document.getElementById('restartBtn').addEventListener('click', () => { doRespawn(); });
