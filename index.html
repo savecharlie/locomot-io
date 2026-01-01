@@ -106,6 +106,10 @@
                 <div style="color: #fff; margin-bottom: 5px;">👁 I OBSERVED YOUR PATTERNS:</div>
                 <div id="patternStatsText">Loading...</div>
             </div>
+            <div id="godelStatsBox" style="font-size: 8px; color: #f0f; margin: 10px 0; padding: 10px; background: #201; border: 1px solid #f0f; border-radius: 4px; max-width: 280px;">
+                <div style="color: #fff; margin-bottom: 5px;">🧠 NEURAL TRAINS LEARNED:</div>
+                <div id="godelStatsText">Loading...</div>
+            </div>
             <button class="start-btn" id="restartBtn">TRY AGAIN</button>
             <button class="start-btn" id="uploadCollectiveBtn" style="background: #0a6; margin-top: 10px; font-size: 9px;">🧠 UPLOAD TO COLLECTIVE</button>
             <button class="start-btn" id="copyDeathBtn" style="background: #5af; margin-top: 10px; font-size: 9px;">📋 COPY DEBUG INFO</button>
@@ -1196,10 +1200,48 @@
         }
 
         function respawn() {
-            // IO game respawn - keep world state, just reset player
-            patternTracker.save(); // Save patterns to localStorage on death
-            deathReason = '';
-            deathDebugInfo = null;
+            // Show death screen with learning stats
+            patternTracker.save();
+            ruleEngine.save();
+
+            // Update game over screen stats
+            document.getElementById('finalScore').textContent = score;
+            document.getElementById('finalWave').textContent = '#' + (enemies.filter(e => e.segments.length >= snake.length).length + 1);
+            document.getElementById('finalLength').textContent = maxLength;
+            document.getElementById('deathReasonText').textContent = deathReason || 'Unknown';
+
+            // Pattern stats
+            const pStats = patternTracker.getStats();
+            document.getElementById('patternStatsText').innerHTML =
+                `Turn bias: ${pStats.leftBias}% left<br>` +
+                `Flee distance: ${pStats.fleeDistance} tiles`;
+
+            // Gödel learning stats
+            const gStats = ruleEngine.getStats();
+            let godelText = `${gStats.total} rules active (${gStats.learned} learned from deaths)<br>`;
+            godelText += `Avg confidence: ${(gStats.avgConf * 100).toFixed(0)}%<br>`;
+            godelText += `Death patterns tracked: ${gStats.patterns}`;
+
+            // Show recently generated rules
+            const recentRules = ruleEngine.rules.filter(r => r.source === 'death_pattern').slice(-3);
+            if (recentRules.length > 0) {
+                godelText += `<br><br>Recent learnings:`;
+                for (const rule of recentRules) {
+                    const conditions = Object.keys(rule.trigger.conditions).join(', ');
+                    const avoid = rule.action.bias[0] < -1 ? 'left' : rule.action.bias[2] < -1 ? 'right' : 'straight';
+                    godelText += `<br>• "${conditions}" → avoid ${avoid}`;
+                }
+            }
+            document.getElementById('godelStatsText').innerHTML = godelText;
+
+            // Show game over screen
+            gameState = 'dead';
+            canvas.classList.remove('playing');
+            document.getElementById('gameOverScreen').classList.remove('hidden');
+        }
+
+        function doRespawn() {
+            document.getElementById('gameOverScreen').classList.add('hidden');
 
             // Find safe spawn location
             let spawnX, spawnY, attempts = 0;
@@ -1239,6 +1281,8 @@
             // Reset score on death (io game style)
             score = 0;
             maxLength = 4;
+            deathReason = '';
+            deathDebugInfo = null;
 
             gameState = 'playing';
             canvas.classList.add('playing');
@@ -2523,7 +2567,7 @@
             });
         });
         document.getElementById('resumeBtn').addEventListener('click', () => { document.getElementById('pauseScreen').classList.add('hidden'); gameState = 'playing'; canvas.classList.add('playing'); });
-        document.getElementById('restartBtn').addEventListener('click', () => { document.getElementById('gameOverScreen').classList.add('hidden'); deathReason = ''; deathDebugInfo = null; init(); gameState = 'playing'; canvas.classList.add('playing'); });
+        document.getElementById('restartBtn').addEventListener('click', () => { doRespawn(); });
         
         document.getElementById('copyDeathBtn').addEventListener('click', () => {
             if (deathDebugInfo) {
