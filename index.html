@@ -3535,8 +3535,8 @@
             // Update aim angle to point at mouse cursor
             const head = snake[0];
             if (head) {
-                const hx = head.x * GRID + GRID/2 - cameraX;
-                const hy = head.y * GRID + GRID/2 - cameraY;
+                const hx = (head.x * GRID + GRID/2 - cameraX) * cameraZoom;
+                const hy = (head.y * GRID + GRID/2 - cameraY) * cameraZoom;
                 aimAngle = Math.atan2(mouseY - hy, mouseX - hx);
             }
         });
