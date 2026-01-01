@@ -2520,6 +2520,14 @@
             patternTracker.save();
             ruleEngine.save();
 
+            // Report leave to server for player history
+            devMode.reportLeave(
+                Multiplayer.username || 'Anonymous',
+                maxLength,      // Track max length achieved this session
+                waveKills,      // Segments destroyed this session
+                score           // Final score
+            );
+
             // Update reputation system
             const survivalTime = strategyClassifier.totalTicks / 60; // ~seconds
             reputationSystem.onGameEnd(survivalTime, strategyClassifier.dominant);
@@ -3724,43 +3732,23 @@
             let followTarget = null;
             let followLength = 0;
 
-            // SPECTATOR MODE: When dead, follow the most INTERESTING player (MVP)
+            // SPECTATOR MODE: When dead, PRIORITIZE real players, fall back to AI
             if (gameState === 'dead') {
                 let bestScore = 0;
                 let newMVP = null;
                 const now = Date.now();
-                
+                let hasRealPlayer = false;
+
                 // Clear old MVP status
                 for (const e of enemies) if (e) e.isMVP = false;
-                
-                // Calculate interest score for each enemy
-                for (let i = 0; i < enemies.length; i++) {
-                    const e = enemies[i];
-                    if (!e || !e.segments || e.segments.length === 0) continue;
-                    
-                    // Decay recentPoints over time (halves every 5 seconds)
-                    const timeSincePoint = now - (e.lastPointTime || 0);
-                    const decayFactor = Math.pow(0.5, timeSincePoint / 5000);
-                    const decayedPoints = (e.recentPoints || 0) * decayFactor;
-                    
-                    // Interest score = length weight + recent activity weight
-                    const lengthScore = e.segments.length * 2;
-                    const activityScore = decayedPoints * 3;
-                    const totalScore = lengthScore + activityScore;
-                    
-                    if (totalScore > bestScore) {
-                        bestScore = totalScore;
-                        followTarget = { x: e.segments[0].x, y: e.segments[0].y };
-                        followLength = e.segments.length;
-                        newMVP = e;
-                    }
-                }
-                
-                // Also check multiplayer players
+
+                // FIRST: Check real multiplayer players (PRIORITY)
                 if (Multiplayer.connected) {
                     for (const [pid, op] of Multiplayer.otherPlayers) {
                         if (!op.segments || op.segments.length === 0) continue;
-                        const lengthScore = op.segments.length * 2;
+                        hasRealPlayer = true;
+                        // Real players get 10x score bonus to always be prioritized
+                        const lengthScore = op.segments.length * 20;
                         if (lengthScore > bestScore) {
                             bestScore = lengthScore;
                             followTarget = { x: op.segments[0].x, y: op.segments[0].y };
@@ -3769,7 +3757,32 @@
                         }
                     }
                 }
-                
+
+                // SECOND: If no real players, check AI enemies
+                if (!hasRealPlayer) {
+                    for (let i = 0; i < enemies.length; i++) {
+                        const e = enemies[i];
+                        if (!e || !e.segments || e.segments.length === 0) continue;
+
+                        // Decay recentPoints over time (halves every 5 seconds)
+                        const timeSincePoint = now - (e.lastPointTime || 0);
+                        const decayFactor = Math.pow(0.5, timeSincePoint / 5000);
+                        const decayedPoints = (e.recentPoints || 0) * decayFactor;
+
+                        // Interest score = length weight + recent activity weight
+                        const lengthScore = e.segments.length * 2;
+                        const activityScore = decayedPoints * 3;
+                        const totalScore = lengthScore + activityScore;
+
+                        if (totalScore > bestScore) {
+                            bestScore = totalScore;
+                            followTarget = { x: e.segments[0].x, y: e.segments[0].y };
+                            followLength = e.segments.length;
+                            newMVP = e;
+                        }
+                    }
+                }
+
                 // Mark MVP and update tracking
                 if (newMVP && newMVP !== currentMVP) {
                     currentMVP = newMVP;
@@ -4482,6 +4495,8 @@
             init();
             gameState = 'playing';
             canvas.classList.add('playing');
+            // Report join to server for player history
+            devMode.reportJoin(Multiplayer.username || 'Anonymous', Multiplayer.playerId);
         });
 
         document.getElementById('startTeams').addEventListener('click', () => {
@@ -4489,6 +4504,8 @@
             init();
             gameState = 'playing';
             canvas.classList.add('playing');
+            // Report join to server for player history
+            devMode.reportJoin(Multiplayer.username || 'Anonymous', Multiplayer.playerId);
         });
 
         document.getElementById('usernameInputDeath').addEventListener('change', (e) => {
@@ -4627,6 +4644,8 @@
             spectating: false,
             playerIndex: 0,
             selectedPlayer: null,
+            playerHistory: { players: [], sessions: [] },
+            lastHistoryFetch: 0,
 
             toggle() {
                 this.spectating = !this.spectating;
@@ -4635,6 +4654,52 @@
                     this.updateSelection();
                 }
                 console.log('[DEV] Spectate mode:', this.spectating);
+            },
+
+            // Fetch player history from server
+            async fetchHistory() {
+                try {
+                    const res = await fetch('https://api.locomot.io/api/players');
+                    if (res.ok) {
+                        this.playerHistory = await res.json();
+                        console.log('[DEV] Fetched player history:', this.playerHistory.players.length, 'players');
+                    }
+                } catch (e) {
+                    console.log('[DEV] Could not fetch player history');
+                }
+            },
+
+            // Report player join to server
+            async reportJoin(name, id) {
+                try {
+                    await fetch('https://api.locomot.io/api/player/join', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ name, id })
+                    });
+                } catch (e) {}
+            },
+
+            // Report player leave with stats
+            async reportLeave(name, maxLength, kills, score) {
+                try {
+                    await fetch('https://api.locomot.io/api/player/leave', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ name, maxLength, kills, score })
+                    });
+                } catch (e) {}
+            },
+
+            // Periodic activity heartbeat
+            async reportActivity(name, length, score) {
+                try {
+                    await fetch('https://api.locomot.io/api/player/activity', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ name, length, score })
+                    });
+                } catch (e) {}
             },
 
             getPlayers() {
@@ -4647,6 +4712,16 @@
                     }
                 }
                 return players;
+            },
+
+            // Get recent sessions from history (for when no one is online)
+            getRecentSessions() {
+                if (!this.playerHistory.sessions) return [];
+                const now = Date.now();
+                return this.playerHistory.sessions
+                    .filter(s => s.left) // Only completed sessions
+                    .slice(-10)
+                    .reverse();
             },
 
             nextPlayer() {
@@ -4689,7 +4764,11 @@
                 ctx.setTransform(1, 0, 0, 1, 0, 0);
 
                 const players = this.getPlayers();
-                const boxHeight = this.spectating ? 90 + Math.min(players.length, 8) * 15 : 70;
+                const recentSessions = this.getRecentSessions();
+                const showHistory = players.length === 0 && recentSessions.length > 0;
+                const boxHeight = this.spectating && players.length > 0
+                    ? 90 + Math.min(players.length, 8) * 15
+                    : showHistory ? 90 + Math.min(recentSessions.length, 6) * 15 : 70;
 
                 // Semi-transparent background for visibility
                 ctx.fillStyle = 'rgba(0, 0, 0, 0.85)';
@@ -4723,12 +4802,34 @@
                         const marker = selected ? '► ' : '  ';
                         ctx.fillText(`${marker}${p.name || 'Unknown'} (${p.segments?.length || 0})`, 15, 195 + i * 15);
                     }
+                } else if (showHistory) {
+                    ctx.fillStyle = '#5cf';
+                    ctx.fillText('📜 Recent players:', 15, 175);
+
+                    for (let i = 0; i < Math.min(recentSessions.length, 6); i++) {
+                        const s = recentSessions[i];
+                        const ago = this.timeAgo(s.left);
+                        ctx.fillStyle = '#888';
+                        ctx.fillText(`${s.name} - ${s.score}pts (${ago})`, 15, 195 + i * 15);
+                    }
                 } else if (players.length === 0) {
                     ctx.fillStyle = '#f55';
-                    ctx.fillText('No other players yet...', 15, 175);
+                    ctx.fillText('No players yet. Fetching...', 15, 175);
                 }
 
                 ctx.restore();
+            },
+
+            // Helper to format time ago
+            timeAgo(isoString) {
+                if (!isoString) return '?';
+                const diff = Date.now() - new Date(isoString).getTime();
+                const mins = Math.floor(diff / 60000);
+                if (mins < 1) return 'just now';
+                if (mins < 60) return `${mins}m ago`;
+                const hours = Math.floor(mins / 60);
+                if (hours < 24) return `${hours}h ago`;
+                return `${Math.floor(hours / 24)}d ago`;
             },
 
             // Check if tap is in dev box
@@ -4798,8 +4899,17 @@
         
         patternTracker.load(); // Load saved patterns from localStorage
         reputationSystem.load(); // Load player reputation from localStorage
+        devMode.fetchHistory(); // Fetch recent player history
         init();
         requestAnimationFrame(gameLoop);
+
+        // Periodic activity heartbeat (every 30 seconds)
+        setInterval(() => {
+            if (gameState === 'playing' && Multiplayer.connected) {
+                const playerName = Multiplayer.username || 'Anonymous';
+                devMode.reportActivity(playerName, snake.length, score);
+            }
+        }, 30000);
 
         // PWA: Register service worker for offline play
         if ('serviceWorker' in navigator) {
