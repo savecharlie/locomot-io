@@ -21,6 +21,7 @@
         .leaderboard-entry:last-child { border-bottom: none; }
         .leaderboard-entry.player { color: #0f0; }
         .leaderboard-entry.neural { color: #f0f; }
+        .leaderboard-entry.mvp { background: rgba(255,255,0,0.2); border-left: 2px solid #ff0; }
         .leaderboard-rank { color: #666; width: 16px; }
         .leaderboard-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin: 0 6px; }
         .leaderboard-score { color: #ff0; }
@@ -1867,6 +1868,7 @@
             enemies.push({
                 // Assign team to balance (alternate)
                 team: enemies.filter(e => e.team === 'blue').length <= enemies.filter(e => e.team === 'red').length ? 'blue' : 'red',
+                name: TRAIN_NAMES[Math.floor(Math.random() * TRAIN_NAMES.length)],
                 segments, dir: startDir, nextDir: startDir,
                 baseSpeed: 8 + wave * 0.5, damage: 10 + wave * 2,
                 moveTimer: 0, lastFired: 0, fireRate: 1200 - wave * 40,
@@ -2918,19 +2920,22 @@
             // Add AI enemies
             for (const e of enemies) {
                 if (e.segments.length > 0) {
-                    let typeName;
-                    if (e.segments.length >= 10) typeName = 'ALPHA';
-                    else if (e.personality.neural) typeName = 'NEURAL';
-                    else if (e.personality.aggression > 0.7) typeName = 'HUNTER';
-                    else if (e.personality.greed > 0.7) typeName = 'COLLECTOR';
-                    else if (e.personality.caution > 0.5) typeName = 'SURVIVOR';
-                    else typeName = 'BERSERKER';
-                    entries.push({ name: typeName, length: e.segments.length, isPlayer: false, color: e.color, isNeural: e.personality.neural });
+                    entries.push({ 
+                        name: e.name || 'Train', 
+                        length: e.segments.length, 
+                        isPlayer: false, 
+                        color: e.color, 
+                        isNeural: e.personality.neural,
+                        isMVP: e.isMVP && gameState === 'dead'
+                    });
                 }
             }
             entries.sort((a, b) => b.length - a.length);
             const top = entries.slice(0, 12);
-            document.getElementById('leaderboardEntries').innerHTML = top.map((e, i) => `<div class="leaderboard-entry ${e.isPlayer ? 'player' : ''} ${e.isNeural ? 'neural' : ''} ${e.isMultiplayer ? 'multiplayer' : ''}" style="${!e.isPlayer ? 'color:' + (e.color && /^#[0-9a-f]{3,6}$/i.test(e.color) ? e.color : '#fff') : ''}"><span class="leaderboard-rank">${i + 1}.</span><span class="leaderboard-name">${esc(e.name)}</span><span class="leaderboard-score">${e.length}</span></div>`).join('');
+            document.getElementById('leaderboardEntries').innerHTML = top.map((e, i) => {
+                const mvpIcon = e.isMVP ? '📹 ' : '';
+                return `<div class="leaderboard-entry ${e.isPlayer ? 'player' : ''} ${e.isNeural ? 'neural' : ''} ${e.isMultiplayer ? 'multiplayer' : ''} ${e.isMVP ? 'mvp' : ''}" style="${!e.isPlayer ? 'color:' + (e.color && /^#[0-9a-f]{3,6}$/i.test(e.color) ? e.color : '#fff') : ''}"><span class="leaderboard-rank">${i + 1}.</span><span class="leaderboard-name">${mvpIcon}${esc(e.name)}</span><span class="leaderboard-score">${e.length}</span></div>`;
+            }).join('');
         }
         
         function updateHUD() {
