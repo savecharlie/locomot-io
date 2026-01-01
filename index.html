@@ -967,7 +967,9 @@
         }
 
         let snake = [], dir = DIR.RIGHT, nextDir = DIR.RIGHT;
-        let dirQueue = []; // Queue for fast direction changes
+        let tronTrail = []; // Tron light trail positions
+        let dirQueue = [];
+            // Queue for fast direction changes
         let enemies = [], projectiles = [], enemyProjectiles = [], pickups = [], particles = [];
         let waveEnemies = 0, waveKills = 0, spawnTimer = 0, waveDelay = 0;
         let bestRank = 999, maxLength = 2;
@@ -1539,7 +1541,7 @@
         
         function init() {
             score = 0; wave = 3; // Start at wave 3 - world is already established
-            enemies = []; projectiles = []; enemyProjectiles = []; pickups = []; particles = [];
+            enemies = []; projectiles = []; enemyProjectiles = []; pickups = []; particles = []; tronTrail = [];
             waveEnemies = 0; waveKills = 0; spawnTimer = 0; waveDelay = 0;
             bestRank = 999; maxLength = 4; // Reset tracking
             invincibleTimer = 10000; // 10 seconds of spawn protection
@@ -1632,7 +1634,8 @@
             cameraZoom = 2; targetZoom = 2; // Start zoomed in
             cameraX = spawnX * GRID - canvas.width / 2 / cameraZoom;
             cameraY = spawnY * GRID - canvas.height / 2 / cameraZoom;
-            dirQueue = []; // Clear direction queue
+            dirQueue = [];
+            tronTrail = []; // Clear trail
             
             updateHUD(); updateLeaderboard(); announceSpawn();
         }
@@ -1775,6 +1778,7 @@
             cameraX = spawnX * GRID - canvas.width / 2 / cameraZoom;
             cameraY = spawnY * GRID - canvas.height / 2 / cameraZoom;
             dirQueue = [];
+            tronTrail = []; // Clear trail on respawn
 
             // Reset score on death (io game style)
             score = 0;
@@ -1884,6 +1888,10 @@
             }
             
             const prevPositions = snake.map(s => ({ x: s.x, y: s.y }));
+            // Add to Tron trail
+            tronTrail.push({ x: wrappedX, y: wrappedY, age: 0 });
+            if (tronTrail.length > 60) tronTrail.shift(); // Keep last 60 positions
+            
             snake[0].x = wrappedX;
             snake[0].y = wrappedY;
             
@@ -2923,6 +2931,31 @@
             }
 
             // Draw from back to front
+            // TRON LIGHT TRAIL 🌟
+            if (tronTrail.length > 1) {
+                ctx.save();
+                ctx.lineCap = "round";
+                ctx.lineJoin = "round";
+                for (let i = 1; i < tronTrail.length; i++) {
+                    const t0 = tronTrail[i - 1];
+                    const t1 = tronTrail[i];
+                    // Skip if wrapped around world
+                    if (Math.abs(t1.x - t0.x) > 2 || Math.abs(t1.y - t0.y) > 2) continue;
+                    const alpha = (i / tronTrail.length) * 0.8;
+                    const width = 2 + (i / tronTrail.length) * 4;
+                    // Glow effect
+                    ctx.shadowColor = "#0ff";
+                    ctx.shadowBlur = 10;
+                    ctx.strokeStyle = `rgba(0, 255, 255, ${alpha})`;
+                    ctx.lineWidth = width;
+                    ctx.beginPath();
+                    ctx.moveTo(t0.x * GRID + GRID/2, t0.y * GRID + GRID/2);
+                    ctx.lineTo(t1.x * GRID + GRID/2, t1.y * GRID + GRID/2);
+                    ctx.stroke();
+                }
+                ctx.restore();
+            }
+
             for (let i = snake.length - 1; i >= 0; i--) {
                 const seg = snake[i];
                 const x = seg.x * GRID + GRID/2, y = seg.y * GRID + GRID/2;
