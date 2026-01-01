@@ -2535,7 +2535,24 @@
         }
         
         function updateLeaderboard() {
-            const entries = [{ name: 'YOU', length: snake.length, isPlayer: true }];
+            const entries = [{ name: Multiplayer.username || 'YOU', length: snake.length, isPlayer: true }];
+            
+            // Add other multiplayer players
+            if (Multiplayer.connected) {
+                for (const [pid, op] of Multiplayer.otherPlayers) {
+                    if (op.segments && op.segments.length > 0) {
+                        entries.push({ 
+                            name: op.name || 'Player', 
+                            length: op.segments.length, 
+                            isPlayer: false, 
+                            isMultiplayer: true,
+                            color: op.color 
+                        });
+                    }
+                }
+            }
+            
+            // Add AI enemies
             for (const e of enemies) {
                 if (e.segments.length > 0) {
                     let typeName;
@@ -2550,7 +2567,7 @@
             }
             entries.sort((a, b) => b.length - a.length);
             const top = entries.slice(0, 12);
-            document.getElementById('leaderboardEntries').innerHTML = top.map((e, i) => `<div class="leaderboard-entry ${e.isPlayer ? 'player' : ''} ${e.isNeural ? 'neural' : ''}" style="${!e.isPlayer ? 'color:' + e.color : ''}"><span class="leaderboard-rank">${i + 1}.</span><span class="leaderboard-name">${e.name}</span><span class="leaderboard-score">${e.length}</span></div>`).join('');
+            document.getElementById('leaderboardEntries').innerHTML = top.map((e, i) => `<div class="leaderboard-entry ${e.isPlayer ? 'player' : ''} ${e.isNeural ? 'neural' : ''} ${e.isMultiplayer ? 'multiplayer' : ''}" style="${!e.isPlayer ? 'color:' + e.color : ''}"><span class="leaderboard-rank">${i + 1}.</span><span class="leaderboard-name">${e.name}</span><span class="leaderboard-score">${e.length}</span></div>`).join('');
         }
         
         function updateHUD() {
