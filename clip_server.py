@@ -12,8 +12,8 @@ import re
 
 CLIP_DIR = '/home/ivy/locomot-io/clips'
 PLAYER_HISTORY_FILE = '/home/ivy/locomot-io/player_history.json'
-TELEGRAM_BOT_TOKEN = '8090124821:AAEN2b2EQMYkeTw1mzrV9XqGkUkmq2Qs-3s'
-TELEGRAM_CHAT_ID = '6248804784'
+TELEGRAM_BOT_TOKEN = os.environ.get('TELEGRAM_BOT_TOKEN', '')
+TELEGRAM_CHAT_ID = os.environ.get('TELEGRAM_CHAT_ID', '')
 
 os.makedirs(CLIP_DIR, exist_ok=True)
 
