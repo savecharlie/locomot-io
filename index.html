@@ -3875,8 +3875,13 @@
         }
         
         function updateLeaderboard() {
-            const entries = [{ name: playerName || 'YOU', length: snake.length, isPlayer: true }];
-            
+            const entries = [];
+
+            // Only add player to leaderboard if alive
+            if (gameState === 'playing') {
+                entries.push({ name: playerName || 'YOU', length: snake.length, isPlayer: true });
+            }
+
             // Add other multiplayer players
             if (Multiplayer.connected) {
                 for (const [pid, op] of Multiplayer.otherPlayers) {

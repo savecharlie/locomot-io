@@ -26,6 +26,7 @@ const WORLD_ROWS = 150;
 
 export default class LocomotServer implements Party.Server {
   state: GameState;
+  cleanupInterval: ReturnType<typeof setInterval> | null = null;
 
   constructor(readonly room: Party.Room) {
     this.state = {
@@ -33,6 +34,35 @@ export default class LocomotServer implements Party.Server {
       pickups: this.generatePickups(50),
       worldSize: { cols: WORLD_COLS, rows: WORLD_ROWS }
     };
+
+    // Clean up stale players every 10 seconds
+    this.cleanupInterval = setInterval(() => this.cleanupStalePlayers(), 10000);
+  }
+
+  // Remove players who haven't sent an update in 30 seconds
+  cleanupStalePlayers() {
+    const now = Date.now();
+    const staleTimeout = 30000; // 30 seconds
+    const toRemove: string[] = [];
+
+    for (const [id, player] of this.state.players) {
+      if (now - player.lastUpdate > staleTimeout) {
+        toRemove.push(id);
+        console.log(`Cleaning up stale player: ${player.name} (${id}) - no update for ${Math.floor((now - player.lastUpdate) / 1000)}s`);
+      }
+    }
+
+    for (const id of toRemove) {
+      this.state.players.delete(id);
+      this.room.broadcast(JSON.stringify({
+        type: 'player_left',
+        playerId: id
+      }));
+    }
+
+    if (toRemove.length > 0) {
+      console.log(`Cleaned up ${toRemove.length} stale player(s). Remaining: ${this.state.players.size}`);
+    }
   }
 
   generatePickups(count: number) {
