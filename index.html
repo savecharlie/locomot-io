@@ -589,7 +589,7 @@
                         const seg = player.segments[i];
                         const isHead = i === 0;
 
-                        ctx.fillStyle = isHead ? player.color : this.dimColor(player.color);
+                        const teamColor = teamMode ? '#0ff' : player.color; ctx.fillStyle = isHead ? teamColor : this.dimColor(teamColor);
                         ctx.fillRect(seg.x * 12, seg.y * 12, 12, 12);
 
                         // Outline
@@ -739,6 +739,7 @@
         let cameraX = 0, cameraY = 0, targetCameraX = 0, targetCameraY = 0;
         let cameraZoom = 2, targetZoom = 2; // Start zoomed in
         let gameState = 'start';
+        let teamMode = true; // All players on same team vs AI
         let score = 0, wave = 1, lastTime = 0, moveTimer = 0, MOVE_INTERVAL = 70; // Faster!
         let aimAngle = 0, isAiming = false;
         let mouseX = 0, mouseY = 0, isMouseAiming = false;
@@ -1958,7 +1959,8 @@
             if (Multiplayer.connected) {
                 Multiplayer.sendUpdate(snake[0].x, snake[0].y, snake, score);
                 
-                // PVP COLLISION DETECTION
+                // PVP COLLISION DETECTION (disabled in team mode)
+                if (!teamMode) {
                 for (const [playerId, otherPlayer] of Multiplayer.otherPlayers) {
                     if (!otherPlayer.segments || otherPlayer.segments.length === 0) continue;
                     
@@ -2003,6 +2005,7 @@
                     }
                 }
                 
+                } // end teamMode check
                 
             }
 
@@ -2849,7 +2852,7 @@
             let powerupStatus = [];
             if (invincibleTimer > 0) powerupStatus.push('🛡️' + Math.ceil(invincibleTimer / 1000));
             if (speedTimer > 0) powerupStatus.push('🚀' + Math.ceil(speedTimer / 1000));
-            if (trailBoostTimer > 0) powerupStatus.push("⚡DRAFTING"); if (isLeader) powerupStatus.push("👑LEADER"); if (magnetTimer > 0) powerupStatus.push('🧲' + Math.ceil(magnetTimer / 1000));
+            if (trailBoostTimer > 0) powerupStatus.push("⚡DRAFTING"); if (isLeader) powerupStatus.push("👑LEADER"); if (teamMode) powerupStatus.push("👥TEAM"); if (magnetTimer > 0) powerupStatus.push('🧲' + Math.ceil(magnetTimer / 1000));
             
             if (powerupStatus.length > 0) {
                 document.getElementById('score').textContent = powerupStatus.join(' ');
