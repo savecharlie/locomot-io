@@ -160,14 +160,48 @@ export default class LocomotServer implements Party.Server {
     }
   }
 
-  // Periodic game tick (optional - for server-authoritative physics)
-  // async onAlarm() {
-  //   // Move snakes, check collisions, etc.
-  //   this.room.broadcast(JSON.stringify({
-  //     type: 'tick',
-  //     players: Array.from(this.state.players.values())
-  //   }));
-  //   // Schedule next tick
-  //   await this.room.storage.setAlarm(Date.now() + 100);
-  // }
+  // Handle HTTP requests (for training data upload)
+  async onRequest(req: Party.Request) {
+    // Enable CORS
+    const headers = {
+      'Access-Control-Allow-Origin': '*',
+      'Access-Control-Allow-Methods': 'POST, OPTIONS',
+      'Access-Control-Allow-Headers': 'Content-Type'
+    };
+
+    if (req.method === 'OPTIONS') {
+      return new Response(null, { headers });
+    }
+
+    if (req.method === 'POST') {
+      try {
+        const data = await req.json() as { type: string; data: unknown };
+
+        if (data.type === 'upload_training') {
+          // Store training data (using Partykit storage)
+          const key = `training_${Date.now()}_${Math.random().toString(36).slice(2)}`;
+          await this.room.storage.put(key, data.data);
+
+          console.log(`Training data uploaded: ${key}`);
+
+          return new Response(JSON.stringify({ success: true, key }), {
+            headers: { ...headers, 'Content-Type': 'application/json' }
+          });
+        }
+
+        return new Response(JSON.stringify({ error: 'Unknown type' }), {
+          status: 400,
+          headers: { ...headers, 'Content-Type': 'application/json' }
+        });
+      } catch (e) {
+        console.error('Request error:', e);
+        return new Response(JSON.stringify({ error: 'Invalid request' }), {
+          status: 400,
+          headers: { ...headers, 'Content-Type': 'application/json' }
+        });
+      }
+    }
+
+    return new Response('Method not allowed', { status: 405, headers });
+  }
 }

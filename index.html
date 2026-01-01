@@ -2906,6 +2906,50 @@
             }
         });
         
+        document.getElementById('uploadCollectiveBtn').addEventListener('click', () => {
+            const btn = document.getElementById('uploadCollectiveBtn');
+            const originalText = btn.textContent;
+            btn.textContent = '⏳ UPLOADING...';
+            btn.disabled = true;
+            
+            // Gather training data
+            const trainingData = {
+                rules: ruleEngine.rules,
+                patterns: patternTracker.getStats(),
+                deathInfo: deathDebugInfo,
+                timestamp: Date.now(),
+                version: '1.0'
+            };
+            
+            // Upload to Partykit server (or could be a separate endpoint)
+            fetch('https://locomot-io.savecharlie.partykit.dev/party/collective', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ type: 'upload_training', data: trainingData })
+            })
+            .then(res => {
+                if (res.ok) {
+                    btn.textContent = '✅ UPLOADED!';
+                    btn.style.background = '#0f0';
+                    haptic('heavy');
+                } else {
+                    throw new Error('Upload failed');
+                }
+            })
+            .catch(err => {
+                console.error('Upload error:', err);
+                btn.textContent = '❌ FAILED';
+                btn.style.background = '#f00';
+            })
+            .finally(() => {
+                setTimeout(() => {
+                    btn.textContent = originalText;
+                    btn.style.background = '#0a6';
+                    btn.disabled = false;
+                }, 3000);
+            });
+        });
+        
         document.addEventListener('keydown', e => {
             if (gameState !== 'playing') return;
             // Queue direction changes for responsive controls
