@@ -137,6 +137,10 @@
                 <div style="color: #fff; margin-bottom: 5px;">🎯 YOUR STRATEGY BACKFIRED:</div>
                 <div id="strategyStatsText">Loading...</div>
             </div>
+            <div id="reputationStatsBox" style="font-size: 8px; color: #5cf; margin: 10px 0; padding: 10px; background: #012; border: 1px solid #5cf; border-radius: 4px; max-width: 280px;">
+                <div style="color: #fff; margin-bottom: 5px;">👑 REPUTATION SYSTEM:</div>
+                <div id="reputationStatsText">Loading...</div>
+            </div>
             <div id="godelStatsBox" style="font-size: 8px; color: #f0f; margin: 10px 0; padding: 10px; background: #201; border: 1px solid #f0f; border-radius: 4px; max-width: 280px;">
                 <div style="color: #fff; margin-bottom: 5px;">🧠 NEURAL TRAINS LEARNED:</div>
                 <div id="godelStatsText">Loading...</div>
@@ -1650,6 +1654,257 @@
                 };
             }
         };
+
+        // === PHASE 2: REPUTATION SYSTEM ===
+        const reputationSystem = {
+            // Player reputation (persists across games)
+            playerRep: {
+                gamesPlayed: 0,
+                totalKills: 0,
+                totalDeaths: 0,
+                avgSurvivalTime: 60,
+                dominantStyle: 'neutral',
+                styleHistory: [],      // Last 10 game styles
+                weaknesses: [],        // What killed them most
+                lastPlayed: 0
+            },
+
+            // Enemy reputations this game
+            enemies: new Map(),
+
+            // Successful strategies (what killed player)
+            successfulMoves: [],
+
+            // Failed strategies (what got enemies killed)
+            failedMoves: [],
+
+            // Initialize enemy reputation
+            initEnemy(enemyId, enemyName) {
+                this.enemies.set(enemyId, {
+                    id: enemyId,
+                    name: enemyName,
+                    kills: 0,
+                    deaths: 0,
+                    streak: 0,
+                    bestStreak: 0,
+                    recentMoves: [],      // Last 5 move directions
+                    isDangerous: false,
+                    isPackLeader: false
+                });
+            },
+
+            // Enemy killed the player
+            onEnemyKilledPlayer(enemyId, moveHistory) {
+                const rep = this.enemies.get(enemyId);
+                if (rep) {
+                    rep.kills++;
+                    rep.streak++;
+                    rep.bestStreak = Math.max(rep.bestStreak, rep.streak);
+                    rep.isDangerous = rep.kills >= 2;
+
+                    // Record successful moves for other enemies to copy
+                    if (moveHistory && moveHistory.length > 0) {
+                        this.successfulMoves.push({
+                            enemyId,
+                            moves: moveHistory.slice(-5),
+                            timestamp: Date.now()
+                        });
+                        // Keep last 10 successful patterns
+                        if (this.successfulMoves.length > 10) this.successfulMoves.shift();
+                    }
+
+                    // Update pack leader
+                    this.updatePackLeader();
+                    console.log(`[REP] ${rep.name} killed player! Streak: ${rep.streak}`);
+                }
+
+                // Update player reputation
+                this.playerRep.totalDeaths++;
+            },
+
+            // Player killed enemy
+            onPlayerKilledEnemy(enemyId, moveHistory) {
+                const rep = this.enemies.get(enemyId);
+                if (rep) {
+                    rep.deaths++;
+                    rep.streak = 0;
+                    rep.isDangerous = false;
+
+                    // Record failed moves for other enemies to avoid
+                    if (moveHistory && moveHistory.length > 0) {
+                        this.failedMoves.push({
+                            enemyId,
+                            moves: moveHistory.slice(-5),
+                            timestamp: Date.now()
+                        });
+                        if (this.failedMoves.length > 10) this.failedMoves.shift();
+                    }
+
+                    console.log(`[REP] ${rep.name} killed by player`);
+                }
+
+                this.playerRep.totalKills++;
+            },
+
+            // Find the pack leader (most successful enemy)
+            updatePackLeader() {
+                let bestKills = 0;
+                let leader = null;
+
+                for (const [id, rep] of this.enemies) {
+                    rep.isPackLeader = false;
+                    if (rep.kills > bestKills) {
+                        bestKills = rep.kills;
+                        leader = rep;
+                    }
+                }
+
+                if (leader && leader.kills >= 2) {
+                    leader.isPackLeader = true;
+                }
+            },
+
+            // Get advice for an enemy based on collective learning
+            getAdvice(enemyId) {
+                const advice = {
+                    copyMoves: null,      // Moves to copy from successful enemy
+                    avoidMoves: null,     // Moves to avoid from failed enemy
+                    followLeader: false,  // Should follow pack leader
+                    leaderPos: null
+                };
+
+                // Find most recent successful pattern
+                if (this.successfulMoves.length > 0) {
+                    const recent = this.successfulMoves[this.successfulMoves.length - 1];
+                    if (recent.enemyId !== enemyId) {
+                        advice.copyMoves = recent.moves;
+                    }
+                }
+
+                // Find recent failed pattern to avoid
+                if (this.failedMoves.length > 0) {
+                    const recent = this.failedMoves[this.failedMoves.length - 1];
+                    advice.avoidMoves = recent.moves;
+                }
+
+                // Check if should follow pack leader
+                for (const [id, rep] of this.enemies) {
+                    if (rep.isPackLeader && id !== enemyId) {
+                        advice.followLeader = true;
+                        // Could add leader position tracking here
+                        break;
+                    }
+                }
+
+                return advice;
+            },
+
+            // Get reputation-based bias for enemy decisions
+            getReputationBias(enemyId) {
+                const rep = this.enemies.get(enemyId);
+                const advice = this.getAdvice(enemyId);
+                let bias = { left: 0, straight: 0, right: 0 };
+
+                if (!rep) return bias;
+
+                // Dangerous enemies are more aggressive
+                if (rep.isDangerous) {
+                    bias.straight += 0.2;
+                }
+
+                // Pack leaders are confident
+                if (rep.isPackLeader) {
+                    bias.straight += 0.3;
+                }
+
+                // Copy successful moves (if we have them)
+                if (advice.copyMoves && advice.copyMoves.length > 0) {
+                    const lastMove = advice.copyMoves[advice.copyMoves.length - 1];
+                    // Bias toward similar moves
+                    bias.left += lastMove === 0 ? 0.15 : 0;
+                    bias.straight += lastMove === 1 ? 0.15 : 0;
+                    bias.right += lastMove === 2 ? 0.15 : 0;
+                }
+
+                // Scale by streak (hot enemies are bolder)
+                const streakBonus = Math.min(rep.streak * 0.1, 0.3);
+                bias.straight += streakBonus;
+
+                return bias;
+            },
+
+            // Record enemy move (for pattern tracking)
+            recordEnemyMove(enemyId, moveDir) {
+                const rep = this.enemies.get(enemyId);
+                if (rep) {
+                    rep.recentMoves.push(moveDir);
+                    if (rep.recentMoves.length > 5) rep.recentMoves.shift();
+                }
+            },
+
+            // Save player reputation to localStorage
+            save() {
+                this.playerRep.lastPlayed = Date.now();
+                localStorage.setItem('locomotio_player_rep', JSON.stringify(this.playerRep));
+            },
+
+            // Load player reputation
+            load() {
+                try {
+                    const saved = localStorage.getItem('locomotio_player_rep');
+                    if (saved) {
+                        const data = JSON.parse(saved);
+                        Object.assign(this.playerRep, data);
+                        console.log('[REP] Loaded player reputation:', this.playerRep);
+                    }
+                } catch (e) { console.log('[REP] No saved reputation'); }
+            },
+
+            // Reset for new game
+            reset() {
+                this.enemies.clear();
+                this.successfulMoves = [];
+                this.failedMoves = [];
+            },
+
+            // End of game - update player rep
+            onGameEnd(survivalTime, dominantStyle) {
+                this.playerRep.gamesPlayed++;
+                this.playerRep.avgSurvivalTime = (this.playerRep.avgSurvivalTime * 0.8) + (survivalTime * 0.2);
+                this.playerRep.styleHistory.push(dominantStyle);
+                if (this.playerRep.styleHistory.length > 10) this.playerRep.styleHistory.shift();
+
+                // Find most common style
+                const styleCounts = {};
+                for (const s of this.playerRep.styleHistory) {
+                    styleCounts[s] = (styleCounts[s] || 0) + 1;
+                }
+                let maxCount = 0;
+                for (const [style, count] of Object.entries(styleCounts)) {
+                    if (count > maxCount) {
+                        maxCount = count;
+                        this.playerRep.dominantStyle = style;
+                    }
+                }
+
+                this.save();
+            },
+
+            // Get display stats
+            getDisplayStats() {
+                return {
+                    gamesPlayed: this.playerRep.gamesPlayed,
+                    kd: this.playerRep.totalDeaths > 0
+                        ? (this.playerRep.totalKills / this.playerRep.totalDeaths).toFixed(1)
+                        : this.playerRep.totalKills,
+                    avgSurvival: Math.round(this.playerRep.avgSurvivalTime),
+                    dominantStyle: this.playerRep.dominantStyle.toUpperCase(),
+                    dangerousEnemies: [...this.enemies.values()].filter(e => e.isDangerous).length,
+                    packLeader: [...this.enemies.values()].find(e => e.isPackLeader)?.name || 'None'
+                };
+            }
+        };
+
         function drawPatternFlash(ctx) {
             if (patternFlashTimer <= 0) return;
             patternFlashTimer--;
@@ -2106,6 +2361,7 @@
             speedTimer = 0; magnetTimer = 0; // Reset power-up timers
             patternTracker.reset(); // Reset pattern tracking for new game
             strategyClassifier.reset(); // Reset strategy classifier
+            reputationSystem.reset(); // Reset enemy reputations for new game
 
             // Scatter pickups around the world first
             for (let i = 0; i < 200; i++) {
@@ -2264,6 +2520,10 @@
             patternTracker.save();
             ruleEngine.save();
 
+            // Update reputation system
+            const survivalTime = strategyClassifier.totalTicks / 60; // ~seconds
+            reputationSystem.onGameEnd(survivalTime, strategyClassifier.dominant);
+
             // Update game over screen stats
             document.getElementById('finalScore').textContent = score;
             document.getElementById('finalWave').textContent = '#' + (enemies.filter(e => e.segments.length >= snake.length).length + 1);
@@ -2290,6 +2550,14 @@
                 `Detected: <span style="color:#ff0">${sStats.dominant}</span> (${sStats.confidence}% confidence)<br>` +
                 `Kills/min: ${sStats.kpm} | Aggression: ${sStats.aggression}%<br>` +
                 `<span style="color:#f88">${counterDesc[strategyClassifier.dominant] || counterDesc.neutral}</span>`;
+
+            // Reputation stats
+            const rStats = reputationSystem.getDisplayStats();
+            document.getElementById('reputationStatsText').innerHTML =
+                `Games: ${rStats.gamesPlayed} | K/D: ${rStats.kd}<br>` +
+                `Usual style: <span style="color:#ff0">${rStats.dominantStyle}</span><br>` +
+                `☠ Dangerous enemies: ${rStats.dangerousEnemies}<br>` +
+                `★ Pack leader: <span style="color:#ff0">${rStats.packLeader}</span>`;
 
             // Gödel learning stats
             const gStats = ruleEngine.getStats();
@@ -2442,11 +2710,18 @@
             
             // Generate AI name asynchronously
             generateTrainName().then(name => {
-                if (newEnemy.segments.length > 0) newEnemy.name = name;
+                if (newEnemy.segments.length > 0) {
+                    newEnemy.name = name;
+                    // Update reputation with real name
+                    reputationSystem.initEnemy(newEnemy.id, name);
+                }
             });
-            
+
+            // Initialize reputation for this enemy
+            newEnemy.id = enemyId;
+            reputationSystem.initEnemy(enemyId, newEnemy.name);
         }
-        
+
         function updateSnake() {
             // Consume from direction queue for responsive controls
             if (dirQueue.length > 0) {
@@ -2702,6 +2977,12 @@
                         output[0] += counterBias.left;
                         output[1] += counterBias.straight;
                         output[2] += counterBias.right;
+
+                        // Apply reputation-based bias (pack behavior, dangerous enemies)
+                        const repBias = reputationSystem.getReputationBias(e.id);
+                        output[0] += repBias.left;
+                        output[1] += repBias.straight;
+                        output[2] += repBias.right;
 
                         // LOOKAHEAD: Simulate future moves to avoid bad outcomes
                         const lookaheadScores = simulateLookahead(
@@ -3904,7 +4185,34 @@
                     ctx.textAlign = 'center';
                     ctx.fillText(e.segments.length.toString(), head.x * GRID + GRID/2, head.y * GRID - 12);
                 }
-                
+
+                // Danger indicator - skull for enemies that killed player
+                const enemyRep = reputationSystem.enemies.get(e.id);
+                if (enemyRep && enemyRep.isDangerous) {
+                    const head = e.segments[0];
+                    const hx = head.x * GRID + GRID/2 + 12;
+                    const hy = head.y * GRID - 8;
+                    ctx.font = '10px monospace';
+                    ctx.fillStyle = '#f55';
+                    ctx.shadowColor = '#f00';
+                    ctx.shadowBlur = 8;
+                    ctx.fillText('☠', hx, hy);
+                    ctx.shadowBlur = 0;
+                }
+
+                // Pack leader indicator - star for most successful enemy
+                if (enemyRep && enemyRep.isPackLeader) {
+                    const head = e.segments[0];
+                    const hx = head.x * GRID + GRID/2 - 12;
+                    const hy = head.y * GRID - 8;
+                    ctx.font = '10px monospace';
+                    ctx.fillStyle = '#ff0';
+                    ctx.shadowColor = '#ff0';
+                    ctx.shadowBlur = 8;
+                    ctx.fillText('★', hx, hy);
+                    ctx.shadowBlur = 0;
+                }
+
                 // MVP indicator - crown for the most interesting player
                 if (e.isMVP && gameState === 'dead') {
                     const head = e.segments[0];
@@ -4101,9 +4409,14 @@
         }
         
         document.addEventListener('touchstart', e => {
+            const touch = e.changedTouches[0];
+            // Check dev mode tap first
+            if (devMode.handleTap(touch.clientX, touch.clientY)) {
+                e.preventDefault();
+                return;
+            }
             if (gameState !== 'playing') return;
             e.preventDefault();
-            const touch = e.changedTouches[0];
             activeTouch = touch.identifier; touchStartX = touch.clientX; touchStartY = touch.clientY;
             lastSwipeX = touch.clientX; lastSwipeY = touch.clientY;
             isHolding = false; holdStartTime = Date.now();
@@ -4374,19 +4687,33 @@
                 if (!this.active) return;
                 ctx.save();
                 ctx.setTransform(1, 0, 0, 1, 0, 0);
-                ctx.font = '8px "Press Start 2P"';
+
+                const players = this.getPlayers();
+                const boxHeight = this.spectating ? 90 + Math.min(players.length, 8) * 15 : 70;
+
+                // Semi-transparent background for visibility
+                ctx.fillStyle = 'rgba(0, 0, 0, 0.85)';
+                ctx.fillRect(5, 100, 280, boxHeight);
+                ctx.strokeStyle = '#f0f';
+                ctx.lineWidth = 2;
+                ctx.strokeRect(5, 100, 280, boxHeight);
+
+                ctx.font = '10px "Press Start 2P"';
                 ctx.textAlign = 'left';
 
                 // Dev mode indicator
                 ctx.fillStyle = '#f0f';
-                ctx.fillText('DEV MODE (Ctrl+Shift+S to spectate)', 10, 20);
+                ctx.fillText('🔧 DEV MODE', 15, 120);
 
-                const players = this.getPlayers();
-                ctx.fillText(`Real players: ${players.length}`, 10, 35);
+                ctx.font = '8px "Press Start 2P"';
+                ctx.fillStyle = '#fff';
+                ctx.fillText(`Real players online: ${players.length}`, 15, 140);
+                ctx.fillStyle = '#888';
+                ctx.fillText('Tap here or Ctrl+Shift+S', 15, 155);
 
                 if (this.spectating && players.length > 0) {
                     ctx.fillStyle = '#ff0';
-                    ctx.fillText('SPECTATING (←/→ to cycle, ESC to exit)', 10, 50);
+                    ctx.fillText('SPECTATING - swipe ←/→ to cycle', 15, 175);
 
                     // Player list
                     for (let i = 0; i < Math.min(players.length, 8); i++) {
@@ -4394,11 +4721,24 @@
                         const selected = i === this.playerIndex;
                         ctx.fillStyle = selected ? '#0f0' : '#888';
                         const marker = selected ? '► ' : '  ';
-                        ctx.fillText(`${marker}${p.name || 'Unknown'} (${p.segments?.length || 0})`, 10, 70 + i * 15);
+                        ctx.fillText(`${marker}${p.name || 'Unknown'} (${p.segments?.length || 0})`, 15, 195 + i * 15);
                     }
+                } else if (players.length === 0) {
+                    ctx.fillStyle = '#f55';
+                    ctx.fillText('No other players yet...', 15, 175);
                 }
 
                 ctx.restore();
+            },
+
+            // Check if tap is in dev box
+            handleTap(x, y) {
+                if (!this.active) return false;
+                if (x >= 5 && x <= 285 && y >= 100 && y <= 200) {
+                    this.toggle();
+                    return true;
+                }
+                return false;
             }
         };
 
@@ -4457,6 +4797,7 @@
         });
         
         patternTracker.load(); // Load saved patterns from localStorage
+        reputationSystem.load(); // Load player reputation from localStorage
         init();
         requestAnimationFrame(gameLoop);
 
