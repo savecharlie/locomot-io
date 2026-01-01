@@ -2383,50 +2383,45 @@
         }
         
         function updateProjectiles(dt) {
+            // Combine enemies + other players into one target list
+            const allTargets = [...enemies];
+            if (Multiplayer.connected) {
+                for (const [playerId, op] of Multiplayer.otherPlayers) {
+                    if (op.segments && op.segments.length > 0) {
+                        allTargets.push({
+                            segments: op.segments.map(s => ({ x: s.x, y: s.y, hp: 999, maxHp: 999 })),
+                            color: op.color,
+                            isPlayer: true,
+                            playerId: playerId
+                        });
+                    }
+                }
+            }
+            
             for (let i = projectiles.length - 1; i >= 0; i--) {
                 const p = projectiles[i];
                 p.x += p.vx * dt * 0.25; p.y += p.vy * dt * 0.25; p.life -= dt;
                 
-                // Hit enemies
-                outer: for (const e of enemies) {
+                // Hit any target (enemies or players)
+                outer: for (const e of allTargets) {
+                    if (!e.segments) continue;
                     for (const seg of e.segments) {
                         const sx = seg.x * GRID + GRID/2, sy = seg.y * GRID + GRID/2;
                         const dist = Math.sqrt((p.x - sx)**2 + (p.y - sy)**2);
                         if (dist < GRID/2 + p.size) {
-                            seg.hp -= p.damage; p.life = 0;
-                            particles.push({ x: p.x, y: p.y, vx: (Math.random()-0.5)*2, vy: (Math.random()-0.5)*2, life: 10, color: '#fff' });
-                            break outer;
-                        }
-                    }
-                }
-                
-                // Hit other players (PvP)
-                if (Multiplayer.connected && p.life > 0) {
-                    for (const [playerId, otherPlayer] of Multiplayer.otherPlayers) {
-                        if (!otherPlayer.segments || otherPlayer.segments.length === 0) continue;
-                        for (const seg of otherPlayer.segments) {
-                            // Segments come as grid coords, convert to pixels
-                            const sx = seg.x * GRID + GRID/2;
-                            const sy = seg.y * GRID + GRID/2;
-                            const dist = Math.sqrt((p.x - sx)**2 + (p.y - sy)**2);
+                            p.life = 0;
+                            particles.push({ x: p.x, y: p.y, vx: (Math.random()-0.5)*2, vy: (Math.random()-0.5)*2, life: 10, color: e.color || '#fff' });
                             
-                            // DEBUG: Show yellow spark when bullet is close (within 50px)
-                            if (dist < 50) {
-                                particles.push({ x: p.x, y: p.y, vx: 0, vy: 0, life: 5, color: '#ff0' });
-                            }
-                            
-                            // Hit detection (larger hitbox for lag)
-                            if (dist < GRID * 1.5 + p.size) {
-                                // HIT!
-                                p.life = 0;
+                            if (e.isPlayer) {
+                                // Hit another player
                                 score += 10;
                                 haptic('light');
-                                for (let j = 0; j < 8; j++) {
-                                    particles.push({ x: sx, y: sy, vx: (Math.random()-0.5)*6, vy: (Math.random()-0.5)*6, life: 20, color: '#f00' });
-                                }
-                                Multiplayer.send({ type: 'hit', targetId: playerId, damage: p.damage });
-                                break;
+                                Multiplayer.send({ type: 'hit', targetId: e.playerId, damage: p.damage });
+                            } else {
+                                // Hit enemy AI
+                                seg.hp -= p.damage;
                             }
+                            break outer;
                         }
                     }
                 }
