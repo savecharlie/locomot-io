@@ -2535,7 +2535,7 @@
         }
         
         function updateLeaderboard() {
-            const entries = [{ name: Multiplayer.username || 'YOU', length: snake.length, isPlayer: true }];
+            const entries = [{ name: playerName || 'YOU', length: snake.length, isPlayer: true }];
             
             // Add other multiplayer players
             if (Multiplayer.connected) {
