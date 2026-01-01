@@ -121,37 +121,71 @@
         
         <div class="overlay game-over-screen hidden" id="gameOverScreen">
             <div id="spectatingLabel" style="position:absolute; top:20px; left:50%; transform:translateX(-50%); color:#5ff; font-size:12px; text-shadow:0 0 10px #5ff; display:none;">SPECTATING LEADER</div>
-            <h2>GAME OVER</h2>
-            <div style="margin: 10px 0;">
-                <input type="text" id="usernameInputDeath" placeholder="Change name..." maxlength="12"
-                    style="font-family: 'Press Start 2P'; font-size: 8px; padding: 8px; border: 2px solid #f55; background: #111; color: #f55; text-align: center; width: 180px;">
+
+            <h2 style="margin-bottom: 15px;">GAME OVER</h2>
+
+            <!-- Score Summary -->
+            <div style="display: flex; gap: 20px; justify-content: center; margin-bottom: 15px;">
+                <div style="text-align: center;">
+                    <div style="font-size: 24px; color: #ff0;">★<span id="finalScore">0</span></div>
+                    <div style="font-size: 6px; color: #888;">SCORE</div>
+                </div>
+                <div style="text-align: center;">
+                    <div style="font-size: 24px; color: #0f0;"><span id="finalWave">#?</span></div>
+                    <div style="font-size: 6px; color: #888;">RANK</div>
+                </div>
+                <div style="text-align: center;">
+                    <div style="font-size: 24px; color: #5ff;">◈<span id="finalLength">2</span></div>
+                    <div style="font-size: 6px; color: #888;">LENGTH</div>
+                </div>
             </div>
-            <div class="score-display">SCORE: <span id="finalScore">0</span><br>BEST RANK: <span id="finalWave">#?</span><br>MAX LENGTH: <span id="finalLength">2</span></div>
-            <div id="deathReasonBox" style="font-size: 8px; color: #f55; margin: 10px 0; padding: 10px; background: #200; border-radius: 4px; max-width: 280px;">CAUSE: <span id="deathReasonText">Unknown</span></div>
-            <div id="patternStatsBox" style="font-size: 8px; color: #0fc; margin: 10px 0; padding: 10px; background: #021; border: 1px solid #0fc; border-radius: 4px; max-width: 280px;">
-                <div style="color: #fff; margin-bottom: 5px;">👁 I OBSERVED YOUR PATTERNS:</div>
-                <div id="patternStatsText">Loading...</div>
+
+            <!-- Death Cause -->
+            <div style="font-size: 9px; color: #f55; margin-bottom: 15px; padding: 8px 16px; background: rgba(255,50,50,0.15); border-radius: 20px;">
+                ☠ <span id="deathReasonText">Unknown</span>
             </div>
-            <div id="strategyStatsBox" style="font-size: 8px; color: #f5a; margin: 10px 0; padding: 10px; background: #210; border: 1px solid #f5a; border-radius: 4px; max-width: 280px;">
-                <div style="color: #fff; margin-bottom: 5px;">🎯 YOUR STRATEGY BACKFIRED:</div>
-                <div id="strategyStatsText">Loading...</div>
+
+            <!-- Main Buttons -->
+            <div style="display: flex; gap: 10px; margin-bottom: 20px;">
+                <button class="start-btn" id="restartBtn" style="flex: 1;">▶ PLAY AGAIN</button>
+                <button class="start-btn" id="spectateBtn" style="flex: 1; background: #155;">👁 SPECTATE</button>
             </div>
-            <div id="reputationStatsBox" style="font-size: 8px; color: #5cf; margin: 10px 0; padding: 10px; background: #012; border: 1px solid #5cf; border-radius: 4px; max-width: 280px;">
-                <div style="color: #fff; margin-bottom: 5px;">👑 REPUTATION SYSTEM:</div>
-                <div id="reputationStatsText">Loading...</div>
+
+            <!-- Change Name -->
+            <input type="text" id="usernameInputDeath" placeholder="Change name..." maxlength="12"
+                style="font-family: 'Press Start 2P'; font-size: 7px; padding: 6px 12px; border: 1px solid #444; background: #1a1a1a; color: #888; text-align: center; width: 160px; border-radius: 4px; margin-bottom: 15px;">
+
+            <!-- AI Learning Stats (compact) -->
+            <details style="max-width: 280px; margin-bottom: 15px;">
+                <summary style="font-size: 8px; color: #888; cursor: pointer; padding: 8px; background: #111; border-radius: 4px;">🧠 AI LEARNED FROM YOUR DEATH</summary>
+                <div style="padding: 10px; background: #0a0a0a; border-radius: 0 0 4px 4px; font-size: 7px;">
+                    <div style="color: #0fc; margin-bottom: 8px;"><span style="color:#666;">Pattern:</span> <span id="patternStatsText">-</span></div>
+                    <div style="color: #f5a; margin-bottom: 8px;"><span style="color:#666;">Strategy:</span> <span id="strategyStatsText">-</span></div>
+                    <div style="color: #f0f;"><span style="color:#666;">Neural:</span> <span id="godelStatsText">-</span></div>
+                </div>
+            </details>
+
+            <!-- Hidden stats for JS compatibility -->
+            <div id="reputationStatsText" style="display:none;"></div>
+
+            <!-- Support & Other Games -->
+            <div style="padding-top: 15px; border-top: 1px solid #222;">
+                <div id="kofiWidgetContainer" style="display: flex; justify-content: center; margin-bottom: 12px;"></div>
+                <script>kofiwidget2.init('Support me on Ko-fi', '#72a4f2', 'S6S21JNSQJ');kofiwidget2.draw();</script>
+                <div style="display: flex; gap: 8px; justify-content: center; flex-wrap: wrap;">
+                    <a href="https://painter.locomot.io" target="_blank"
+                       style="font-family: 'Press Start 2P'; font-size: 6px; padding: 5px 8px; background: #222; color: #f5a; text-decoration: none; border-radius: 4px;">
+                        🎨 PAINTER
+                    </a>
+                    <a href="https://sandbox.locomot.io" target="_blank"
+                       style="font-family: 'Press Start 2P'; font-size: 6px; padding: 5px 8px; background: #222; color: #fa5; text-decoration: none; border-radius: 4px;">
+                        🏖️ SANDBOX
+                    </a>
+                </div>
             </div>
-            <div id="godelStatsBox" style="font-size: 8px; color: #f0f; margin: 10px 0; padding: 10px; background: #201; border: 1px solid #f0f; border-radius: 4px; max-width: 280px;">
-                <div style="color: #fff; margin-bottom: 5px;">🧠 NEURAL TRAINS LEARNED:</div>
-                <div id="godelStatsText">Loading...</div>
-            </div>
-            <button class="start-btn" id="restartBtn">TRY AGAIN</button>
-            <button class="start-btn" id="spectateBtn" style="background:#155; margin-left:10px;">SPECTATE</button>
-            <button class="start-btn" id="uploadCollectiveBtn" style="background: #0a6; margin-top: 10px; font-size: 9px;">🧠 UPLOAD TO COLLECTIVE</button>
-            <button class="start-btn" id="copyDeathBtn" style="background: #5af; margin-top: 10px; font-size: 9px;">📋 COPY DEBUG</button>
-            <button class="start-btn" id="submitIdeaBtn" style="background: #f80; margin-top: 10px; font-size: 9px;">💡 SUBMIT IDEA</button>
 
             <!-- Ad Space -->
-            <div style="margin-top: 15px; min-height: 100px; display: flex; justify-content: center;">
+            <div style="margin-top: 15px;">
                 <ins class="adsbygoogle"
                      style="display:block; width:320px; height:100px;"
                      data-ad-client="ca-pub-7560120281604459"
@@ -159,23 +193,6 @@
                      data-ad-format="auto"
                      data-full-width-responsive="true"></ins>
                 <script>(adsbygoogle = window.adsbygoogle || []).push({});</script>
-            </div>
-
-            <!-- Support & Other Games -->
-            <div style="margin-top: 20px; padding-top: 15px; border-top: 1px solid #333;">
-                <div style="font-size: 8px; color: #888; margin-bottom: 10px;">MORE FROM THE DEV:</div>
-                <div id="kofiWidgetContainer" style="display: flex; justify-content: center;"></div>
-                <script>kofiwidget2.init('Support me on Ko-fi', '#72a4f2', 'S6S21JNSQJ');kofiwidget2.draw();</script>
-                <div style="display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; margin-top: 10px;">
-                    <a href="https://painter.locomot.io" target="_blank"
-                       style="font-family: 'Press Start 2P'; font-size: 7px; padding: 6px 10px; background: #333; color: #f5a; text-decoration: none; border-radius: 4px; border: 1px solid #f5a;">
-                        🎨 PORTRAIT PAINTER
-                    </a>
-                    <a href="https://sandbox.locomot.io" target="_blank"
-                       style="font-family: 'Press Start 2P'; font-size: 7px; padding: 6px 10px; background: #333; color: #fa5; text-decoration: none; border-radius: 4px; border: 1px solid #fa5;">
-                        🏖️ SAND BUDDY
-                    </a>
-                </div>
             </div>
         </div>
     </div>
@@ -957,20 +974,7 @@
             });
         }
         setTimeout(updateInviteLink, 100);
-        
-        // === IDEA SUBMISSION ===
-        document.getElementById('submitIdeaBtn')?.addEventListener('click', submitIdea);
-        function submitIdea() {
-            const idea = prompt("Got an idea for LOCOMOT.IO? Share it!");
-            if (idea && idea.trim()) {
-                const _e = ["s","a","v","e","c","h","a","r","l","i","e","@","g","m","a","i","l",".","c","o","m"].join(""); fetch("https://formsubmit.co/ajax/" + _e, {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json", "Accept": "application/json" },
-                    body: JSON.stringify({ message: idea, _subject: "LOCOMOT.IO Idea" })
-                }).then(() => alert("Thanks! Idea sent 💡")).catch(() => alert("Failed to send - try again"));
-            }
-        }
-        
+
         // === SCREEN SHAKE ===
         function screenShake() {
             document.body.classList.add('shake');
@@ -2592,52 +2596,33 @@
             document.getElementById('finalLength').textContent = maxLength;
             document.getElementById('deathReasonText').textContent = deathReason || 'Unknown';
 
-            // Pattern stats
+            // Pattern stats (compact)
             const pStats = patternTracker.getStats();
-            document.getElementById('patternStatsText').innerHTML =
-                `Turn bias: ${pStats.leftBias}% left<br>` +
-                `Flee distance: ${pStats.fleeDistance} tiles`;
+            document.getElementById('patternStatsText').textContent = `${pStats.leftBias}% left bias, ${pStats.fleeDistance} tile flee`;
 
-            // Strategy classifier stats
+            // Strategy stats (compact)
             const sStats = strategyClassifier.getDisplayStats();
-            const counterDesc = {
-                rusher: 'Enemies flanked and retreat-baited you',
-                sniper: 'Enemies rushed you directly at high speed',
-                farmer: 'Enemies chased you relentlessly',
-                survivor: 'Enemies used pincer movements to trap you',
-                hunter: 'Enemies protected their weak with bodyguards',
-                neutral: 'Enemies are still learning your style...'
-            };
-            document.getElementById('strategyStatsText').innerHTML =
-                `Detected: <span style="color:#ff0">${sStats.dominant}</span> (${sStats.confidence}% confidence)<br>` +
-                `Kills/min: ${sStats.kpm} | Aggression: ${sStats.aggression}%<br>` +
-                `<span style="color:#f88">${counterDesc[strategyClassifier.dominant] || counterDesc.neutral}</span>`;
+            document.getElementById('strategyStatsText').innerHTML = `<span style="color:#ff0">${sStats.dominant}</span> (${sStats.confidence}%)`;
 
-            // Reputation stats
+            // Reputation stats (hidden element for compatibility)
             const rStats = reputationSystem.getDisplayStats();
-            document.getElementById('reputationStatsText').innerHTML =
-                `Games: ${rStats.gamesPlayed} | K/D: ${rStats.kd}<br>` +
-                `Usual style: <span style="color:#ff0">${rStats.dominantStyle}</span><br>` +
-                `☠ Dangerous enemies: ${rStats.dangerousEnemies}<br>` +
-                `★ Pack leader: <span style="color:#ff0">${rStats.packLeader}</span>`;
+            document.getElementById('reputationStatsText').textContent = rStats.dominantStyle;
 
-            // Gödel learning stats
+            // Neural stats (compact)
             const gStats = ruleEngine.getStats();
-            let godelText = `${gStats.total} rules active (${gStats.learned} learned from deaths)<br>`;
-            godelText += `Avg confidence: ${(gStats.avgConf * 100).toFixed(0)}%<br>`;
-            godelText += `Death patterns tracked: ${gStats.patterns}`;
+            document.getElementById('godelStatsText').textContent = `${gStats.total} rules, ${gStats.learned} from deaths`;
 
-            // Show recently generated rules
-            const recentRules = ruleEngine.rules.filter(r => r.source === 'death_pattern').slice(-3);
-            if (recentRules.length > 0) {
-                godelText += `<br><br>Recent learnings:`;
-                for (const rule of recentRules) {
-                    const conditions = Object.keys(rule.trigger.conditions).join(', ');
-                    const avoid = rule.action.bias[0] < -1 ? 'left' : rule.action.bias[2] < -1 ? 'right' : 'straight';
-                    godelText += `<br>• "${conditions}" → avoid ${avoid}`;
-                }
-            }
-            document.getElementById('godelStatsText').innerHTML = godelText;
+            // Silent auto-upload to collective
+            try {
+                fetch('https://locomot-io.savecharlie.partykit.dev/party/collective', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        type: 'upload_training',
+                        data: { rules: ruleEngine.rules, patterns: patternTracker.getStats(), deathInfo: deathDebugInfo, timestamp: Date.now() }
+                    })
+                }).catch(() => {});
+            } catch(e) {}
 
             // Show game over screen
             gameState = 'dead';
@@ -4595,77 +4580,7 @@
             };
             setTimeout(() => document.addEventListener('click', respawnOnTap), 500);
         });
-        
-        document.getElementById('copyDeathBtn').addEventListener('click', () => {
-            // Compact debug format
-            const mp = Multiplayer;
-            const ops = [];
-            if (mp.connected) {
-                for (const [id, p] of mp.otherPlayers) {
-                    ops.push(p.name + ':' + (p.segments?.length || 0) + '@' + (p.segments?.[0]?.x || '?') + ',' + (p.segments?.[0]?.y || '?'));
-                }
-            }
-            const compact = [
-                'reason:' + (deathReason || '?'),
-                'me:' + snake.length + '@' + (snake[0]?.x || '?') + ',' + (snake[0]?.y || '?'),
-                'mp:' + (mp.connected ? 'Y' : 'N') + '/' + mp.otherPlayers.size + 'p',
-                'players:[' + ops.join('|') + ']'
-            ].join(' | ');
-            
-            navigator.clipboard.writeText(compact).then(() => {
-                document.getElementById('copyDeathBtn').textContent = '✓ COPIED!';
-                setTimeout(() => {
-                    document.getElementById('copyDeathBtn').textContent = '📋 COPY DEBUG';
-                }, 2000);
-            }).catch(() => {
-                alert(compact);
-            });
-        });
-        
-        document.getElementById('uploadCollectiveBtn').addEventListener('click', () => {
-            const btn = document.getElementById('uploadCollectiveBtn');
-            const originalText = btn.textContent;
-            btn.textContent = '⏳ UPLOADING...';
-            btn.disabled = true;
-            
-            // Gather training data
-            const trainingData = {
-                rules: ruleEngine.rules,
-                patterns: patternTracker.getStats(),
-                deathInfo: deathDebugInfo,
-                timestamp: Date.now(),
-                version: '1.0'
-            };
-            
-            // Upload to Partykit server (or could be a separate endpoint)
-            fetch('https://locomot-io.savecharlie.partykit.dev/party/collective', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ type: 'upload_training', data: trainingData })
-            })
-            .then(res => {
-                if (res.ok) {
-                    btn.textContent = '✅ UPLOADED!';
-                    btn.style.background = '#0f0';
-                    haptic('heavy');
-                } else {
-                    throw new Error('Upload failed');
-                }
-            })
-            .catch(err => {
-                console.error('Upload error:', err);
-                btn.textContent = '❌ FAILED';
-                btn.style.background = '#f00';
-            })
-            .finally(() => {
-                setTimeout(() => {
-                    btn.textContent = originalText;
-                    btn.style.background = '#0a6';
-                    btn.disabled = false;
-                }, 3000);
-            });
-        });
-        
+
         // === DEV SPECTATE MODE - Watch real players ===
         const devMode = {
             active: new URLSearchParams(window.location.search).get('dev') === '1',
