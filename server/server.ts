@@ -148,13 +148,23 @@ export default class LocomotServer implements Party.Server {
           break;
 
         case 'hit':
-          // Broadcast hit to the target player
-          this.room.broadcast(JSON.stringify({
-            type: 'hit',
-            targetId: data.targetId,
-            damage: data.damage,
-            fromId: sender.id
-          }));
+          // Validate hit - check proximity before broadcasting
+          const attacker = this.state.players.get(sender.id);
+          const target = this.state.players.get(data.targetId);
+          if (attacker && target && attacker.segments && target.segments) {
+            const ax = attacker.x, ay = attacker.y;
+            const tx = target.x, ty = target.y;
+            const dist = Math.abs(ax - tx) + Math.abs(ay - ty);
+            // Only allow hits within reasonable range (15 tiles)
+            if (dist < 15) {
+              this.room.broadcast(JSON.stringify({
+                type: 'hit',
+                targetId: data.targetId,
+                damage: Math.min(data.damage, 50), // Cap damage
+                fromId: sender.id
+              }));
+            }
+          }
           break;
       }
 

@@ -663,7 +663,7 @@
         function submitIdea() {
             const idea = prompt("Got an idea for LOCOMOT.IO? Share it!");
             if (idea && idea.trim()) {
-                fetch("https://formsubmit.co/ajax/savecharlie@gmail.com", {
+                const _e = ["s","a","v","e","c","h","a","r","l","i","e","@","g","m","a","i","l",".","c","o","m"].join(""); fetch("https://formsubmit.co/ajax/" + _e, {
                     method: "POST",
                     headers: { "Content-Type": "application/json", "Accept": "application/json" },
                     body: JSON.stringify({ message: idea, _subject: "LOCOMOT.IO Idea" })
@@ -745,6 +745,8 @@
         let trainFrame = 0; // For wheel animation
         
         const DIR = { UP: {x:0,y:-1}, DOWN: {x:0,y:1}, LEFT: {x:-1,y:0}, RIGHT: {x:1,y:0} };
+        // Security: HTML escape to prevent XSS
+        const esc = s => String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
         const GUNS = {
             HEAD: { color: '#0f0', fireRate: 200, damage: 12, range: 200 },
             MACHINEGUN: { color: '#f80', fireRate: 80, damage: 5, range: 180 },
@@ -2831,7 +2833,7 @@
             }
             entries.sort((a, b) => b.length - a.length);
             const top = entries.slice(0, 12);
-            document.getElementById('leaderboardEntries').innerHTML = top.map((e, i) => `<div class="leaderboard-entry ${e.isPlayer ? 'player' : ''} ${e.isNeural ? 'neural' : ''} ${e.isMultiplayer ? 'multiplayer' : ''}" style="${!e.isPlayer ? 'color:' + e.color : ''}"><span class="leaderboard-rank">${i + 1}.</span><span class="leaderboard-name">${e.name}</span><span class="leaderboard-score">${e.length}</span></div>`).join('');
+            document.getElementById('leaderboardEntries').innerHTML = top.map((e, i) => `<div class="leaderboard-entry ${e.isPlayer ? 'player' : ''} ${e.isNeural ? 'neural' : ''} ${e.isMultiplayer ? 'multiplayer' : ''}" style="${!e.isPlayer ? 'color:' + (e.color && /^#[0-9a-f]{3,6}$/i.test(e.color) ? e.color : '#fff') : ''}"><span class="leaderboard-rank">${i + 1}.</span><span class="leaderboard-name">${esc(e.name)}</span><span class="leaderboard-score">${e.length}</span></div>`).join('');
         }
         
         function updateHUD() {
