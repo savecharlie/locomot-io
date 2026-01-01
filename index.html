@@ -4836,6 +4836,49 @@
                 ctx.fillStyle = '#888';
                 ctx.fillText('Tap here or Ctrl+Shift+S', 15, 155);
 
+                // Debug: Show info about ALL entities (real + AI)
+                ctx.fillStyle = '#f80';
+                const mpCount = Multiplayer.otherPlayers.size;
+                const aiCount = enemies.filter(e => e.segments && e.segments.length > 0).length;
+                ctx.fillText(`MP: ${mpCount} | AI: ${aiCount}`, 200, 120);
+
+                // Debug: Show who we're spectating
+                if (gameState === 'dead') {
+                    let foundTarget = null;
+                    let targetType = 'none';
+                    
+                    // Check multiplayer players
+                    for (const [pid, op] of Multiplayer.otherPlayers) {
+                        if (op.name === 'grease' || (op.segments && op.segments.length > 0)) {
+                            if (!foundTarget || op.name === 'grease') {
+                                foundTarget = { ...op, pid };
+                                targetType = 'REAL MP';
+                            }
+                        }
+                    }
+                    
+                    // Check AI enemies for "grease"
+                    for (const e of enemies) {
+                        if (e.name === 'grease' && e.segments && e.segments.length > 0) {
+                            foundTarget = e;
+                            targetType = 'AI ENEMY';
+                        }
+                    }
+                    
+                    if (foundTarget && foundTarget.name === 'grease') {
+                        ctx.fillStyle = '#f00';
+                        ctx.fillText(`🔍 grease = ${targetType}`, 15, 170);
+                        if (foundTarget.pid) {
+                            ctx.fillText(`   ID: ${foundTarget.pid.slice(0,12)}...`, 15, 182);
+                        }
+                        const lastSeen = Multiplayer.playerLastSeen.get(foundTarget.pid);
+                        if (lastSeen) {
+                            const ago = Math.floor((Date.now() - lastSeen) / 1000);
+                            ctx.fillText(`   Last update: ${ago}s ago`, 15, 194);
+                        }
+                    }
+                }
+
                 if (this.spectating && players.length > 0) {
                     ctx.fillStyle = '#ff0';
                     ctx.fillText('SPECTATING - swipe ←/→ to cycle', 15, 175);
