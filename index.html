@@ -1455,6 +1455,11 @@
             if (teamMode) newEnemy.color = newEnemy.team === "blue" ? "#0af" : "#f55";
             else newEnemy.color = color;
             
+            // Generate AI name asynchronously
+            generateTrainName().then(name => {
+                if (newEnemy.segments.length > 0) newEnemy.name = name;
+            });
+            
         }
         
         function simulateWorld(ticks) {
@@ -1865,10 +1870,11 @@
                 });
             }
             
+            const enemyId = enemies.length;
             enemies.push({
                 // Assign team to balance (alternate)
                 team: enemies.filter(e => e.team === 'blue').length <= enemies.filter(e => e.team === 'red').length ? 'blue' : 'red',
-                name: TRAIN_NAMES[Math.floor(Math.random() * TRAIN_NAMES.length)],
+                name: '...', // Placeholder until Qwen generates name
                 segments, dir: startDir, nextDir: startDir,
                 baseSpeed: 8 + wave * 0.5, damage: 10 + wave * 2,
                 moveTimer: 0, lastFired: 0, fireRate: 1200 - wave * 40,
@@ -1881,6 +1887,11 @@
             const newEnemy = enemies[enemies.length - 1];
             if (teamMode) newEnemy.color = newEnemy.team === "blue" ? "#0af" : "#f55";
             else newEnemy.color = color;
+            
+            // Generate AI name asynchronously
+            generateTrainName().then(name => {
+                if (newEnemy.segments.length > 0) newEnemy.name = name;
+            });
             
         }
         
