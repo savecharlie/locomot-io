@@ -2403,11 +2403,14 @@
                 // Hit other players (PvP)
                 if (Multiplayer.connected && p.life > 0) {
                     for (const [playerId, otherPlayer] of Multiplayer.otherPlayers) {
-                        if (!otherPlayer.segments) continue;
+                        if (!otherPlayer.segments || otherPlayer.segments.length === 0) continue;
                         for (const seg of otherPlayer.segments) {
-                            const sx = seg.x * GRID + GRID/2, sy = seg.y * GRID + GRID/2;
+                            // Convert grid coords to pixel coords
+                            const sx = seg.x * GRID + GRID/2;
+                            const sy = seg.y * GRID + GRID/2;
                             const dist = Math.sqrt((p.x - sx)**2 + (p.y - sy)**2);
-                            if (dist < GRID/2 + p.size) {
+                            // Larger hitbox for PvP (lag compensation)
+                            if (dist < GRID + p.size) {
                                 // Hit! Show particles and mark projectile dead
                                 p.life = 0;
                                 score += 10; // Points for hitting other players
