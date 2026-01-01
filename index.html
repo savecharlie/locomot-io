@@ -79,6 +79,10 @@
             <p style="color:#d4a017;">All aboard the pain train</p>
             <p>Build your train • Collect gun cars • Survive</p>
             <p style="color:#f0f;">🧠 Neural Network AI Enemies!</p>
+            <div style="margin: 15px 0;">
+                <input type="text" id="usernameInput" placeholder="Enter your name..." maxlength="12"
+                    style="font-family: 'Press Start 2P'; font-size: 10px; padding: 10px; border: 2px solid #0f0; background: #111; color: #0f0; text-align: center; width: 200px;">
+            </div>
             <div class="controls-help">
                 <div class="control-item"><div class="icon">🎮</div><div>WASD/ARROWS<br>to turn</div></div>
                 <div class="control-item"><div class="icon">🖱️</div><div>MOUSE<br>to aim</div></div>
@@ -100,6 +104,10 @@
         
         <div class="overlay game-over-screen hidden" id="gameOverScreen">
             <h2>GAME OVER</h2>
+            <div style="margin: 10px 0;">
+                <input type="text" id="usernameInputDeath" placeholder="Change name..." maxlength="12"
+                    style="font-family: 'Press Start 2P'; font-size: 8px; padding: 8px; border: 2px solid #f55; background: #111; color: #f55; text-align: center; width: 180px;">
+            </div>
             <div class="score-display">SCORE: <span id="finalScore">0</span><br>BEST RANK: <span id="finalWave">#?</span><br>MAX LENGTH: <span id="finalLength">2</span></div>
             <div id="deathReasonBox" style="font-size: 8px; color: #f55; margin: 10px 0; padding: 10px; background: #200; border-radius: 4px; max-width: 280px;">CAUSE: <span id="deathReasonText">Unknown</span></div>
             <div id="patternStatsBox" style="font-size: 8px; color: #0fc; margin: 10px 0; padding: 10px; background: #021; border: 1px solid #0fc; border-radius: 4px; max-width: 280px;">
@@ -418,7 +426,11 @@
         }
 
         // ==================== MULTIPLAYER ====================
+        // Player username
+        let playerName = localStorage.getItem('locomot_username') || 'Train' + Math.floor(Math.random() * 999);
+
         const Multiplayer = {
+            username: playerName,
             socket: null,
             connected: false,
             playerId: null,
@@ -436,6 +448,10 @@
                         console.log('[MP] Connected to room:', roomId);
                         this.connected = true;
                         this.showStatus('Connected!');
+                        // Send username to server
+                        if (this.username) {
+                            this.send({ type: 'name', name: this.username });
+                        }
                     };
 
                     this.socket.onmessage = (event) => {
@@ -513,6 +529,14 @@
             // Send direction change
             sendMove(dir) {
                 this.send({ type: 'move', dir });
+            },
+
+            setUsername(name) {
+                name = name.trim().slice(0, 12) || 'Train' + Math.floor(Math.random() * 999);
+                this.username = name;
+                playerName = name;
+                localStorage.setItem('locomot_username', name);
+                this.send({ type: 'name', name });
             },
 
             showStatus(msg) {
@@ -2314,6 +2338,19 @@
 
             // Update smoke particles
             updateSmoke();
+
+            // Draw player name tag above head
+            if (snake.length > 0 && Multiplayer.username) {
+                const head = snake[0];
+                ctx.save();
+                ctx.fillStyle = '#0f0';
+                ctx.font = '8px "Press Start 2P"';
+                ctx.textAlign = 'center';
+                ctx.shadowColor = '#000';
+                ctx.shadowBlur = 3;
+                ctx.fillText(Multiplayer.username, head.x * GRID + GRID/2, head.y * GRID - 8);
+                ctx.restore();
+            }
         }
         
         function drawAimLine() {
@@ -2688,7 +2725,23 @@
             aimAngle = Math.atan2(touchY - hy, touchX - hx);
         }
         
-        document.getElementById('startBtn').addEventListener('click', () => { document.getElementById('startScreen').classList.add('hidden'); init(); gameState = 'playing'; canvas.classList.add('playing'); });
+        // Initialize username inputs with saved value
+        const savedName = localStorage.getItem('locomot_username') || '';
+        document.getElementById('usernameInput').value = savedName;
+        document.getElementById('usernameInputDeath').value = savedName;
+
+        document.getElementById('startBtn').addEventListener('click', () => {
+            const nameInput = document.getElementById('usernameInput').value;
+            if (nameInput) Multiplayer.setUsername(nameInput);
+            document.getElementById('startScreen').classList.add('hidden');
+            init();
+            gameState = 'playing';
+            canvas.classList.add('playing');
+        });
+
+        document.getElementById('usernameInputDeath').addEventListener('change', (e) => {
+            if (e.target.value) Multiplayer.setUsername(e.target.value);
+        });
         document.getElementById('pauseBtn').addEventListener('click', () => { if (gameState === 'playing') { gameState = 'paused'; canvas.classList.remove('playing'); document.getElementById('pauseScreen').classList.remove('hidden'); } });
         
         document.getElementById('debugBtn').addEventListener('click', () => {
