@@ -133,6 +133,10 @@
                 <div style="color: #fff; margin-bottom: 5px;">👁 I OBSERVED YOUR PATTERNS:</div>
                 <div id="patternStatsText">Loading...</div>
             </div>
+            <div id="strategyStatsBox" style="font-size: 8px; color: #f5a; margin: 10px 0; padding: 10px; background: #210; border: 1px solid #f5a; border-radius: 4px; max-width: 280px;">
+                <div style="color: #fff; margin-bottom: 5px;">🎯 YOUR STRATEGY BACKFIRED:</div>
+                <div id="strategyStatsText">Loading...</div>
+            </div>
             <div id="godelStatsBox" style="font-size: 8px; color: #f0f; margin: 10px 0; padding: 10px; background: #201; border: 1px solid #f0f; border-radius: 4px; max-width: 280px;">
                 <div style="color: #fff; margin-bottom: 5px;">🧠 NEURAL TRAINS LEARNED:</div>
                 <div id="godelStatsText">Loading...</div>
@@ -1397,6 +1401,255 @@
 
         let patternFlashTimer = 0, patternFlashType = '';
         function showPatternFlash(type) { patternFlashType = type; patternFlashTimer = 90; }
+
+        // === STRATEGY CLASSIFIER - Makes player strategy backfire ===
+        const strategyClassifier = {
+            // Raw metrics
+            killTimestamps: [],
+            distanceSamples: [],
+            centerTicks: 0,
+            totalTicks: 0,
+            healthPickups: 0,
+            gunPickups: 0,
+            killSizes: [],
+            chaseEvents: 0,    // Times player moved toward enemy
+            fleeEvents: 0,     // Times player moved away from enemy
+
+            // Computed metrics (updated periodically)
+            metrics: {
+                killsPerMinute: 0,
+                avgDistToEnemy: 15,
+                centerPct: 0.5,
+                healthRatio: 0.5,
+                aggression: 0.5,
+                avgKillSize: 5
+            },
+
+            // Current archetype weights
+            archetypes: {
+                rusher: 0.2,
+                sniper: 0.2,
+                farmer: 0.2,
+                survivor: 0.2,
+                hunter: 0.2
+            },
+
+            // Dominant archetype
+            dominant: 'neutral',
+            confidence: 0,
+
+            // Counter parameters applied to enemies
+            counterParams: {
+                leftBias: 0,
+                straightBias: 0,
+                rightBias: 0,
+                speedMult: 1.0,
+                flankTendency: 0.3
+            },
+
+            // Enemy reputation tracking
+            enemyReps: new Map(),
+
+            reset() {
+                this.killTimestamps = [];
+                this.distanceSamples = [];
+                this.centerTicks = 0;
+                this.totalTicks = 0;
+                this.chaseEvents = 0;
+                this.fleeEvents = 0;
+                this.enemyReps.clear();
+            },
+
+            // Called when player kills an enemy
+            onKill(enemySize) {
+                this.killTimestamps.push(Date.now());
+                this.killSizes.push(enemySize);
+                if (this.killSizes.length > 30) this.killSizes.shift();
+                // Keep last 2 minutes of kills
+                this.killTimestamps = this.killTimestamps.filter(t => Date.now() - t < 120000);
+            },
+
+            // Called when player picks up item
+            onPickup(isHealth) {
+                if (isHealth) this.healthPickups++;
+                else this.gunPickups++;
+            },
+
+            // Called every frame to track position and behavior
+            update(playerPos, nearestEnemyDist, playerDir, prevPlayerPos) {
+                this.totalTicks++;
+
+                // Track center vs edge positioning
+                const inCenter = playerPos.x > WORLD_COLS * 0.33 && playerPos.x < WORLD_COLS * 0.67 &&
+                                playerPos.y > WORLD_ROWS * 0.33 && playerPos.y < WORLD_ROWS * 0.67;
+                if (inCenter) this.centerTicks++;
+
+                // Track distance to enemies
+                if (nearestEnemyDist < 50) {
+                    this.distanceSamples.push(nearestEnemyDist);
+                    if (this.distanceSamples.length > 100) this.distanceSamples.shift();
+                }
+
+                // Track chase vs flee behavior (every 10 frames)
+                if (this.totalTicks % 10 === 0 && prevPlayerPos && nearestEnemyDist < 20) {
+                    const prevDist = Math.sqrt((prevPlayerPos.x - playerPos.x)**2 + (prevPlayerPos.y - playerPos.y)**2);
+                    // This is simplified - would need enemy pos to do properly
+                }
+            },
+
+            // Called every ~60 frames to recompute metrics
+            computeMetrics() {
+                // Kills per minute
+                const recentKills = this.killTimestamps.filter(t => Date.now() - t < 60000);
+                this.metrics.killsPerMinute = recentKills.length;
+
+                // Average distance to enemies
+                if (this.distanceSamples.length > 10) {
+                    this.metrics.avgDistToEnemy = this.distanceSamples.reduce((a,b) => a+b, 0) / this.distanceSamples.length;
+                }
+
+                // Center percentage
+                this.metrics.centerPct = this.totalTicks > 0 ? this.centerTicks / this.totalTicks : 0.5;
+
+                // Health vs gun pickup ratio
+                const totalPickups = this.healthPickups + this.gunPickups;
+                this.metrics.healthRatio = totalPickups > 0 ? this.healthPickups / totalPickups : 0.5;
+
+                // Average kill size
+                if (this.killSizes.length > 3) {
+                    this.metrics.avgKillSize = this.killSizes.reduce((a,b) => a+b, 0) / this.killSizes.length;
+                }
+
+                // Aggression (kills + close distance + center position)
+                this.metrics.aggression = Math.min(1, (
+                    (this.metrics.killsPerMinute / 5) * 0.4 +
+                    (1 - this.metrics.avgDistToEnemy / 20) * 0.3 +
+                    this.metrics.centerPct * 0.3
+                ));
+            },
+
+            // Called every ~120 frames to reclassify player
+            classify() {
+                this.computeMetrics();
+                const m = this.metrics;
+
+                // Score each archetype
+                let scores = {
+                    // RUSHER: High kills, close to enemies, center map
+                    rusher: m.killsPerMinute * 0.15 + (1 - m.avgDistToEnemy/20) * 0.5 + m.centerPct * 0.3,
+
+                    // SNIPER: Moderate kills, stays distant
+                    sniper: Math.min(m.killsPerMinute, 3) * 0.2 + (m.avgDistToEnemy/20) * 0.6,
+
+                    // FARMER: Low kills, prioritizes pickups
+                    farmer: (1 - Math.min(m.killsPerMinute, 4)/4) * 0.5 + m.healthRatio * 0.3,
+
+                    // SURVIVOR: Avoids combat, edges of map
+                    survivor: (1 - m.aggression) * 0.5 + (1 - m.centerPct) * 0.3,
+
+                    // HUNTER: Targets smaller/weaker enemies
+                    hunter: m.avgKillSize < 4 ? 0.6 : m.avgKillSize < 6 ? 0.3 : 0.1
+                };
+
+                // Normalize to sum to 1
+                const total = Object.values(scores).reduce((a,b) => a+b, 0.001);
+                for (const key of Object.keys(scores)) {
+                    this.archetypes[key] = scores[key] / total;
+                }
+
+                // Find dominant archetype
+                let maxScore = 0;
+                for (const [arch, score] of Object.entries(this.archetypes)) {
+                    if (score > maxScore) {
+                        maxScore = score;
+                        this.dominant = arch;
+                    }
+                }
+                this.confidence = maxScore;
+
+                // Update counter parameters based on dominant archetype
+                this.updateCounterParams();
+
+                // Show flash if confident enough
+                if (this.confidence > 0.35 && this.totalTicks > 300) {
+                    showPatternFlash('strategy');
+                }
+            },
+
+            // Set counter-strategy parameters
+            updateCounterParams() {
+                const arch = this.dominant;
+                const conf = this.confidence;
+
+                // Base counters for each archetype
+                const counters = {
+                    // vs RUSHER: Enemies flank and retreat-bait
+                    rusher: { left: 0.4, straight: -0.3, right: 0.4, speed: 1.1, flank: 0.7 },
+
+                    // vs SNIPER: Enemies rush directly, zigzag
+                    sniper: { left: 0.2, straight: 0.5, right: 0.2, speed: 1.3, flank: 0.2 },
+
+                    // vs FARMER: Aggressive chase
+                    farmer: { left: 0, straight: 0.6, right: 0, speed: 1.2, flank: 0.4 },
+
+                    // vs SURVIVOR: Pincer movement, cut off escape
+                    survivor: { left: 0.3, straight: 0.2, right: 0.3, speed: 1.15, flank: 0.8 },
+
+                    // vs HUNTER: Protect weak, bodyguard behavior
+                    hunter: { left: 0.1, straight: 0.3, right: 0.1, speed: 1.0, flank: 0.5 }
+                };
+
+                const c = counters[arch] || counters.farmer;
+
+                // Apply with confidence scaling
+                this.counterParams.leftBias = c.left * conf;
+                this.counterParams.straightBias = c.straight * conf;
+                this.counterParams.rightBias = c.right * conf;
+                this.counterParams.speedMult = 1 + (c.speed - 1) * conf;
+                this.counterParams.flankTendency = c.flank * conf;
+            },
+
+            // Get bias for a specific enemy based on situation
+            getCounterBias(enemyPos, playerPos, enemyId) {
+                const dist = Math.abs(enemyPos.x - playerPos.x) + Math.abs(enemyPos.y - playerPos.y);
+
+                // Scale bias by distance (stronger when closer)
+                const distScale = dist < 15 ? 1.0 : dist < 25 ? 0.5 : 0.2;
+
+                // Check enemy reputation
+                const rep = this.enemyReps.get(enemyId) || { kills: 0, deaths: 0 };
+                const repBonus = rep.kills > 0 ? 0.2 : 0; // Successful enemies get bonus
+
+                return {
+                    left: this.counterParams.leftBias * distScale * (1 + repBonus),
+                    straight: this.counterParams.straightBias * distScale,
+                    right: this.counterParams.rightBias * distScale * (1 + repBonus)
+                };
+            },
+
+            // Track enemy success/failure
+            onEnemyKilledPlayer(enemyId) {
+                const rep = this.enemyReps.get(enemyId) || { kills: 0, deaths: 0 };
+                rep.kills++;
+                this.enemyReps.set(enemyId, rep);
+            },
+
+            onPlayerKilledEnemy(enemyId) {
+                const rep = this.enemyReps.get(enemyId) || { kills: 0, deaths: 0 };
+                rep.deaths++;
+                this.enemyReps.set(enemyId, rep);
+            },
+
+            // Get stats for display
+            getDisplayStats() {
+                return {
+                    dominant: this.dominant.toUpperCase(),
+                    confidence: Math.round(this.confidence * 100),
+                    kpm: this.metrics.killsPerMinute,
+                    aggression: Math.round(this.metrics.aggression * 100)
+                };
+            }
+        };
         function drawPatternFlash(ctx) {
             if (patternFlashTimer <= 0) return;
             patternFlashTimer--;
@@ -1411,6 +1664,13 @@
             } else if (patternFlashType === 'detected') {
                 ctx.fillStyle = `rgba(255, 100, 100, ${alpha})`;
                 ctx.fillText('PATTERN DETECTED', canvas.width / 2, 70);
+            } else if (patternFlashType === 'strategy') {
+                const stats = strategyClassifier.getDisplayStats();
+                ctx.fillStyle = `rgba(255, 50, 150, ${alpha})`;
+                ctx.fillText(`STRATEGY: ${stats.dominant}`, canvas.width / 2, 70);
+                ctx.font = '7px "Press Start 2P"';
+                ctx.fillStyle = `rgba(255, 150, 200, ${alpha * 0.8})`;
+                ctx.fillText('COUNTERING...', canvas.width / 2, 85);
             }
             ctx.restore();
         }
@@ -1845,7 +2105,8 @@
             invincibleTimer = 10000; // 10 seconds of spawn protection
             speedTimer = 0; magnetTimer = 0; // Reset power-up timers
             patternTracker.reset(); // Reset pattern tracking for new game
-            
+            strategyClassifier.reset(); // Reset strategy classifier
+
             // Scatter pickups around the world first
             for (let i = 0; i < 200; i++) {
                 const px = Math.floor(Math.random() * WORLD_COLS) * GRID + GRID/2;
@@ -2014,6 +2275,21 @@
             document.getElementById('patternStatsText').innerHTML =
                 `Turn bias: ${pStats.leftBias}% left<br>` +
                 `Flee distance: ${pStats.fleeDistance} tiles`;
+
+            // Strategy classifier stats
+            const sStats = strategyClassifier.getDisplayStats();
+            const counterDesc = {
+                rusher: 'Enemies flanked and retreat-baited you',
+                sniper: 'Enemies rushed you directly at high speed',
+                farmer: 'Enemies chased you relentlessly',
+                survivor: 'Enemies used pincer movements to trap you',
+                hunter: 'Enemies protected their weak with bodyguards',
+                neutral: 'Enemies are still learning your style...'
+            };
+            document.getElementById('strategyStatsText').innerHTML =
+                `Detected: <span style="color:#ff0">${sStats.dominant}</span> (${sStats.confidence}% confidence)<br>` +
+                `Kills/min: ${sStats.kpm} | Aggression: ${sStats.aggression}%<br>` +
+                `<span style="color:#f88">${counterDesc[strategyClassifier.dominant] || counterDesc.neutral}</span>`;
 
             // Gödel learning stats
             const gStats = ruleEngine.getStats();
@@ -2267,6 +2543,8 @@
                             particles.push({ x: p.x, y: p.y, vx: (Math.random() - 0.5) * 6, vy: (Math.random() - 0.5) * 6, life: 30, color: p.type.color });
                         }
                     }
+                    // Track pickup for strategy classification
+                    strategyClassifier.onPickup(p.isHealth);
                     pickups.splice(i, 1);
                 }
             }
@@ -2414,6 +2692,16 @@
 
                         // Apply rules (Gödel layer)
                         output = ruleEngine.applyRules(output, gameState, e.id);
+
+                        // Apply player strategy counter (makes their strategy backfire)
+                        const counterBias = strategyClassifier.getCounterBias(
+                            { x: head.x, y: head.y },
+                            { x: playerHead.x, y: playerHead.y },
+                            e.id
+                        );
+                        output[0] += counterBias.left;
+                        output[1] += counterBias.straight;
+                        output[2] += counterBias.right;
 
                         // LOOKAHEAD: Simulate future moves to avoid bad outcomes
                         const lookaheadScores = simulateLookahead(
@@ -2702,6 +2990,9 @@
                         }
                         haptic('heavy');
                     } else if (myLen < playerLen) {
+                        // Player killed this enemy - track for strategy classifier
+                        strategyClassifier.onKill(e.segments.length);
+                        strategyClassifier.onPlayerKilledEnemy(e.id);
                         for (const seg of e.segments) {
                             pickups.push({ x: seg.x*GRID+GRID/2, y: seg.y*GRID+GRID/2, type: GUNS[GUN_NAMES[Math.floor(Math.random()*GUN_NAMES.length)]], isHealth: false, bob: Math.random()*Math.PI*2 });
                             score += 15; waveKills++;
@@ -2813,6 +3104,8 @@
                     if (e.segments[j].hp <= 0) {
                         const seg = e.segments[j];
                         score += 10; waveKills++;
+                        // Track segment kills for strategy classifier
+                        strategyClassifier.onKill(1); // Single segment kill
                         let totalHp = 0, maxTotalHp = 0;
                         for (let k = 1; k < snake.length; k++) { totalHp += snake[k].hp; maxTotalHp += snake[k].maxHp; }
                         const healthPct = maxTotalHp > 0 ? totalHp / maxTotalHp : 1;
@@ -3731,6 +4024,23 @@
                     updateEnemyProjectiles(dt); updateProjectiles(dt); fireGuns(time); updateParticles();
                     updateWaves(time, dt); updateCamera(); updateHUD(); updateLeaderboard();
                     ruleEngine.update(); // Gödel layer tick
+
+                    // Strategy classifier - learns player behavior and counters it
+                    if (snake[0]) {
+                        let nearestDist = 999;
+                        for (const e of enemies) {
+                            if (e.segments && e.segments[0]) {
+                                const d = Math.abs(e.segments[0].x - snake[0].x) + Math.abs(e.segments[0].y - snake[0].y);
+                                if (d < nearestDist) nearestDist = d;
+                            }
+                        }
+                        strategyClassifier.update({ x: snake[0].x, y: snake[0].y }, nearestDist);
+
+                        // Reclassify every ~2 seconds (120 frames at 60fps)
+                        if (strategyClassifier.totalTicks % 120 === 0 && strategyClassifier.totalTicks > 60) {
+                            strategyClassifier.classify();
+                        }
+                    }
                 }
                 
                 // SPECTATOR MODE: Keep updating when dead so player can watch
