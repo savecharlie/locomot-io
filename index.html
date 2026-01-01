@@ -486,6 +486,8 @@
             playerId: null,
             roomId: null,
             otherPlayers: new Map(), // id -> player state
+            playerLastSeen: new Map(), // id -> timestamp for inactive cleanup
+            INACTIVE_TIMEOUT: 30000, // Boot players after 30 seconds of no updates
             serverUrl: 'locomot-io.savecharlie.partykit.dev',
 
             connect(roomId = 'main') {
@@ -533,6 +535,7 @@
                         for (const p of data.players) {
                             if (p.id !== this.playerId) {
                                 this.otherPlayers.set(p.id, p);
+                                this.playerLastSeen.set(p.id, Date.now());
                             }
                         }
                         break;
@@ -540,12 +543,14 @@
                     case 'player_joined':
                         console.log('[MP] Player joined:', data.player.name);
                         this.otherPlayers.set(data.player.id, data.player);
+                        this.playerLastSeen.set(data.player.id, Date.now());
                         this.showStatus(`${data.player.name} joined!`);
                         break;
 
                     case 'player_left':
                         const left = this.otherPlayers.get(data.playerId);
                         this.otherPlayers.delete(data.playerId);
+                        this.playerLastSeen.delete(data.playerId);
                         if (left) this.showStatus(`${left.name} left`);
                         break;
 
@@ -554,6 +559,7 @@
                         for (const p of data.players) {
                             if (p.id !== this.playerId) {
                                 this.otherPlayers.set(p.id, p);
+                                this.playerLastSeen.set(p.id, Date.now());
                             }
                         }
                         break;
@@ -612,6 +618,26 @@
                     el.textContent = msg;
                     el.classList.add('show');
                     setTimeout(() => el.classList.remove('show'), 1500);
+                }
+            },
+
+            // Boot inactive players (not updated in INACTIVE_TIMEOUT ms)
+            cleanupInactivePlayers() {
+                const now = Date.now();
+                const toRemove = [];
+                for (const [id, lastSeen] of this.playerLastSeen) {
+                    if (now - lastSeen > this.INACTIVE_TIMEOUT) {
+                        toRemove.push(id);
+                    }
+                }
+                for (const id of toRemove) {
+                    const player = this.otherPlayers.get(id);
+                    console.log('[MP] Booting inactive player:', player?.name || id);
+                    this.otherPlayers.delete(id);
+                    this.playerLastSeen.delete(id);
+                }
+                if (toRemove.length > 0) {
+                    console.log(`[MP] Cleaned up ${toRemove.length} inactive player(s)`);
                 }
             },
 
@@ -4930,6 +4956,13 @@
                 devMode.reportActivity(playerName, snake.length, score);
             }
         }, 30000);
+
+        // Clean up inactive players every 10 seconds
+        setInterval(() => {
+            if (Multiplayer.connected) {
+                Multiplayer.cleanupInactivePlayers();
+            }
+        }, 10000);
 
         // PWA: Register service worker for offline play
         if ('serviceWorker' in navigator) {
