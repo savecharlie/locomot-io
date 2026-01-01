@@ -2405,19 +2405,25 @@
                     for (const [playerId, otherPlayer] of Multiplayer.otherPlayers) {
                         if (!otherPlayer.segments || otherPlayer.segments.length === 0) continue;
                         for (const seg of otherPlayer.segments) {
-                            // Convert grid coords to pixel coords
+                            // Segments come as grid coords, convert to pixels
                             const sx = seg.x * GRID + GRID/2;
                             const sy = seg.y * GRID + GRID/2;
                             const dist = Math.sqrt((p.x - sx)**2 + (p.y - sy)**2);
-                            // Larger hitbox for PvP (lag compensation)
-                            if (dist < GRID + p.size) {
-                                // Hit! Show particles and mark projectile dead
+                            
+                            // DEBUG: Show yellow spark when bullet is close (within 50px)
+                            if (dist < 50) {
+                                particles.push({ x: p.x, y: p.y, vx: 0, vy: 0, life: 5, color: '#ff0' });
+                            }
+                            
+                            // Hit detection (larger hitbox for lag)
+                            if (dist < GRID * 1.5 + p.size) {
+                                // HIT!
                                 p.life = 0;
-                                score += 10; // Points for hitting other players
-                                for (let j = 0; j < 5; j++) {
-                                    particles.push({ x: p.x, y: p.y, vx: (Math.random()-0.5)*4, vy: (Math.random()-0.5)*4, life: 15, color: otherPlayer.color });
+                                score += 10;
+                                haptic('light');
+                                for (let j = 0; j < 8; j++) {
+                                    particles.push({ x: sx, y: sy, vx: (Math.random()-0.5)*6, vy: (Math.random()-0.5)*6, life: 20, color: '#f00' });
                                 }
-                                // Send hit notification to server
                                 Multiplayer.send({ type: 'hit', targetId: playerId, damage: p.damage });
                                 break;
                             }
