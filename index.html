@@ -61,6 +61,8 @@
         .kill-feed-entry.fade { opacity: 0; }
         .invite-link { position: absolute; bottom: 10px; left: 10px; font-size: 6px; color: #666; z-index: 20; background: rgba(0,0,0,0.5); padding: 4px 8px; border-radius: 4px; }
         .invite-link span { color: #0f0; cursor: pointer; }
+        .feedback-btn { position: absolute; bottom: 10px; right: 10px; font-size: 7px; color: #888; z-index: 20; background: rgba(0,0,0,0.5); padding: 6px 10px; border-radius: 4px; border: 1px solid #444; cursor: pointer; }
+        .feedback-btn:hover { background: #333; color: #fff; }
         .shake { animation: shake 0.3s ease-in-out; }
         @keyframes shake { 0%, 100% { transform: translateX(0); } 25% { transform: translateX(-10px) rotate(-1deg); } 75% { transform: translateX(10px) rotate(1deg); } }
     </style>
@@ -82,6 +84,7 @@
         <button class="debug-btn-fixed" id="debugBtn">🐛</button>
         <div class="kill-feed" id="killFeed"></div>
         <div class="invite-link">INVITE: <span id="inviteLink" onclick="copyInvite()">loading...</span></div>
+        <button class="feedback-btn" onclick="submitIdea()">💡 SUBMIT IDEA</button>
         
         <div class="overlay start-screen" id="startScreen">
             <h2>LOCOMOT.IO</h2>
@@ -652,6 +655,16 @@
             });
         }
         setTimeout(updateInviteLink, 100);
+        
+        // === IDEA SUBMISSION ===
+        function submitIdea() {
+            const idea = prompt('Got an idea for LOCOMOT.IO? Share it!');
+            if (idea && idea.trim()) {
+                const subject = encodeURIComponent('LOCOMOT.IO Idea');
+                const body = encodeURIComponent('IDEA: ' + idea + '\n\n---\nSent from locomot.io');
+                window.open('mailto:savecharlie@gmail.com?subject=' + subject + '&body=' + body);
+            }
+        }
         
         // === SCREEN SHAKE ===
         function screenShake() {
@@ -1640,7 +1653,7 @@
         function respawn() {
             // Death effects
             screenShake();
-            sounds.play('death');
+            // sounds disabled
             
             // Capture debug info at death
             const otherPlayersDebug = [];
@@ -1889,7 +1902,7 @@
                             magnetTimer = p.type.duration;
                         }
                         haptic('heavy');
-                        sounds.play('powerup');
+                        // sounds disabled
                         // Big flashy particles
                         for (let j = 0; j < 20; j++) {
                             particles.push({ x: p.x, y: p.y, vx: (Math.random() - 0.5) * 8, vy: (Math.random() - 0.5) * 8, life: 40, color: p.type.color });
@@ -1915,7 +1928,7 @@
                         const tailPos = prevPositions[prevPositions.length - 1];
                         snake.push({ x: tailPos.x, y: tailPos.y, type: p.type, hp: 200, maxHp: 200, lastFired: 0 });
                         haptic('double');
-                        sounds.play('pickup');
+                        // sounds disabled
                         score += 50;
                         for (let j = 0; j < 12; j++) {
                             particles.push({ x: p.x, y: p.y, vx: (Math.random() - 0.5) * 6, vy: (Math.random() - 0.5) * 6, life: 30, color: p.type.color });
@@ -1953,7 +1966,7 @@
                                     // We win!
                                     score += theirLen * 100;
                                     haptic('heavy');
-                                    sounds.play('hit');
+                                    // sounds disabled
                                     killFeed.add(playerName, otherPlayer.name);
                                     for (let j = 0; j < 20; j++) {
                                         particles.push({ x: seg.x * GRID, y: seg.y * GRID, vx: (Math.random()-0.5)*8, vy: (Math.random()-0.5)*8, life: 40, color: otherPlayer.color });
@@ -2566,12 +2579,12 @@
                                 // Hit another player
                                 score += 10;
                                 haptic('light');
-                                sounds.play('hit');
+                                // sounds disabled
                                 Multiplayer.send({ type: 'hit', targetId: e.playerId, damage: p.damage });
                             } else {
                                 // Hit enemy AI
                                 seg.hp -= p.damage;
-                                sounds.play('hit');
+                                // sounds disabled
                             }
                             break outer;
                         }
@@ -2611,7 +2624,7 @@
                 }
                 fired = true;
             }
-            if (fired && Math.random() < 0.3) sounds.play('shoot'); // Don't spam sound
+            
         }
         
         function updateParticles() {
