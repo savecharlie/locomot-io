@@ -664,7 +664,7 @@
             if (idea && idea.trim()) {
                 const subject = encodeURIComponent('LOCOMOT.IO Idea');
                 const body = encodeURIComponent('IDEA: ' + idea + '\n\n---\nSent from locomot.io');
-                window.location.href = 'mailto:savecharlie@gmail.com?subject=' + subject + '&body=' + body);
+                window.location.href = 'mailto:savecharlie@gmail.com?subject=' + subject + '&body=' + body;
             }
         }
         
@@ -968,7 +968,7 @@
 
         let snake = [], dir = DIR.RIGHT, nextDir = DIR.RIGHT;
         let dirQueue = []; // Queue for fast direction changes
-        let tronTrail = []; // Tron light trail
+        let tronTrail = [];
         let enemies = [], projectiles = [], enemyProjectiles = [], pickups = [], particles = [];
         let waveEnemies = 0, waveKills = 0, spawnTimer = 0, waveDelay = 0;
         let bestRank = 999, maxLength = 2;
@@ -1537,7 +1537,7 @@
         
         function init() {
             score = 0; wave = 3; // Start at wave 3 - world is already established
-            enemies = []; projectiles = []; enemyProjectiles = []; pickups = []; particles = []; tronTrail = [];
+            enemies = []; projectiles = []; enemyProjectiles = []; pickups = []; particles = [];
             waveEnemies = 0; waveKills = 0; spawnTimer = 0; waveDelay = 0;
             bestRank = 999; maxLength = 4; // Reset tracking
             invincibleTimer = 10000; // 10 seconds of spawn protection
@@ -1631,7 +1631,6 @@
             cameraX = spawnX * GRID - canvas.width / 2 / cameraZoom;
             cameraY = spawnY * GRID - canvas.height / 2 / cameraZoom;
             dirQueue = []; // Clear direction queue
-            tronTrail = [];
             
             updateHUD(); updateLeaderboard(); announceSpawn();
         }
@@ -1775,7 +1774,6 @@
             cameraY = spawnY * GRID - canvas.height / 2 / cameraZoom;
             dirQueue = [];
 
-            tronTrail = [];
             // Reset score on death (io game style)
             score = 0;
             maxLength = 4;
@@ -1881,7 +1879,7 @@
             }
             
             const prevPositions = snake.map(s => ({ x: s.x, y: s.y }));
-            tronTrail.push({ x: wrappedX, y: wrappedY }); if (tronTrail.length > 50) tronTrail.shift();
+            tronTrail.push({x:wrappedX,y:wrappedY}); if(tronTrail.length>50)tronTrail.shift();
             snake[0].x = wrappedX;
             snake[0].y = wrappedY;
             
@@ -2873,23 +2871,7 @@
         
         function drawSnake() {
             // Update train frame for wheel animation
-            // TRON LIGHT TRAIL
-            if (tronTrail.length > 1) {
-                ctx.save();
-                for (let i = 1; i < tronTrail.length; i++) {
-                    const t0 = tronTrail[i-1], t1 = tronTrail[i];
-                    if (Math.abs(t1.x - t0.x) > 2 || Math.abs(t1.y - t0.y) > 2) continue;
-                    const alpha = (i / tronTrail.length) * 0.7;
-                    ctx.strokeStyle = 'rgba(0,255,255,' + alpha + ')';
-                    ctx.lineWidth = 2 + (i / tronTrail.length) * 3;
-                    ctx.shadowColor = '#0ff'; ctx.shadowBlur = 8;
-                    ctx.beginPath();
-                    ctx.moveTo(t0.x * GRID + GRID/2, t0.y * GRID + GRID/2);
-                    ctx.lineTo(t1.x * GRID + GRID/2, t1.y * GRID + GRID/2);
-                    ctx.stroke();
-                }
-                ctx.restore();
-            }
+            for(let i=1;i<tronTrail.length;i++){const t0=tronTrail[i-1],t1=tronTrail[i];if(Math.abs(t1.x-t0.x)>2||Math.abs(t1.y-t0.y)>2)continue;ctx.strokeStyle="rgba(0,255,255,"+(i/tronTrail.length)*0.7+")";ctx.lineWidth=2+(i/tronTrail.length)*3;ctx.shadowColor="#0ff";ctx.shadowBlur=8;ctx.beginPath();ctx.moveTo(t0.x*GRID+GRID/2,t0.y*GRID+GRID/2);ctx.lineTo(t1.x*GRID+GRID/2,t1.y*GRID+GRID/2);ctx.stroke();}ctx.shadowBlur=0;
             trainFrame++;
 
             // Draw smoke behind everything
@@ -2928,7 +2910,6 @@
             }
 
             // Draw from back to front
-            if (invincibleTimer > 0) ctx.globalAlpha = 0.4 + Math.sin(Date.now()/80) * 0.3;
             for (let i = snake.length - 1; i >= 0; i--) {
                 const seg = snake[i];
                 const x = seg.x * GRID + GRID/2, y = seg.y * GRID + GRID/2;
@@ -2968,7 +2949,6 @@
             }
 
             // Update smoke particles
-            ctx.globalAlpha = 1;
             updateSmoke();
 
             // Draw player name tag above head
