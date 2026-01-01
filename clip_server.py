@@ -10,6 +10,15 @@ import requests
 from datetime import datetime
 import re
 
+# Load .env file if present
+env_path = os.path.join(os.path.dirname(__file__), '.env')
+if os.path.exists(env_path):
+    with open(env_path) as f:
+        for line in f:
+            if '=' in line and not line.startswith('#'):
+                key, val = line.strip().split('=', 1)
+                os.environ.setdefault(key, val)
+
 CLIP_DIR = '/home/ivy/locomot-io/clips'
 PLAYER_HISTORY_FILE = '/home/ivy/locomot-io/player_history.json'
 TELEGRAM_BOT_TOKEN = os.environ.get('TELEGRAM_BOT_TOKEN', '')
