@@ -664,7 +664,7 @@
             if (idea && idea.trim()) {
                 const subject = encodeURIComponent('LOCOMOT.IO Idea');
                 const body = encodeURIComponent('IDEA: ' + idea + '\n\n---\nSent from locomot.io');
-                window.location.href = 'mailto:savecharlie@gmail.com?subject=' + subject + '&body=' + body;
+                window.location.href = 'mailto:savecharlie@gmail.com?subject=' + subject + '&body=' + body);
             }
         }
         
@@ -932,7 +932,7 @@
                     y: y + offsetY + (Math.random() - 0.5) * 6,
                     vx: -direction.x * 0.3 + (Math.random() - 0.5) * 0.8,
                     vy: -0.8 - Math.random() * 0.4,
-                    size: 6 + Math.random() * 5,
+                    size: 4 + Math.random() * 3,
                     life: 50 + Math.random() * 20,
                     maxLife: 50
                 });
@@ -967,8 +967,8 @@
         }
 
         let snake = [], dir = DIR.RIGHT, nextDir = DIR.RIGHT;
-        let tronTrail = []; // Tron light trail positions
-        let dirQueue = [];
+        let dirQueue = []; // Queue for fast direction changes
+        let tronTrail = []; // Tron light trail
         let enemies = [], projectiles = [], enemyProjectiles = [], pickups = [], particles = [];
         let waveEnemies = 0, waveKills = 0, spawnTimer = 0, waveDelay = 0;
         let bestRank = 999, maxLength = 2;
@@ -1482,9 +1482,6 @@
                         // Don't reverse
                         if (newDir.x === -e.dir.x && newDir.y === -e.dir.y) newDir = e.dir;
                         e.dir = newDir;
-                    // TURN SPARKS! 🔥
-                    const hx = snake[0].x * GRID + GRID/2, hy = snake[0].y * GRID + GRID/2;
-                    for (let sp = 0; sp < 6; sp++) { particles.push({ x: hx, y: hy + 5, vx: (Math.random()-0.5)*8, vy: Math.random()*2, life: 15, color: Math.random() > 0.5 ? "#f80" : "#ff0" }); }
                         
                         // Move
                         const prevPositions = e.segments.map(s => ({ x: s.x, y: s.y }));
@@ -1633,8 +1630,8 @@
             cameraZoom = 2; targetZoom = 2; // Start zoomed in
             cameraX = spawnX * GRID - canvas.width / 2 / cameraZoom;
             cameraY = spawnY * GRID - canvas.height / 2 / cameraZoom;
-            dirQueue = [];
-            tronTrail = []; // Clear trail
+            dirQueue = []; // Clear direction queue
+            tronTrail = [];
             
             updateHUD(); updateLeaderboard(); announceSpawn();
         }
@@ -1777,8 +1774,8 @@
             cameraX = spawnX * GRID - canvas.width / 2 / cameraZoom;
             cameraY = spawnY * GRID - canvas.height / 2 / cameraZoom;
             dirQueue = [];
-            tronTrail = []; // Clear trail on respawn
 
+            tronTrail = [];
             // Reset score on death (io game style)
             score = 0;
             maxLength = 4;
@@ -1864,9 +1861,6 @@
                 // Extra check to prevent 180 turns
                 if (!(dir.x === -newDir.x && dir.y === -newDir.y)) {
                     dir = newDir;
-                    // TURN SPARKS! 🔥
-                    const hx = snake[0].x * GRID + GRID/2, hy = snake[0].y * GRID + GRID/2;
-                    for (let sp = 0; sp < 6; sp++) { particles.push({ x: hx, y: hy + 5, vx: (Math.random()-0.5)*8, vy: Math.random()*2, life: 15, color: Math.random() > 0.5 ? "#f80" : "#ff0" }); }
                     nextDir = newDir;
                 }
             } else {
@@ -1887,10 +1881,7 @@
             }
             
             const prevPositions = snake.map(s => ({ x: s.x, y: s.y }));
-            // Add to Tron trail
-            tronTrail.push({ x: wrappedX, y: wrappedY, age: 0 });
-            if (tronTrail.length > 60) tronTrail.shift(); // Keep last 60 positions
-            
+            tronTrail.push({ x: wrappedX, y: wrappedY }); if (tronTrail.length > 50) tronTrail.shift();
             snake[0].x = wrappedX;
             snake[0].y = wrappedY;
             
@@ -1942,7 +1933,6 @@
                     } else {
                         const tailPos = prevPositions[prevPositions.length - 1];
                         snake.push({ x: tailPos.x, y: tailPos.y, type: p.type, hp: 200, maxHp: 200, lastFired: 0 });
-                        screenShake(); // JUICE!
                         haptic('double');
                         // sounds disabled
                         score += 50;
@@ -2246,9 +2236,6 @@
                     }
                     
                     e.dir = newDir;
-                    // TURN SPARKS! 🔥
-                    const hx = snake[0].x * GRID + GRID/2, hy = snake[0].y * GRID + GRID/2;
-                    for (let sp = 0; sp < 6; sp++) { particles.push({ x: hx, y: hy + 5, vx: (Math.random()-0.5)*8, vy: Math.random()*2, life: 15, color: Math.random() > 0.5 ? "#f80" : "#ff0" }); }
                     
                     // Move
                     const prevPositions = e.segments.map(s => ({ x: s.x, y: s.y }));
@@ -2886,6 +2873,23 @@
         
         function drawSnake() {
             // Update train frame for wheel animation
+            // TRON LIGHT TRAIL
+            if (tronTrail.length > 1) {
+                ctx.save();
+                for (let i = 1; i < tronTrail.length; i++) {
+                    const t0 = tronTrail[i-1], t1 = tronTrail[i];
+                    if (Math.abs(t1.x - t0.x) > 2 || Math.abs(t1.y - t0.y) > 2) continue;
+                    const alpha = (i / tronTrail.length) * 0.7;
+                    ctx.strokeStyle = 'rgba(0,255,255,' + alpha + ')';
+                    ctx.lineWidth = 2 + (i / tronTrail.length) * 3;
+                    ctx.shadowColor = '#0ff'; ctx.shadowBlur = 8;
+                    ctx.beginPath();
+                    ctx.moveTo(t0.x * GRID + GRID/2, t0.y * GRID + GRID/2);
+                    ctx.lineTo(t1.x * GRID + GRID/2, t1.y * GRID + GRID/2);
+                    ctx.stroke();
+                }
+                ctx.restore();
+            }
             trainFrame++;
 
             // Draw smoke behind everything
@@ -2923,38 +2927,8 @@
                 return dir;
             }
 
-            // SHIELD GHOST EFFECT - blinking transparency when invulnerable
-            if (invincibleTimer > 0) {
-                const blink = Math.sin(Date.now() / 80) * 0.3 + 0.6;
-                ctx.globalAlpha = blink;
-            }
-
             // Draw from back to front
-            // TRON LIGHT TRAIL 🌟
-            if (tronTrail.length > 1) {
-                ctx.save();
-                ctx.lineCap = "round";
-                ctx.lineJoin = "round";
-                for (let i = 1; i < tronTrail.length; i++) {
-                    const t0 = tronTrail[i - 1];
-                    const t1 = tronTrail[i];
-                    // Skip if wrapped around world
-                    if (Math.abs(t1.x - t0.x) > 2 || Math.abs(t1.y - t0.y) > 2) continue;
-                    const alpha = (i / tronTrail.length) * 0.8;
-                    const width = 2 + (i / tronTrail.length) * 4;
-                    // Glow effect
-                    ctx.shadowColor = "#0ff";
-                    ctx.shadowBlur = 10;
-                    ctx.strokeStyle = `rgba(0, 255, 255, ${alpha})`;
-                    ctx.lineWidth = width;
-                    ctx.beginPath();
-                    ctx.moveTo(t0.x * GRID + GRID/2, t0.y * GRID + GRID/2);
-                    ctx.lineTo(t1.x * GRID + GRID/2, t1.y * GRID + GRID/2);
-                    ctx.stroke();
-                }
-                ctx.restore();
-            }
-
+            if (invincibleTimer > 0) ctx.globalAlpha = 0.4 + Math.sin(Date.now()/80) * 0.3;
             for (let i = snake.length - 1; i >= 0; i--) {
                 const seg = snake[i];
                 const x = seg.x * GRID + GRID/2, y = seg.y * GRID + GRID/2;
@@ -2972,7 +2946,7 @@
                     drawLocomotive(ctx, x, drawY, GRID, segDir, trainFrame);
 
                     // Spawn smoke occasionally
-                    if (trainFrame % 5 === 0) {
+                    if (trainFrame % 8 === 0) {
                         spawnSmoke(x, drawY, segDir);
                     }
                 } else {
@@ -2993,10 +2967,8 @@
                 }
             }
 
-            // Reset alpha after drawing invincible player
-            ctx.globalAlpha = 1;
-
             // Update smoke particles
+            ctx.globalAlpha = 1;
             updateSmoke();
 
             // Draw player name tag above head
@@ -3173,13 +3145,7 @@
                     return e.dir;
                 }
 
-                // SHIELD GHOST EFFECT - blinking transparency when invulnerable
-            if (invincibleTimer > 0) {
-                const blink = Math.sin(Date.now() / 80) * 0.3 + 0.6;
-                ctx.globalAlpha = blink;
-            }
-
-            // Draw from back to front
+                // Draw from back to front
                 for (let i = e.segments.length - 1; i >= 0; i--) {
                     const seg = e.segments[i];
                     const x = seg.x * GRID + GRID/2, y = seg.y * GRID + GRID/2;
