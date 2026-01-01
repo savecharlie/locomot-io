@@ -1542,6 +1542,44 @@
         }
 
         function respawn() {
+            // Capture debug info at death
+            const otherPlayersDebug = [];
+            if (Multiplayer.connected) {
+                for (const [pid, op] of Multiplayer.otherPlayers) {
+                    otherPlayersDebug.push({
+                        id: pid,
+                        name: op.name,
+                        segments: op.segments ? op.segments.length : 0,
+                        head: op.segments && op.segments[0] ? op.segments[0] : null,
+                        color: op.color
+                    });
+                }
+            }
+            
+            deathDebugInfo = {
+                timestamp: new Date().toISOString(),
+                reason: deathReason,
+                myPosition: snake[0] ? { x: snake[0].x, y: snake[0].y } : null,
+                myLength: snake.length,
+                myScore: score,
+                multiplayer: {
+                    connected: Multiplayer.connected,
+                    playerId: Multiplayer.playerId,
+                    roomId: Multiplayer.roomId,
+                    otherPlayers: otherPlayersDebug
+                },
+                nearbyEnemies: enemies.filter(e => {
+                    if (!e.segments || !snake[0]) return false;
+                    const dist = Math.abs(e.segments[0].x - snake[0].x) + Math.abs(e.segments[0].y - snake[0].y);
+                    return dist < 15;
+                }).map(e => ({
+                    len: e.segments.length,
+                    head: e.segments[0],
+                    personality: e.personality?.neural ? 'neural' : 'basic'
+                }))
+            };
+            console.log('DEATH DEBUG:', deathDebugInfo);
+            
             // Show death screen with learning stats
             patternTracker.save();
             ruleEngine.save();
@@ -1797,29 +1835,49 @@
                     const myLen = snake.length;
                     const theirLen = otherPlayer.segments.length;
                     
-                    // Check head vs other player's body
+                    // Check head vs other player's body (with 1-tile tolerance for lag)
                     for (let i = 0; i < otherPlayer.segments.length; i++) {
                         const seg = otherPlayer.segments[i];
-                        if (wrappedX === seg.x && wrappedY === seg.y) {
+                        const dx = Math.abs(wrappedX - seg.x);
+                        const dy = Math.abs(wrappedY - seg.y);
+                        
+                        // Exact collision or within 1 tile (lag compensation)
+                        if (dx <= 1 && dy <= 1 && dx + dy <= 1) {
+                            console.log('[PVP] Collision!', { myPos: {x: wrappedX, y: wrappedY}, theirSeg: seg, segIdx: i, player: otherPlayer.name });
+                            
                             if (i === 0) {
                                 // Head-to-head collision!
                                 if (myLen > theirLen) {
-                                    // We win! They die (handled on their client)
+                                    // We win!
                                     score += theirLen * 100;
                                     haptic('heavy');
                                     for (let j = 0; j < 20; j++) {
                                         particles.push({ x: seg.x * GRID, y: seg.y * GRID, vx: (Math.random()-0.5)*8, vy: (Math.random()-0.5)*8, life: 40, color: otherPlayer.color });
                                     }
+                                    Multiplayer.send({ type: 'kill', targetId: playerId });
                                 } else if (myLen < theirLen) {
                                     // We die!
-                                    deathReason = 'Killed by ' + otherPlayer.name + ' (head-on)';
+                                    deathReason = 'Killed by ' + otherPlayer.name + ' (head-on, ' + theirLen + ' vs ' + myLen + ')';
                                     return true;
                                 }
-                                // Equal size = both survive (pass through)
+                                // Equal size = both survive
                             } else {
                                 // Hit their body - we die!
-                                deathReason = 'Ran into ' + otherPlayer.name;
+                                deathReason = 'Ran into ' + otherPlayer.name + "'s body (seg " + i + ')';
                                 return true;
+                            }
+                        }
+                    }
+                }
+                
+                // Log nearby players for debugging
+                if (Math.random() < 0.02) { // 2% of frames
+                    for (const [pid, op] of Multiplayer.otherPlayers) {
+                        if (op.segments && op.segments.length > 0) {
+                            const oh = op.segments[0];
+                            const dist = Math.abs(wrappedX - oh.x) + Math.abs(wrappedY - oh.y);
+                            if (dist < 10) {
+                                console.log('[PVP] Near player:', op.name, 'dist:', dist, 'myPos:', {x: wrappedX, y: wrappedY}, 'theirHead:', oh);
                             }
                         }
                     }
