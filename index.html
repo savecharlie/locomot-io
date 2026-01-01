@@ -741,6 +741,8 @@
         let cameraX = 0, cameraY = 0, targetCameraX = 0, targetCameraY = 0;
         let cameraZoom = 2, targetZoom = 2; // Start zoomed in
         let gameState = 'start';
+        let currentMVP = null; // Track most interesting player for spectating
+        let mvpScore = 0;
         let teamMode = true;
         let playerTeam = 'blue'; // Player's team (blue or red)
         let score = 0, wave = 1, lastTime = 0, moveTimer = 0, MOVE_INTERVAL = 70; // Faster!
@@ -1521,6 +1523,9 @@
                                     type: p.type, lastFired: 0 
                                 });
                                 pickups.splice(pi, 1);
+                                // Track recent activity for MVP
+                                e.recentPoints = (e.recentPoints || 0) + 10;
+                                e.lastPointTime = Date.now();
                             }
                         }
                     }
@@ -1867,7 +1872,8 @@
                 moveTimer: 0, lastFired: 0, fireRate: 1200 - wave * 40,
                 score: 10 * trainLength, personality,
                 targetPos: null, avoidPos: null, lastDecision: 0,
-                decisionInterval: 300 + Math.random() * 200
+                decisionInterval: 300 + Math.random() * 200,
+                recentPoints: 0, lastPointTime: 0, isMVP: false
             });
             // Set color based on team in team mode
             const newEnemy = enemies[enemies.length - 1];
@@ -2426,12 +2432,16 @@
                             ruleEngine.onOutcome(other.id, 'death');
                             ruleEngine.analyzeDeathAndGenerateRule(other.id);
                             ruleEngine.onOutcome(e.id, 'got_kill');
+                            e.recentPoints = (e.recentPoints || 0) + 50; // Big points for kill!
+                            e.lastPointTime = Date.now();
                             other.segments = [];
                         } else if (myLen < otherLen) {
                             for (const seg of e.segments) { pickups.push({ x: seg.x*GRID+GRID/2, y: seg.y*GRID+GRID/2, type: GUNS[GUN_NAMES[Math.floor(Math.random()*GUN_NAMES.length)]], isHealth: false, bob: Math.random()*Math.PI*2 }); waveKills++; }
                             ruleEngine.onOutcome(e.id, 'death');
                             ruleEngine.analyzeDeathAndGenerateRule(e.id);
                             ruleEngine.onOutcome(other.id, 'got_kill');
+                            other.recentPoints = (other.recentPoints || 0) + 50;
+                            other.lastPointTime = Date.now();
                             e.segments = [];
                         } else {
                             for (const seg of e.segments) { pickups.push({ x: seg.x*GRID+GRID/2, y: seg.y*GRID+GRID/2, type: GUNS[GUN_NAMES[Math.floor(Math.random()*GUN_NAMES.length)]], isHealth: false, bob: Math.random()*Math.PI*2 }); waveKills++; }
@@ -2815,27 +2825,57 @@
             let followTarget = null;
             let followLength = 0;
 
-            // SPECTATOR MODE: When dead, follow the current leader
+            // SPECTATOR MODE: When dead, follow the most INTERESTING player (MVP)
             if (gameState === 'dead') {
-                let maxLen = 0;
-                // Find longest alive enemy
+                let bestScore = 0;
+                let newMVP = null;
+                const now = Date.now();
+                
+                // Clear old MVP status
+                for (const e of enemies) if (e) e.isMVP = false;
+                
+                // Calculate interest score for each enemy
                 for (let i = 0; i < enemies.length; i++) {
                     const e = enemies[i];
-                    if (e && e.segments && e.segments.length > 0 && e.segments.length > maxLen) {
-                        maxLen = e.segments.length;
+                    if (!e || !e.segments || e.segments.length === 0) continue;
+                    
+                    // Decay recentPoints over time (halves every 5 seconds)
+                    const timeSincePoint = now - (e.lastPointTime || 0);
+                    const decayFactor = Math.pow(0.5, timeSincePoint / 5000);
+                    const decayedPoints = (e.recentPoints || 0) * decayFactor;
+                    
+                    // Interest score = length weight + recent activity weight
+                    const lengthScore = e.segments.length * 2;
+                    const activityScore = decayedPoints * 3;
+                    const totalScore = lengthScore + activityScore;
+                    
+                    if (totalScore > bestScore) {
+                        bestScore = totalScore;
                         followTarget = { x: e.segments[0].x, y: e.segments[0].y };
                         followLength = e.segments.length;
-                        }
+                        newMVP = e;
+                    }
                 }
+                
                 // Also check multiplayer players
                 if (Multiplayer.connected) {
                     for (const [pid, op] of Multiplayer.otherPlayers) {
-                        if (op.segments && op.segments.length > maxLen) {
-                            maxLen = op.segments.length;
+                        if (!op.segments || op.segments.length === 0) continue;
+                        const lengthScore = op.segments.length * 2;
+                        if (lengthScore > bestScore) {
+                            bestScore = lengthScore;
                             followTarget = { x: op.segments[0].x, y: op.segments[0].y };
                             followLength = op.segments.length;
+                            newMVP = op;
                         }
                     }
+                }
+                
+                // Mark MVP and update tracking
+                if (newMVP && newMVP !== currentMVP) {
+                    currentMVP = newMVP;
+                    mvpScore = bestScore;
+                    if (newMVP.isMVP !== undefined) newMVP.isMVP = true;
                 }
             }
 
@@ -3236,6 +3276,20 @@
                     ctx.textAlign = 'center';
                     ctx.fillText(e.segments.length.toString(), head.x * GRID + GRID/2, head.y * GRID - 12);
                 }
+                
+                // MVP indicator - crown for the most interesting player
+                if (e.isMVP && gameState === 'dead') {
+                    const head = e.segments[0];
+                    const hx = head.x * GRID + GRID/2;
+                    const hy = head.y * GRID - 20;
+                    ctx.fillStyle = '#ff0';
+                    ctx.shadowColor = '#ff0';
+                    ctx.shadowBlur = 10;
+                    ctx.font = 'bold 12px monospace';
+                    ctx.textAlign = 'center';
+                    ctx.fillText('★ MVP ★', hx, hy);
+                    ctx.shadowBlur = 0;
+                }
             }
         }
         
@@ -3512,7 +3566,7 @@
                 floatingLabel = document.createElement('div');
                 floatingLabel.id = 'floatingSpectateLabel';
                 floatingLabel.style.cssText = 'position:fixed; top:20px; left:50%; transform:translateX(-50%); color:#5ff; font-size:14px; text-shadow:0 0 10px #5ff; z-index:200; pointer-events:none;';
-                floatingLabel.textContent = 'SPECTATING - Tap to respawn';
+                floatingLabel.innerHTML = '★ SPECTATING MVP ★<br><span style="font-size:10px">Tap to respawn</span>';
                 document.body.appendChild(floatingLabel);
             }
             floatingLabel.style.display = 'block';
