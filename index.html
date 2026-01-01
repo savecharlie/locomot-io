@@ -752,7 +752,7 @@
         async function generateTrainName() {
             // Try Cloudflare tunnel first, then localhost
             const endpoints = [
-                'https://regarded-incoming-sink-yorkshire.trycloudflare.com/api/generate',
+                'https://ollama.locomot.io/api/generate',
                 'http://localhost:11434/api/generate'
             ];
             for (const endpoint of endpoints) {
