@@ -1105,7 +1105,97 @@
         let aimAngle = 0, isAiming = false;
         let mouseX = 0, mouseY = 0, isMouseAiming = false;
         let trainFrame = 0; // For wheel animation
-        
+
+        // === SPAWN DIRECTOR - L4D-style adaptive spawning ===
+        const SpawnDirector = {
+            intensity: 50,           // 0-100 rolling combat intensity
+            lastCombatTime: 0,       // timestamp of last damage event
+            lastSpawnTime: 0,        // rate limiting
+            TARGET_POPULATION: 80,   // total entities (AI + real players)
+            COMBAT_LULL_MS: 5000,    // 5 seconds without combat = lull
+
+            // Called when any damage happens
+            onCombat(dealt, taken) {
+                this.lastCombatTime = Date.now();
+                this.intensity += dealt * 0.3 + taken * 1.5;
+                this.intensity = Math.min(100, this.intensity);
+            },
+
+            // Called when enemy is killed
+            onKill() {
+                this.intensity += 10;
+                this.intensity = Math.min(100, this.intensity);
+            },
+
+            // Reset on player respawn
+            reset() {
+                this.intensity = 50;
+                this.lastCombatTime = Date.now();
+            },
+
+            // Get current population (AI + real players)
+            getTotalPopulation() {
+                const aiCount = enemies.filter(e => e.segments && e.segments.length > 0).length;
+                const realCount = Multiplayer.connected ? Multiplayer.otherPlayers.size : 0;
+                return aiCount + realCount + 1; // +1 for the player
+            },
+
+            // Main update - call each frame
+            update(time) {
+                // Decay intensity toward baseline
+                this.intensity = Math.max(10, this.intensity * 0.997);
+
+                const now = Date.now();
+                const inCombatLull = (now - this.lastCombatTime) > this.COMBAT_LULL_MS;
+                const currentPop = this.getTotalPopulation();
+                const targetPop = this.TARGET_POPULATION + Math.floor(snake.length / 3);
+
+                // Calculate spawn rate based on intensity
+                let spawnRate;
+                if (this.intensity > 70) {
+                    spawnRate = 3000;  // Overwhelmed - slow down
+                } else if (this.intensity > 40) {
+                    spawnRate = 1500;  // Normal pace
+                } else {
+                    spawnRate = 800;   // Quiet - speed up
+                }
+
+                // Combat lull override - force faster spawning
+                if (inCombatLull && this.intensity < 50) {
+                    spawnRate = 400;  // Break the lull!
+                }
+
+                // Spawn if under population and rate allows
+                if (currentPop < targetPop && time - this.lastSpawnTime > spawnRate) {
+                    // If in combat lull, spawn near player
+                    if (inCombatLull) {
+                        this.spawnNearPlayer();
+                    } else {
+                        spawnEnemy();
+                    }
+                    this.lastSpawnTime = time;
+                }
+            },
+
+            // Spawn enemy in ring around player (30-60 tiles away)
+            spawnNearPlayer() {
+                if (!snake[0]) return spawnEnemy();
+
+                const minDist = 30, maxDist = 60;
+                const angle = Math.random() * Math.PI * 2;
+                const dist = minDist + Math.random() * (maxDist - minDist);
+
+                const spawnX = Math.floor(snake[0].x + Math.cos(angle) * dist);
+                const spawnY = Math.floor(snake[0].y + Math.sin(angle) * dist);
+
+                // Clamp to world bounds
+                const x = Math.max(5, Math.min(WORLD_COLS - 5, spawnX));
+                const y = Math.max(5, Math.min(WORLD_ROWS - 5, spawnY));
+
+                spawnEnemyAt(x, y);
+            }
+        };
+
         const DIR = { UP: {x:0,y:-1}, DOWN: {x:0,y:1}, LEFT: {x:-1,y:0}, RIGHT: {x:1,y:0} };
         // Security: HTML escape to prevent XSS
         const esc = s => String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
@@ -2647,6 +2737,7 @@
 
         function doRespawn() {
             document.getElementById('gameOverScreen').classList.add('hidden');
+            SpawnDirector.reset(); // Reset intensity for fresh start
 
             // Find safe spawn location
             let spawnX, spawnY, attempts = 0;
@@ -2700,16 +2791,27 @@
             setTimeout(() => el.classList.remove('show'), 1500);
         }
 
+        // Spawn at specific location (used by SpawnDirector for near-player spawns)
+        function spawnEnemyAt(spawnX, spawnY) {
+            const dirs = [DIR.UP, DIR.DOWN, DIR.LEFT, DIR.RIGHT];
+            const startDir = dirs[Math.floor(Math.random() * dirs.length)];
+            spawnEnemyCore(spawnX, spawnY, startDir);
+        }
+
         function spawnEnemy() {
             const edge = Math.floor(Math.random() * 4);
             let x, y, startDir;
-            
+
             switch (edge) {
                 case 0: x = 0; y = Math.floor(Math.random() * WORLD_ROWS); startDir = DIR.RIGHT; break;
                 case 1: x = WORLD_COLS - 1; y = Math.floor(Math.random() * WORLD_ROWS); startDir = DIR.LEFT; break;
                 case 2: x = Math.floor(Math.random() * WORLD_COLS); y = 0; startDir = DIR.DOWN; break;
                 case 3: x = Math.floor(Math.random() * WORLD_COLS); y = WORLD_ROWS - 1; startDir = DIR.UP; break;
             }
+            spawnEnemyCore(x, y, startDir);
+        }
+
+        function spawnEnemyCore(x, y, startDir) {
             
             let trainLength = 2;
             if (wave >= 2 && Math.random() > 0.6) trainLength = 3;
@@ -2953,7 +3055,11 @@
             
             for (let i = enemies.length - 1; i >= 0; i--) {
                 const e = enemies[i];
-                if (!e.segments || e.segments.length === 0) { enemies.splice(i, 1); continue; }
+                if (!e.segments || e.segments.length === 0) {
+                    SpawnDirector.onKill(); // Enemy died
+                    enemies.splice(i, 1);
+                    continue;
+                }
                 
                 const head = e.segments[0];
                 const myLen = e.segments.length;
@@ -3527,6 +3633,7 @@
                             // Reduced damage during 2 second grace period
                             const dmg = invincibleTimer > -2000 ? p.damage * 0.3 : p.damage;
                             seg.hp -= dmg; p.life = 0; haptic('medium');
+                            SpawnDirector.onCombat(0, dmg); // Player took damage
                             particles.push({ x: p.x, y: p.y, vx: 0, vy: 0, life: 10, color: '#f00' });
                             break;
                         }
@@ -3597,6 +3704,7 @@
                             } else {
                                 // Hit enemy AI
                                 seg.hp -= p.damage;
+                                SpawnDirector.onCombat(p.damage, 0); // Player dealt damage
                                 // sounds disabled
                             }
                             break outer;
@@ -3621,7 +3729,10 @@
                         for (const seg of e.segments) {
                             const sx = seg.x * GRID + GRID/2, sy = seg.y * GRID + GRID/2;
                             const dist = Math.sqrt((sx - cx)**2 + (sy - cy)**2);
-                            if (dist < type.range) seg.hp -= type.damage;
+                            if (dist < type.range) {
+                                seg.hp -= type.damage;
+                                SpawnDirector.onCombat(type.damage, 0);
+                            }
                         }
                     }
                     particles.push({ x: cx, y: cy, vx: 0, vy: 0, life: 15, color: type.color, isAoe: true, radius: 10 });
@@ -3752,18 +3863,8 @@
                 }
             }
             
-            // Maintain population - slither.io style continuous spawning
-            const targetPopulation = 80 + Math.floor(snake.length / 2); // More enemies as player grows
-            const spawnRate = 1000; // Spawn every second if needed
-            
-            // Spawn new snakes to maintain population
-            if (enemies.length < targetPopulation && time - spawnTimer > spawnRate) {
-                // Spawn size varies - some small, some medium, occasionally big
-                const sizes = [2, 2, 2, 3, 3, 3, 4, 4, 5, 6, 7, 8];
-                const size = sizes[Math.floor(Math.random() * sizes.length)];
-                spawnEnemy();
-                spawnTimer = time;
-            }
+            // SpawnDirector handles adaptive spawning (L4D-style intensity pacing)
+            SpawnDirector.update(time);
             
             // Spawn pickups to keep the world interesting
             if (pickups.length < 120 && Math.random() < 0.05) {
