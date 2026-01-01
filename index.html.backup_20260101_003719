@@ -664,7 +664,7 @@
             if (idea && idea.trim()) {
                 const subject = encodeURIComponent('LOCOMOT.IO Idea');
                 const body = encodeURIComponent('IDEA: ' + idea + '\n\n---\nSent from locomot.io');
-                window.location.href = 'mailto:savecharlie@gmail.com?subject=' + subject + '&body=' + body;
+                window.location.href = 'mailto:savecharlie@gmail.com?subject=' + subject + '&body=' + body);
             }
         }
         
