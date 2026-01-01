@@ -120,7 +120,7 @@
             </div>
             <button class="start-btn" id="restartBtn">TRY AGAIN</button>
             <button class="start-btn" id="uploadCollectiveBtn" style="background: #0a6; margin-top: 10px; font-size: 9px;">🧠 UPLOAD TO COLLECTIVE</button>
-            <button class="start-btn" id="copyDeathBtn" style="background: #5af; margin-top: 10px; font-size: 9px;">📋 COPY DEBUG INFO</button>
+            <button class="start-btn" id="copyDeathBtn" style="background: #5af; margin-top: 10px; font-size: 9px;">📋 COPY DEBUG</button>
         </div>
     </div>
 
@@ -3174,18 +3174,29 @@
         document.getElementById('restartBtn').addEventListener('click', () => { doRespawn(); });
         
         document.getElementById('copyDeathBtn').addEventListener('click', () => {
-            if (deathDebugInfo) {
-                const debugText = JSON.stringify(deathDebugInfo, null, 2);
-                navigator.clipboard.writeText(debugText).then(() => {
-                    document.getElementById('copyDeathBtn').textContent = '✓ COPIED!';
-                    setTimeout(() => {
-                        document.getElementById('copyDeathBtn').textContent = '📋 COPY DEBUG INFO';
-                    }, 2000);
-                }).catch(() => {
-                    console.log('DEATH DEBUG INFO:', debugText);
-                    alert('Check console for debug info');
-                });
+            // Compact debug format
+            const mp = Multiplayer;
+            const ops = [];
+            if (mp.connected) {
+                for (const [id, p] of mp.otherPlayers) {
+                    ops.push(p.name + ':' + (p.segments?.length || 0) + '@' + (p.segments?.[0]?.x || '?') + ',' + (p.segments?.[0]?.y || '?'));
+                }
             }
+            const compact = [
+                'reason:' + (deathReason || '?'),
+                'me:' + snake.length + '@' + (snake[0]?.x || '?') + ',' + (snake[0]?.y || '?'),
+                'mp:' + (mp.connected ? 'Y' : 'N') + '/' + mp.otherPlayers.size + 'p',
+                'players:[' + ops.join('|') + ']'
+            ].join(' | ');
+            
+            navigator.clipboard.writeText(compact).then(() => {
+                document.getElementById('copyDeathBtn').textContent = '✓ COPIED!';
+                setTimeout(() => {
+                    document.getElementById('copyDeathBtn').textContent = '📋 COPY DEBUG';
+                }, 2000);
+            }).catch(() => {
+                alert(compact);
+            });
         });
         
         document.getElementById('uploadCollectiveBtn').addEventListener('click', () => {
