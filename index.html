@@ -4444,7 +4444,9 @@
                 }
                 
                 ctx.save(); ctx.scale(cameraZoom, cameraZoom); ctx.translate(-cameraX, -cameraY);
-                drawGrid(); drawPickups(time); drawEnemies(); Multiplayer.drawOtherPlayers(ctx); drawSnake(); drawAimLine(); drawProjectiles(); drawParticles(); drawLeaderArrow();
+                drawGrid(); drawPickups(time); drawEnemies(); Multiplayer.drawOtherPlayers(ctx);
+                if (gameState === 'playing') { drawSnake(); drawAimLine(); drawLeaderArrow(); }
+                drawProjectiles(); drawParticles();
                 ctx.restore(); drawScanlines(); drawPatternFlash(ctx); devMode.draw(ctx);
             } catch (err) { console.error('Game loop error:', err); }
             requestAnimationFrame(gameLoop);
