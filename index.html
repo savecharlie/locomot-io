@@ -1011,6 +1011,120 @@
         }
         
         // Vision system for neural network - matches training exactly
+        // LOOKAHEAD AI - Simulate future moves to predict outcomes
+        function simulateLookahead(headX, headY, currentDir, segments, allEnemies, allPickups, playerSnake, depth = 4) {
+            const scores = [0, 0, 0]; // left, straight, right
+            const directions = [turnLeft(currentDir), currentDir, turnRight(currentDir)];
+            
+            for (let d = 0; d < 3; d++) {
+                let simX = headX;
+                let simY = headY;
+                let simDir = directions[d];
+                let simSegments = segments.map(s => ({x: s.x, y: s.y}));
+                let alive = true;
+                let foodCollected = 0;
+                let score = 0;
+                
+                // Simulate several steps ahead
+                for (let step = 0; step < depth && alive; step++) {
+                    // Move in current direction
+                    simX += simDir.x;
+                    simY += simDir.y;
+                    
+                    // Wrap around world
+                    if (simX < 0) simX = WORLD_COLS - 1;
+                    if (simX >= WORLD_COLS) simX = 0;
+                    if (simY < 0) simY = WORLD_ROWS - 1;
+                    if (simY >= WORLD_ROWS) simY = 0;
+                    
+                    // Check self collision
+                    for (const seg of simSegments) {
+                        if (seg.x === simX && seg.y === simY) {
+                            alive = false;
+                            score -= 100; // Death is very bad
+                            break;
+                        }
+                    }
+                    
+                    if (!alive) break;
+                    
+                    // Check collision with other enemies
+                    for (const enemy of allEnemies) {
+                        if (!enemy.segments) continue;
+                        for (const seg of enemy.segments) {
+                            if (seg.x === simX && seg.y === simY) {
+                                // Collision - bad if they're bigger
+                                if (enemy.segments.length >= simSegments.length) {
+                                    alive = false;
+                                    score -= 80;
+                                } else {
+                                    score += 30; // Could eat them!
+                                }
+                                break;
+                            }
+                        }
+                        if (!alive) break;
+                    }
+                    
+                    if (!alive) break;
+                    
+                    // Check collision with player
+                    if (playerSnake && playerSnake.length > 0) {
+                        for (let i = 0; i < playerSnake.length; i++) {
+                            const seg = playerSnake[i];
+                            if (seg.x === simX && seg.y === simY) {
+                                if (i === 0) {
+                                    // Head collision - depends on size
+                                    if (playerSnake.length >= simSegments.length) {
+                                        alive = false;
+                                        score -= 90;
+                                    } else {
+                                        score += 50; // Kill player!
+                                    }
+                                } else {
+                                    alive = false;
+                                    score -= 70;
+                                }
+                                break;
+                            }
+                        }
+                    }
+                    
+                    if (!alive) break;
+                    
+                    // Check for nearby food (bonus for paths near food)
+                    for (const pickup of allPickups) {
+                        const px = Math.floor(pickup.x / GRID);
+                        const py = Math.floor(pickup.y / GRID);
+                        const dist = Math.abs(simX - px) + Math.abs(simY - py);
+                        if (dist === 0) {
+                            foodCollected++;
+                            score += 20;
+                        } else if (dist < 3) {
+                            score += 5 / dist; // Closer food = better
+                        }
+                    }
+                    
+                    // Update simulated segments (move forward)
+                    simSegments.unshift({x: simX, y: simY});
+                    if (foodCollected === 0) simSegments.pop();
+                    
+                    // Slight preference for going straight (more predictable)
+                    if (d === 1) score += 0.5;
+                    
+                    // After first step, continue straight for simulation
+                    // (simplification - real tree search would branch)
+                }
+                
+                // Bonus for staying alive
+                if (alive) score += 10;
+                
+                scores[d] = score;
+            }
+            
+            return scores; // [leftScore, straightScore, rightScore]
+        }
+
         function getVision(headX, headY, currentDir, segments, allEnemies, allPickups, playerSnake) {
             // 8 directions relative to heading (matches training order)
             const angles = [0, Math.PI/4, Math.PI/2, 3*Math.PI/4, Math.PI, -3*Math.PI/4, -Math.PI/2, -Math.PI/4];
@@ -1714,6 +1828,29 @@
 
                         // Apply rules (Gödel layer)
                         output = ruleEngine.applyRules(output, gameState, e.id);
+
+                        // LOOKAHEAD: Simulate future moves to avoid bad outcomes
+                        const lookaheadScores = simulateLookahead(
+                            head.x, head.y, e.dir, e.segments,
+                            enemies.filter(oe => oe !== e), pickups, snake, 5
+                        );
+                        
+                        // Combine neural output with lookahead (lookahead can veto bad moves)
+                        // Normalize neural output to 0-1 range
+                        const maxNeural = Math.max(output[0], output[1], output[2]);
+                        const minNeural = Math.min(output[0], output[1], output[2]);
+                        const range = maxNeural - minNeural || 1;
+                        const neuralNorm = output.map(v => (v - minNeural) / range);
+                        
+                        // If lookahead predicts death (very negative), heavily penalize
+                        for (let i = 0; i < 3; i++) {
+                            if (lookaheadScores[i] < -50) {
+                                output[i] -= 100; // Veto this direction
+                            } else {
+                                // Add lookahead bonus scaled by neural confidence
+                                output[i] += lookaheadScores[i] * 0.1;
+                            }
+                        }
 
                         // Make decision from modified output
                         let decision = 1; // default straight
