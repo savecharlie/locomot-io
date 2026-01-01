@@ -1,0 +1,10 @@
+# Cloudflare Pages headers
+# Prevent caching of service worker so updates are detected
+/sw.js
+  Cache-Control: no-cache, no-store, must-revalidate
+
+# Short cache for HTML
+/
+  Cache-Control: no-cache
+/index.html
+  Cache-Control: no-cache
