@@ -133,7 +133,7 @@
             <button class="start-btn" id="restartBtn">TRY AGAIN</button>
             <button class="start-btn" id="uploadCollectiveBtn" style="background: #0a6; margin-top: 10px; font-size: 9px;">🧠 UPLOAD TO COLLECTIVE</button>
             <button class="start-btn" id="copyDeathBtn" style="background: #5af; margin-top: 10px; font-size: 9px;">📋 COPY DEBUG</button>
-            <button class="start-btn" id="submitIdeaBtn" style="background: #f80; margin-top: 10px; font-size: 9px;">💡 SUBMIT IDEA</button>
+            
         </div>
     </div>
 
@@ -970,6 +970,7 @@
         let dirQueue = []; // Queue for fast direction changes
         let tronTrail = [];
         let enemies = [], projectiles = [], enemyProjectiles = [], pickups = [], particles = [];
+        let isLeader = false, trailBoostTimer = 0;
         let waveEnemies = 0, waveKills = 0, spawnTimer = 0, waveDelay = 0;
         let bestRank = 999, maxLength = 2;
         let invincibleTimer = 0; // 30 seconds of spawn protection
@@ -1879,7 +1880,13 @@
             }
             
             const prevPositions = snake.map(s => ({ x: s.x, y: s.y }));
-            tronTrail.push({x:wrappedX,y:wrappedY}); if(tronTrail.length>50)tronTrail.shift();
+            // Leader trail logic
+            let maxLen = snake.length;
+            for(const e of enemies) if(e.segments.length > maxLen) maxLen = e.segments.length;
+            if(Multiplayer.connected) for(const [,p] of Multiplayer.otherPlayers) if(p.segments && p.segments.length > maxLen) maxLen = p.segments.length;
+            isLeader = (snake.length >= maxLen);
+            if(isLeader) { tronTrail.push({x:wrappedX,y:wrappedY}); if(tronTrail.length>50) tronTrail.shift(); }
+            else { for(const t of tronTrail) if(t.x===wrappedX && t.y===wrappedY) { trailBoostTimer = 500; break; } }
             snake[0].x = wrappedX;
             snake[0].y = wrappedY;
             
@@ -2473,7 +2480,7 @@
             }
             
             const playerSpeedMultiplier = 1 / (1 + (playerLen - 3) * 0.1);
-            const speedBoost = speedTimer > 0 ? 1.8 : 1; // 80% faster with speed power-up
+            const speedBoost = speedTimer > 0 ? 1.8 : (trailBoostTimer > 0 ? 1.5 : 1); // 80% faster with speed power-up
             MOVE_INTERVAL = 120 / playerSpeedMultiplier / speedBoost;
             
             // Passive health regen for player segments (2 HP per 100ms = 20 HP/sec)
@@ -2723,7 +2730,7 @@
             
             // Update power-up timers
             if (invincibleTimer > 0) invincibleTimer -= dt;
-            if (speedTimer > 0) speedTimer -= dt;
+            if (speedTimer > 0) speedTimer -= dt; if (trailBoostTimer > 0) trailBoostTimer -= dt;
             if (magnetTimer > 0) magnetTimer -= dt;
             
             // Magnet effect - pull pickups toward player
@@ -2837,7 +2844,7 @@
             let powerupStatus = [];
             if (invincibleTimer > 0) powerupStatus.push('🛡️' + Math.ceil(invincibleTimer / 1000));
             if (speedTimer > 0) powerupStatus.push('🚀' + Math.ceil(speedTimer / 1000));
-            if (magnetTimer > 0) powerupStatus.push('🧲' + Math.ceil(magnetTimer / 1000));
+            if (trailBoostTimer > 0) powerupStatus.push("⚡DRAFTING"); if (isLeader) powerupStatus.push("👑LEADER"); if (magnetTimer > 0) powerupStatus.push('🧲' + Math.ceil(magnetTimer / 1000));
             
             if (powerupStatus.length > 0) {
                 document.getElementById('score').textContent = powerupStatus.join(' ');
@@ -2871,7 +2878,7 @@
         
         function drawSnake() {
             // Update train frame for wheel animation
-            for(let i=1;i<tronTrail.length;i++){const t0=tronTrail[i-1],t1=tronTrail[i];if(Math.abs(t1.x-t0.x)>2||Math.abs(t1.y-t0.y)>2)continue;ctx.strokeStyle="rgba(0,255,255,"+(i/tronTrail.length)*0.7+")";ctx.lineWidth=2+(i/tronTrail.length)*3;ctx.shadowColor="#0ff";ctx.shadowBlur=8;ctx.beginPath();ctx.moveTo(t0.x*GRID+GRID/2,t0.y*GRID+GRID/2);ctx.lineTo(t1.x*GRID+GRID/2,t1.y*GRID+GRID/2);ctx.stroke();}ctx.shadowBlur=0;
+            for(let i=1;i<tronTrail.length;i++){const t0=tronTrail[i-1],t1=tronTrail[i];if(Math.abs(t1.x-t0.x)>2||Math.abs(t1.y-t0.y)>2)continue;ctx.strokeStyle="rgba(255,215,0,"+(i/tronTrail.length)*0.7+")";ctx.lineWidth=2+(i/tronTrail.length)*3;ctx.shadowColor="#ff0";ctx.shadowBlur=8;ctx.beginPath();ctx.moveTo(t0.x*GRID+GRID/2,t0.y*GRID+GRID/2);ctx.lineTo(t1.x*GRID+GRID/2,t1.y*GRID+GRID/2);ctx.stroke();}ctx.shadowBlur=0;
             trainFrame++;
 
             // Draw smoke behind everything
