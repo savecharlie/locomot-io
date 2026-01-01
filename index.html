@@ -507,6 +507,23 @@
                             }
                         }
                         break;
+                    
+                    case 'hit':
+                        // We got hit by another player!
+                        if (data.targetId === this.playerId && snake.length > 1) {
+                            // Damage a random segment
+                            const segIdx = 1 + Math.floor(Math.random() * (snake.length - 1));
+                            if (snake[segIdx]) {
+                                snake[segIdx].hp -= data.damage;
+                                haptic('medium');
+                                // Flash red
+                                const seg = snake[segIdx];
+                                for (let j = 0; j < 5; j++) {
+                                    particles.push({ x: seg.x * GRID, y: seg.y * GRID, vx: (Math.random()-0.5)*3, vy: (Math.random()-0.5)*3, life: 10, color: '#f00' });
+                                }
+                            }
+                        }
+                        break;
                 }
             },
 
@@ -2322,6 +2339,8 @@
             for (let i = projectiles.length - 1; i >= 0; i--) {
                 const p = projectiles[i];
                 p.x += p.vx * dt * 0.25; p.y += p.vy * dt * 0.25; p.life -= dt;
+                
+                // Hit enemies
                 outer: for (const e of enemies) {
                     for (const seg of e.segments) {
                         const sx = seg.x * GRID + GRID/2, sy = seg.y * GRID + GRID/2;
@@ -2333,6 +2352,29 @@
                         }
                     }
                 }
+                
+                // Hit other players (PvP)
+                if (Multiplayer.connected && p.life > 0) {
+                    for (const [playerId, otherPlayer] of Multiplayer.otherPlayers) {
+                        if (!otherPlayer.segments) continue;
+                        for (const seg of otherPlayer.segments) {
+                            const sx = seg.x * GRID + GRID/2, sy = seg.y * GRID + GRID/2;
+                            const dist = Math.sqrt((p.x - sx)**2 + (p.y - sy)**2);
+                            if (dist < GRID/2 + p.size) {
+                                // Hit! Show particles and mark projectile dead
+                                p.life = 0;
+                                score += 10; // Points for hitting other players
+                                for (let j = 0; j < 5; j++) {
+                                    particles.push({ x: p.x, y: p.y, vx: (Math.random()-0.5)*4, vy: (Math.random()-0.5)*4, life: 15, color: otherPlayer.color });
+                                }
+                                // Send hit notification to server
+                                Multiplayer.send({ type: 'hit', targetId: playerId, damage: p.damage });
+                                break;
+                            }
+                        }
+                    }
+                }
+                
                 if (p.life <= 0) projectiles.splice(i, 1);
             }
         }

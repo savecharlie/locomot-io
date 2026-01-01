@@ -146,6 +146,16 @@ export default class LocomotServer implements Party.Server {
         case 'name':
           player.name = data.name.slice(0, 12);
           break;
+
+        case 'hit':
+          // Broadcast hit to the target player
+          this.room.broadcast(JSON.stringify({
+            type: 'hit',
+            targetId: data.targetId,
+            damage: data.damage,
+            fromId: sender.id
+          }));
+          break;
       }
 
       // Broadcast state to all players
