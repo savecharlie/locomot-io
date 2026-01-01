@@ -932,7 +932,7 @@
                     y: y + offsetY + (Math.random() - 0.5) * 6,
                     vx: -direction.x * 0.3 + (Math.random() - 0.5) * 0.8,
                     vy: -0.8 - Math.random() * 0.4,
-                    size: 4 + Math.random() * 3,
+                    size: 6 + Math.random() * 5,
                     life: 50 + Math.random() * 20,
                     maxLife: 50
                 });
@@ -1481,6 +1481,9 @@
                         // Don't reverse
                         if (newDir.x === -e.dir.x && newDir.y === -e.dir.y) newDir = e.dir;
                         e.dir = newDir;
+                    // TURN SPARKS! 🔥
+                    const hx = snake[0].x * GRID + GRID/2, hy = snake[0].y * GRID + GRID/2;
+                    for (let sp = 0; sp < 6; sp++) { particles.push({ x: hx, y: hy + 5, vx: (Math.random()-0.5)*8, vy: Math.random()*2, life: 15, color: Math.random() > 0.5 ? "#f80" : "#ff0" }); }
                         
                         // Move
                         const prevPositions = e.segments.map(s => ({ x: s.x, y: s.y }));
@@ -1858,6 +1861,9 @@
                 // Extra check to prevent 180 turns
                 if (!(dir.x === -newDir.x && dir.y === -newDir.y)) {
                     dir = newDir;
+                    // TURN SPARKS! 🔥
+                    const hx = snake[0].x * GRID + GRID/2, hy = snake[0].y * GRID + GRID/2;
+                    for (let sp = 0; sp < 6; sp++) { particles.push({ x: hx, y: hy + 5, vx: (Math.random()-0.5)*8, vy: Math.random()*2, life: 15, color: Math.random() > 0.5 ? "#f80" : "#ff0" }); }
                     nextDir = newDir;
                 }
             } else {
@@ -1929,6 +1935,7 @@
                     } else {
                         const tailPos = prevPositions[prevPositions.length - 1];
                         snake.push({ x: tailPos.x, y: tailPos.y, type: p.type, hp: 200, maxHp: 200, lastFired: 0 });
+                        screenShake(); // JUICE!
                         haptic('double');
                         // sounds disabled
                         score += 50;
@@ -2232,6 +2239,9 @@
                     }
                     
                     e.dir = newDir;
+                    // TURN SPARKS! 🔥
+                    const hx = snake[0].x * GRID + GRID/2, hy = snake[0].y * GRID + GRID/2;
+                    for (let sp = 0; sp < 6; sp++) { particles.push({ x: hx, y: hy + 5, vx: (Math.random()-0.5)*8, vy: Math.random()*2, life: 15, color: Math.random() > 0.5 ? "#f80" : "#ff0" }); }
                     
                     // Move
                     const prevPositions = e.segments.map(s => ({ x: s.x, y: s.y }));
@@ -2906,6 +2916,12 @@
                 return dir;
             }
 
+            // SHIELD GHOST EFFECT - blinking transparency when invulnerable
+            if (invincibleTimer > 0) {
+                const blink = Math.sin(Date.now() / 80) * 0.3 + 0.6;
+                ctx.globalAlpha = blink;
+            }
+
             // Draw from back to front
             for (let i = snake.length - 1; i >= 0; i--) {
                 const seg = snake[i];
@@ -2924,7 +2940,7 @@
                     drawLocomotive(ctx, x, drawY, GRID, segDir, trainFrame);
 
                     // Spawn smoke occasionally
-                    if (trainFrame % 8 === 0) {
+                    if (trainFrame % 5 === 0) {
                         spawnSmoke(x, drawY, segDir);
                     }
                 } else {
@@ -2944,6 +2960,9 @@
                     ctx.fillRect(x - bw/2, y - GRID/2 - 10, bw * pct, bh);
                 }
             }
+
+            // Reset alpha after drawing invincible player
+            ctx.globalAlpha = 1;
 
             // Update smoke particles
             updateSmoke();
@@ -3122,7 +3141,13 @@
                     return e.dir;
                 }
 
-                // Draw from back to front
+                // SHIELD GHOST EFFECT - blinking transparency when invulnerable
+            if (invincibleTimer > 0) {
+                const blink = Math.sin(Date.now() / 80) * 0.3 + 0.6;
+                ctx.globalAlpha = blink;
+            }
+
+            // Draw from back to front
                 for (let i = e.segments.length - 1; i >= 0; i--) {
                     const seg = e.segments[i];
                     const x = seg.x * GRID + GRID/2, y = seg.y * GRID + GRID/2;
