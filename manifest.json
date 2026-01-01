@@ -1,0 +1,18 @@
+{
+  "name": "LOCOMOT.IO - Neural Train Pathfinding",
+  "short_name": "LOCOMOT",
+  "description": "Interactive AI pathfinding demonstration with adaptive learning",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "orientation": "landscape",
+  "background_color": "#0a0610",
+  "theme_color": "#0a0610",
+  "categories": ["games", "education"],
+  "icons": [
+    {
+      "src": "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect fill='%230a0610' width='100' height='100'/><text y='65' x='50' text-anchor='middle' font-size='50'>🚂</text></svg>",
+      "sizes": "any",
+      "type": "image/svg+xml"
+    }
+  ]
+}
