@@ -107,7 +107,11 @@
                 <div class="legend-item"><div class="legend-color" style="background:#ff0;"></div> ALPHA</div>
                 <div class="legend-item"><div class="legend-color" style="background:#4f4;"></div> HEALTH</div>
             </div>
-            <button class="start-btn" id="startBtn">ALL ABOARD</button>
+            <div style="margin-top: 20px;">
+                <p style="color:#0ff; font-size: 10px; margin-bottom: 10px;">CHOOSE YOUR MODE:</p>
+                <button class="start-btn" id="startFFA" style="background: linear-gradient(135deg, #500 0%, #a00 100%); margin: 5px;">⚔️ FREE FOR ALL</button>
+                <button class="start-btn" id="startTeams" style="background: linear-gradient(135deg, #005 0%, #00a 100%); margin: 5px;">👥 TEAM BATTLE</button>
+            </div>
         </div>
         
         <div class="overlay pause-screen hidden" id="pauseScreen">
@@ -645,6 +649,184 @@
             }
         };
         
+        // === HIGHLIGHT CLIP RECORDER ===
+        const HighlightRecorder = {
+            isRecording: false,
+            mediaRecorder: null,
+            chunks: [],
+            clips: [],
+            events: [],
+            lastKillTime: 0,
+            killStreak: 0,
+            wasLeader: false,
+            clipDuration: 8000, // 8 seconds per clip
+
+            init() {
+                try {
+                    const stream = canvas.captureStream(30);
+                    this.mediaRecorder = new MediaRecorder(stream, { mimeType: 'video/webm;codecs=vp9' });
+                    this.mediaRecorder.ondataavailable = (e) => {
+                        if (e.data.size > 0) this.chunks.push(e.data);
+                    };
+                    this.mediaRecorder.onstop = () => this.saveClip();
+                    this.startRecording();
+                    console.log('🎬 Highlight recorder initialized');
+                } catch (e) {
+                    console.log('Highlight recorder not available:', e);
+                }
+            },
+
+            startRecording() {
+                if (!this.mediaRecorder || this.isRecording) return;
+                this.chunks = [];
+                this.mediaRecorder.start();
+                this.isRecording = true;
+                // Auto-stop after clipDuration to create rolling buffer
+                setTimeout(() => {
+                    if (this.isRecording && this.events.length === 0) {
+                        // No events, just restart
+                        this.mediaRecorder.stop();
+                        this.chunks = [];
+                        this.isRecording = false;
+                        this.startRecording();
+                    }
+                }, this.clipDuration);
+            },
+
+            triggerHighlight(type, details = {}) {
+                if (!this.isRecording) return;
+                this.events.push({ type, details, time: Date.now() });
+                console.log('🎬 Highlight:', type, details);
+
+                // Stop recording after a short delay to capture aftermath
+                setTimeout(() => {
+                    if (this.mediaRecorder && this.isRecording) {
+                        this.mediaRecorder.stop();
+                        this.isRecording = false;
+                    }
+                }, 2000);
+            },
+
+            saveClip() {
+                if (this.chunks.length === 0 || this.events.length === 0) {
+                    this.events = [];
+                    this.startRecording();
+                    return;
+                }
+
+                const blob = new Blob(this.chunks, { type: 'video/webm' });
+                const url = URL.createObjectURL(blob);
+                const eventType = this.events[0]?.type || 'highlight';
+
+                this.clips.push({
+                    url,
+                    blob,
+                    type: eventType,
+                    timestamp: Date.now(),
+                    events: [...this.events]
+                });
+
+                // Keep max 10 clips
+                while (this.clips.length > 10) {
+                    const old = this.clips.shift();
+                    URL.revokeObjectURL(old.url);
+                }
+
+                this.events = [];
+                this.updateClipUI();
+                this.startRecording();
+            },
+
+            // Event detectors
+            onKill(killerName, victimName) {
+                const now = Date.now();
+                if (now - this.lastKillTime < 5000) {
+                    this.killStreak++;
+                } else {
+                    this.killStreak = 1;
+                }
+                this.lastKillTime = now;
+
+                if (this.killStreak >= 2) {
+                    this.triggerHighlight('kill_streak', { streak: this.killStreak, killer: killerName, victim: victimName });
+                } else {
+                    this.triggerHighlight('kill', { killer: killerName, victim: victimName });
+                }
+            },
+
+            onBecameLeader() {
+                if (!this.wasLeader) {
+                    this.triggerHighlight('became_leader', { length: snake.length });
+                    this.wasLeader = true;
+                }
+            },
+
+            onLostLeader() {
+                this.wasLeader = false;
+            },
+
+            onLongTrain(length) {
+                if (length >= 30 && length % 10 === 0) {
+                    this.triggerHighlight('long_train', { length });
+                }
+            },
+
+            updateClipUI() {
+                let container = document.getElementById('clipContainer');
+                if (!container) {
+                    container = document.createElement('div');
+                    container.id = 'clipContainer';
+                    container.style.cssText = 'position:fixed;bottom:10px;right:10px;z-index:100;';
+                    document.body.appendChild(container);
+                }
+
+                if (this.clips.length === 0) {
+                    container.innerHTML = '';
+                    return;
+                }
+
+                const icons = { kill: '💀', kill_streak: '🔥', became_leader: '👑', long_train: '🚂' };
+                container.innerHTML = `
+                    <div style="background:rgba(0,0,0,0.8);padding:8px;border-radius:8px;border:2px solid #0f0;">
+                        <div style="color:#0f0;font-size:10px;margin-bottom:5px;">🎬 CLIPS (${this.clips.length})</div>
+                        ${this.clips.slice(-3).map((c, i) => `
+                            <button onclick="HighlightRecorder.downloadClip(${this.clips.length - 3 + i})"
+                                style="display:block;background:#222;border:1px solid #0f0;color:#0f0;padding:4px 8px;margin:2px 0;font-size:8px;cursor:pointer;border-radius:4px;">
+                                ${icons[c.type] || '🎬'} ${c.type.replace('_', ' ').toUpperCase()}
+                            </button>
+                        `).join('')}
+                        <button onclick="HighlightRecorder.downloadAll()"
+                            style="background:#0f0;border:none;color:#000;padding:4px 8px;margin-top:5px;font-size:8px;cursor:pointer;border-radius:4px;width:100%;">
+                            ⬇️ DOWNLOAD ALL
+                        </button>
+                    </div>
+                `;
+            },
+
+            downloadClip(index) {
+                const clip = this.clips[index];
+                if (!clip) return;
+                const a = document.createElement('a');
+                a.href = clip.url;
+                a.download = `locomotio_${clip.type}_${Date.now()}.webm`;
+                a.click();
+            },
+
+            downloadAll() {
+                this.clips.forEach((clip, i) => {
+                    setTimeout(() => {
+                        const a = document.createElement('a');
+                        a.href = clip.url;
+                        a.download = `locomotio_${clip.type}_${i + 1}.webm`;
+                        a.click();
+                    }, i * 500);
+                });
+            }
+        };
+
+        // Make it globally accessible for UI buttons
+        window.HighlightRecorder = HighlightRecorder;
+
         // === INVITE LINK ===
         function updateInviteLink() {
             const room = roomParam || 'main';
@@ -783,7 +965,7 @@
             return FALLBACK_NAMES[Math.floor(Math.random() * FALLBACK_NAMES.length)] + Math.floor(Math.random() * 999);
         }
         
-        let teamMode = true;
+        let teamMode = false; // Set by mode selection at start
         let playerTeam = 'blue'; // Player's team (blue or red)
         let score = 0, wave = 1, lastTime = 0, moveTimer = 0, MOVE_INTERVAL = 70; // Faster!
         let aimAngle = 0, isAiming = false;
@@ -1965,9 +2147,13 @@
             let maxLen = snake.length;
             for(const e of enemies) if(e.segments.length > maxLen) maxLen = e.segments.length;
             if(Multiplayer.connected) for(const [,p] of Multiplayer.otherPlayers) if(p.segments && p.segments.length > maxLen) maxLen = p.segments.length;
+            const wasLeaderBefore = isLeader;
             isLeader = (snake.length >= maxLen);
-            if(isLeader) { tronTrail.push({x:wrappedX,y:wrappedY}); if(tronTrail.length>50) tronTrail.shift(); }
+            if (isLeader && !wasLeaderBefore) HighlightRecorder.onBecameLeader();
+            if (!isLeader && wasLeaderBefore) HighlightRecorder.onLostLeader();
+            if (isLeader) { tronTrail.push({x:wrappedX,y:wrappedY}); if(tronTrail.length>50) tronTrail.shift(); }
             else { for(const t of tronTrail) if(t.x===wrappedX && t.y===wrappedY) { trailBoostTimer = 500; break; } }
+            HighlightRecorder.onLongTrain(snake.length);
             snake[0].x = wrappedX;
             snake[0].y = wrappedY;
             
@@ -2061,6 +2247,7 @@
                                     haptic('heavy');
                                     // sounds disabled
                                     killFeed.add(playerName, otherPlayer.name);
+                                    HighlightRecorder.onKill(playerName, otherPlayer.name);
                                     for (let j = 0; j < 20; j++) {
                                         particles.push({ x: seg.x * GRID, y: seg.y * GRID, vx: (Math.random()-0.5)*8, vy: (Math.random()-0.5)*8, life: 40, color: otherPlayer.color });
                                     }
@@ -2486,6 +2673,7 @@
                             ruleEngine.onOutcome(e.id, 'got_kill');
                             e.recentPoints = (e.recentPoints || 0) + 50; // Big points for kill!
                             e.lastPointTime = Date.now();
+                            if (e.isMVP) HighlightRecorder.onKill(e.name, other.name); // MVP kill!
                             other.segments = [];
                         } else if (myLen < otherLen) {
                             for (const seg of e.segments) { pickups.push({ x: seg.x*GRID+GRID/2, y: seg.y*GRID+GRID/2, type: GUNS[GUN_NAMES[Math.floor(Math.random()*GUN_NAMES.length)]], isHealth: false, bob: Math.random()*Math.PI*2 }); waveKills++; }
@@ -2494,6 +2682,7 @@
                             ruleEngine.onOutcome(other.id, 'got_kill');
                             other.recentPoints = (other.recentPoints || 0) + 50;
                             other.lastPointTime = Date.now();
+                            if (other.isMVP) HighlightRecorder.onKill(other.name, e.name); // MVP kill!
                             e.segments = [];
                         } else {
                             for (const seg of e.segments) { pickups.push({ x: seg.x*GRID+GRID/2, y: seg.y*GRID+GRID/2, type: GUNS[GUN_NAMES[Math.floor(Math.random()*GUN_NAMES.length)]], isHealth: false, bob: Math.random()*Math.PI*2 }); waveKills++; }
@@ -3565,10 +3754,24 @@
         document.getElementById('usernameInput').value = savedName;
         document.getElementById('usernameInputDeath').value = savedName;
 
-        document.getElementById('startBtn').addEventListener('click', () => {
+        function startGame(isTeamMode) {
+            teamMode = isTeamMode;
             const nameInput = document.getElementById('usernameInput').value;
             if (nameInput) Multiplayer.setUsername(nameInput);
             document.getElementById('startScreen').classList.add('hidden');
+            // Initialize highlight recorder
+            HighlightRecorder.init();
+        }
+
+        document.getElementById('startFFA').addEventListener('click', () => {
+            startGame(false);
+            init();
+            gameState = 'playing';
+            canvas.classList.add('playing');
+        });
+
+        document.getElementById('startTeams').addEventListener('click', () => {
+            startGame(true);
             init();
             gameState = 'playing';
             canvas.classList.add('playing');
