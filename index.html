@@ -2548,7 +2548,7 @@
                 p.x += p.vx * dt * 0.2; p.y += p.vy * dt * 0.2; p.life -= dt;
                 
                 // Check hit on player (skip if invincible, same team, or reduced damage during grace)
-                if (teamMode && p.owner && p.owner.team === playerTeam) { /* skip - same team */ } else
+                if (!(teamMode && p.owner && p.owner.team === playerTeam))
                 if (invincibleTimer <= 0) {
                     for (const seg of snake) {
                         const sx = seg.x * GRID + GRID/2, sy = seg.y * GRID + GRID/2;
