@@ -1,0 +1,13 @@
+{
+  "name": "locomot-server",
+  "version": "1.0.0",
+  "description": "Multiplayer server for LOCOMOT.IO",
+  "scripts": {
+    "dev": "partykit dev",
+    "deploy": "partykit deploy"
+  },
+  "dependencies": {
+    "partykit": "^0.0.115",
+    "partysocket": "^1.1.10"
+  }
+}

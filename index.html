@@ -417,6 +417,156 @@
             ruleEngine.save();
         }
 
+        // ==================== MULTIPLAYER ====================
+        const Multiplayer = {
+            socket: null,
+            connected: false,
+            playerId: null,
+            roomId: null,
+            otherPlayers: new Map(), // id -> player state
+            serverUrl: 'locomot-io.ivyxav.partykit.dev', // Will be set after deploy
+
+            connect(roomId = 'main') {
+                this.roomId = roomId;
+                try {
+                    // Use PartySocket for reconnection handling
+                    this.socket = new WebSocket(`wss://${this.serverUrl}/party/${roomId}`);
+
+                    this.socket.onopen = () => {
+                        console.log('[MP] Connected to room:', roomId);
+                        this.connected = true;
+                        this.showStatus('Connected!');
+                    };
+
+                    this.socket.onmessage = (event) => {
+                        this.handleMessage(JSON.parse(event.data));
+                    };
+
+                    this.socket.onclose = () => {
+                        console.log('[MP] Disconnected');
+                        this.connected = false;
+                        this.showStatus('Disconnected');
+                        // Try reconnect after 2s
+                        setTimeout(() => this.connect(roomId), 2000);
+                    };
+
+                    this.socket.onerror = (e) => {
+                        console.log('[MP] Error:', e);
+                    };
+                } catch (e) {
+                    console.log('[MP] Connection failed:', e);
+                }
+            },
+
+            handleMessage(data) {
+                switch (data.type) {
+                    case 'init':
+                        this.playerId = data.playerId;
+                        console.log('[MP] Assigned ID:', this.playerId);
+                        // Initialize other players
+                        for (const p of data.players) {
+                            if (p.id !== this.playerId) {
+                                this.otherPlayers.set(p.id, p);
+                            }
+                        }
+                        break;
+
+                    case 'player_joined':
+                        console.log('[MP] Player joined:', data.player.name);
+                        this.otherPlayers.set(data.player.id, data.player);
+                        this.showStatus(`${data.player.name} joined!`);
+                        break;
+
+                    case 'player_left':
+                        const left = this.otherPlayers.get(data.playerId);
+                        this.otherPlayers.delete(data.playerId);
+                        if (left) this.showStatus(`${left.name} left`);
+                        break;
+
+                    case 'state':
+                        // Update all other players
+                        for (const p of data.players) {
+                            if (p.id !== this.playerId) {
+                                this.otherPlayers.set(p.id, p);
+                            }
+                        }
+                        break;
+                }
+            },
+
+            send(data) {
+                if (this.socket && this.connected) {
+                    this.socket.send(JSON.stringify(data));
+                }
+            },
+
+            // Send our position to server
+            sendUpdate(x, y, segments, score) {
+                this.send({
+                    type: 'update',
+                    x, y,
+                    segments: segments.map(s => ({ x: s.x, y: s.y })),
+                    score
+                });
+            },
+
+            // Send direction change
+            sendMove(dir) {
+                this.send({ type: 'move', dir });
+            },
+
+            showStatus(msg) {
+                const el = document.getElementById('waveAnnounce');
+                if (el) {
+                    el.textContent = msg;
+                    el.classList.add('show');
+                    setTimeout(() => el.classList.remove('show'), 1500);
+                }
+            },
+
+            // Draw other players
+            drawOtherPlayers(ctx) {
+                for (const player of this.otherPlayers.values()) {
+                    if (!player.segments || player.segments.length === 0) continue;
+
+                    // Draw segments
+                    for (let i = player.segments.length - 1; i >= 0; i--) {
+                        const seg = player.segments[i];
+                        const isHead = i === 0;
+
+                        ctx.fillStyle = isHead ? player.color : this.dimColor(player.color);
+                        ctx.fillRect(seg.x * 12, seg.y * 12, 12, 12);
+
+                        // Outline
+                        ctx.strokeStyle = '#000';
+                        ctx.lineWidth = 1;
+                        ctx.strokeRect(seg.x * 12, seg.y * 12, 12, 12);
+                    }
+
+                    // Name tag
+                    const head = player.segments[0];
+                    ctx.fillStyle = '#fff';
+                    ctx.font = '8px "Press Start 2P"';
+                    ctx.textAlign = 'center';
+                    ctx.fillText(player.name, head.x * 12 + 6, head.y * 12 - 5);
+                }
+            },
+
+            dimColor(color) {
+                // Dim color for body segments
+                const r = parseInt(color.slice(1, 3), 16) * 0.6;
+                const g = parseInt(color.slice(3, 5), 16) * 0.6;
+                const b = parseInt(color.slice(5, 7), 16) * 0.6;
+                return `rgb(${r},${g},${b})`;
+            }
+        };
+
+        // Auto-connect if URL has room param
+        const urlParams = new URLSearchParams(window.location.search);
+        const roomParam = urlParams.get('room');
+        // Multiplayer disabled until server deployed
+        // if (roomParam) Multiplayer.connect(roomParam);
+
         // ==================== GAME CODE ====================
         const canvas = document.getElementById('gameCanvas');
         const ctx = canvas.getContext('2d');
