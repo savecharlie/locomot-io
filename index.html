@@ -1428,7 +1428,7 @@
             enemies = []; projectiles = []; enemyProjectiles = []; pickups = []; particles = [];
             waveEnemies = 0; waveKills = 0; spawnTimer = 0; waveDelay = 0;
             bestRank = 999; maxLength = 4; // Reset tracking
-            invincibleTimer = 45000; // 45 seconds of spawn protection
+            invincibleTimer = 10000; // 10 seconds of spawn protection
             speedTimer = 0; magnetTimer = 0; // Reset power-up timers
             patternTracker.reset(); // Reset pattern tracking for new game
             
@@ -1651,7 +1651,7 @@
 
             dir = DIR.RIGHT; nextDir = DIR.RIGHT;
             aimAngle = 0; isAiming = true;
-            invincibleTimer = 30000; // 30s spawn protection
+            invincibleTimer = 5000; // 5s spawn protection
 
             cameraZoom = 2; targetZoom = 2;
             cameraX = spawnX * GRID - canvas.width / 2 / cameraZoom;
