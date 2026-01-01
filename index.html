@@ -1907,6 +1907,35 @@
                         // Extract gameState from vision for rule matching
                         // Vision: 8 directions × 6 values [food, self, wall, smaller_head, bigger_head, enemy_body]
                         // Dir 0=ahead, 2=right, 6=left
+                        // Find leader (biggest snake) direction
+                        let leaderDir = null;
+                        let maxLen = e.segments.length;
+                        for (const other of enemies) {
+                            if (other !== e && other.segments && other.segments.length > maxLen) {
+                                maxLen = other.segments.length;
+                                const dx = other.segments[0].x - head.x;
+                                const dy = other.segments[0].y - head.y;
+                                leaderDir = { dx, dy, len: other.segments.length };
+                            }
+                        }
+                        // Check player too
+                        if (snake.length > maxLen) {
+                            maxLen = snake.length;
+                            const dx = snake[0].x - head.x;
+                            const dy = snake[0].y - head.y;
+                            leaderDir = { dx, dy, len: snake.length };
+                        }
+                        
+                        // Calculate leader direction relative to our heading
+                        let leaderAhead = false, leaderLeft = false, leaderRight = false;
+                        if (leaderDir) {
+                            const { dx, dy } = leaderDir;
+                            if (e.dir === DIR.UP) { leaderAhead = dy < 0; leaderLeft = dx < 0; leaderRight = dx > 0; }
+                            else if (e.dir === DIR.DOWN) { leaderAhead = dy > 0; leaderLeft = dx > 0; leaderRight = dx < 0; }
+                            else if (e.dir === DIR.LEFT) { leaderAhead = dx < 0; leaderLeft = dy > 0; leaderRight = dy < 0; }
+                            else { leaderAhead = dx > 0; leaderLeft = dy < 0; leaderRight = dy > 0; }
+                        }
+                        
                         const gameState = {
                             foodAhead: vision[0] > 0,
                             foodLeft: vision[36] > 0,
@@ -1920,7 +1949,11 @@
                             enemyAhead: vision[5] > 0 || vision[3] > 0 || vision[4] > 0,
                             enemyLeft: vision[41] > 0 || vision[39] > 0 || vision[40] > 0,
                             enemyRight: vision[17] > 0 || vision[15] > 0 || vision[16] > 0,
-                            enemyCloser: vision[3] > vision[4]  // smaller head closer than bigger
+                            enemyCloser: vision[3] > vision[4],
+                            leaderAhead,
+                            leaderLeft, 
+                            leaderRight,
+                            iAmBigger: leaderDir ? e.segments.length > leaderDir.len : true
                         };
 
                         // Get raw neural output
@@ -1950,6 +1983,14 @@
                                 // Add lookahead bonus scaled by neural confidence
                                 output[i] += lookaheadScores[i] * 0.1;
                             }
+                        }
+
+                        // LEADER HUNTING: Bias toward the biggest snake (if we're bigger, hunt; if smaller, maybe flee)
+                        if (gameState.leaderAhead || gameState.leaderLeft || gameState.leaderRight) {
+                            const huntBias = gameState.iAmBigger ? 2 : -1; // Hunt if bigger, slight avoid if smaller
+                            if (gameState.leaderAhead) output[1] += huntBias;
+                            if (gameState.leaderLeft) output[0] += huntBias;
+                            if (gameState.leaderRight) output[2] += huntBias;
                         }
 
                         // Make decision from modified output
