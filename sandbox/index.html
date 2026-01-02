@@ -1,0 +1,5139 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<meta name="screen-orientation" content="portrait">
+<title>Buddy - Interactive Sandbox Friend</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+html, body {
+  background: #111;
+  overflow: hidden;
+  width: 100%;
+  height: 100%;
+  touch-action: none;
+  font-family: sans-serif;
+}
+canvas {
+  display: block;
+  width: 100vw;
+  height: calc(100vh - 60px);
+}
+#toolbar {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 60px;
+  background: #222;
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 8px;
+  padding: 8px 12px;
+  overflow-x: scroll;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+}
+#toolbar::-webkit-scrollbar { display: none; }
+
+/* Permission request overlay */
+#permission-overlay {
+  display: none;
+  position: fixed;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: rgba(0,0,0,0.9);
+  z-index: 9998;
+  justify-content: center;
+  align-items: center;
+  flex-direction: column;
+  color: white;
+  text-align: center;
+  padding: 40px;
+}
+#permission-overlay.show { display: flex; }
+#permission-overlay button {
+  font-size: 24px;
+  padding: 20px 40px;
+  margin-top: 20px;
+  border: none;
+  border-radius: 12px;
+  background: #4CAF50;
+  color: white;
+  cursor: pointer;
+}
+#permission-overlay .icon { font-size: 60px; margin-bottom: 20px; }
+
+/* Landscape orientation blocker */
+#rotate-message {
+  display: none;
+  position: fixed;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: #111;
+  z-index: 9999;
+  justify-content: center;
+  align-items: center;
+  flex-direction: column;
+  color: white;
+  font-size: 24px;
+  text-align: center;
+  padding: 40px;
+}
+#rotate-message .phone-icon {
+  font-size: 80px;
+  animation: rotate-phone 1.5s ease-in-out infinite;
+  margin-bottom: 20px;
+}
+@keyframes rotate-phone {
+  0%, 100% { transform: rotate(0deg); }
+  50% { transform: rotate(-90deg); }
+}
+@media (orientation: landscape) {
+  #rotate-message { display: flex; }
+  canvas, #toolbar { display: none; }
+}
+.element-btn {
+  min-width: 44px;
+  width: 44px;
+  height: 44px;
+  border: 2px solid #444;
+  border-radius: 8px;
+  background: #333;
+  color: white;
+  font-size: 20px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.element-btn.selected {
+  border-color: #fff;
+  box-shadow: 0 0 10px rgba(255,255,255,0.5);
+}
+
+/* Nav Menu */
+#nav-toggle { position: fixed; top: 10px; right: 10px; z-index: 9999; width: 40px; height: 40px; background: rgba(0,0,0,0.7); border: 2px solid #fa5; border-radius: 8px; color: #fa5; font-size: 20px; cursor: pointer; }
+#nav-menu { position: fixed; top: 60px; right: 10px; z-index: 9998; background: rgba(0,0,0,0.9); border: 2px solid #fa5; border-radius: 8px; padding: 10px; display: none; }
+#nav-menu.show { display: block; }
+#nav-menu a { display: block; color: #fff; text-decoration: none; padding: 8px 12px; font-size: 12px; border-radius: 4px; margin: 4px 0; }
+#nav-menu a:hover { background: #fa5; color: #000; }
+#nav-menu .kofi { background: #ff5e5b; }
+</style>
+</head>
+<body>
+<button id="nav-toggle" onclick="document.getElementById('nav-menu').classList.toggle('show')">☰</button>
+<div id="nav-menu">
+    <a href="https://locomot.io">🚂 LOCOMOT.IO</a>
+    <a href="https://painter.locomot.io">🎨 Portrait Painter</a>
+    <a href="https://ko-fi.com/sendivylove" class="kofi">☕ Support on Ko-fi</a>
+</div>
+
+<div id="permission-overlay">
+  <div class="icon">📱↗️</div>
+  <div style="font-size: 24px; margin-bottom: 10px;">Enable Tilt Controls?</div>
+  <div style="font-size: 16px; color: #aaa;">Tilt your phone to change gravity direction</div>
+  <button id="enable-tilt-btn">Enable Tilt</button>
+  <div id="permission-status" style="margin-top: 15px; font-size: 14px; color: #ff0; min-height: 40px;"></div>
+  <div style="margin-top: 10px; font-size: 14px; color: #666;">tap anywhere else to skip</div>
+</div>
+<div id="rotate-message">
+  <div class="phone-icon">📱</div>
+  <div>Please rotate to portrait mode</div>
+</div>
+<canvas id="c"></canvas>
+<div id="toolbar"></div>
+
+<script>
+const canvas = document.getElementById('c');
+const ctx = canvas.getContext('2d');
+const toolbar = document.getElementById('toolbar');
+
+// ========== SOUND SYSTEM ==========
+// Sounds by Juhani Junkala (CC0) - https://opengameart.org/content/512-sound-effects-8-bit-style
+const soundFiles = {
+  zap: 'tamagotchi_sounds/zap.mp3',
+  splash: 'tamagotchi_sounds/splash.mp3',
+  burn: 'tamagotchi_sounds/burn.wav',
+  pain: 'tamagotchi_sounds/pain.wav',
+  gasp: 'tamagotchi_sounds/gasp.wav',
+  bite: 'tamagotchi_sounds/bite.wav',
+  freeze: 'tamagotchi_sounds/freeze.wav'
+};
+
+// Preload audio elements
+const audioElements = {};
+let soundEnabled = false; // Sounds off by default for now
+let colorblindMode = false; // High contrast mode for colorblind users
+
+for (const [name, path] of Object.entries(soundFiles)) {
+  const audio = new Audio(path);
+  audio.preload = 'auto';
+  audio.volume = 0.5;
+  audioElements[name] = audio;
+}
+
+// ========== JUICE SYSTEM ==========
+let screenShake = 0;
+let screenShakeDecay = 0.9;
+let flashColor = null;
+let flashAlpha = 0;
+
+function shake(amount) {
+  screenShake = Math.max(screenShake, amount);
+}
+
+function flash(color, alpha = 0.3) {
+  flashColor = color;
+  flashAlpha = alpha;
+}
+
+// Sound cooldowns to prevent spam
+let lastSoundTime = {};
+function playSound(name, cooldown = 100) {
+  if (!soundEnabled) return;
+  const now = Date.now();
+  if (lastSoundTime[name] && now - lastSoundTime[name] < cooldown) return;
+  lastSoundTime[name] = now;
+  const audio = audioElements[name];
+  if (audio) {
+    try {
+      audio.currentTime = 0;
+      audio.play().catch(() => {}); // Ignore autoplay errors
+    } catch(e) {}
+  }
+}
+
+// Chunk size for spatial optimization
+const CHUNK_SIZE = 8;
+
+// Brush size (adjustable)
+let brushSize = 3;
+
+// Japanese characters
+const CHARS = {
+  sand: '砂沙塵土地', water: '水波流泉海', fire: '火炎焔灼熱',
+  smoke: '煙霧雲霞気', steam: '湯蒸霧気', stone: '石岩磐塊',
+  wood: '木林森材', oil: '油脂滑', plant: '草苗芽葉花', lava: '溶岩熔炎',
+  gunpowder: '薬爆火硝', nitro: '危爆震液',
+  glass: '硝晶透明',
+  acid: '酸毒溶腐',
+  ember: '燼炭熾灰',
+  ice: '氷凍霜雪',
+  ant: '蟻蟻蟻',
+  fish: '魚鯉鮭',
+  wax: '蝋塊球滴',
+  food: '食肉餌糧',
+  // New elements
+  lightning: '雷電閃⚡',
+  snow: '雪霰粉白',
+  cloud: '雲霧靄天',
+  honey: '蜜甘糖蜂',
+  metal: '金鉄銅鋼',
+  mud: '泥濘沼湿',
+  bee: '蜂虫羽働',
+  queen: '女王蜂♕',
+  flower: '花桜薔咲蕾',
+  hive: '巣窩蜂房',
+  // Crafted structures
+  campfire: '焚篝炉火',
+  ladder: '梯階段登',
+  shelter: '家屋宿舎',
+  boat: '舟船艇筏',
+};
+
+// Temperature constants
+const TEMP_AMBIENT = 20;
+
+// Compact element definitions
+const E = {
+  sand:  { n:'Sand',  e:'🏖', d:90,  c:[194,178,128], f:1, fl:1, hc:0.8, co:0.3 },
+  water: { n:'Water', e:'💧', d:60,  c:[64,164,223],  f:1, fl:1, lq:1, hc:4, co:0.6, cool:1 },
+  fire:  { n:'Fire',  e:'🔥', d:-30, c:[255,150,0],   r:1, t:800, lt:20, hc:0.1, co:1, rad:1 },
+  smoke: { n:'Smoke', e:'💨', d:-20, c:[80,80,90],    r:1, dr:1, lt:50, hc:0.1, co:0.1 },
+  steam: { n:'Steam', e:'♨️', d:-25, c:[200,200,210], r:1, dr:1, lt:40, hc:0.5, co:0.2 },
+  stone: { n:'Stone', e:'🪨', d:100, c:[90,90,95],    s:1, hc:1, co:0.5, mt:1100 },
+  wood:  { n:'Wood',  e:'🪵', d:100, c:[139,90,43],   s:1, hc:0.5, co:0.2, it:300, fm:1 },
+  oil:   { n:'Oil',   e:'🛢', d:40,  c:[80,40,100],   f:1, fl:1, lq:1, hc:0.5, co:0.3, it:150, fm:1 },
+  plant: { n:'Plant', e:'🌱', d:100, c:[34,139,34],   s:1, hc:0.4, co:0.2, it:200, fm:1, gr:1 },
+  lava:  { n:'Lava',  e:'🌋', d:80,  c:[255,80,0],    f:1, fl:1, lq:1, t:1200, hc:1, co:0.8, rad:1, ct:700 },
+  gunpowder: { n:'Gunpowder', e:'💣', d:85, c:[50,50,50], f:1, fl:1, hc:0.3, co:0.2, xp:1, xr:6 },  // xp=explosive, xr=explosion radius
+  nitro: { n:'Nitro', e:'⚠️', d:70, c:[200,50,50], f:1, fl:1, lq:1, hc:0.3, co:0.2, xp:1, xr:12, shake:1 },  // shake=explodes on shake
+  glass: { n:'Glass', e:'🪟', d:95, c:[200,220,255], s:1, hc:0.8, co:0.4, br:1, brt:5 },  // solid, breakable, brt=break threshold
+  acid: { n:'Acid', e:'🧪', d:65, c:[100,255,50], f:1, fl:1, lq:1, hc:0.5, co:0.3 },  // liquid, dissolves materials
+  ember: { n:'Ember', e:'🔶', d:85, c:[255,100,20], s:1, t:600, hc:0.5, co:0.8, rad:1 },  // glowing solid, slowly burns
+  ice: { n:'Ice', e:'🧊', d:92, c:[180,220,255], s:1, hc:2, co:0.6, br:1, brt:3, mt:0, cool:1 },  // solid, very breakable, melts at 0°
+  ant: { n:'Ant', e:'🐜', d:80, c:[40,20,10], s:1, hc:0.3, co:0.2, alive:1 },  // crawls on surfaces
+  fish: { n:'Fish', e:'🐟', d:70, c:[255,140,0], lq:1, hc:0.5, co:0.3, alive:1, aquatic:1 },  // swims in water
+  wax: { n:'Wax', e:'🕯️', d:85, c:[255,100,150], s:1, hc:0.4, co:0.3, wax:1 },  // lava lamp! solid at room temp, melts when hot
+  food: { n:'Food', e:'🍖', d:90, c:[160,82,45], f:1, fl:1, hc:0.4, co:0.2 },  // ant food - ants will eat this
+  // New elements
+  lightning: { n:'Lightning', e:'⚡', d:-50, c:[255,255,100], r:1, lt:3, hc:0, co:1, elec:1 },  // electric, rises fast, short life
+  snow: { n:'Snow', e:'❄️', d:30, c:[240,248,255], f:1, fl:1, hc:1, co:0.5, cool:1, cold:1 },  // light, falls slowly, melts
+  cloud: { n:'Cloud', e:'☁️', d:-15, c:[220,220,230], r:1, dr:1, lt:200, hc:0.5, co:0.3, rain:1 },  // rises, spawns rain
+  honey: { n:'Honey', e:'🍯', d:100, c:[210,120,30], f:1, fl:1, lq:1, hc:0.3, co:0.5, visc:10 },  // amber viscous liquid
+  metal: { n:'Metal', e:'🔩', d:200, c:[150,150,160], s:1, hc:10, co:1, cond:1, mt:1500 },  // conducts heat & electricity
+  mud: { n:'Mud', e:'💩', d:95, c:[101,67,33], f:1, fl:1, hc:0.5, co:0.4, visc:3, dry:1 },  // viscous, dries to dirt
+  bee: { n:'Bee', e:'🐝', d:50, c:[255,200,50], hc:0.3, co:0.2, alive:1, fly:1 },  // worker bee - flies freely, doesn't rise like gas
+  queen: { n:'Queen', e:'👑', d:50, c:[255,180,0], hc:0.3, co:0.2, alive:1, fly:1 },  // queen bee - flies freely
+  flower: { n:'Flower', e:'🌸', d:100, c:[255,105,180], s:1, hc:0.3, co:0.2, bloom:1 },  // attracts bees
+  hive: { n:'Hive', e:'🍯', d:100, c:[200,150,50], s:1, hc:0.4, co:0.3 },  // bee home, produces honey
+  // Crafted structures (buddy builds these)
+  campfire: { n:'Campfire', e:'🔥', d:100, c:[200,100,30], s:1, t:400, hc:0.5, co:0.8, rad:1, warm:1 },  // warmth source
+  ladder: { n:'Ladder', e:'🪜', d:100, c:[160,100,60], s:1, hc:0.2, co:0.1, climb:1, fm:1, it:250 },  // climbable, flammable
+  shelter: { n:'Shelter', e:'🏠', d:100, c:[120,80,50], s:1, hc:0.3, co:0.2, protect:1, fm:1, it:280 },  // blocks rain, flammable
+  boat: { n:'Boat', e:'🚣', d:25, c:[139,90,43], s:1, hc:0.3, co:0.2, buoy:1, fm:1, it:250 },  // floats, flammable
+};
+
+// Crafting recipes - buddy builds these autonomously
+const RECIPES = {
+  campfire: {
+    name: 'Campfire', icon: '🔥',
+    cost: { wood: 2 },
+    trigger: 'cold',  // buddy builds when cold
+    shape: [[0,'campfire',0], ['ember','ember','ember']],
+    width: 3, height: 2
+  },
+  ladder: {
+    name: 'Ladder', icon: '🪜',
+    cost: { wood: 3 },
+    trigger: 'trapped',  // buddy builds when stuck below something
+    shape: [['ladder','ladder'],['ladder','ladder'],['ladder','ladder'],['ladder','ladder']],
+    width: 2, height: 4
+  },
+  shelter: {
+    name: 'Shelter', icon: '🏠',
+    cost: { wood: 6 },
+    trigger: 'rain',  // buddy builds when getting rained on
+    shape: [['shelter','shelter','shelter','shelter','shelter'],['shelter',0,0,0,'shelter'],['shelter',0,0,0,'shelter']],
+    width: 5, height: 3
+  },
+  boat: {
+    name: 'Boat', icon: '🚣',
+    cost: { wood: 4 },
+    trigger: 'water',  // buddy builds when near large water
+    shape: [[0,'boat','boat',0],['boat','boat','boat','boat']],
+    width: 4, height: 2
+  }
+};
+
+let selectedElement = 'sand';
+let w, h, cellSize, cols, rows;
+let frameCount = 0;
+
+// ============================================
+// HUMAN CHARACTER - The Buddy (SIMPLE VERSION)
+// ============================================
+class Character {
+  constructor() {
+    this.x = 0;
+    this.y = 0;
+    this.vy = 0;
+    this.vx = 0;
+    this.width = 4;
+    this.height = 8;
+
+    // Appearance
+    this.skinColor = [241, 194, 125];
+    this.hairColor = [100, 60, 30];
+    this.sproutColor = [100, 180, 80];
+    this.eyeColor = [20, 20, 30];
+
+    // Type: 'plain', 'hair', 'sprout'
+    this.type = 'sprout';
+
+    // Animation
+    this.animFrame = 0;
+    this.animTimer = 0;
+    this.state = 'idle'; // idle, walk, fall, swim, drowning, gasp, panic, splash, tired
+
+    // Swimming & Breathing
+    this.breath = 100;        // Air meter (0-100)
+    this.maxBreath = 100;
+    this.headUnderwater = false;
+    this.wasUnderwater = false;  // For gasp detection
+    this.bubbleTimer = 0;
+
+    // Tiredness from swimming
+    this.energy = 100;
+    this.maxEnergy = 100;
+
+    // Fear & Memory
+    this.waterFear = 0;       // Increases after near-drowning (0-100)
+    this.nearDrownCount = 0;  // Times nearly drowned
+
+    // Splash detection
+    this.justEnteredWater = false;
+    this.waterDepth = 0;      // How deep in water
+
+    // Fire/burning
+    this.onFire = false;
+    this.burnTimer = 0;       // How long burning
+    this.painTimer = 0;       // Pain flash timer
+
+    // Cold
+    this.coldLevel = 0;       // 0-100, increases near ice
+    this.shivering = false;
+
+    // Ants
+    this.antFear = 0;         // Fear of ants (0-100)
+    this.beingEaten = false;  // Currently being bitten by ants
+
+    // Electricity
+    this.shocked = false;     // Currently being shocked
+    this.shockTimer = 0;      // How long shock effect lasts
+    this.chargeLevel = 0;     // Built up static charge
+
+    // Hunger & Happiness (the LOVE stats!)
+    this.hunger = 50;         // 0-100, 0=starving, 100=full
+    this.happiness = 50;      // 0-100, 0=miserable, 100=ecstatic
+    this.lastPetTime = 0;     // For petting detection
+    this.petStrokes = 0;      // Count strokes for petting
+    this.foodTarget = null;   // Food particle buddy is walking toward
+    this.speechBubble = null; // Current speech bubble {text, timer}
+    this.hearts = [];         // Floating heart particles
+
+    // Idle behaviors
+    this.idleTimer = 0;       // Timer for idle actions
+    this.idleAction = null;   // Current idle action: 'look', 'stretch', 'fidget', 'wave'
+    this.lookDirection = 0;   // -1 left, 0 center, 1 right
+
+    // Fishing
+    this.fishing = false;     // Currently fishing
+    this.fishingLine = null;  // {x, y, bobY} fishing line end position
+    this.fishingTimer = 0;    // How long been fishing
+    this.caughtFish = 0;      // Fish caught count
+
+    // Crafting & Gathering (autonomous survival)
+    this.inventory = { wood: 0, stone: 0, metal: 0, ice: 0 };
+    this.maxInventory = 20;   // Max per material type
+    this.gathering = false;   // Currently gathering
+    this.gatherTimer = 0;     // Gather progress
+    this.gatherTarget = null; // {x, y, type} material being gathered
+    this.crafting = false;    // Currently crafting
+    this.craftTimer = 0;      // Craft progress
+    this.craftingItem = null; // What we're building
+    this.currentGoal = null;  // 'warmth', 'shelter', 'escape', 'explore'
+
+    // Curiosity & Preference Memory
+    this.preferences = {
+      // Positive = likes, Negative = fears/dislikes (-100 to 100)
+      fire: 0, water: 0, ice: 0, honey: 30, food: 20,
+      lava: -50, acid: -80, lightning: -40
+    };
+    this.curiosity = 50;        // 0-100, decreases when bored
+    this.curiosityTarget = null; // {x, y, type} thing we're curious about
+    this.lastPosition = null;   // For detecting if stuck
+    this.stuckTimer = 0;        // How long in same spot
+    this.exploredSpots = [];    // Recently visited areas
+    this.boredomTimer = 0;      // Increases when nothing interesting
+  }
+
+  spawn() {
+    this.x = Math.floor(cols / 2) - 2;
+    this.y = 2;
+    this.vy = 0;
+    this.vx = 0;
+
+    // Random skin tone
+    const tones = [
+      [255, 224, 189],
+      [241, 194, 125],
+      [198, 134, 66],
+      [141, 85, 36],
+      [255, 205, 148],
+      [224, 172, 105],
+    ];
+    this.skinColor = tones[Math.floor(Math.random() * tones.length)];
+    this.hairColor = [
+      Math.max(0, this.skinColor[0] - 100),
+      Math.max(0, this.skinColor[1] - 80),
+      Math.max(0, this.skinColor[2] - 60)
+    ];
+
+    // Random type
+    const types = ['plain', 'hair', 'sprout'];
+    this.type = types[Math.floor(Math.random() * types.length)];
+
+    // Reset stats (but keep water fear - learned!)
+    this.breath = this.maxBreath;
+    this.energy = this.maxEnergy;
+    this.headUnderwater = false;
+    this.wasUnderwater = false;
+    this.state = 'idle';
+
+    console.log('Buddy spawned:', this.type, 'waterFear:', this.waterFear);
+  }
+
+  // Check if a grid cell is standable (solids + semi-solids like sand)
+  isSolid(gx, gy) {
+    if (gx < 0 || gx >= cols) return true;
+    if (gy < 0) return false;
+    if (gy >= rows) return true;
+    const i = gy * cols + gx;
+    const typeId = types[i];
+    if (typeId === 0) return false;
+    const typeName = TYPE_NAMES[typeId];
+    const elem = E[typeName];
+    if (!elem) return false;
+    // Stand on: solids, sand, gunpowder, food, ember, wax (anything not liquid/gas)
+    // Can't stand on: water, oil, fire, smoke, steam, lava, acid
+    if (elem.s) return true;  // solid
+    if (elem.lq) return false; // liquid
+    if (elem.r) return false;  // rising (gas)
+    if (typeName === 'fire') return false;
+    // Everything else (sand, gunpowder, food, etc) is standable
+    return true;
+  }
+
+  // Check if standing on ground
+  checkGround() {
+    const footY = Math.floor(this.y) + this.height;
+    for (let dx = 0; dx < this.width; dx++) {
+      const gx = Math.floor(this.x) + dx;
+      if (this.isSolid(gx, footY)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  // Check what element is at a position
+  getElementAt(gx, gy) {
+    if (gx < 0 || gx >= cols || gy < 0 || gy >= rows) return null;
+    const typeId = types[gy * cols + gx];
+    if (typeId === 0) return null;
+    return TYPE_NAMES[typeId];
+  }
+
+  // Check if position has liquid
+  isLiquid(gx, gy) {
+    const elem = this.getElementAt(gx, gy);
+    if (!elem) return false;
+    return E[elem] && E[elem].lq;
+  }
+
+  // Check if position is dangerous
+  isDangerous(gx, gy) {
+    const elem = this.getElementAt(gx, gy);
+    if (!elem) return false;
+    const e = E[elem];
+    if (!e) return false;
+    // Dangerous: fire, lava, acid, ember, very hot things
+    if (elem === 'fire' || elem === 'lava' || elem === 'acid' || elem === 'ember') return true;
+    if (e.t && e.t > 400) return true;  // hot things
+    return false;
+  }
+
+  // Check if buddy is directly touching fire/lava/ember
+  isTouchingHot() {
+    const gx = Math.floor(this.x);
+    const gy = Math.floor(this.y);
+    for (let dy = 0; dy < this.height; dy++) {
+      for (let dx = 0; dx < this.width; dx++) {
+        const elem = this.getElementAt(gx + dx, gy + dy);
+        if (elem === 'fire' || elem === 'lava' || elem === 'ember') {
+          return true;
+        }
+      }
+    }
+    return false;
+  }
+
+  // Check if buddy is touching ice/cold things
+  isTouchingCold() {
+    const gx = Math.floor(this.x);
+    const gy = Math.floor(this.y);
+    let coldCount = 0;
+    for (let dy = 0; dy < this.height; dy++) {
+      for (let dx = 0; dx < this.width; dx++) {
+        const elem = this.getElementAt(gx + dx, gy + dy);
+        if (elem === 'ice') {
+          coldCount += 2;  // Ice is very cold
+        } else if (elem === 'snow') {
+          coldCount += 1;  // Snow is cold but less so
+        }
+      }
+    }
+    return coldCount;
+  }
+
+  // Check if buddy is being attacked by ants
+  countTouchingAnts() {
+    const gx = Math.floor(this.x);
+    const gy = Math.floor(this.y);
+    let antCount = 0;
+    for (let dy = 0; dy < this.height; dy++) {
+      for (let dx = 0; dx < this.width; dx++) {
+        const elem = this.getElementAt(gx + dx, gy + dy);
+        if (elem === 'ant') {
+          antCount++;
+        }
+      }
+    }
+    return antCount;
+  }
+
+  // Scan for ants nearby to flee from
+  scanForAnts(radius) {
+    const cx = Math.floor(this.x) + Math.floor(this.width / 2);
+    const cy = Math.floor(this.y) + Math.floor(this.height / 2);
+    let antX = 0, antY = 0, antCount = 0;
+
+    for (let dy = -radius; dy <= radius; dy++) {
+      for (let dx = -radius; dx <= radius; dx++) {
+        if (dx === 0 && dy === 0) continue;
+        const elem = this.getElementAt(cx + dx, cy + dy);
+        if (elem === 'ant') {
+          antX += dx;
+          antY += dy;
+          antCount++;
+        }
+      }
+    }
+
+    if (antCount === 0) return null;
+    const mag = Math.sqrt(antX * antX + antY * antY);
+    return { x: -antX / mag, y: -antY / mag, count: antCount };
+  }
+
+  // Scan for food or honey nearby - returns direction to nearest edible
+  scanForFood(radius) {
+    const cx = Math.floor(this.x) + Math.floor(this.width / 2);
+    const cy = Math.floor(this.y) + Math.floor(this.height / 2);
+    let nearestDist = Infinity;
+    let nearestX = 0, nearestY = 0;
+    let foundFood = false;
+
+    for (let dy = -radius; dy <= radius; dy++) {
+      for (let dx = -radius; dx <= radius; dx++) {
+        const gx = cx + dx, gy = cy + dy;
+        if (gx < 0 || gx >= cols || gy < 0 || gy >= rows) continue;
+        const elem = this.getElementAt(gx, gy);
+        // Buddy will seek food OR honey
+        if (elem === 'food' || elem === 'honey') {
+          const dist = Math.abs(dx) + Math.abs(dy);
+          if (dist < nearestDist) {
+            nearestDist = dist;
+            nearestX = dx;
+            nearestY = dy;
+            foundFood = true;
+          }
+        }
+      }
+    }
+
+    if (!foundFood) return null;
+    const mag = Math.sqrt(nearestX * nearestX + nearestY * nearestY) || 1;
+    return { x: nearestX / mag, y: nearestY / mag, dist: nearestDist, gx: cx + nearestX, gy: cy + nearestY };
+  }
+
+  // Check if buddy is touching food (can eat it)
+  tryEatFood() {
+    const gx = Math.floor(this.x);
+    const gy = Math.floor(this.y);
+
+    // Check around body for food or honey
+    for (let dy = 0; dy < this.height; dy++) {
+      for (let dx = -1; dx <= this.width; dx++) {
+        const fx = gx + dx, fy = gy + dy;
+        if (fx < 0 || fx >= cols || fy < 0 || fy >= rows) continue;
+        const i = fy * cols + fx;
+        const cellType = TYPE_NAMES[types[i]];
+        if (cellType === 'food') {
+          // Eat food!
+          setCell(i, 'empty');
+          this.hunger = Math.min(100, this.hunger + 15);
+          this.happiness = Math.min(100, this.happiness + 5);
+          this.showSpeech('😋', 40);
+          this.updatePreference('food', 3); // Learn to like food more!
+          return true;
+        }
+        if (cellType === 'honey') {
+          // Eat honey! Sweet and delicious
+          setCell(i, 'empty');
+          this.hunger = Math.min(100, this.hunger + 20);
+          this.happiness = Math.min(100, this.happiness + 10);
+          this.showSpeech('🍯😋', 50);
+          this.updatePreference('honey', 5); // Love honey!
+          return true;
+        }
+      }
+    }
+    return false;
+  }
+
+  // Scan for fish in water nearby (for fishing)
+  scanForFish(radius) {
+    const cx = Math.floor(this.x) + Math.floor(this.width / 2);
+    const cy = Math.floor(this.y) + this.height; // Look below buddy
+    let fishFound = [];
+
+    for (let dy = 1; dy <= radius; dy++) {
+      for (let dx = -radius; dx <= radius; dx++) {
+        const gx = cx + dx, gy = cy + dy;
+        if (gx < 0 || gx >= cols || gy < 0 || gy >= rows) continue;
+        const i = gy * cols + gx;
+        if (TYPE_NAMES[types[i]] === 'fish') {
+          fishFound.push({x: gx, y: gy, dist: Math.abs(dx) + dy});
+        }
+      }
+    }
+
+    // Also need water for fishing
+    let hasWaterBelow = false;
+    for (let dy = 1; dy <= 3; dy++) {
+      const gy = cy + dy;
+      if (gy < rows) {
+        const i = gy * cols + cx;
+        if (TYPE_NAMES[types[i]] === 'water') {
+          hasWaterBelow = true;
+          break;
+        }
+      }
+    }
+
+    if (fishFound.length > 0 && hasWaterBelow) {
+      fishFound.sort((a, b) => a.dist - b.dist);
+      return fishFound[0];
+    }
+    return null;
+  }
+
+  // Try to catch a fish with the line
+  tryCatchFish() {
+    if (!this.fishingLine) return false;
+    const lx = Math.floor(this.fishingLine.x);
+    const ly = Math.floor(this.fishingLine.y + this.fishingLine.bobY);
+
+    // Check around the bobber for fish
+    for (let dy = -1; dy <= 1; dy++) {
+      for (let dx = -1; dx <= 1; dx++) {
+        const fx = lx + dx, fy = ly + dy;
+        if (fx < 0 || fx >= cols || fy < 0 || fy >= rows) continue;
+        const i = fy * cols + fx;
+        if (TYPE_NAMES[types[i]] === 'fish') {
+          // Caught one!
+          setCell(i, 'empty');
+          this.caughtFish++;
+          this.hunger = Math.min(100, this.hunger + 25);
+          this.happiness = Math.min(100, this.happiness + 15);
+          this.showSpeech('🐟!', 50);
+          this.fishing = false;
+          this.fishingLine = null;
+          return true;
+        }
+      }
+    }
+    return false;
+  }
+
+  // Show a speech bubble
+  showSpeech(text, duration = 60) {
+    this.speechBubble = { text, timer: duration };
+  }
+
+  // Spawn a heart particle
+  spawnHeart() {
+    this.hearts.push({
+      x: this.x + this.width / 2 + (Math.random() - 0.5) * 2,
+      y: this.y - 1,
+      vx: (Math.random() - 0.5) * 0.3,
+      vy: -0.5 - Math.random() * 0.3,
+      life: 60
+    });
+  }
+
+  // Check if buddy is being petted (called from outside)
+  pet() {
+    const now = Date.now();
+    this.petStrokes++;
+    this.lastPetTime = now;
+
+    // Every few strokes, increase happiness
+    if (this.petStrokes >= 3) {
+      this.happiness = Math.min(100, this.happiness + 8);
+      this.spawnHeart();
+      this.petStrokes = 0;
+      if (this.happiness > 70) {
+        this.showSpeech('❤️', 30);
+      } else {
+        this.showSpeech('💕', 30);
+      }
+    }
+  }
+
+  // Check if buddy is being struck by lightning/electricity
+  isTouchingElectricity() {
+    const gx = Math.floor(this.x);
+    const gy = Math.floor(this.y);
+    let electricCount = 0;
+
+    // Check body area and slightly around it for lightning bolts
+    for (let dy = -1; dy < this.height + 1; dy++) {
+      for (let dx = -1; dx < this.width + 1; dx++) {
+        const elem = this.getElementAt(gx + dx, gy + dy);
+        if (elem === 'lightning' || elem === 'spark' || elem === 'plasma') {
+          electricCount++;
+        }
+      }
+    }
+    return electricCount;
+  }
+
+  // Scan for danger in a radius, return direction to flee
+  scanForDanger(radius) {
+    const cx = Math.floor(this.x) + Math.floor(this.width / 2);
+    const cy = Math.floor(this.y) + Math.floor(this.height / 2);
+    let dangerX = 0, dangerY = 0, dangerCount = 0;
+
+    for (let dy = -radius; dy <= radius; dy++) {
+      for (let dx = -radius; dx <= radius; dx++) {
+        if (dx === 0 && dy === 0) continue;
+        const gx = cx + dx, gy = cy + dy;
+        if (this.isDangerous(gx, gy)) {
+          // Accumulate danger direction (toward danger)
+          dangerX += dx;
+          dangerY += dy;
+          dangerCount++;
+        }
+      }
+    }
+
+    if (dangerCount === 0) return null;
+    // Return normalized flee direction (away from danger)
+    const mag = Math.sqrt(dangerX * dangerX + dangerY * dangerY);
+    return { x: -dangerX / mag, y: -dangerY / mag, count: dangerCount };
+  }
+
+  // Check if character is submerged in liquid (with head tracking)
+  checkSubmerged() {
+    let liquidCells = 0;
+    let headLiquidCells = 0;
+    let feetLiquidCells = 0;
+    const gx = Math.floor(this.x), gy = Math.floor(this.y);
+
+    // Head is top 2 rows, feet is bottom 2 rows
+    const headRows = 2;
+    const feetRows = 2;
+
+    for (let dy = 0; dy < this.height; dy++) {
+      for (let dx = 0; dx < this.width; dx++) {
+        const elem = this.getElementAt(gx + dx, gy + dy);
+        if (elem && E[elem] && E[elem].lq) {
+          liquidCells++;
+          if (dy < headRows) headLiquidCells++;
+          if (dy >= this.height - feetRows) feetLiquidCells++;
+        }
+      }
+    }
+
+    const totalCells = this.width * this.height;
+    const headCells = this.width * headRows;
+    const feetCells = this.width * feetRows;
+
+    return {
+      inLiquid: liquidCells > totalCells * 0.3,
+      submerged: liquidCells > totalCells * 0.7,
+      headUnder: headLiquidCells > headCells * 0.5,
+      feetInLiquid: feetLiquidCells > feetCells * 0.3,
+      liquidDepth: liquidCells / totalCells,  // 0-1 how deep
+      isShallow: liquidCells > 0 && liquidCells < totalCells * 0.4
+    };
+  }
+
+  // ===== AUTONOMOUS CRAFTING SYSTEM =====
+
+  // Scan for gatherable materials nearby
+  scanForMaterial(radius) {
+    const cx = Math.floor(this.x) + Math.floor(this.width / 2);
+    const cy = Math.floor(this.y) + Math.floor(this.height / 2);
+    const gatherables = ['wood', 'stone', 'metal', 'ice'];
+    let nearest = null;
+    let nearestDist = Infinity;
+
+    for (let dy = -radius; dy <= radius; dy++) {
+      for (let dx = -radius; dx <= radius; dx++) {
+        const gx = cx + dx, gy = cy + dy;
+        if (gx < 0 || gx >= cols || gy < 0 || gy >= rows) continue;
+        const i = gy * cols + gx;
+        const elem = TYPE_NAMES[types[i]];
+        if (gatherables.includes(elem)) {
+          const dist = Math.abs(dx) + Math.abs(dy);
+          if (dist < nearestDist) {
+            nearestDist = dist;
+            nearest = { x: gx, y: gy, type: elem, dist: dist };
+          }
+        }
+      }
+    }
+    return nearest;
+  }
+
+  // Try to gather material when adjacent
+  tryGather() {
+    if (!this.gatherTarget) return false;
+
+    // Use buddy CENTER for distance calc
+    const buddyCX = Math.floor(this.x + this.width / 2);
+    const buddyCY = Math.floor(this.y + this.height / 2);
+    const tx = this.gatherTarget.x;
+    const ty = this.gatherTarget.y;
+
+    // Check if close enough (within 5 cells from center)
+    const dist = Math.abs(tx - buddyCX) + Math.abs(ty - buddyCY);
+    if (dist > 6) {
+      // Too far, stop gathering but keep target
+      this.gathering = false;
+      return false;
+    }
+
+    // Check if target still exists
+    const i = ty * cols + tx;
+    if (types[i] === undefined || TYPE_NAMES[types[i]] !== this.gatherTarget.type) {
+      this.gatherTarget = null;
+      this.gathering = false;
+      return false;
+    }
+
+    // We're close - gathering!
+    this.gatherTimer++;
+
+    // Gather times vary by material (faster for testing)
+    const gatherTimes = { wood: 30, stone: 45, metal: 60, ice: 15 };
+    const needed = gatherTimes[this.gatherTarget.type] || 30;
+
+    if (this.gatherTimer >= needed) {
+      // Collect the material!
+      const matType = this.gatherTarget.type;
+      if (this.inventory[matType] < this.maxInventory) {
+        types[i] = 0; // Set to empty directly
+        this.inventory[matType]++;
+        this.showSpeech('+1 ' + E[matType].e, 50);
+        this.happiness = Math.min(100, this.happiness + 3);
+      }
+      this.gathering = false;
+      this.gatherTarget = null;
+      this.gatherTimer = 0;
+      return true;
+    }
+    return false;
+  }
+
+  // Assess what buddy needs - PROACTIVE builder!
+  assessNeeds() {
+    // Priority 1: URGENT survival
+    if (this.coldLevel > 40 && this.inventory.wood >= 2) return 'warmth';
+    if (this.headUnderwater) return null; // focus on survival, not crafting
+
+    // Priority 2: Escape if trapped
+    const aboveX = Math.floor(this.x + this.width/2);
+    const aboveY = Math.floor(this.y) - 1;
+    if (aboveY >= 0) {
+      const aboveElem = this.getElementAt(aboveX, aboveY);
+      if (aboveElem && E[aboveElem] && E[aboveElem].s && this.inventory.wood >= 3) {
+        return 'escape';
+      }
+    }
+
+    // Priority 3: Active threats (rain/snow)
+    let rainDrops = 0;
+    for (let dy = -10; dy < 0; dy++) {
+      for (let dx = -2; dx <= this.width + 2; dx++) {
+        const elem = this.getElementAt(Math.floor(this.x) + dx, Math.floor(this.y) + dy);
+        if (elem === 'water' || elem === 'snow') rainDrops++;
+      }
+    }
+    if (rainDrops > 5 && this.inventory.wood >= 6) return 'shelter';
+
+    // Priority 4: PROACTIVE building when happy & well-resourced
+    if (this.happiness > 40 && this.hunger > 40) {
+      // Check for clouds (might rain soon) - build shelter preemptively
+      let cloudCount = 0;
+      for (let dy = -20; dy < 0; dy++) {
+        for (let dx = -10; dx <= 10; dx++) {
+          const elem = this.getElementAt(Math.floor(this.x) + dx, Math.floor(this.y) + dy);
+          if (elem === 'cloud') cloudCount++;
+        }
+      }
+      if (cloudCount > 3 && this.inventory.wood >= 6) return 'shelter';
+
+      // Got lots of wood? Build something useful
+      if (this.inventory.wood >= 8) {
+        // Random choice of what to build proactively
+        const choices = [];
+        if (this.coldLevel > 10) choices.push('warmth'); // Slightly cold, make campfire
+        choices.push('shelter'); // Always good to have shelter
+        // Check for water - maybe build boat
+        let waterNearby = 0;
+        for (let dy = 0; dy < 6; dy++) {
+          for (let dx = -6; dx < 6; dx++) {
+            if (this.getElementAt(Math.floor(this.x) + dx, Math.floor(this.y) + this.height + dy) === 'water') {
+              waterNearby++;
+            }
+          }
+        }
+        if (waterNearby > 15) choices.push('explore');
+
+        if (choices.length > 0) {
+          return choices[Math.floor(Math.random() * choices.length)];
+        }
+      }
+
+      // Got some wood? Build campfire for comfort
+      if (this.inventory.wood >= 2 && this.coldLevel > 5) {
+        return 'warmth';
+      }
+    }
+
+    // Check for large water body nearby (exploration)
+    let waterCount = 0;
+    for (let dy = 0; dy < 8; dy++) {
+      for (let dx = -8; dx < 8; dx++) {
+        const elem = this.getElementAt(Math.floor(this.x) + dx, Math.floor(this.y) + this.height + dy);
+        if (elem === 'water') waterCount++;
+      }
+    }
+    if (waterCount > 30 && this.inventory.wood >= 4) return 'explore';
+
+    return null;
+  }
+
+  // Check if buddy can afford a recipe
+  canAfford(recipe) {
+    for (const [mat, count] of Object.entries(recipe.cost)) {
+      if ((this.inventory[mat] || 0) < count) return false;
+    }
+    return true;
+  }
+
+  // Find a good place to build
+  findBuildSpot(recipe) {
+    const gx = Math.floor(this.x);
+    const gy = Math.floor(this.y);
+
+    // For ladder: build against wall we're facing or to escape upward
+    if (recipe === RECIPES.ladder) {
+      // Build right next to buddy
+      return { x: gx + this.width, y: gy - recipe.height + this.height };
+    }
+
+    // For shelter: build above and around buddy
+    if (recipe === RECIPES.shelter) {
+      return { x: gx - 1, y: gy - recipe.height };
+    }
+
+    // For campfire: build at buddy's feet
+    if (recipe === RECIPES.campfire) {
+      return { x: gx, y: gy + this.height };
+    }
+
+    // For boat: build below buddy (will float up)
+    if (recipe === RECIPES.boat) {
+      return { x: gx - 1, y: gy + this.height };
+    }
+
+    return { x: gx, y: gy + this.height };
+  }
+
+  // Place a structure in the world
+  placeStructure(recipe, spot) {
+    for (let row = 0; row < recipe.shape.length; row++) {
+      for (let col = 0; col < recipe.shape[row].length; col++) {
+        const cell = recipe.shape[row][col];
+        if (cell && cell !== 0) {
+          const px = spot.x + col;
+          const py = spot.y + row;
+          if (px >= 0 && px < cols && py >= 0 && py < rows) {
+            setCell(py * cols + px, cell);
+          }
+        }
+      }
+    }
+  }
+
+  // Autonomous crafting decision - returns recipe to build or null
+  decideToBuild() {
+    const need = this.assessNeeds();
+    if (!need) return null;
+
+    const recipeMap = {
+      'warmth': RECIPES.campfire,
+      'escape': RECIPES.ladder,
+      'shelter': RECIPES.shelter,
+      'explore': RECIPES.boat
+    };
+
+    const recipe = recipeMap[need];
+    if (recipe && this.canAfford(recipe)) {
+      return recipe;
+    }
+    return null;
+  }
+
+  // Deduct materials for crafting
+  payCost(recipe) {
+    for (const [mat, count] of Object.entries(recipe.cost)) {
+      this.inventory[mat] -= count;
+    }
+  }
+
+  // ===== CURIOSITY & PREFERENCE SYSTEM =====
+
+  // Update preference based on experience
+  updatePreference(element, delta) {
+    if (this.preferences[element] !== undefined) {
+      this.preferences[element] = Math.max(-100, Math.min(100, this.preferences[element] + delta));
+    } else {
+      this.preferences[element] = delta;
+    }
+  }
+
+  // Scan for interesting things (based on curiosity and preferences)
+  scanForInteresting(radius) {
+    const cx = Math.floor(this.x) + Math.floor(this.width / 2);
+    const cy = Math.floor(this.y) + Math.floor(this.height / 2);
+    const interesting = [];
+
+    for (let dy = -radius; dy <= radius; dy++) {
+      for (let dx = -radius; dx <= radius; dx++) {
+        const gx = cx + dx, gy = cy + dy;
+        if (gx < 0 || gx >= cols || gy < 0 || gy >= rows) continue;
+        if (Math.abs(dx) + Math.abs(dy) < 2) continue; // Too close
+        const i = gy * cols + gx;
+        const elem = TYPE_NAMES[types[i]];
+        if (!elem || elem === 'empty') continue;
+
+        // Calculate interest based on preferences and novelty
+        let interest = 0;
+        const pref = this.preferences[elem];
+
+        // Things we like = more interesting
+        if (pref !== undefined && pref > 0) {
+          interest += pref * 0.5;
+        }
+        // New/unknown things = curious!
+        else if (pref === undefined) {
+          interest += 30 + this.curiosity * 0.5;
+        }
+        // Fire/light is mesmerizing (even if scary)
+        if (elem === 'fire' || elem === 'campfire' || elem === 'lightning') {
+          interest += 20;
+        }
+        // Living things are interesting
+        if (E[elem] && E[elem].alive) {
+          interest += 25;
+        }
+
+        if (interest > 10) {
+          interesting.push({ x: gx, y: gy, type: elem, interest: interest });
+        }
+      }
+    }
+
+    // Sort by interest and return top pick
+    interesting.sort((a, b) => b.interest - a.interest);
+    return interesting[0] || null;
+  }
+
+  // Check if stuck in same position
+  checkIfStuck() {
+    const currentPos = Math.floor(this.x) + ',' + Math.floor(this.y);
+    if (this.lastPosition === currentPos) {
+      this.stuckTimer++;
+    } else {
+      this.stuckTimer = 0;
+      this.lastPosition = currentPos;
+    }
+    return this.stuckTimer > 120; // Stuck for 2 seconds
+  }
+
+  // Record visited spot
+  recordVisit() {
+    const spot = Math.floor(this.x / 5) + ',' + Math.floor(this.y / 5);
+    if (!this.exploredSpots.includes(spot)) {
+      this.exploredSpots.push(spot);
+      if (this.exploredSpots.length > 20) {
+        this.exploredSpots.shift(); // Forget oldest
+      }
+      // Exploring new places = happy!
+      this.happiness = Math.min(100, this.happiness + 1);
+      this.curiosity = Math.min(100, this.curiosity + 5);
+    }
+  }
+
+  update() {
+    // Animation timer
+    this.animTimer++;
+    if (this.animTimer > 10) {
+      this.animTimer = 0;
+      this.animFrame++;
+    }
+
+    // Skip physics if being grabbed
+    if (this.state === 'grabbed') {
+      return;
+    }
+
+    // Check swimming state - swims in any liquid!
+    const liquid = this.checkSubmerged();
+    const swimming = liquid.inLiquid;
+    const wasSwimming = this.waterDepth > 0;
+    this.waterDepth = liquid.liquidDepth;
+
+    // Track head underwater state
+    this.wasUnderwater = this.headUnderwater;
+    this.headUnderwater = liquid.headUnder;
+
+    // Detect entering liquid (splash!)
+    if (!wasSwimming && swimming) {
+      this.justEnteredWater = true;
+      this.state = 'splash';
+      playSound('splash');
+      shake(3);
+    }
+
+    // ========== BREATHING SYSTEM ==========
+    if (this.headUnderwater) {
+      // Losing air!
+      this.breath -= 0.5;
+      this.bubbleTimer++;
+      if (this.breath <= 0) {
+        this.breath = 0;
+        // Drowning!
+        this.state = 'drowning';
+      }
+    } else {
+      // Recovering air
+      if (this.wasUnderwater && !this.headUnderwater) {
+        // Just surfaced - gasp!
+        this.state = 'gasp';
+        playSound('gasp');
+        // Near-drown detection
+        if (this.breath < 30) {
+          this.nearDrownCount++;
+          this.waterFear = Math.min(100, this.waterFear + 20);
+        }
+      }
+      this.breath = Math.min(this.maxBreath, this.breath + 2);
+      this.bubbleTimer = 0;
+    }
+
+    // ========== ENERGY SYSTEM ==========
+    if (swimming) {
+      // Swimming is tiring
+      this.energy -= 0.1;
+      if (this.energy < 0) this.energy = 0;
+    } else {
+      // Recover energy on land
+      this.energy = Math.min(this.maxEnergy, this.energy + 0.2);
+    }
+
+    // Check for danger (fire, lava, acid)
+    const danger = this.scanForDanger(5);
+    const nearLiquid = this.waterFear > 30 && liquid.feetInLiquid && !swimming;
+
+    if (danger && danger.count > 0) {
+      this.state = 'panic';
+      // Flee from danger!
+      this.vx += danger.x * 0.5;
+      this.vy += danger.y * 0.3;
+    }
+
+    // Fear of liquid after near-drowning
+    if (nearLiquid && Math.random() < this.waterFear / 200) {
+      this.state = 'panic';
+      // Try to back away from water (opposite of gravity projected onto ground)
+      this.vx -= Math.sign(gravityX) * 0.3;
+    }
+
+    // ========== FIRE/BURNING ==========
+    // Check if touching fire, lava, or ember
+    const touchingFire = this.isTouchingHot();
+    if (touchingFire) {
+      if (!this.onFire) {
+        this.onFire = true;
+        this.burnTimer = 60; // Burn for ~1 second
+        playSound('burn');
+        shake(4);
+        flash('#ff4400', 0.3);
+        // Learn to fear fire!
+        this.updatePreference('fire', -15);
+        this.updatePreference('lava', -20);
+      }
+      this.painTimer = 10; // Flash red
+      this.state = 'burning';
+      // Panic and flail!
+      this.vx += (Math.random() - 0.5) * 1;
+      this.vy -= 0.5; // Jump up in pain
+    }
+
+    // Burning countdown
+    if (this.onFire) {
+      this.burnTimer--;
+      if (this.burnTimer <= 0) {
+        this.onFire = false;
+      }
+      // Water puts out fire!
+      if (swimming) {
+        this.onFire = false;
+        this.burnTimer = 0;
+      }
+    }
+
+    // Pain timer countdown
+    if (this.painTimer > 0) {
+      this.painTimer--;
+    }
+
+    // ========== COLD/FREEZING ==========
+    const coldTouching = this.isTouchingCold();
+    const wasFreezingBefore = this.coldLevel > 50;
+    if (coldTouching > 0) {
+      this.coldLevel = Math.min(100, this.coldLevel + coldTouching * 0.5);
+      this.shivering = true;
+      // Learn to dislike cold
+      if (this.coldLevel > 30) {
+        this.updatePreference('ice', -5);
+        this.updatePreference('snow', -3);
+      }
+      if (this.coldLevel > 50) {
+        this.state = 'freezing';
+        // Slow down when cold
+        this.vx *= 0.8;
+        this.vy *= 0.9;
+        if (!wasFreezingBefore) {
+          playSound('freeze');
+          flash('#88ccff', 0.2);
+        }
+      }
+    } else {
+      // Warm up slowly
+      this.coldLevel = Math.max(0, this.coldLevel - 0.3);
+      if (this.coldLevel < 20) {
+        this.shivering = false;
+      }
+    }
+    // Fire warms you up!
+    if (this.onFire || touchingFire) {
+      this.coldLevel = 0;
+      this.shivering = false;
+    }
+
+    // ========== ANTS ==========
+    const antsTouching = this.countTouchingAnts();
+    if (antsTouching > 0) {
+      this.beingEaten = true;
+      this.painTimer = 10;
+      this.antFear = Math.min(100, this.antFear + 5);
+      this.state = 'bitten';
+      // Flail in pain!
+      this.vx += (Math.random() - 0.5) * 0.8;
+      this.vy -= 0.3;
+      playSound('bite', 200);
+    } else {
+      this.beingEaten = false;
+    }
+
+    // Fear ants and flee from them
+    if (this.antFear > 20) {
+      const nearbyAnts = this.scanForAnts(6);
+      if (nearbyAnts && nearbyAnts.count > 0) {
+        this.state = 'panic';
+        this.vx += nearbyAnts.x * 0.4;
+        this.vy += nearbyAnts.y * 0.2;
+      }
+    }
+
+    // Slowly reduce ant fear
+    if (this.antFear > 0 && Math.random() < 0.005) {
+      this.antFear -= 1;
+    }
+
+    // ========== ELECTRICITY ==========
+    const electricityTouching = this.isTouchingElectricity();
+    if (electricityTouching > 0) {
+      this.shocked = true;
+      this.shockTimer = 30;  // Shock lasts a bit
+      this.chargeLevel = Math.min(100, this.chargeLevel + electricityTouching * 20);
+      this.painTimer = 15;
+      this.state = 'shocked';
+      // Violent spasm!
+      this.vx += (Math.random() - 0.5) * 2;
+      this.vy += (Math.random() - 0.5) * 2;
+      // JUICE!
+      playSound('zap');
+      shake(8);
+      flash('#ffff00', 0.4);
+    } else if (this.shockTimer > 0) {
+      this.shockTimer--;
+      // Still twitching
+      if (this.shockTimer > 15) {
+        this.vx += (Math.random() - 0.5) * 0.5;
+        this.vy += (Math.random() - 0.5) * 0.3;
+      }
+      if (this.shockTimer === 0) {
+        this.shocked = false;
+      }
+    }
+    // Slowly discharge
+    if (this.chargeLevel > 0) {
+      this.chargeLevel -= 0.5;
+    }
+
+    // ========== HUNGER & HAPPINESS ==========
+    // Hunger decays slowly over time
+    if (Math.random() < 0.01) {
+      this.hunger = Math.max(0, this.hunger - 0.5);
+    }
+
+    // Happiness decays slowly if neglected
+    if (Math.random() < 0.005) {
+      this.happiness = Math.max(0, this.happiness - 0.3);
+    }
+
+    // Being hurt decreases happiness
+    if (this.painTimer > 0) {
+      this.happiness = Math.max(0, this.happiness - 0.5);
+    }
+
+    // Very hungry = unhappy
+    if (this.hunger < 20) {
+      this.happiness = Math.max(0, this.happiness - 0.1);
+      if (Math.random() < 0.01 && !this.speechBubble) {
+        this.showSpeech('🍖?', 60);
+      }
+    }
+
+    // Try to eat nearby food
+    if (this.tryEatFood()) {
+      // Ate something!
+    }
+
+    // If hungry, seek food
+    if (this.hunger < 40 && !swimming) {
+      const food = this.scanForFood(12);
+      if (food) {
+        // Walk toward food
+        this.vx += food.x * 0.15;
+        if (food.dist < 3) {
+          this.state = 'idle'; // Stop and eat
+        }
+      }
+    }
+
+    // ========== AUTONOMOUS GATHERING & CRAFTING ==========
+    if (!swimming && !this.crafting && this.hunger >= 25) {
+      // ALWAYS look for materials when we don't have a target
+      if (!this.gatherTarget) {
+        const mat = this.scanForMaterial(20);
+        if (mat && this.inventory[mat.type] < this.maxInventory) {
+          this.gatherTarget = mat;
+          this.gathering = false;
+          this.gatherTimer = 0;
+          if (Math.random() < 0.3) this.showSpeech('🪵!', 30);
+        }
+      }
+
+      // Have a target - move toward it or gather
+      if (this.gatherTarget) {
+        const dx = this.gatherTarget.x - Math.floor(this.x + this.width/2);
+        const dy = this.gatherTarget.y - Math.floor(this.y + this.height/2);
+        const dist = Math.abs(dx) + Math.abs(dy);
+
+        if (dist > 4) {
+          // Walk toward material
+          this.vx += Math.sign(dx) * 0.2;
+          this.state = 'walk';
+          this.gathering = false;
+        } else {
+          // Close enough - gather!
+          this.gathering = true;
+          this.state = 'gathering';
+          if (this.tryGather()) {
+            // Successfully gathered - will look for next target
+          }
+        }
+      }
+
+      // Check if we should craft something
+      if (!this.gathering && !this.gatherTarget && this.inventory.wood >= 2) {
+        if (Math.random() < 0.02) {
+          const recipe = this.decideToBuild();
+          if (recipe) {
+            this.crafting = true;
+            this.craftingItem = recipe;
+            this.craftTimer = 0;
+            this.showSpeech('🔨', 30);
+          }
+        }
+      }
+    }
+
+    // Handle crafting animation
+    if (this.crafting && this.craftingItem) {
+      this.craftTimer++;
+      this.state = 'crafting';
+      if (this.craftTimer >= 60) {
+        // Build it!
+        const spot = this.findBuildSpot(this.craftingItem);
+        this.placeStructure(this.craftingItem, spot);
+        this.payCost(this.craftingItem);
+        this.showSpeech(this.craftingItem.icon + '!', 60);
+        this.happiness = Math.min(100, this.happiness + 15);
+        this.crafting = false;
+        this.craftingItem = null;
+        this.craftTimer = 0;
+      }
+    }
+
+    // ========== CURIOSITY & EXPLORATION ==========
+    if (!swimming && !this.crafting && !this.gathering && this.state === 'idle') {
+      // Check if stuck
+      const isStuck = this.checkIfStuck();
+      if (isStuck) {
+        this.boredomTimer++;
+        this.curiosity = Math.max(0, this.curiosity - 0.5);
+        if (this.boredomTimer > 60 && Math.random() < 0.05) {
+          this.showSpeech('😐', 30);
+          // Try to move somewhere new
+          this.vx += (Math.random() - 0.5) * 0.5;
+        }
+      } else {
+        this.boredomTimer = 0;
+        this.recordVisit(); // Track exploration
+      }
+
+      // Look for interesting things when curious
+      if (this.curiosity > 30 && Math.random() < 0.02) {
+        const interesting = this.scanForInteresting(12);
+        if (interesting) {
+          this.curiosityTarget = interesting;
+          if (Math.random() < 0.3) {
+            this.showSpeech('❓', 30);
+          }
+        }
+      }
+
+      // Move toward curiosity target
+      if (this.curiosityTarget) {
+        const dx = this.curiosityTarget.x - Math.floor(this.x + this.width/2);
+        const dy = this.curiosityTarget.y - Math.floor(this.y + this.height/2);
+        const dist = Math.abs(dx) + Math.abs(dy);
+
+        // Check if target still exists
+        const ti = this.curiosityTarget.y * cols + this.curiosityTarget.x;
+        if (TYPE_NAMES[types[ti]] !== this.curiosityTarget.type) {
+          this.curiosityTarget = null;
+        } else if (dist > 3) {
+          this.vx += Math.sign(dx) * 0.08;
+          this.state = 'walk';
+        } else {
+          // Reached it! Investigate
+          this.showSpeech('🔍', 40);
+          this.curiosity = Math.min(100, this.curiosity + 10);
+          // If it's unknown, now we know it
+          const elem = this.curiosityTarget.type;
+          if (this.preferences[elem] === undefined) {
+            this.preferences[elem] = 0; // Neutral until proven otherwise
+          }
+          this.curiosityTarget = null;
+        }
+      }
+
+      // Naturally recover curiosity when rested and fed
+      if (this.hunger > 50 && this.happiness > 40) {
+        this.curiosity = Math.min(100, this.curiosity + 0.05);
+      }
+    }
+
+    // Update speech bubble
+    if (this.speechBubble) {
+      this.speechBubble.timer--;
+      if (this.speechBubble.timer <= 0) {
+        this.speechBubble = null;
+      }
+    }
+
+    // Update heart particles
+    for (let i = this.hearts.length - 1; i >= 0; i--) {
+      const h = this.hearts[i];
+      h.x += h.vx;
+      h.y += h.vy;
+      h.vy += 0.01; // Slight gravity
+      h.life--;
+      if (h.life <= 0) {
+        this.hearts.splice(i, 1);
+      }
+    }
+
+    // Reset pet strokes if not petted recently
+    if (Date.now() - this.lastPetTime > 500) {
+      this.petStrokes = 0;
+    }
+
+    // ========== SWIMMING BEHAVIOR ==========
+    if (swimming) {
+      // Urgency based on breath and energy
+      const urgency = (1 - this.breath / 100) + (1 - this.energy / 100) * 0.5;
+
+      if (this.headUnderwater) {
+        // URGENT: swim up to get head above water!
+        const swimPower = 0.3 + urgency * 0.4;
+        this.vy -= gravityY * swimPower;
+        this.vx -= gravityX * swimPower;
+
+        if (this.breath < 30) {
+          // Desperate flailing!
+          this.state = 'drowning';
+          this.vx += (Math.random() - 0.5) * 0.5;
+          this.vy += (Math.random() - 0.5) * 0.3;
+        }
+      } else if (liquid.isShallow) {
+        // Shallow water - happy splashing if not tired/scared
+        if (this.energy > 50 && this.waterFear < 30 && Math.random() < 0.05) {
+          this.state = 'splash';
+        } else {
+          this.state = 'swim';
+        }
+      } else {
+        // Treading water - head above but body in water
+        this.state = 'swim';
+        // Gentle kicks to stay afloat
+        if (Math.random() < 0.15) {
+          this.vy -= gravityY * 0.2;
+          this.vx -= gravityX * 0.2;
+        }
+      }
+    }
+
+    // Apply gravity (reduced in water, more if tired)
+    const energyFactor = this.energy < 30 ? 1.5 : 1;
+    const gravMult = swimming ? 0.05 * energyFactor : 0.2;
+    this.vy += gravityY * gravMult;
+    this.vx += gravityX * gravMult;
+
+    // Speed limits (slower in water, slower if tired)
+    const tiredMult = this.energy < 30 ? 0.6 : 1;
+    const maxSpeed = (swimming ? 1 : 2) * tiredMult;
+    if (this.vy > maxSpeed) this.vy = maxSpeed;
+    if (this.vy < -maxSpeed) this.vy = -maxSpeed;
+    if (this.vx > maxSpeed) this.vx = maxSpeed;
+    if (this.vx < -maxSpeed) this.vx = -maxSpeed;
+
+    // Try to move
+    let newY = this.y + this.vy;
+    let newX = this.x + this.vx;
+
+    // Check vertical collision
+    let onGround = false;
+    const checkY = Math.floor(newY) + this.height;
+    for (let dx = 0; dx < this.width; dx++) {
+      const gx = Math.floor(this.x) + dx;
+      if (this.isSolid(gx, checkY)) {
+        onGround = true;
+        break;
+      }
+    }
+
+    if (onGround && this.vy > 0) {
+      newY = Math.floor(this.y);
+      this.vy = 0;
+    }
+
+    // Check horizontal collision
+    if (this.vx !== 0) {
+      const checkX = this.vx > 0 ? Math.floor(newX) + this.width : Math.floor(newX);
+      let blocked = false;
+      for (let dy = 0; dy < this.height; dy++) {
+        if (this.isSolid(checkX, Math.floor(this.y) + dy)) {
+          blocked = true;
+          break;
+        }
+      }
+      if (blocked) {
+        newX = this.x;
+        this.vx = 0;
+      }
+    }
+
+    this.y = newY;
+    this.x = newX;
+
+    // Keep in bounds
+    if (this.y < 0) this.y = 0;
+    if (this.y > rows - this.height) {
+      this.y = rows - this.height;
+      this.vy = 0;
+      onGround = true;
+    }
+    if (this.x < 0) this.x = 0;
+    if (this.x > cols - this.width) this.x = cols - this.width;
+
+    // ========== STATE MACHINE ==========
+    // Only change state if not in a priority state
+    const priorityStates = ['drowning', 'gasp', 'panic', 'splash', 'burning', 'freezing', 'bitten', 'shocked'];
+    if (!priorityStates.includes(this.state)) {
+      if (swimming) {
+        this.state = 'swim';
+      } else if (this.energy < 20) {
+        this.state = 'tired';
+      } else if (!onGround && this.vy > 0.5) {
+        this.state = 'fall';
+      } else if (Math.abs(this.vx) > 0.1) {
+        this.state = 'walk';
+      } else {
+        this.state = 'idle';
+      }
+    }
+
+    // Friction (more in water)
+    const friction = swimming ? 0.8 : 0.9;
+    this.vx *= friction;
+    this.vy *= swimming ? 0.85 : 1;
+
+    // ========== IDLE BEHAVIORS ==========
+    this.idleTimer++;
+
+    // Ground idle behaviors
+    if (this.state === 'idle' && onGround && !this.fishing) {
+      // Check for fish to start fishing
+      const fishNearby = this.scanForFish(12);
+      if (fishNearby && Math.random() < 0.08) {
+        this.fishing = true;
+        this.fishingTimer = 0;
+        this.fishingLine = {
+          x: this.x + this.width / 2,
+          y: this.y + this.height,
+          bobY: fishNearby.y - (this.y + this.height)
+        };
+        this.showSpeech('🎣', 40);
+      }
+      // Random idle actions
+      else if (this.idleTimer > 60 && Math.random() < 0.02) {
+        const actions = ['look', 'stretch', 'fidget', 'wave', 'wander'];
+        this.idleAction = actions[Math.floor(Math.random() * actions.length)];
+        this.idleTimer = 0;
+
+        if (this.idleAction === 'look') {
+          this.lookDirection = Math.random() < 0.5 ? -1 : 1;
+        } else if (this.idleAction === 'wander') {
+          this.vx = (Math.random() - 0.5) * 1;
+        } else if (this.idleAction === 'wave') {
+          this.showSpeech('👋', 30);
+        } else if (this.idleAction === 'stretch') {
+          this.showSpeech('💤', 25);
+        }
+      }
+      // Clear idle action after a bit
+      if (this.idleTimer > 30 && this.idleAction) {
+        this.idleAction = null;
+        this.lookDirection = 0;
+      }
+    }
+
+    // Fishing behavior
+    if (this.fishing) {
+      this.fishingTimer++;
+      // Bob the line
+      if (this.fishingLine) {
+        this.fishingLine.bobY += Math.sin(this.fishingTimer * 0.1) * 0.05;
+      }
+      // Try to catch fish
+      if (this.fishingTimer % 30 === 0) {
+        this.tryCatchFish();
+      }
+      // Give up after a while
+      if (this.fishingTimer > 300) {
+        this.fishing = false;
+        this.fishingLine = null;
+        this.showSpeech('😕', 30);
+      }
+      // Cancel if moved or in danger
+      if (Math.abs(this.vx) > 0.3 || this.painTimer > 0) {
+        this.fishing = false;
+        this.fishingLine = null;
+      }
+    }
+
+    // Swimming idle behaviors
+    if (this.state === 'swim' && !this.headUnderwater) {
+      if (this.idleTimer > 40 && Math.random() < 0.03) {
+        const swimActions = ['float', 'paddle', 'splash', 'dive'];
+        const action = swimActions[Math.floor(Math.random() * swimActions.length)];
+        this.idleTimer = 0;
+
+        if (action === 'float') {
+          this.vy = -0.1; // Float up a bit
+        } else if (action === 'paddle') {
+          this.vx = (Math.random() - 0.5) * 0.8;
+        } else if (action === 'splash' && this.happiness > 40) {
+          this.state = 'splash';
+          this.showSpeech('💦', 20);
+        } else if (action === 'dive' && this.breath > 70) {
+          this.vy = 0.5; // Dive down
+        }
+      }
+    }
+
+    // Clear temporary states
+    if (this.state === 'panic' && Math.random() < 0.1) {
+      this.state = 'idle';
+    }
+    if (this.state === 'gasp' && Math.random() < 0.2) {
+      this.state = swimming ? 'swim' : 'idle';
+    }
+    if (this.state === 'splash' && Math.random() < 0.15) {
+      this.state = swimming ? 'swim' : 'idle';
+    }
+    if (this.state === 'burning' && !this.onFire) {
+      this.state = 'idle';
+    }
+
+    // Clear justEnteredWater flag
+    this.justEnteredWater = false;
+
+    // Slowly reduce water fear over time (on land)
+    if (!swimming && this.waterFear > 0 && Math.random() < 0.01) {
+      this.waterFear -= 1;
+    }
+
+    // ========== DIGGING OUT OF SAND ==========
+    this.checkAndDigOut();
+  }
+
+  // Check if buried and dig toward surface
+  checkAndDigOut() {
+    try {
+    const gx = Math.floor(this.x);
+    const gy = Math.floor(this.y);
+    if (gx < 0 || gy < 0 || !cols || !rows) return; // Safety check
+    let buriedCells = 0;
+    let headBuried = false;
+
+    // Check how many cells are covered by loose material
+    for (let dy = 0; dy < this.height; dy++) {
+      for (let dx = 0; dx < this.width; dx++) {
+        const elem = this.getElementAt(gx + dx, gy + dy);
+        if (elem && this.isLooseMaterial(elem)) {
+          buriedCells++;
+          if (dy < 2) headBuried = true; // Head is top 2 rows
+        }
+      }
+    }
+
+    const totalCells = this.width * this.height;
+    const buriedRatio = buriedCells / totalCells;
+
+    // If significantly buried, start digging
+    if (buriedRatio > 0.3 || headBuried) {
+      this.state = 'digging';
+
+      // Dig toward surface (opposite of gravity)
+      // Move up and displace sand
+      const digX = gx + Math.floor(this.width / 2);
+      const digY = gy - 1; // Check cell above head
+
+      // Try to move up by displacing loose material
+      if (digY >= 0) {
+        let canDig = true;
+        // Check if space above is loose material or empty
+        for (let dx = 0; dx < this.width; dx++) {
+          const elem = this.getElementAt(gx + dx, digY);
+          // elem is null for empty cells, so only block if it's a non-loose material
+          if (elem && !this.isLooseMaterial(elem)) {
+            // Blocked by solid/liquid/other
+            canDig = false;
+            break;
+          }
+        }
+
+        if (canDig) {
+          // Displace sand: move it down/to sides
+          for (let dx = 0; dx < this.width; dx++) {
+            const checkX = gx + dx;
+            if (checkX < 0 || checkX >= cols) continue;
+            const elem = this.getElementAt(checkX, digY);
+            if (elem && this.isLooseMaterial(elem)) {
+              // Try to move this sand cell down or to the side
+              const sandIdx = digY * cols + checkX;
+              if (sandIdx < 0 || sandIdx >= types.length) continue;
+
+              const belowY = gy + this.height;
+              const belowIdx = belowY * cols + checkX;
+              const leftIdx = digY * cols + (checkX - 1);
+              const rightIdx = digY * cols + (checkX + 1);
+
+              // Try to place sand below the buddy's feet
+              if (belowY < rows && belowIdx >= 0 && belowIdx < types.length && types[belowIdx] === 0) {
+                types[belowIdx] = types[sandIdx];
+                temps[belowIdx] = temps[sandIdx];
+                chars[belowIdx] = chars[sandIdx];
+                types[sandIdx] = 0;
+              } else if (checkX > 0 && leftIdx >= 0 && leftIdx < types.length && types[leftIdx] === 0) {
+                types[leftIdx] = types[sandIdx];
+                temps[leftIdx] = temps[sandIdx];
+                chars[leftIdx] = chars[sandIdx];
+                types[sandIdx] = 0;
+              } else if (checkX < cols - 1 && rightIdx >= 0 && rightIdx < types.length && types[rightIdx] === 0) {
+                types[rightIdx] = types[sandIdx];
+                temps[rightIdx] = temps[sandIdx];
+                chars[rightIdx] = chars[sandIdx];
+                types[sandIdx] = 0;
+              }
+            }
+          }
+
+          // Move buddy up slightly
+          this.y -= 0.3;
+          this.vy = -0.2; // Small upward velocity
+        }
+      }
+    }
+    } catch(e) { console.error('Dig error:', e); }
+  }
+
+  // Check if element is loose/diggable
+  isLooseMaterial(elemName) {
+    if (!elemName) return false;
+    const loose = ['sand', 'gunpowder', 'food'];
+    return loose.includes(elemName);
+  }
+
+  render(ctx, cellSize) {
+    // Lock to grid
+    const gx = Math.floor(this.x);
+    const gy = Math.floor(this.y);
+    const halfCell = cellSize / 2;
+
+    // Modify skin color based on state
+    let skinMod = [...this.skinColor];
+    if (this.breath < 50) {
+      // Turning blue from lack of air
+      const blueAmount = (50 - this.breath) / 50;
+      skinMod[0] = Math.max(0, skinMod[0] - blueAmount * 80);  // less red
+      skinMod[2] = Math.min(255, skinMod[2] + blueAmount * 100); // more blue
+    }
+    if (this.state === 'panic') {
+      // Flushed/red when panicking
+      skinMod[0] = Math.min(255, skinMod[0] + 30);
+    }
+    if (this.energy < 30) {
+      // Pale when tired
+      skinMod[0] = Math.min(255, skinMod[0] + 20);
+      skinMod[1] = Math.min(255, skinMod[1] + 20);
+      skinMod[2] = Math.min(255, skinMod[2] + 20);
+    }
+    if (this.painTimer > 0 || this.onFire) {
+      // BRIGHT RED when in pain/burning!
+      skinMod[0] = 255;
+      skinMod[1] = Math.max(0, skinMod[1] - 100);
+      skinMod[2] = Math.max(0, skinMod[2] - 100);
+    }
+    if (this.coldLevel > 20) {
+      // Turning blue/purple from cold
+      const coldAmount = (this.coldLevel - 20) / 80;
+      skinMod[0] = Math.max(100, skinMod[0] - coldAmount * 100);  // less red, but keep some
+      skinMod[1] = Math.max(100, skinMod[1] - coldAmount * 50);   // less green
+      skinMod[2] = Math.min(255, skinMod[2] + coldAmount * 130);  // more blue
+    }
+    if (this.beingEaten) {
+      // Red spots/irritation from ant bites
+      skinMod[0] = Math.min(255, skinMod[0] + 40);
+      skinMod[1] = Math.max(0, skinMod[1] - 30);
+    }
+    if (this.shocked || this.shockTimer > 0) {
+      // Flickering yellow/white when electrocuted
+      const flicker = Math.random();
+      if (flicker > 0.5) {
+        skinMod[0] = 255;
+        skinMod[1] = 255;
+        skinMod[2] = Math.floor(Math.random() * 100);
+      } else {
+        skinMod[0] = 255;
+        skinMod[1] = 200 + Math.floor(Math.random() * 55);
+        skinMod[2] = 0;
+      }
+    }
+
+    const skin = `rgb(${skinMod.join(',')})`;
+    const hair = `rgb(${this.hairColor.join(',')})`;
+    const sprout = `rgb(${this.sproutColor.join(',')})`;
+
+    // Eye color changes with state
+    let eyeMod = [...this.eyeColor];
+    if (this.state === 'drowning') {
+      eyeMod = [200, 50, 50]; // red/panicked eyes
+    } else if (this.state === 'gasp') {
+      eyeMod = [100, 100, 150]; // wide eyes
+    } else if (this.state === 'tired') {
+      eyeMod = [80, 80, 80]; // dull eyes
+    } else if (this.state === 'freezing') {
+      eyeMod = [150, 180, 255]; // icy blue eyes
+    } else if (this.state === 'bitten') {
+      eyeMod = [255, 100, 100]; // red irritated eyes
+    } else if (this.state === 'shocked' || this.shockTimer > 0) {
+      // Flickering white/yellow eyes
+      eyeMod = [255, 255, Math.floor(Math.random() * 150)];
+    }
+    const eye = `rgb(${eyeMod.join(',')})`;
+
+    // Kanji for body parts - vary based on state
+    let skinKanji = '肉体身胴腕足手首顔頭';
+    let eyeKanji = '目眼';
+    if (this.state === 'drowning') {
+      eyeKanji = '泣涙'; // crying/tears
+    } else if (this.state === 'gasp') {
+      eyeKanji = '驚愕'; // surprise
+    } else if (this.state === 'splash') {
+      skinKanji = '水波泡沫'; // water/splash related
+    } else if (this.state === 'burning' || this.onFire) {
+      eyeKanji = '痛熱'; // pain/heat
+      skinKanji = '火炎熱焼'; // fire/burning
+    } else if (this.state === 'freezing' || this.coldLevel > 50) {
+      eyeKanji = '凍寒'; // frozen/cold
+      skinKanji = '氷凍寒雪'; // ice/frozen/cold/snow
+    } else if (this.state === 'bitten' || this.beingEaten) {
+      eyeKanji = '痛泣'; // pain/crying
+      skinKanji = '咬傷痒赤'; // bite/wound/itch/red
+    } else if (this.state === 'shocked' || this.shockTimer > 0) {
+      eyeKanji = '電光'; // electricity/light
+      skinKanji = '雷電撃痺'; // thunder/electric/shock/numb
+    }
+    const hairKanji = '髪毛';
+    const sproutKanji = '芽苗草';
+
+    // Determine orientation from gravity (8 directions)
+    // Calculate angle from gravity vector - feet point WITH gravity
+    const angle = Math.atan2(gravityY, gravityX) * 180 / Math.PI;
+    // Convert to 0-7 (8 directions, starting from right going clockwise)
+    // Right=0, DownRight=1, Down=2, DownLeft=3, Left=4, UpLeft=5, Up=6, UpRight=7
+    let orientation = Math.round(((angle + 360) % 360) / 45) % 8;
+
+    // Body patterns for 8 directions (each designed for grid alignment)
+    const bodies = {
+      // Down (gravity pulling down)
+      2: [
+        [0,1,1,0],
+        [1,1,1,1],
+        [1,2,2,1],
+        [1,1,1,1],
+        [0,1,1,0],
+        [1,1,1,1],
+        [0,1,1,0],
+        [1,0,0,1],
+      ],
+      // Up (gravity pulling up, head down)
+      6: [
+        [1,0,0,1],
+        [0,1,1,0],
+        [1,1,1,1],
+        [0,1,1,0],
+        [1,1,1,1],
+        [1,2,2,1],
+        [1,1,1,1],
+        [0,1,1,0],
+      ],
+      // Right (gravity pulling right)
+      0: [
+        [1,0,1,1,0,1,0,1],
+        [0,1,1,1,1,1,1,0],
+        [0,1,2,1,1,1,1,0],
+        [1,0,1,1,0,1,0,1],
+      ],
+      // Left (gravity pulling left)
+      4: [
+        [1,0,1,0,1,1,0,1],
+        [0,1,1,1,1,2,1,0],
+        [0,1,1,1,1,1,1,0],
+        [1,0,1,0,1,1,0,1],
+      ],
+      // Down-Right diagonal
+      1: [
+        [0,0,0,1,1,0],
+        [0,0,1,1,1,1],
+        [0,1,1,2,1,0],
+        [1,1,2,1,0,0],
+        [1,1,1,0,0,0],
+        [0,1,0,0,0,1],
+      ],
+      // Down-Left diagonal
+      3: [
+        [0,1,1,0,0,0],
+        [1,1,1,1,0,0],
+        [0,1,2,1,1,0],
+        [0,0,1,2,1,1],
+        [0,0,0,1,1,1],
+        [1,0,0,0,1,0],
+      ],
+      // Up-Left diagonal
+      5: [
+        [1,0,0,0,1,0],
+        [0,0,0,1,1,1],
+        [0,0,1,2,1,1],
+        [0,1,2,1,1,0],
+        [1,1,1,1,0,0],
+        [0,1,1,0,0,0],
+      ],
+      // Up-Right diagonal
+      7: [
+        [0,1,0,0,0,1],
+        [1,1,1,0,0,0],
+        [1,1,2,1,0,0],
+        [0,1,1,2,1,0],
+        [0,0,1,1,1,1],
+        [0,0,0,1,1,0],
+      ],
+    };
+
+    let body = bodies[orientation] || bodies[2];
+
+    // Shiver offset when cold, twitch when shocked
+    let shiverX = 0, shiverY = 0;
+    if (this.shivering && this.coldLevel > 30) {
+      shiverX = (Math.random() - 0.5) * (this.coldLevel / 30);
+      shiverY = (Math.random() - 0.5) * (this.coldLevel / 50);
+    }
+    if (this.shocked || this.shockTimer > 0) {
+      // Violent twitching when electrocuted
+      shiverX = (Math.random() - 0.5) * 4;
+      shiverY = (Math.random() - 0.5) * 3;
+    }
+
+    // Draw body as kanji - snapped to grid
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.font = `${cellSize * 0.9}px "Noto Sans JP", sans-serif`;
+
+    for (let y = 0; y < body.length; y++) {
+      for (let x = 0; x < body[y].length; x++) {
+        const cell = body[y][x];
+        const drawX = gx + x;
+        const drawY = gy + y;
+        if (cell === 1) {
+          ctx.fillStyle = skin;
+          const char = skinKanji[(drawX + drawY) % skinKanji.length];
+          ctx.fillText(char, drawX * cellSize + halfCell + shiverX, drawY * cellSize + halfCell + shiverY);
+        } else if (cell === 2) {
+          ctx.fillStyle = eye;
+          const char = eyeKanji[drawX % eyeKanji.length];
+          ctx.fillText(char, drawX * cellSize + halfCell + shiverX, drawY * cellSize + halfCell + shiverY);
+        }
+      }
+    }
+
+    // Draw type decoration based on orientation (8 directions)
+    // Hair/sprout positions opposite to gravity direction
+    const decorOffsets = {
+      0: {hx: -1, hy: 1, sx: -1, sy: 1, sx2: -2, sy2: 1},      // gravity right, decor left
+      1: {hx: -1, hy: -1, sx: -1, sy: -1, sx2: -2, sy2: -2},   // gravity down-right
+      2: {hx: 1, hy: -1, sx: 1, sy: -1, sx2: 1, sy2: -2},      // gravity down, decor up
+      3: {hx: body[0].length, hy: -1, sx: body[0].length, sy: -1, sx2: body[0].length+1, sy2: -2},  // gravity down-left
+      4: {hx: body[0].length, hy: 1, sx: body[0].length, sy: 1, sx2: body[0].length+1, sy2: 1},     // gravity left, decor right
+      5: {hx: body[0].length, hy: body.length, sx: body[0].length, sy: body.length, sx2: body[0].length+1, sy2: body.length+1}, // gravity up-left
+      6: {hx: 1, hy: body.length, sx: 1, sy: body.length, sx2: 1, sy2: body.length+1},  // gravity up, decor down
+      7: {hx: -1, hy: body.length, sx: -1, sy: body.length, sx2: -2, sy2: body.length+1}, // gravity up-right
+    };
+    const off = decorOffsets[orientation] || decorOffsets[2];
+
+    if (this.type === 'hair') {
+      ctx.fillStyle = hair;
+      const char = hairKanji[this.animFrame % hairKanji.length];
+      ctx.fillText(char, (gx + off.hx) * cellSize + halfCell, (gy + off.hy) * cellSize + halfCell);
+    } else if (this.type === 'sprout') {
+      ctx.fillStyle = sprout;
+      const char = sproutKanji[this.animFrame % sproutKanji.length];
+      ctx.fillText(char, (gx + off.sx) * cellSize + halfCell, (gy + off.sy) * cellSize + halfCell);
+      ctx.fillText(char, (gx + off.sx2) * cellSize + halfCell, (gy + off.sy2) * cellSize + halfCell);
+    }
+
+    // Draw bubbles when head underwater
+    if (this.headUnderwater && this.bubbleTimer > 0) {
+      ctx.fillStyle = 'rgba(200, 220, 255, 0.8)';
+      const bubbleKanji = '泡○◯';
+      // Bubbles rise opposite to gravity
+      const bubbleRise = Math.floor(this.bubbleTimer / 5);
+      for (let i = 0; i < Math.min(3, Math.floor(this.bubbleTimer / 10)); i++) {
+        const bx = gx + 1 + (i % 2);
+        const by = gy - bubbleRise - i * 2;
+        if (by >= 0) {
+          const char = bubbleKanji[i % bubbleKanji.length];
+          ctx.fillText(char, bx * cellSize + halfCell, by * cellSize + halfCell);
+        }
+      }
+    }
+
+    // Draw breath meter when in water (small bar above head)
+    if (this.waterDepth > 0 || this.breath < 100) {
+      const barWidth = this.width * cellSize;
+      const barHeight = 3;
+      const barX = gx * cellSize;
+      const barY = (gy - 1) * cellSize - barHeight;
+
+      // Background
+      ctx.fillStyle = 'rgba(50, 50, 80, 0.7)';
+      ctx.fillRect(barX, barY, barWidth, barHeight);
+
+      // Breath level
+      const breathPct = this.breath / this.maxBreath;
+      let breathColor = 'rgba(100, 200, 255, 0.9)';
+      if (breathPct < 0.3) breathColor = 'rgba(255, 80, 80, 0.9)';
+      else if (breathPct < 0.5) breathColor = 'rgba(255, 200, 80, 0.9)';
+      ctx.fillStyle = breathColor;
+      ctx.fillRect(barX, barY, barWidth * breathPct, barHeight);
+    }
+
+    // Draw hunger & happiness meters (top corners of screen)
+    const meterWidth = 40;
+    const meterHeight = 6;
+    const meterPadding = 5;
+
+    // Hunger meter (left side, food icon)
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
+    ctx.fillRect(meterPadding, meterPadding, meterWidth, meterHeight);
+    const hungerPct = this.hunger / 100;
+    ctx.fillStyle = hungerPct < 0.3 ? '#ff4444' : hungerPct < 0.5 ? '#ffaa44' : '#88cc44';
+    ctx.fillRect(meterPadding, meterPadding, meterWidth * hungerPct, meterHeight);
+    ctx.fillStyle = '#fff';
+    ctx.font = '10px sans-serif';
+    ctx.textAlign = 'left';
+    ctx.fillText('🍖', meterPadding, meterPadding + meterHeight + 10);
+
+    // Happiness meter (right side, heart icon)
+    const happyX = w - meterWidth - meterPadding;
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
+    ctx.fillRect(happyX, meterPadding, meterWidth, meterHeight);
+    const happyPct = this.happiness / 100;
+    ctx.fillStyle = happyPct < 0.3 ? '#8844aa' : happyPct < 0.5 ? '#cc66cc' : '#ff88aa';
+    ctx.fillRect(happyX, meterPadding, meterWidth * happyPct, meterHeight);
+    ctx.textAlign = 'right';
+    ctx.fillText('❤️', w - meterPadding, meterPadding + meterHeight + 10);
+
+    // Draw speech bubble
+    if (this.speechBubble) {
+      const bubbleX = (gx + this.width / 2) * cellSize;
+      const bubbleY = (gy - 2) * cellSize;
+
+      // Bubble background
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
+      ctx.beginPath();
+      ctx.arc(bubbleX, bubbleY, 12, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Bubble text
+      ctx.fillStyle = '#000';
+      ctx.font = '14px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(this.speechBubble.text, bubbleX, bubbleY);
+    }
+
+    // Draw fishing line
+    if (this.fishing && this.fishingLine) {
+      ctx.strokeStyle = '#8B4513';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      // Rod from buddy's side
+      const rodStartX = (this.x + this.width * 0.7) * cellSize;
+      const rodStartY = (this.y + this.height * 0.3) * cellSize;
+      const rodEndX = (this.x + this.width + 2) * cellSize;
+      const rodEndY = (this.y) * cellSize;
+      ctx.moveTo(rodStartX, rodStartY);
+      ctx.lineTo(rodEndX, rodEndY);
+      ctx.stroke();
+
+      // Fishing line from rod tip to water
+      ctx.strokeStyle = '#AAA';
+      ctx.lineWidth = 0.5;
+      ctx.beginPath();
+      ctx.moveTo(rodEndX, rodEndY);
+      const bobberX = this.fishingLine.x * cellSize;
+      const bobberY = (this.y + this.height + this.fishingLine.bobY) * cellSize;
+      // Slight curve in line
+      const midX = (rodEndX + bobberX) / 2;
+      const midY = (rodEndY + bobberY) / 2 + Math.sin(Date.now() / 500) * 3;
+      ctx.quadraticCurveTo(midX, midY, bobberX, bobberY);
+      ctx.stroke();
+
+      // Bobber
+      ctx.fillStyle = '#FF4444';
+      ctx.beginPath();
+      ctx.arc(bobberX, bobberY, 3, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#FFFFFF';
+      ctx.beginPath();
+      ctx.arc(bobberX, bobberY - 1.5, 1.5, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    // Draw floating hearts
+    ctx.font = '12px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    for (const h of this.hearts) {
+      const alpha = h.life / 60;
+      ctx.globalAlpha = alpha;
+      ctx.fillText('❤️', h.x * cellSize, h.y * cellSize);
+    }
+    ctx.globalAlpha = 1;
+  }
+}
+
+// The buddy instance
+let buddy = null;
+
+// Accelerometer-based gravity - full 360 degree support
+let tiltX = 0;  // -1 to 1 from gamma (left-right tilt)
+let tiltY = 1;  // 1 = down (normal), -1 = up (inverted), 0 = sideways
+let hasAccelerometer = false;
+// Smoothing for tilt to prevent jitter
+let smoothTiltX = 0;
+let smoothTiltY = 1;
+const TILT_SMOOTHING = 0.1; // Lower = smoother but more lag
+// Continuous gravity direction (float -1 to 1)
+let gravityX = 0;
+let gravityY = 1;
+// Shake detection for nitro
+let lastShakeTime = 0;
+let shakeTriggered = false;
+const SHAKE_THRESHOLD = 25;  // acceleration threshold
+const SHAKE_COOLDOWN = 500;  // ms between shakes
+
+// Flat arrays for performance
+let types, temps, lives, chars, falls;  // falls = momentum tracking for breakables
+let chunkCols, chunkRows;
+let activeChunks; // Set of active chunk indices
+
+function idx(x, y) { return y * cols + x; }
+function chunkIdx(cx, cy) { return cy * chunkCols + cx; }
+function getChunk(x, y) { return chunkIdx(Math.floor(x / CHUNK_SIZE), Math.floor(y / CHUNK_SIZE)); }
+
+function resize() {
+  w = canvas.width = window.innerWidth;
+  h = canvas.height = window.innerHeight - 60;
+  cellSize = Math.max(14, Math.min(w, h) / 35);
+  cols = Math.ceil(w / cellSize);
+  rows = Math.ceil(h / cellSize);
+
+  chunkCols = Math.ceil(cols / CHUNK_SIZE);
+  chunkRows = Math.ceil(rows / CHUNK_SIZE);
+
+  const size = cols * rows;
+  types = new Uint8Array(size);  // 0=empty, 1=sand, 2=water, etc
+  temps = new Float32Array(size);
+  lives = new Uint8Array(size);
+  chars = new Array(size);
+  falls = new Uint8Array(size);  // momentum/fall distance for impact detection
+
+  // Initialize temps to ambient
+  temps.fill(TEMP_AMBIENT);
+
+  activeChunks = new Set();
+
+  // OPTIMIZATION: Init ImageData buffer after resize
+  initImageData();
+}
+
+const TYPE_MAP = { empty:0, sand:1, water:2, fire:3, smoke:4, steam:5, stone:6, wood:7, oil:8, plant:9, lava:10, gunpowder:11, nitro:12, glass:13, acid:14, ember:15, ice:16, ant:17, fish:18, wax:19, food:20, lightning:21, snow:22, cloud:23, honey:24, metal:25, mud:26, bee:27, queen:28, flower:29, hive:30, campfire:31, ladder:32, shelter:33, boat:34 };
+const TYPE_NAMES = ['empty','sand','water','fire','smoke','steam','stone','wood','oil','plant','lava','gunpowder','nitro','glass','acid','ember','ice','ant','fish','wax','food','lightning','snow','cloud','honey','metal','mud','bee','queen','flower','hive','campfire','ladder','shelter','boat'];
+
+function getElem(i) {
+  const t = TYPE_NAMES[types[i]];
+  return t === 'empty' ? null : E[t];
+}
+
+function setCell(i, typeName) {
+  const typeId = TYPE_MAP[typeName];
+  types[i] = typeId;
+
+  if (typeId === 0) {
+    temps[i] = TEMP_AMBIENT;
+    lives[i] = 0;
+    chars[i] = ' ';
+    return;
+  }
+
+  const elem = E[typeName];
+  const charSet = CHARS[typeName] || '?';
+  chars[i] = charSet[Math.floor(Math.random() * charSet.length)];
+  lives[i] = elem.lt || 0;
+  temps[i] = elem.t || TEMP_AMBIENT;
+
+  // Mark chunk active
+  const x = i % cols, y = Math.floor(i / cols);
+  markChunkActive(x, y);
+}
+
+function markChunkActive(x, y) {
+  const cx = Math.floor(x / CHUNK_SIZE);
+  const cy = Math.floor(y / CHUNK_SIZE);
+  // Mark this chunk and neighbors
+  for (let dy = -1; dy <= 1; dy++) {
+    for (let dx = -1; dx <= 1; dx++) {
+      const ncx = cx + dx, ncy = cy + dy;
+      if (ncx >= 0 && ncx < chunkCols && ncy >= 0 && ncy < chunkRows) {
+        activeChunks.add(chunkIdx(ncx, ncy));
+      }
+    }
+  }
+}
+
+// Save/Load scene functions
+function saveScene() {
+  const scene = {
+    cols, rows,
+    types: Array.from(types),
+    chars: chars.slice(),
+    temps: Array.from(temps),
+    lives: Array.from(lives),
+    buddy: buddy ? {
+      x: buddy.x, y: buddy.y,
+      hunger: buddy.hunger,
+      happiness: buddy.happiness,
+      type: buddy.type
+    } : null
+  };
+  localStorage.setItem('tamagotchiScene', JSON.stringify(scene));
+}
+
+function loadScene() {
+  const saved = localStorage.getItem('tamagotchiScene');
+  if (!saved) return false;
+
+  try {
+    const scene = JSON.parse(saved);
+    // Only load if dimensions match
+    if (scene.cols === cols && scene.rows === rows) {
+      for (let i = 0; i < types.length && i < scene.types.length; i++) {
+        types[i] = scene.types[i];
+        chars[i] = scene.chars[i];
+        temps[i] = scene.temps[i];
+        lives[i] = scene.lives[i];
+        if (types[i] !== 0) {
+          const x = i % cols, y = Math.floor(i / cols);
+          markChunkActive(x, y);
+        }
+      }
+      if (scene.buddy && buddy) {
+        buddy.x = scene.buddy.x;
+        buddy.y = scene.buddy.y;
+        buddy.hunger = scene.buddy.hunger;
+        buddy.happiness = scene.buddy.happiness;
+        buddy.type = scene.buddy.type;
+      }
+      return true;
+    }
+  } catch (e) {
+    console.error('Failed to load scene:', e);
+  }
+  return false;
+}
+
+// Colorblind-friendly colors (high contrast, distinct hues)
+const CB_COLORS = [
+  null,                // 0 = empty
+  [230, 159, 0],       // 1 = sand (orange)
+  [0, 114, 178],       // 2 = water (blue)
+  [255, 255, 255],     // 3 = fire (white)
+  [120, 120, 120],     // 4 = smoke (gray)
+  [200, 200, 200],     // 5 = steam (light gray)
+  [50, 50, 50],        // 6 = stone (dark gray)
+  [150, 75, 0],        // 7 = wood (brown)
+  [100, 0, 100],       // 8 = oil (purple)
+  [0, 158, 115],       // 9 = plant (teal)
+  [255, 100, 100],     // 10 = lava (pink-red)
+  [0, 0, 0],           // 11 = gunpowder (black)
+  [204, 121, 167],     // 12 = nitro (pink)
+  [240, 240, 255],     // 13 = glass (white-blue)
+  [0, 255, 0],         // 14 = acid (bright green)
+  [255, 200, 150],     // 15 = ember (peach)
+  [86, 180, 233],      // 16 = ice (sky blue)
+  [0, 0, 0],           // 17 = ant (black)
+  [213, 94, 0],        // 18 = fish (vermillion)
+  [255, 180, 200],     // 19 = wax (light pink)
+  [140, 86, 75],       // 20 = food (brown)
+  [255, 255, 0],       // 21 = lightning (yellow)
+  [255, 255, 255],     // 22 = snow (white)
+  [180, 180, 190],     // 23 = cloud (gray)
+  [210, 120, 30],      // 24 = honey (amber/orange)
+  [80, 80, 90],        // 25 = metal (dark gray)
+  [60, 40, 20],        // 26 = mud (dark brown)
+  [255, 220, 0],       // 27 = bee (bright yellow)
+  [255, 160, 0],       // 28 = queen (orange-gold)
+  [255, 105, 180],     // 29 = flower (pink)
+  [180, 120, 40],      // 30 = hive (darker brown)
+  [200, 100, 30],      // 31 = campfire (warm orange)
+  [160, 100, 60],      // 32 = ladder (wood brown)
+  [120, 80, 50],       // 33 = shelter (dark wood)
+  [139, 90, 43],       // 34 = boat (wood)
+];
+
+// OPTIMIZATION: Pre-cached base colors by type index
+const BASE_COLORS = [
+  null,                // 0 = empty
+  [194, 178, 128],     // 1 = sand
+  [64, 164, 223],      // 2 = water
+  [255, 150, 0],       // 3 = fire
+  [80, 80, 90],        // 4 = smoke
+  [200, 200, 210],     // 5 = steam
+  [90, 90, 95],        // 6 = stone
+  [139, 90, 43],       // 7 = wood
+  [80, 40, 100],       // 8 = oil
+  [34, 139, 34],       // 9 = plant
+  [255, 80, 0],        // 10 = lava
+  [50, 50, 50],        // 11 = gunpowder
+  [200, 50, 50],       // 12 = nitro
+  [200, 220, 255],     // 13 = glass
+  [100, 255, 50],      // 14 = acid
+  [255, 100, 20],      // 15 = ember
+  [180, 220, 255],     // 16 = ice
+  [40, 20, 10],        // 17 = ant
+  [255, 140, 0],       // 18 = fish
+  [255, 100, 150],     // 19 = wax
+  [160, 82, 45],       // 20 = food
+  [255, 255, 100],     // 21 = lightning
+  [240, 248, 255],     // 22 = snow
+  [220, 220, 230],     // 23 = cloud
+  [210, 120, 30],      // 24 = honey (amber)
+  [150, 150, 160],     // 25 = metal
+  [101, 67, 33],       // 26 = mud
+  [255, 220, 0],       // 27 = bee (bright yellow)
+  [255, 160, 0],       // 28 = queen (orange-gold)
+  [255, 105, 180],     // 29 = flower
+  [180, 120, 40],      // 30 = hive (brown)
+  [200, 100, 30],      // 31 = campfire (warm orange)
+  [160, 100, 60],      // 32 = ladder (wood brown)
+  [120, 80, 50],       // 33 = shelter (dark wood)
+  [139, 90, 43],       // 34 = boat (wood)
+];
+
+// Reusable color array to avoid allocations
+const tempColor = [0, 0, 0];
+
+function getColor(i) {
+  const typeId = types[i];
+  if (typeId === 0) return null;
+
+  // Use colorblind-friendly palette if enabled
+  const palette = colorblindMode ? CB_COLORS : BASE_COLORS;
+  const base = palette[typeId];
+  if (!base) return null;
+
+  // HONEY SHIMMER - amber glimmer effect
+  if (typeId === 24) {  // honey
+    const shimmer = Math.sin(frameCount * 0.1 + i * 0.3) * 0.5 + 0.5;  // 0-1 wave
+    const sparkle = Math.random() < 0.03 ? 60 : 0;  // occasional bright sparkle
+    tempColor[0] = Math.min(255, base[0] + shimmer * 40 + sparkle) | 0;
+    tempColor[1] = Math.min(255, base[1] + shimmer * 25 + sparkle) | 0;
+    tempColor[2] = Math.min(255, base[2] + shimmer * 15) | 0;
+    return tempColor;
+  }
+
+  // BEE STRIPES - yellow/black pattern
+  if (typeId === 27) {  // bee
+    const stripe = ((i + frameCount) % 3 === 0) ? 0.3 : 1.0;  // dark stripes
+    tempColor[0] = (base[0] * stripe) | 0;
+    tempColor[1] = (base[1] * stripe) | 0;
+    tempColor[2] = (base[2] * stripe) | 0;
+    return tempColor;
+  }
+
+  // QUEEN - slightly pulsing glow
+  if (typeId === 28) {  // queen
+    const pulse = Math.sin(frameCount * 0.15) * 0.2 + 0.8;
+    tempColor[0] = Math.min(255, base[0] * pulse + 20) | 0;
+    tempColor[1] = (base[1] * pulse) | 0;
+    tempColor[2] = (base[2] * pulse) | 0;
+    return tempColor;
+  }
+
+  // In colorblind mode, skip temperature effects for clearer distinction
+  if (colorblindMode) return base;
+
+  const temp = temps[i];
+
+  // OPTIMIZATION: Skip temp calc for normal temps (most common case)
+  if (temp >= 10 && temp <= 200) {
+    return base;
+  }
+
+  if (temp > 200) {
+    const heat = Math.min(1, (temp - 200) / 800);
+    tempColor[0] = Math.min(255, base[0] + heat * (255 - base[0])) | 0;
+    tempColor[1] = Math.min(255, base[1] + heat * Math.max(0, 150 - base[1])) | 0;
+    tempColor[2] = Math.max(0, base[2] * (1 - heat * 0.8)) | 0;
+    return tempColor;
+  } else {
+    const cold = Math.min(1, (10 - temp) / 30);
+    tempColor[0] = Math.max(0, base[0] * (1 - cold * 0.5)) | 0;
+    tempColor[1] = Math.max(0, base[1] * (1 - cold * 0.3)) | 0;
+    tempColor[2] = Math.min(255, base[2] + cold * (255 - base[2]) * 0.5) | 0;
+    return tempColor;
+  }
+}
+
+function canDisplace(fromType, toType) {
+  if (toType === 0) return true;
+  const fromE = E[TYPE_NAMES[fromType]];
+  const toE = E[TYPE_NAMES[toType]];
+  if (!fromE || !toE || toE.s) return false;
+  return fromE.d > toE.d;
+}
+
+function swap(i1, i2) {
+  [types[i1], types[i2]] = [types[i2], types[i1]];
+  [temps[i1], temps[i2]] = [temps[i2], temps[i1]];
+  [lives[i1], lives[i2]] = [lives[i2], lives[i1]];
+  [chars[i1], chars[i2]] = [chars[i2], chars[i1]];
+  [falls[i1], falls[i2]] = [falls[i2], falls[i1]];
+}
+
+// Shatter a breakable element into sand-like particles
+function shatter(i, x, y) {
+  const typeName = TYPE_NAMES[types[i]];
+  // Glass shatters into sand, ice shatters into water
+  if (typeName === 'glass') {
+    setCell(i, 'sand');
+  } else if (typeName === 'ice') {
+    setCell(i, 'water');
+  } else {
+    types[i] = 0;  // Just destroy other breakables
+  }
+  falls[i] = 0;
+  markChunkActive(x, y);
+}
+
+// Heat simulation - only every 2nd frame
+function simulateHeat() {
+  const newTemps = new Float32Array(temps.length);
+
+  for (const chunkId of activeChunks) {
+    const cx = chunkId % chunkCols;
+    const cy = Math.floor(chunkId / chunkCols);
+    const startX = cx * CHUNK_SIZE;
+    const startY = cy * CHUNK_SIZE;
+    const endX = Math.min(startX + CHUNK_SIZE, cols);
+    const endY = Math.min(startY + CHUNK_SIZE, rows);
+
+    for (let y = startY; y < endY; y++) {
+      for (let x = startX; x < endX; x++) {
+        const i = idx(x, y);
+        if (types[i] === 0) {
+          newTemps[i] = TEMP_AMBIENT;
+          continue;
+        }
+
+        const elem = getElem(i);
+        if (!elem) continue;
+
+        let temp = temps[i];
+        const cond = elem.co || 0.3;
+        let transfer = 0;
+
+        // Neighbors
+        const neighbors = [[x-1,y],[x+1,y],[x,y-1],[x,y+1]];
+        for (const [nx, ny] of neighbors) {
+          if (nx < 0 || nx >= cols || ny < 0 || ny >= rows) continue;
+          const ni = idx(nx, ny);
+          if (types[ni] === 0) {
+            transfer += (TEMP_AMBIENT - temp) * cond * 0.1;
+          } else {
+            const nElem = getElem(ni);
+            if (nElem) {
+              const avgCond = (cond + (nElem.co || 0.3)) / 2;
+              transfer += (temps[ni] - temp) * avgCond * 0.12;
+            }
+          }
+        }
+
+        // Water cools
+        if (elem.cool && temp > TEMP_AMBIENT) {
+          transfer -= (temp - TEMP_AMBIENT) * 0.15;
+        }
+
+        // Fire/lava maintain temp
+        if (elem.rad && elem.t) {
+          temp = Math.max(temp, elem.t * 0.9);
+        }
+
+        newTemps[i] = temp + transfer;
+      }
+    }
+  }
+
+  // Copy back
+  for (const chunkId of activeChunks) {
+    const cx = chunkId % chunkCols;
+    const cy = Math.floor(chunkId / chunkCols);
+    const startX = cx * CHUNK_SIZE;
+    const startY = cy * CHUNK_SIZE;
+    const endX = Math.min(startX + CHUNK_SIZE, cols);
+    const endY = Math.min(startY + CHUNK_SIZE, rows);
+
+    for (let y = startY; y < endY; y++) {
+      for (let x = startX; x < endX; x++) {
+        temps[idx(x, y)] = newTemps[idx(x, y)];
+      }
+    }
+  }
+}
+
+function simulateReactions() {
+  const processed = new Uint8Array(cols * rows);
+
+  for (const chunkId of activeChunks) {
+    const cx = chunkId % chunkCols;
+    const cy = Math.floor(chunkId / chunkCols);
+    const startX = cx * CHUNK_SIZE;
+    const startY = cy * CHUNK_SIZE;
+    const endX = Math.min(startX + CHUNK_SIZE, cols);
+    const endY = Math.min(startY + CHUNK_SIZE, rows);
+
+    for (let y = startY; y < endY; y++) {
+      for (let x = startX; x < endX; x++) {
+        const i = idx(x, y);
+        if (types[i] === 0 || processed[i]) continue;
+
+        const typeName = TYPE_NAMES[types[i]];
+        const elem = E[typeName];
+        if (!elem) continue;
+
+        const temp = temps[i];
+
+        // Ignition - gradual burning for materials with burn duration
+        if (elem.fm && elem.it && temp >= elem.it) {
+          if (elem.bd) {
+            // Has burn duration - burn gradually
+            if (lives[i] === 0) {
+              lives[i] = elem.bd;  // Start burning
+            }
+            lives[i]--;
+            temps[i] = Math.max(temps[i], elem.it + 100);  // Keep hot while burning
+
+            // Radiate heat to ALL neighbors (not just flammable)
+            for (const [dx, dy] of [[0,-1],[0,1],[-1,0],[1,0],[-1,-1],[1,-1],[-1,1],[1,1]]) {
+              const nx = x + dx, ny = y + dy;
+              if (nx >= 0 && nx < cols && ny >= 0 && ny < rows) {
+                const ni = idx(nx, ny);
+                temps[ni] = Math.min(temps[ni] + 30, 800);
+                markChunkActive(nx, ny);
+              }
+            }
+
+            // Emit smoke rising UP
+            if (Math.random() < 0.1 && y > 0) {
+              const above = idx(x, y - 1);
+              if (types[above] === 0) {
+                types[above] = Math.random() < 0.3 ? TYPE_MAP.fire : TYPE_MAP.smoke;
+                chars[above] = Math.random() < 0.3 ?
+                  CHARS.fire[Math.floor(Math.random() * CHARS.fire.length)] :
+                  CHARS.smoke[Math.floor(Math.random() * CHARS.smoke.length)];
+                lives[above] = Math.random() < 0.3 ? 15 : 30;
+                temps[above] = 400;
+                markChunkActive(x, y - 1);
+              }
+            }
+
+            // Drop embers DOWN (falling fire particles)
+            if (Math.random() < 0.08 && y < rows - 1) {
+              const below = idx(x, y + 1);
+              if (types[below] === 0) {
+                types[below] = TYPE_MAP.fire;
+                chars[below] = CHARS.fire[Math.floor(Math.random() * CHARS.fire.length)];
+                lives[below] = 10 + Math.floor(Math.random() * 10);  // Short-lived embers
+                temps[below] = 600;
+                markChunkActive(x, y + 1);
+              }
+            }
+            if (lives[i] <= 0) {
+              // Done burning - become fire then smoke
+              types[i] = TYPE_MAP.fire;
+              chars[i] = CHARS.fire[Math.floor(Math.random() * CHARS.fire.length)];
+              lives[i] = 25;
+            }
+            processed[i] = 1;
+            continue;
+          } else {
+            // No burn duration - instant ignition (oil etc)
+            types[i] = TYPE_MAP.fire;
+            chars[i] = CHARS.fire[Math.floor(Math.random() * CHARS.fire.length)];
+            lives[i] = 25;
+            processed[i] = 1;
+            continue;
+          }
+        }
+
+        // Water boils
+        if (typeName === 'water' && temp >= 100) {
+          types[i] = TYPE_MAP.steam;
+          chars[i] = CHARS.steam[Math.floor(Math.random() * CHARS.steam.length)];
+          lives[i] = 40;
+          processed[i] = 1;
+          continue;
+        }
+
+        // Steam condenses
+        if (typeName === 'steam' && temp < 80) {
+          types[i] = TYPE_MAP.water;
+          chars[i] = CHARS.water[Math.floor(Math.random() * CHARS.water.length)];
+          processed[i] = 1;
+          continue;
+        }
+
+        // Lava cools
+        if (typeName === 'lava' && temp < 700) {
+          types[i] = TYPE_MAP.stone;
+          chars[i] = CHARS.stone[Math.floor(Math.random() * CHARS.stone.length)];
+          processed[i] = 1;
+          continue;
+        }
+
+        // Stone melts
+        if (typeName === 'stone' && temp >= 1100) {
+          types[i] = TYPE_MAP.lava;
+          chars[i] = CHARS.lava[Math.floor(Math.random() * CHARS.lava.length)];
+          temps[i] = 1200;
+          processed[i] = 1;
+          continue;
+        }
+
+        // Sand melts into glass - lava makes glass!
+        if (typeName === 'sand' && temp >= 800) {
+          types[i] = TYPE_MAP.glass;
+          chars[i] = CHARS.glass[Math.floor(Math.random() * CHARS.glass.length)];
+          temps[i] = 600;  // hot glass
+          processed[i] = 1;
+          continue;
+        }
+
+        // SAND STICKINESS - sand becomes sticky when wet, moved by ants, or under pressure
+        if (typeName === 'sand') {
+          // Check if touching water (becomes wet/sticky)
+          for (const [dx, dy] of [[0,-1],[0,1],[-1,0],[1,0]]) {
+            const nx = x + dx, ny = y + dy;
+            if (nx >= 0 && nx < cols && ny >= 0 && ny < rows) {
+              if (TYPE_NAMES[types[idx(nx, ny)]] === 'water') {
+                lives[i] = Math.max(lives[i], 30);  // Make sticky when wet
+                break;
+              }
+            }
+          }
+
+          // Check if under pressure (sand above = compaction)
+          const aboveI = y > 0 ? idx(x, y - 1) : -1;
+          const sandAbove = aboveI >= 0 && TYPE_NAMES[types[aboveI]] === 'sand';
+          if (sandAbove) {
+            // Sand with sand above it becomes more compact/sticky (slow buildup)
+            if (Math.random() < 0.05) {  // Only 5% chance per frame to increase
+              lives[i] = Math.min(lives[i] + 1, 15);  // Max 15 stickiness from pressure
+            }
+          }
+
+          // Sticky sand decays back to dry - faster when not under pressure
+          if (lives[i] > 0) {
+            const decayChance = sandAbove ? 0.1 : 0.5;  // Fast decay when exposed
+            if (Math.random() < decayChance) {
+              lives[i] = Math.max(0, lives[i] - 1);
+            }
+          }
+        }
+
+        // Water touching lava creates volcanic reaction
+        if (typeName === 'water') {
+          for (const [dx, dy] of [[0,-1],[0,1],[-1,0],[1,0]]) {
+            const nx = x + dx, ny = y + dy;
+            if (nx >= 0 && nx < cols && ny >= 0 && ny < rows) {
+              const ni = idx(nx, ny);
+              if (types[ni] === TYPE_MAP.lava) {
+                // Water becomes steam, lava becomes stone
+                types[i] = TYPE_MAP.steam;
+                chars[i] = CHARS.steam[Math.floor(Math.random() * CHARS.steam.length)];
+                lives[i] = 40;
+                temps[i] = 100;
+                types[ni] = TYPE_MAP.stone;
+                chars[ni] = CHARS.stone[Math.floor(Math.random() * CHARS.stone.length)];
+                temps[ni] = 500;
+                markChunkActive(nx, ny);
+                processed[i] = 1;
+                break;
+              }
+            }
+          }
+          if (processed[i]) continue;
+        }
+
+        // Fire extinguished by adjacent water
+        if (typeName === 'fire') {
+          for (const [dx, dy] of [[0,-1],[0,1],[-1,0],[1,0]]) {
+            const nx = x + dx, ny = y + dy;
+            if (nx >= 0 && nx < cols && ny >= 0 && ny < rows) {
+              if (types[idx(nx, ny)] === TYPE_MAP.water) {
+                types[i] = TYPE_MAP.steam;
+                chars[i] = CHARS.steam[Math.floor(Math.random() * CHARS.steam.length)];
+                lives[i] = 30;
+                temps[i] = 100;
+                processed[i] = 1;
+                break;
+              }
+            }
+          }
+          if (processed[i]) continue;
+        }
+
+        // Gunpowder explodes from heat or adjacent fire
+        if (typeName === 'gunpowder') {
+          let shouldExplode = temp >= 200;  // Heat ignition
+
+          // Check for adjacent fire
+          if (!shouldExplode) {
+            for (const [dx, dy] of [[0,-1],[0,1],[-1,0],[1,0]]) {
+              const nx = x + dx, ny = y + dy;
+              if (nx >= 0 && nx < cols && ny >= 0 && ny < rows) {
+                if (types[idx(nx, ny)] === TYPE_MAP.fire || types[idx(nx, ny)] === TYPE_MAP.lava) {
+                  shouldExplode = true;
+                  break;
+                }
+              }
+            }
+          }
+
+          if (shouldExplode) {
+            explode(x, y, 6);  // Small explosion
+            processed[i] = 1;
+            continue;
+          }
+        }
+
+        // Nitro explodes from shake OR heat
+        if (typeName === 'nitro') {
+          let shouldExplode = shakeTriggered;  // Shake ignition
+          if (!shouldExplode && temp >= 150) shouldExplode = true;  // Heat ignition (lower threshold)
+
+          // Check for adjacent fire (very sensitive)
+          if (!shouldExplode) {
+            for (const [dx, dy] of [[0,-1],[0,1],[-1,0],[1,0]]) {
+              const nx = x + dx, ny = y + dy;
+              if (nx >= 0 && nx < cols && ny >= 0 && ny < rows) {
+                if (types[idx(nx, ny)] === TYPE_MAP.fire || types[idx(nx, ny)] === TYPE_MAP.lava) {
+                  shouldExplode = true;
+                  break;
+                }
+              }
+            }
+          }
+
+          if (shouldExplode) {
+            explode(x, y, 12);  // Large explosion
+            processed[i] = 1;
+            continue;
+          }
+        }
+
+        // Acid dissolves adjacent materials
+        if (typeName === 'acid') {
+          for (const [dx, dy] of [[0,-1],[0,1],[-1,0],[1,0]]) {
+            const nx = x + dx, ny = y + dy;
+            if (nx >= 0 && nx < cols && ny >= 0 && ny < rows) {
+              const ni = idx(nx, ny);
+              const neighborType = TYPE_NAMES[types[ni]];
+              // Dissolve rates: organic fast, stone slow, glass immune
+              let dissolveChance = 0;
+              if (neighborType === 'wood' || neighborType === 'plant') dissolveChance = 0.3;  // Fast
+              else if (neighborType === 'sand') dissolveChance = 0.15;  // Medium
+              else if (neighborType === 'stone') dissolveChance = 0.05;  // Slow
+              else if (neighborType === 'gunpowder') dissolveChance = 0.2;  // Neutralize
+              else if (neighborType === 'ice') dissolveChance = 0.4;  // Ice dissolves very fast!
+              // Glass and lava are acid-resistant
+
+              if (dissolveChance > 0 && Math.random() < dissolveChance) {
+                // Dissolve the neighbor - becomes smoke, acid sometimes consumed
+                types[ni] = TYPE_MAP.smoke;
+                chars[ni] = CHARS.smoke[Math.floor(Math.random() * CHARS.smoke.length)];
+                lives[ni] = 20;
+                markChunkActive(nx, ny);
+
+                // Acid gets used up sometimes
+                if (Math.random() < 0.3) {
+                  types[i] = TYPE_MAP.smoke;
+                  chars[i] = CHARS.smoke[Math.floor(Math.random() * CHARS.smoke.length)];
+                  lives[i] = 15;
+                  processed[i] = 1;
+                  break;
+                }
+              }
+            }
+          }
+        }
+
+        // Water + Sand = Mud reaction
+        if (typeName === 'water') {
+          for (const [dx, dy] of [[0,1],[0,-1],[-1,0],[1,0]]) {
+            const nx = x + dx, ny = y + dy;
+            if (nx >= 0 && nx < cols && ny >= 0 && ny < rows) {
+              const ni = idx(nx, ny);
+              if (TYPE_NAMES[types[ni]] === 'sand' && Math.random() < 0.01) {
+                // Water + sand = mud
+                setCell(i, 'mud');
+                markChunkActive(x, y);
+                break;
+              }
+            }
+          }
+        }
+
+        // Fire spreads and burns
+        if (typeName === 'fire') {
+          // Fire radiates heat to ALL neighbors
+          const neighbors = [[x-1,y],[x+1,y],[x,y-1],[x,y+1],[x-1,y-1],[x+1,y-1],[x-1,y+1],[x+1,y+1]];
+          for (const [nx, ny] of neighbors) {
+            if (nx < 0 || nx >= cols || ny < 0 || ny >= rows) continue;
+            const ni = idx(nx, ny);
+            if (processed[ni]) continue;
+
+            // Radiate heat to everything (50° base)
+            temps[ni] = Math.min(temps[ni] + 50, 1000);
+            markChunkActive(nx, ny);
+
+            const neighborType = TYPE_NAMES[types[ni]];
+            const neighborElem = E[neighborType];
+            // Extra heat for flammable materials
+            if (neighborElem && neighborElem.fm) {
+              // Bonus heat for flammables - 100 total per frame
+              temps[ni] = Math.min(temps[ni] + 50, 1000);
+              // For materials WITHOUT burn duration (like oil), direct ignition
+              if (!neighborElem.bd && temps[ni] >= (neighborElem.it || 200)) {
+                if (Math.random() < 0.5) {
+                  // Wood and plant turn to embers 70% of the time, fire 30%
+                  if ((neighborType === 'wood' || neighborType === 'plant') && Math.random() < 0.7) {
+                    types[ni] = TYPE_MAP.ember;
+                    chars[ni] = CHARS.ember[Math.floor(Math.random() * CHARS.ember.length)];
+                    lives[ni] = (neighborType === 'wood') ? 80 + Math.floor(Math.random() * 40) : 30 + Math.floor(Math.random() * 20);
+                    temps[ni] = 600;
+                  } else {
+                    types[ni] = TYPE_MAP.fire;
+                    chars[ni] = CHARS.fire[Math.floor(Math.random() * CHARS.fire.length)];
+                    lives[ni] = 20 + Math.floor(Math.random() * 15);
+                    temps[ni] = 800;
+                  }
+                  processed[ni] = 1;
+                }
+              }
+              // Materials WITH burn duration (wood, plant) are handled by ignition system
+            }
+          }
+
+          // Fire burns fuel and eventually dies
+          lives[i]--;
+          if (lives[i] <= 0 || temp < 300) {
+            if (Math.random() < 0.5) {
+              types[i] = TYPE_MAP.smoke;
+              chars[i] = CHARS.smoke[Math.floor(Math.random() * CHARS.smoke.length)];
+              lives[i] = 50;
+            } else {
+              types[i] = 0;
+            }
+            processed[i] = 1;
+            continue;
+          }
+        }
+
+        // Ember behavior - glowing coals that slowly burn
+        if (typeName === 'ember') {
+          // Check if we're a wick (touching wax) - burns MUCH slower!
+          let isWick = false;
+          let waxNeighbors = [];
+
+          // Embers radiate heat to all neighbors and ignite flammables
+          const neighbors = [[x-1,y],[x+1,y],[x,y-1],[x,y+1],[x-1,y-1],[x+1,y-1],[x-1,y+1],[x+1,y+1]];
+          for (const [nx, ny] of neighbors) {
+            if (nx < 0 || nx >= cols || ny < 0 || ny >= rows) continue;
+            const ni = idx(nx, ny);
+
+            const neighborType = TYPE_NAMES[types[ni]];
+
+            // Track wax neighbors for wick behavior
+            if (neighborType === 'wax') {
+              isWick = true;
+              waxNeighbors.push({ni, nx, ny});
+            }
+
+            if (processed[ni]) continue;
+
+            // Radiate heat (less than fire, 30° base)
+            temps[ni] = Math.min(temps[ni] + 30, 1000);
+            markChunkActive(nx, ny);
+
+            const neighborElem = E[neighborType];
+            // Ignite nearby wood/plant/oil (but NOT wax - wax doesn't ignite, it melts)
+            if (neighborElem && neighborElem.fm && neighborType !== 'wax' && temps[ni] >= (neighborElem.it || 200)) {
+              if (Math.random() < 0.15) {  // Lower chance than direct fire
+                if (neighborType === 'wood' || neighborType === 'plant') {
+                  // Turn adjacent wood/plant to embers too (spreading glow)
+                  types[ni] = TYPE_MAP.ember;
+                  chars[ni] = CHARS.ember[Math.floor(Math.random() * CHARS.ember.length)];
+                  lives[ni] = (neighborType === 'wood') ? 60 + Math.floor(Math.random() * 30) : 25 + Math.floor(Math.random() * 15);
+                  temps[ni] = 500;
+                } else {
+                  // Oil etc turns to fire
+                  types[ni] = TYPE_MAP.fire;
+                  chars[ni] = CHARS.fire[Math.floor(Math.random() * CHARS.fire.length)];
+                  lives[ni] = 20 + Math.floor(Math.random() * 15);
+                  temps[ni] = 800;
+                }
+                processed[ni] = 1;
+              }
+            }
+          }
+
+          // CANDLE WICK: Melt adjacent wax and burn very slowly
+          if (isWick) {
+            for (const {ni, nx, ny} of waxNeighbors) {
+              // Heat up wax so it melts and flows
+              temps[ni] = Math.min(temps[ni] + 80, 200);
+              markChunkActive(nx, ny);
+            }
+          }
+
+          // Occasionally emit smoke while burning (more smoke when wick!)
+          if (Math.random() < (isWick ? 0.08 : 0.03)) {
+            const above = idx(x, y - 1);
+            if (y > 0 && types[above] === 0) {
+              types[above] = TYPE_MAP.smoke;
+              chars[above] = CHARS.smoke[Math.floor(Math.random() * CHARS.smoke.length)];
+              lives[above] = 30;
+              processed[above] = 1;
+            }
+          }
+
+          // Embers slowly burn down - MUCH slower as a wick!
+          if (isWick) {
+            // Wick burns 100x slower - only decrement 1% of the time
+            if (Math.random() < 0.01) lives[i]--;
+          } else {
+            lives[i]--;
+          }
+          // Keep ember hot while alive
+          temps[i] = Math.max(temps[i], 400);
+
+          // When ember dies, turn to smoke or disappear (ash)
+          if (lives[i] <= 0) {
+            if (Math.random() < 0.3) {
+              types[i] = TYPE_MAP.smoke;
+              chars[i] = CHARS.smoke[Math.floor(Math.random() * CHARS.smoke.length)];
+              lives[i] = 40;
+            } else {
+              // Becomes ash (empty/grey sand could be added later)
+              types[i] = 0;
+            }
+            processed[i] = 1;
+            continue;
+          }
+        }
+
+        // Smoke/steam decay
+        if ((typeName === 'smoke' || typeName === 'steam') && lives[i] > 0) {
+          lives[i]--;
+          if (lives[i] <= 0) {
+            types[i] = 0;
+            processed[i] = 1;
+          }
+        }
+
+        // Ice melting - gradual at room temp, fast when heated
+        if (typeName === 'ice') {
+          // Very hot = instant steam (fire/lava direct contact)
+          if (temp > 200) {
+            setCell(i, 'steam');
+            lives[i] = 40;
+            temps[i] = 100;
+            processed[i] = 1;
+            continue;
+          }
+          // Hot = fast melt to water
+          if (temp > 100) {
+            setCell(i, 'water');
+            temps[i] = 30;
+            processed[i] = 1;
+            continue;
+          }
+          // Slow melt at room temp - only exposed surfaces (check if adjacent to non-ice)
+          if (temp > 15) {
+            let exposed = false;
+            for (const [dx, dy] of [[0,-1],[0,1],[-1,0],[1,0]]) {
+              const nx = x + dx, ny = y + dy;
+              if (nx < 0 || nx >= cols || ny < 0 || ny >= rows) { exposed = true; break; }
+              const ni = idx(nx, ny);
+              if (types[ni] !== TYPE_MAP.ice && types[ni] !== 0) { exposed = true; break; }
+              if (types[ni] === 0) exposed = true;  // Air contact
+            }
+            // Slow melt chance for exposed ice - ~8% per frame
+            if (exposed && Math.random() < 0.08) {
+              setCell(i, 'water');
+              temps[i] = 15;
+              processed[i] = 1;
+              continue;
+            }
+          }
+          // Ice cools nearby things and can freeze water
+          for (const [dx, dy] of [[0,-1],[0,1],[-1,0],[1,0]]) {
+            const nx = x + dx, ny = y + dy;
+            if (nx >= 0 && nx < cols && ny >= 0 && ny < rows) {
+              const ni = idx(nx, ny);
+              temps[ni] = Math.max(temps[ni] - 5, -20);
+              // Water near ice can freeze (5% chance if cold enough)
+              if (TYPE_NAMES[types[ni]] === 'water' && temps[ni] < 10 && Math.random() < 0.05) {
+                setCell(ni, 'ice');
+              }
+              markChunkActive(nx, ny);
+            }
+          }
+        }
+
+        // ANT behavior - digs tunnels by moving sand grains, eats food
+        if (typeName === 'ant') {
+          // Die in fire/lava/acid
+          if (temp > 100) {
+            types[i] = 0;  // Die!
+            continue;
+          }
+          // Check for water (drowning)
+          for (const [dx, dy] of [[0,-1],[0,1],[-1,0],[1,0]]) {
+            const nx = x + dx, ny = y + dy;
+            if (nx >= 0 && nx < cols && ny >= 0 && ny < rows) {
+              if (TYPE_NAMES[types[idx(nx, ny)]] === 'water') {
+                types[i] = 0;  // Drown!
+                continue;
+              }
+            }
+          }
+
+          // Ant carrying state: lives[i] = 0 (not carrying), 1 (carrying sand)
+          const isCarrying = lives[i] > 0;
+
+          // Look for food to eat (priority action)
+          if (!isCarrying) {
+            for (const [dx, dy] of [[0,-1],[0,1],[-1,0],[1,0],[1,1],[-1,1],[-1,-1],[1,-1]]) {
+              const nx = x + dx, ny = y + dy;
+              if (nx >= 0 && nx < cols && ny >= 0 && ny < rows) {
+                const ni = idx(nx, ny);
+                if (TYPE_NAMES[types[ni]] === 'food') {
+                  types[ni] = 0;  // Eat the food!
+                  break;
+                }
+              }
+            }
+          }
+
+          // Check if stuck (surrounded by sand)
+          let stuckCount = 0;
+          let hasEmptySpace = false;
+          for (const [dx, dy] of [[0,-1],[0,1],[-1,0],[1,0]]) {
+            const nx = x + dx, ny = y + dy;
+            if (nx >= 0 && nx < cols && ny >= 0 && ny < rows) {
+              const neighborType = TYPE_NAMES[types[idx(nx, ny)]];
+              if (neighborType === 'sand') stuckCount++;
+              if (neighborType === 'empty') hasEmptySpace = true;
+            }
+          }
+          const isStuck = stuckCount >= 3;  // stuck if 3+ sides are sand
+
+          // FORCE ESCAPE - if completely stuck, DIG OUT immediately by picking up sand!
+          if (isStuck && !hasEmptySpace && lives[i] === 0) {  // Not already carrying
+            // Ant is completely buried - force pick up sand above to escape!
+            const upI = y > 0 ? idx(x, y - 1) : -1;
+            if (upI >= 0 && TYPE_NAMES[types[upI]] === 'sand') {
+              types[upI] = 0;  // Pick up sand above
+              lives[i] = 1;  // Now carrying it
+              markChunkActive(x, y - 1);
+            } else {
+              // Try diagonal up if straight up blocked
+              for (const [dx, dy] of [[-1,-1],[1,-1]]) {
+                const nx = x + dx, ny = y + dy;
+                if (nx >= 0 && nx < cols && ny >= 0 && ny < rows) {
+                  const ni = idx(nx, ny);
+                  if (TYPE_NAMES[types[ni]] === 'sand') {
+                    types[ni] = 0;  // Pick up diagonal sand
+                    lives[i] = 1;  // Now carrying it
+                    markChunkActive(nx, ny);
+                    break;
+                  }
+                }
+              }
+            }
+          }
+
+          // AGGRESSIVE TUNNELING - dig constantly!
+          // Choose movement direction based on stuck state
+          let moveDirs;
+          if (isStuck) {
+            // Stuck - DIG UP aggressively!
+            moveDirs = [[0,-1],[-1,-1],[1,-1]];  // up and diagonal up
+          } else {
+            // Normal - DIG DOWN and sideways to create tunnels
+            moveDirs = [[0,1],[1,1],[-1,1],[-1,0],[1,0]];  // down/diagonal/sides
+          }
+
+          // Try to move in chosen direction
+          const [dx, dy] = moveDirs[Math.floor(Math.random() * moveDirs.length)];
+          const nx = x + dx, ny = y + dy;
+
+          if (nx >= 0 && nx < cols && ny >= 0 && ny < rows) {
+            const ni = idx(nx, ny);
+            const targetType = TYPE_NAMES[types[ni]];
+
+            if (targetType === 'empty') {
+              // Empty space - just move!
+              swap(i, ni);
+              markChunkActive(nx, ny);
+
+              // If carrying, randomly drop sand behind
+              if (isCarrying && Math.random() < 0.3) {
+                // Drop in current position - VERY sticky (saliva-bound tunnel wall!)
+                types[i] = TYPE_MAP['sand'];
+                chars[i] = CHARS.sand[Math.floor(Math.random() * CHARS.sand.length)];
+                lives[i] = 50;  // Maximum stickiness - tunnel walls!
+                // Ant moves to ni, sand stays at i
+                types[ni] = TYPE_MAP['ant'];
+                chars[ni] = CHARS.ant[Math.floor(Math.random() * CHARS.ant.length)];
+                lives[ni] = 0;  // Not carrying anymore
+                markChunkActive(x, y);
+              }
+            } else if (targetType === 'sand') {
+              // Sand in the way - DIG IT!
+              if (!isCarrying) {
+                // Pick up and move into that space
+                types[ni] = TYPE_MAP['ant'];
+                chars[ni] = CHARS.ant[Math.floor(Math.random() * CHARS.ant.length)];
+                lives[ni] = 1;  // Now carrying
+                types[i] = 0;  // Leave empty tunnel behind
+                markChunkActive(nx, ny);
+                markChunkActive(x, y);
+              } else {
+                // Already carrying - drop current sand here, pick up new sand
+                types[i] = TYPE_MAP['sand'];
+                chars[i] = CHARS.sand[Math.floor(Math.random() * CHARS.sand.length)];
+                lives[i] = 50;  // Maximum stickiness - tunnel walls!
+                types[ni] = TYPE_MAP['ant'];
+                chars[ni] = CHARS.ant[Math.floor(Math.random() * CHARS.ant.length)];
+                lives[ni] = 1;  // Still carrying (the new sand)
+                markChunkActive(nx, ny);
+                markChunkActive(x, y);
+              }
+            }
+          }
+
+          processed[i] = 1;
+        }
+
+        // FISH behavior - swims in water, dies without it
+        if (typeName === 'fish') {
+          // Check if in water
+          let inWater = false;
+          for (const [dx, dy] of [[0,-1],[0,1],[-1,0],[1,0]]) {
+            const nx = x + dx, ny = y + dy;
+            if (nx >= 0 && nx < cols && ny >= 0 && ny < rows) {
+              if (TYPE_NAMES[types[idx(nx, ny)]] === 'water') {
+                inWater = true;
+                break;
+              }
+            }
+          }
+          // Die without water (use lives counter)
+          if (!inWater) {
+            lives[i]++;
+            if (lives[i] > 60) {  // 60 frames out of water = death
+              types[i] = 0;
+              continue;
+            }
+          } else {
+            lives[i] = 0;  // Reset counter when in water
+            // Swim randomly in water (50% chance)
+            if (Math.random() < 0.5) {
+              const dirs = [[0,-1],[0,1],[-1,0],[1,0]];
+              const [dx, dy] = dirs[Math.floor(Math.random() * 4)];
+              const nx = x + dx, ny = y + dy;
+              if (nx >= 0 && nx < cols && ny >= 0 && ny < rows) {
+                const ni = idx(nx, ny);
+                if (TYPE_NAMES[types[ni]] === 'water') {
+                  swap(i, ni);
+                  markChunkActive(nx, ny);
+                }
+              }
+            }
+          }
+          // Die in fire/lava
+          if (temp > 100) {
+            setCell(i, 'steam');
+            lives[i] = 20;
+            continue;
+          }
+          processed[i] = 1;
+        }
+
+        // WORKER BEE behavior - forages flowers, brings pollen to hive to make honey
+        // lives[i] tracks state: 0 = seeking flower, 1+ = has pollen (returning to hive)
+        if (typeName === 'bee') {
+          // Die in fire
+          if (temp > 200) {
+            setCell(i, 'smoke');
+            lives[i] = 20;
+            continue;
+          }
+          // Check for water - bees drown
+          let drowned = false;
+          for (const [dx, dy] of [[0,-1],[0,1],[-1,0],[1,0]]) {
+            const nx = x + dx, ny = y + dy;
+            if (nx >= 0 && nx < cols && ny >= 0 && ny < rows) {
+              if (TYPE_NAMES[types[idx(nx, ny)]] === 'water') {
+                types[i] = 0;
+                drowned = true;
+                break;
+              }
+            }
+          }
+          if (drowned) continue;
+
+          const hasPollen = lives[i] > 0;
+
+          // Scan for flowers, hives, and wood
+          let flowerDir = null, flowerDist = 999;
+          let hiveDir = null, hiveDist = 999;
+          let nearFlower = false, nearHive = false;
+          let woodCount = 0;
+
+          for (let r = 1; r <= 25; r++) {
+            for (const [dx, dy] of [[r,0],[-r,0],[0,r],[0,-r],[r,r],[-r,-r],[r,-r],[-r,r]]) {
+              const nx = x + dx, ny = y + dy;
+              if (nx >= 0 && nx < cols && ny >= 0 && ny < rows) {
+                const nt = TYPE_NAMES[types[idx(nx, ny)]];
+                const dist = Math.abs(dx) + Math.abs(dy);
+                if (nt === 'flower') {
+                  if (dist < flowerDist) {
+                    flowerDir = [Math.sign(dx), Math.sign(dy)];
+                    flowerDist = dist;
+                  }
+                  if (dist <= 2) nearFlower = true;
+                }
+                if (nt === 'hive') {
+                  if (dist < hiveDist) {
+                    hiveDir = [Math.sign(dx), Math.sign(dy)];
+                    hiveDist = dist;
+                  }
+                  if (dist <= 2) nearHive = true;
+                }
+                if (nt === 'wood' && dist <= 2) woodCount++;
+              }
+            }
+          }
+
+          // Collect pollen when at flower (if not already carrying)
+          if (nearFlower && !hasPollen) {
+            lives[i] = 1; // Now has pollen!
+          }
+
+          // Deposit pollen at hive to make honey
+          if (nearHive && hasPollen) {
+            lives[i] = 0; // Deposited pollen
+            // Produce honey near hive
+            for (const [dx, dy] of [[0,1],[1,1],[-1,1],[1,0],[-1,0]]) {
+              const hx = x + dx, hy = y + dy;
+              if (hx >= 0 && hx < cols && hy >= 0 && hy < rows) {
+                const hi = idx(hx, hy);
+                if (types[hi] === 0) {
+                  setCell(hi, 'honey');
+                  break;
+                }
+              }
+            }
+          }
+
+          // Colonize bee box - turn wood into hive (only if no hive found)
+          if (woodCount >= 3 && !hiveDir && Math.random() < 0.01) {
+            for (const [dx, dy] of [[0,-1],[0,1],[-1,0],[1,0]]) {
+              const nx = x + dx, ny = y + dy;
+              if (nx >= 0 && nx < cols && ny >= 0 && ny < rows) {
+                const ni = idx(nx, ny);
+                if (TYPE_NAMES[types[ni]] === 'wood') {
+                  setCell(ni, 'hive');
+                  setCell(i, 'queen');
+                  break;
+                }
+              }
+            }
+          }
+
+          // Movement: STRICT FORAGING with natural buzzing flight
+          let moveX = 0, moveY = 0;
+          let targetDir = null;
+
+          if (hasPollen) {
+            // HAS POLLEN - heading to hive
+            targetDir = hiveDir;
+          } else {
+            // NO POLLEN - heading to flower
+            targetDir = flowerDir;
+          }
+
+          if (targetDir) {
+            // Mix target direction with random buzzing (70% toward goal, 30% random)
+            if (Math.random() < 0.7) {
+              moveX = targetDir[0];
+              moveY = targetDir[1];
+            } else {
+              // Random buzz - makes flight path more natural
+              moveX = Math.floor(Math.random() * 3) - 1;
+              moveY = Math.floor(Math.random() * 3) - 1;
+            }
+          } else {
+            // No target found, wander randomly
+            moveX = Math.floor(Math.random() * 3) - 1;
+            moveY = Math.floor(Math.random() * 3) - 1;
+          }
+
+          const nx = x + moveX, ny = y + moveY;
+          if (nx >= 0 && nx < cols && ny >= 0 && ny < rows) {
+            const ni = idx(nx, ny);
+            if (types[ni] === 0) {
+              swap(i, ni);
+              markChunkActive(nx, ny);
+            }
+          }
+          processed[i] = 1;
+        }
+
+        // QUEEN BEE behavior - stays near hive, spawns workers
+        if (typeName === 'queen') {
+          // Die in fire
+          if (temp > 200) {
+            setCell(i, 'smoke');
+            lives[i] = 20;
+            continue;
+          }
+          // Drown in water
+          let drowned = false;
+          for (const [dx, dy] of [[0,-1],[0,1],[-1,0],[1,0]]) {
+            const nx = x + dx, ny = y + dy;
+            if (nx >= 0 && nx < cols && ny >= 0 && ny < rows) {
+              if (TYPE_NAMES[types[idx(nx, ny)]] === 'water') {
+                types[i] = 0;
+                drowned = true;
+                break;
+              }
+            }
+          }
+          if (drowned) continue;
+
+          // Find nearest hive
+          let hiveDir = null;
+          let nearHive = false;
+          for (let r = 1; r <= 10; r++) {
+            for (const [dx, dy] of [[r,0],[-r,0],[0,r],[0,-r],[r,r],[-r,-r],[r,-r],[-r,r]]) {
+              const nx = x + dx, ny = y + dy;
+              if (nx >= 0 && nx < cols && ny >= 0 && ny < rows) {
+                if (TYPE_NAMES[types[idx(nx, ny)]] === 'hive') {
+                  if (!hiveDir) hiveDir = [Math.sign(dx), Math.sign(dy)];
+                  if (Math.abs(dx) <= 2 && Math.abs(dy) <= 2) nearHive = true;
+                }
+              }
+            }
+          }
+
+          // Spawn worker bee occasionally (if near hive)
+          if (nearHive && Math.random() < 0.008) {
+            for (const [dx, dy] of [[0,-1],[0,1],[-1,0],[1,0]]) {
+              const nx = x + dx, ny = y + dy;
+              if (nx >= 0 && nx < cols && ny >= 0 && ny < rows) {
+                const ni = idx(nx, ny);
+                if (types[ni] === 0) {
+                  setCell(ni, 'bee');
+                  break;
+                }
+              }
+            }
+          }
+
+          // Movement: stay near hive
+          let moveX = 0, moveY = 0;
+          if (hiveDir && !nearHive) {
+            moveX = hiveDir[0];
+            moveY = hiveDir[1];
+          } else {
+            // Gentle hovering near hive
+            moveX = Math.floor(Math.random() * 3) - 1;
+            moveY = Math.floor(Math.random() * 3) - 1;
+          }
+
+          const nx = x + moveX, ny = y + moveY;
+          if (nx >= 0 && nx < cols && ny >= 0 && ny < rows) {
+            const ni = idx(nx, ny);
+            if (types[ni] === 0) {
+              swap(i, ni);
+              markChunkActive(nx, ny);
+            }
+          }
+          processed[i] = 1;
+        }
+
+        // FLOWER behavior - static, attracts bees, can wilt without water nearby
+        if (typeName === 'flower') {
+          // Wilt if too hot
+          if (temp > 100) {
+            setCell(i, 'smoke');
+            lives[i] = 10;
+            continue;
+          }
+          // Check for water nearby
+          let hasWater = false;
+          for (let r = 1; r <= 5; r++) {
+            for (const [dx, dy] of [[r,0],[-r,0],[0,r],[0,-r]]) {
+              const nx = x + dx, ny = y + dy;
+              if (nx >= 0 && nx < cols && ny >= 0 && ny < rows) {
+                if (TYPE_NAMES[types[idx(nx, ny)]] === 'water') {
+                  hasWater = true;
+                  break;
+                }
+              }
+            }
+            if (hasWater) break;
+          }
+          if (!hasWater) {
+            lives[i]++;
+            if (lives[i] > 500) {
+              setCell(i, 'sand');
+            }
+          } else {
+            lives[i] = 0;
+          }
+          processed[i] = 1;
+        }
+
+        // HIVE behavior - bees bring pollen here to make honey (honey made by bees, not hive)
+        if (typeName === 'hive') {
+          // Count nearby bees and queen
+          let beeCount = 0;
+          let hasQueen = false;
+          for (const [dx, dy] of [[0,-1],[0,1],[-1,0],[1,0],[-1,-1],[1,-1],[-1,1],[1,1],[0,-2],[0,2],[-2,0],[2,0]]) {
+            const nx = x + dx, ny = y + dy;
+            if (nx >= 0 && nx < cols && ny >= 0 && ny < rows) {
+              const nt = TYPE_NAMES[types[idx(nx, ny)]];
+              if (nt === 'bee') beeCount++;
+              if (nt === 'queen') hasQueen = true;
+            }
+          }
+
+          // Spawn queen if none exists nearby (rare) - needs bees
+          if (!hasQueen && beeCount >= 2 && Math.random() < 0.001) {
+            for (const [dx, dy] of [[0,-1],[0,1],[-1,0],[1,0]]) {
+              const nx = x + dx, ny = y + dy;
+              if (nx >= 0 && nx < cols && ny >= 0 && ny < rows) {
+                const ni = idx(nx, ny);
+                if (types[ni] === 0) {
+                  setCell(ni, 'queen');
+                  break;
+                }
+              }
+            }
+          }
+
+          // Destroyed by fire
+          if (temp > 300) {
+            setCell(i, 'fire');
+            lives[i] = 30;
+          }
+          processed[i] = 1;
+        }
+
+        // BOAT behavior - floats on water surface, burns when hot
+        if (typeName === 'boat') {
+          // Burn when hot
+          if (temp >= 250 && Math.random() < 0.01) {
+            setCell(i, 'fire');
+            lives[i] = 30;
+            continue;
+          }
+
+          const below = y < rows - 1 ? idx(x, y + 1) : -1;
+          const above = y > 0 ? idx(x, y - 1) : -1;
+          const belowType = below >= 0 ? TYPE_NAMES[types[below]] : 'empty';
+          const aboveType = above >= 0 ? TYPE_NAMES[types[above]] : 'empty';
+
+          // If water below and air/empty above - perfect, stay at surface
+          if (belowType === 'water' && (aboveType === 'empty' || aboveType === 'boat')) {
+            // Floating at surface - don't move
+          }
+          // If water above, rise up through it
+          else if (aboveType === 'water') {
+            swap(i, above);
+            markChunkActive(x, y - 1);
+          }
+          // If empty below (no water), fall like solid
+          else if (belowType === 'empty') {
+            swap(i, below);
+            markChunkActive(x, y + 1);
+          }
+          // Gentle horizontal drift on water
+          else if (belowType === 'water' && Math.random() < 0.02) {
+            const dx = Math.random() < 0.5 ? -1 : 1;
+            const nx = x + dx;
+            if (nx >= 0 && nx < cols) {
+              const ni = idx(nx, y);
+              if (types[ni] === 0) {
+                swap(i, ni);
+                markChunkActive(nx, y);
+              }
+            }
+          }
+          processed[i] = 1;
+        }
+
+        // CAMPFIRE behavior - stays hot, warms nearby, CAN START FIRES!
+        if (typeName === 'campfire') {
+          temps[i] = 400; // Stay hot
+          // Heat and potentially ignite things nearby
+          for (const [dx, dy] of [[-1,0],[1,0],[0,-1],[0,1],[-1,-1],[1,-1],[-1,1],[1,1]]) {
+            const nx = x + dx, ny = y + dy;
+            if (nx >= 0 && nx < cols && ny >= 0 && ny < rows) {
+              const ni = idx(nx, ny);
+              temps[ni] = Math.min(350, temps[ni] + 8);
+              // Ignite flammable things!
+              const nearElem = getElem(ni);
+              if (nearElem && nearElem.fm && nearElem.it && temps[ni] >= nearElem.it) {
+                if (Math.random() < 0.02) {
+                  setCell(ni, 'fire');
+                  lives[ni] = 40;
+                }
+              }
+            }
+          }
+          // Spawn fire particles above (flames)
+          if (Math.random() < 0.08 && y > 0) {
+            const ai = idx(x, y - 1);
+            if (types[ai] === 0) {
+              setCell(ai, 'fire');
+              lives[ai] = 15;
+            }
+          }
+          processed[i] = 1;
+        }
+
+        // LADDER behavior - burns when hot enough
+        if (typeName === 'ladder') {
+          if (temp >= 250 && Math.random() < 0.01) {
+            setCell(i, 'fire');
+            lives[i] = 30;
+          }
+          processed[i] = 1;
+        }
+
+        // SHELTER behavior - burns when hot enough
+        if (typeName === 'shelter') {
+          if (temp >= 280 && Math.random() < 0.01) {
+            setCell(i, 'fire');
+            lives[i] = 35;
+          }
+          processed[i] = 1;
+        }
+
+        // BOAT burning behavior (also handled in float physics)
+        // Note: boat floats in separate physics section
+
+        // WAX behavior - lava lamp! solid at room temp, melts when hot
+        if (typeName === 'wax') {
+          const waxTemp = temp;
+          // Wax melts at low temp (>35°) - very sensitive!
+          const isMelted = waxTemp > 35;
+
+          if (isMelted) {
+            // REAL lava lamp physics: HOT wax RISES, COOL wax SINKS
+            const isHot = waxTemp > 45;   // hot enough to rise
+            const isCool = waxTemp < 40;  // cool enough to sink
+
+            // Check up/down directions for water to swap with
+            const upI = y > 0 ? idx(x, y - 1) : -1;
+            const downI = y < rows - 1 ? idx(x, y + 1) : -1;
+
+            // HOT wax rises through water (less dense when hot)
+            if (isHot && upI >= 0 && TYPE_NAMES[types[upI]] === 'water') {
+              swap(i, upI);
+              markChunkActive(x, y - 1);
+            }
+            // COOL wax sinks through water (more dense when cold)
+            else if (isCool && downI >= 0 && TYPE_NAMES[types[downI]] === 'water') {
+              swap(i, downI);
+              markChunkActive(x, y + 1);
+            }
+            // Sideways drift when in middle temperature range
+            else if (!isHot && !isCool && Math.random() < 0.1) {
+              const dx = Math.random() < 0.5 ? -1 : 1;
+              const nx = x + dx;
+              if (nx >= 0 && nx < cols) {
+                const ni = idx(nx, y);
+                if (TYPE_NAMES[types[ni]] === 'water') {
+                  swap(i, ni);
+                  markChunkActive(nx, y);
+                }
+              }
+            }
+          }
+          // Solid wax just sits there (handled by normal physics)
+          processed[i] = 1;
+        }
+
+        // LIGHTNING behavior - electric, chains through water/metal
+        if (typeName === 'lightning') {
+          lives[i]++;
+          if (lives[i] > 3) {
+            types[i] = 0;  // Short life
+            continue;
+          }
+          // Heat surroundings
+          temps[i] = 500;
+          // Chain through water and metal
+          for (const [dx, dy] of [[0,1],[0,-1],[-1,0],[1,0]]) {
+            const nx = x + dx, ny = y + dy;
+            if (nx >= 0 && nx < cols && ny >= 0 && ny < rows) {
+              const ni = idx(nx, ny);
+              const nt = TYPE_NAMES[types[ni]];
+              if (nt === 'water' || nt === 'metal') {
+                // Spread lightning
+                if (Math.random() < 0.5) {
+                  setCell(ni, 'lightning');
+                  lives[ni] = 0;
+                }
+              } else if (nt === 'empty' && Math.random() < 0.2) {
+                // Random spark
+                setCell(ni, 'lightning');
+                lives[ni] = 0;
+              }
+              markChunkActive(nx, ny);
+            }
+          }
+          processed[i] = 1;
+        }
+
+        // SNOW behavior - light, cold, melts into water
+        if (typeName === 'snow') {
+          // Cool surroundings
+          temps[i] = -10;
+          // Melt if warm
+          if (temp > 5) {
+            if (Math.random() < 0.05) {
+              setCell(i, 'water');
+              temps[i] = 1;
+            }
+          }
+          // Snow falls slower (handled by low density)
+          processed[i] = 1;
+        }
+
+        // CLOUD behavior - rises, spawns rain
+        if (typeName === 'cloud') {
+          lives[i]++;
+          // Spawn rain drops occasionally
+          if (Math.random() < 0.02) {
+            const below = y < rows - 1 ? idx(x, y + 1) : -1;
+            if (below >= 0 && types[below] === 0) {
+              setCell(below, 'water');
+              markChunkActive(x, y + 1);
+            }
+          }
+          // Occasionally spawn lightning in storms
+          if (Math.random() < 0.001) {
+            const below = y < rows - 1 ? idx(x, y + 1) : -1;
+            if (below >= 0 && types[below] === 0) {
+              setCell(below, 'lightning');
+              lives[below] = 0;
+              markChunkActive(x, y + 1);
+            }
+          }
+          // Dissipate after a while
+          if (lives[i] > 200 && Math.random() < 0.01) {
+            types[i] = 0;
+          }
+          processed[i] = 1;
+        }
+
+        // HONEY behavior - extremely viscous with surface tension
+        if (typeName === 'honey') {
+          // Count neighboring honey (surface tension) and solids (adhesion)
+          let honeyNeighbors = 0;
+          let solidNeighbors = 0;
+          let atEdge = (x === 0 || x === cols - 1 || y === rows - 1);  // Screen edges
+
+          for (const [dx, dy] of [[0,-1],[0,1],[-1,0],[1,0]]) {
+            const nx = x + dx, ny = y + dy;
+            if (nx >= 0 && nx < cols && ny >= 0 && ny < rows) {
+              const ni = idx(nx, ny);
+              const nt = TYPE_NAMES[types[ni]];
+              if (nt === 'honey') honeyNeighbors++;
+              if (E[nt] && E[nt].s) solidNeighbors++;  // solid elements
+            }
+          }
+
+          // Surface tension: more neighbors = stickier but still flows
+          const clingFactor = honeyNeighbors * 0.1 + solidNeighbors * 0.12 + (atEdge ? 0.15 : 0);
+          const moveChance = Math.max(0.25, 1 - clingFactor);  // Min 25% chance to move
+
+          // Fall down - slow drip
+          const below = y < rows - 1 ? idx(x, y + 1) : -1;
+          const belowType = below >= 0 ? TYPE_NAMES[types[below]] : 'solid';
+
+          if (below >= 0 && (types[below] === 0 || belowType === 'water') && Math.random() < 0.15 * moveChance) {
+            swap(i, below);
+            processed[below] = 1;
+            markChunkActive(x, y + 1);
+          }
+          // Diagonal fall
+          else if (Math.random() < 0.06 * moveChance) {
+            const dx = Math.random() < 0.5 ? -1 : 1;
+            const diagX = x + dx, diagY = y + 1;
+            if (diagX >= 0 && diagX < cols && diagY < rows) {
+              const di = idx(diagX, diagY);
+              if (types[di] === 0) {
+                swap(i, di);
+                processed[di] = 1;
+                markChunkActive(diagX, diagY);
+              }
+            }
+          }
+          // Horizontal spread (rare - honey resists spreading)
+          else if (Math.random() < 0.02 * moveChance) {
+            const dx = Math.random() < 0.5 ? -1 : 1;
+            const sideX = x + dx;
+            if (sideX >= 0 && sideX < cols) {
+              const si = idx(sideX, y);
+              if (types[si] === 0) {
+                swap(i, si);
+                processed[si] = 1;
+                markChunkActive(sideX, y);
+              }
+            }
+          }
+          // PULL toward other honey (surface tension attraction)
+          else if (honeyNeighbors > 0 && Math.random() < 0.02) {
+            // Try to move toward honey cluster
+            for (const [dx, dy] of [[0,-1],[0,1],[-1,0],[1,0]]) {
+              const nx = x + dx, ny = y + dy;
+              if (nx >= 0 && nx < cols && ny >= 0 && ny < rows) {
+                const ni = idx(nx, ny);
+                if (TYPE_NAMES[types[ni]] === 'honey') {
+                  // Try to move to empty space on the other side of this honey
+                  const ox = nx + dx, oy = ny + dy;
+                  if (ox >= 0 && ox < cols && oy >= 0 && oy < rows) {
+                    const oi = idx(ox, oy);
+                    if (types[oi] === 0) {
+                      swap(i, oi);
+                      processed[oi] = 1;
+                      markChunkActive(ox, oy);
+                      break;
+                    }
+                  }
+                }
+              }
+            }
+          }
+
+          processed[i] = 1;
+          continue;
+        }
+
+        // MUD behavior - viscous, dries out over time
+        if (typeName === 'mud') {
+          // Dry out slowly in warm/dry conditions
+          if (temp > 30 && Math.random() < 0.005) {
+            setCell(i, 'sand');  // Dried mud becomes sand/dirt
+          }
+          // Add water to sand to make mud (handled elsewhere)
+          // Mud moves slowly
+          if (Math.random() > 0.3) {
+            processed[i] = 1;
+            continue;
+          }
+        }
+
+        // METAL behavior - conducts heat extremely well
+        if (typeName === 'metal') {
+          // Spread heat very efficiently
+          for (const [dx, dy] of [[0,-1],[0,1],[-1,0],[1,0]]) {
+            const nx = x + dx, ny = y + dy;
+            if (nx >= 0 && nx < cols && ny >= 0 && ny < rows) {
+              const ni = idx(nx, ny);
+              if (TYPE_NAMES[types[ni]] === 'metal') {
+                // Equalize temperature between metals
+                const avg = (temps[i] + temps[ni]) / 2;
+                temps[i] = avg;
+                temps[ni] = avg;
+              }
+            }
+          }
+          processed[i] = 1;
+        }
+
+        // Glass thermal shock - hot glass + COLD water = shatter!
+        // But warm water (lava lamp) is fine - gradual heating doesn't shock
+        if (typeName === 'glass' && temp > 400) {
+          // Check for cold water nearby
+          for (const [dx, dy] of [[0,-1],[0,1],[-1,0],[1,0]]) {
+            const nx = x + dx, ny = y + dy;
+            if (nx >= 0 && nx < cols && ny >= 0 && ny < rows) {
+              const ni = idx(nx, ny);
+              if (TYPE_NAMES[types[ni]] === 'water' && temps[ni] < 50) {
+                // Thermal shock! Glass shatters, water becomes steam
+                shatter(i, x, y);
+                setCell(ni, 'steam');
+                lives[ni] = 40;
+                temps[ni] = 100;
+                processed[i] = 1;
+                break;
+              }
+            }
+          }
+        }
+
+        // Plant growth - MORE AGGRESSIVE
+        if (typeName === 'plant') {
+          // Check if water nearby (boosts growth 5x)
+          let hasWater = false;
+          for (const [wx, wy] of [[x-1,y],[x+1,y],[x,y-1],[x,y+1],[x-1,y-1],[x+1,y-1],[x-1,y+1],[x+1,y+1]]) {
+            if (wx >= 0 && wx < cols && wy >= 0 && wy < rows && types[idx(wx,wy)] === TYPE_MAP.water) {
+              hasWater = true;
+              break;
+            }
+          }
+
+          // Growth only with water (15% chance)
+          if (hasWater && Math.random() < 0.15) {
+            // Can grow in all 8 directions, prefer upward
+            const dirs = [[0,-1],[0,-1],[0,-1],[1,-1],[-1,-1],[1,0],[-1,0],[0,1]];
+            const dir = dirs[Math.floor(Math.random() * dirs.length)];
+            const nx = x + dir[0], ny = y + dir[1];
+            if (nx >= 0 && nx < cols && ny >= 0 && ny < rows) {
+              const ni = idx(nx, ny);
+              if (types[ni] === 0) {
+                setCell(ni, 'plant');
+              }
+            }
+          }
+
+          // FLOWER BLOOMING - plant tops can bloom into flowers
+          // Check if this is a plant "tip" (no plant above, but plant below)
+          const above = y > 0 ? idx(x, y - 1) : -1;
+          const below = y < rows - 1 ? idx(x, y + 1) : -1;
+          const isPlantTip = (above < 0 || TYPE_NAMES[types[above]] !== 'plant') &&
+                            (below >= 0 && TYPE_NAMES[types[below]] === 'plant');
+
+          // Tips can bloom (0.5% chance per frame when watered)
+          if (isPlantTip && hasWater && Math.random() < 0.005) {
+            setCell(i, 'flower');
+          }
+        }
+      }
+    }
+  }
+}
+
+function simulateMovement() {
+  const processed = new Uint8Array(cols * rows);
+
+  // CRITICAL: Iteration order must match gravity direction!
+  // For continuous gravity, use the sign of gravityX/Y
+
+  // Y iteration: if gravity DOWN (positive Y), bottom-to-top
+  const yDown = gravityY >= 0;
+  const startY = yDown ? rows - 1 : 0;
+  const endY = yDown ? -1 : rows;
+  const stepY = yDown ? -1 : 1;
+
+  // X iteration: if gravity RIGHT (positive X), right-to-left
+  const xRight = gravityX > 0;
+  const startX = xRight ? cols - 1 : 0;
+  const endX = xRight ? -1 : cols;
+  const stepX = xRight ? -1 : 1;
+
+  for (let y = startY; y !== endY; y += stepY) {
+    for (let x = startX; x !== endX; x += stepX) {
+      const i = idx(x, y);
+      if (types[i] === 0 || processed[i]) continue;
+
+      // Check if in active chunk
+      const chunkId = getChunk(x, y);
+      if (!activeChunks.has(chunkId)) continue;
+
+      const typeName = TYPE_NAMES[types[i]];
+      const elem = E[typeName];
+      if (!elem) continue;
+
+      // Falling - TRUE 360-degree continuous gravity!
+      if (elem.f) {
+        let moved = false;  // Track if particle moved this frame
+
+        // Convert continuous gravity to probabilistic discrete steps
+        // gravityX and gravityY are floats from -1 to 1
+        const absX = Math.abs(gravityX);
+        const absY = Math.abs(gravityY);
+        const total = absX + absY;
+
+        if (total > 0.05) {  // Only move if there's meaningful gravity
+          // STICKY SAND CHECK - sticky sand resists falling (only ant-placed sand is very sticky)
+          if (typeName === 'sand' && lives[i] > 20) {
+            // Only very sticky sand (ant tunnels) resists falling
+            const stickyChance = (lives[i] - 20) / 40;  // 0 to ~0.75 for ant sand
+            if (Math.random() < stickyChance) {
+              falls[i] = 0;
+              processed[i] = 1;
+              continue;
+            }
+          }
+
+          // Probabilistic step: chance to move in each direction based on gravity magnitude
+          let stepX = 0, stepY = 0;
+
+          // Determine movement based on gravity vector
+          // Higher gravity component = higher chance to move that way
+          const roll = Math.random() * total;
+
+          if (roll < absX) {
+            // Move horizontally
+            stepX = gravityX > 0 ? 1 : -1;
+            // Also have chance for vertical based on ratio
+            if (Math.random() < absY / total) {
+              stepY = gravityY > 0 ? 1 : -1;
+            }
+          } else {
+            // Move vertically
+            stepY = gravityY > 0 ? 1 : -1;
+            // Also have chance for horizontal based on ratio
+            if (Math.random() < absX / total) {
+              stepX = gravityX > 0 ? 1 : -1;
+            }
+          }
+
+          const targetX = x + stepX;
+          const targetY = y + stepY;
+          const canMoveX = targetX >= 0 && targetX < cols;
+          const canMoveY = targetY >= 0 && targetY < rows;
+
+          // Try diagonal movement first
+          if (canMoveX && canMoveY && stepX !== 0 && stepY !== 0) {
+            const diagI = idx(targetX, targetY);
+            if (canDisplace(types[i], types[diagI])) {
+              falls[i] = Math.min(falls[i] + 1, 255);  // Track momentum
+              swap(i, diagI);
+              processed[diagI] = 1;
+              markChunkActive(targetX, targetY);
+              moved = true;
+              continue;
+            }
+          }
+
+          // Try movement in dominant gravity direction
+          if (absY >= absX && canMoveY && stepY !== 0) {
+            const vertI = idx(x, targetY);
+            if (canDisplace(types[i], types[vertI])) {
+              falls[i] = Math.min(falls[i] + 1, 255);  // Track momentum
+              swap(i, vertI);
+              processed[vertI] = 1;
+              markChunkActive(x, targetY);
+              moved = true;
+              continue;
+            }
+          }
+
+          if (absX > absY && canMoveX && stepX !== 0) {
+            const horizI = idx(targetX, y);
+            if (canDisplace(types[i], types[horizI])) {
+              falls[i] = Math.min(falls[i] + 1, 255);  // Track momentum
+              swap(i, horizI);
+              processed[horizI] = 1;
+              markChunkActive(targetX, y);
+              moved = true;
+              continue;
+            }
+          }
+
+          // Fallback: try other direction
+          if (canMoveY && stepY !== 0) {
+            const vertI = idx(x, targetY);
+            if (canDisplace(types[i], types[vertI])) {
+              falls[i] = Math.min(falls[i] + 1, 255);  // Track momentum
+              swap(i, vertI);
+              processed[vertI] = 1;
+              markChunkActive(x, targetY);
+              moved = true;
+              continue;
+            }
+          }
+          if (canMoveX && stepX !== 0) {
+            const horizI = idx(targetX, y);
+            if (canDisplace(types[i], types[horizI])) {
+              falls[i] = Math.min(falls[i] + 1, 255);  // Track momentum
+              swap(i, horizI);
+              processed[horizI] = 1;
+              markChunkActive(targetX, y);
+              moved = true;
+              continue;
+            }
+          }
+        }  // End of if (total > 0.05)
+
+        // Impact detection - if particle didn't move, check for breakable impacts
+        if (!moved && falls[i] > 0) {
+          // Check what's in the gravity direction
+          const impactX = x + (gravityX > 0 ? 1 : (gravityX < 0 ? -1 : 0));
+          const impactY = y + (gravityY > 0 ? 1 : (gravityY < 0 ? -1 : 0));
+          if (impactX >= 0 && impactX < cols && impactY >= 0 && impactY < rows) {
+            const impactI = idx(impactX, impactY);
+            const impactType = TYPE_NAMES[types[impactI]];
+            const impactElem = E[impactType];
+            // Check if what we hit is breakable - but soft materials (wax, water) can't break things
+            const softMaterial = typeName === 'wax' || typeName === 'water' || typeName === 'steam';
+            if (impactElem && impactElem.br && !softMaterial) {
+              const threshold = impactElem.brt || 5;
+              if (falls[i] >= threshold) {
+                shatter(impactI, impactX, impactY);
+                // Momentum transfers - particle keeps falling
+                falls[i] = Math.floor(falls[i] / 2);
+              }
+            }
+          }
+          // Reset momentum since we stopped
+          falls[i] = 0;
+        }
+
+        // Diagonal spread for liquids and flowing elements
+        // Spread perpendicular to gravity direction
+        if (elem.fl || elem.lq) {
+          const gx = gravityX > 0 ? 1 : (gravityX < 0 ? -1 : 0);
+          const gy = gravityY > 0 ? 1 : (gravityY < 0 ? -1 : 0);
+          const spreadDirs = Math.random() < 0.5 ? [-1, 1] : [1, -1];
+
+          if (Math.abs(gravityY) > Math.abs(gravityX)) {
+            // Gravity mostly vertical - spread horizontally
+            for (const dx of spreadDirs) {
+              const nx = x + dx;
+              const ny = y + gy;
+              if (nx >= 0 && nx < cols && ny >= 0 && ny < rows) {
+                const di = idx(nx, ny);
+                if (canDisplace(types[i], types[di])) {
+                  swap(i, di);
+                  processed[di] = 1;
+                  markChunkActive(nx, ny);
+                  break;
+                }
+              }
+            }
+          } else if (Math.abs(gravityX) > 0) {
+            // Gravity mostly horizontal - spread vertically
+            for (const dy of spreadDirs) {
+              const nx = x + gx;
+              const ny = y + dy;
+              if (nx >= 0 && nx < cols && ny >= 0 && ny < rows) {
+                const di = idx(nx, ny);
+                if (canDisplace(types[i], types[di])) {
+                  swap(i, di);
+                  processed[di] = 1;
+                  markChunkActive(nx, ny);
+                  break;
+                }
+              }
+            }
+          }
+        }
+
+        // Liquid horizontal spread with SURFACE TENSION
+        if (elem.lq) {
+          // Count same-type liquid neighbors (surface tension)
+          let sameTypeNeighbors = 0;
+          let solidNeighbors = 0;
+          const atEdge = (x === 0 || x === cols - 1 || y === rows - 1);
+
+          for (const [dx, dy] of [[0,-1],[0,1],[-1,0],[1,0]]) {
+            const nx = x + dx, ny = y + dy;
+            if (nx >= 0 && nx < cols && ny >= 0 && ny < rows) {
+              const ni = idx(nx, ny);
+              const nt = TYPE_NAMES[types[ni]];
+              if (nt === typeName) sameTypeNeighbors++;  // Same liquid type
+              if (E[nt] && E[nt].s) solidNeighbors++;    // Solid surface
+            }
+          }
+
+          // Surface tension reduces spread chance
+          const tensionFactor = sameTypeNeighbors * 0.1 + solidNeighbors * 0.15 + (atEdge ? 0.2 : 0);
+          const spreadChance = Math.max(0.1, 1 - tensionFactor);
+
+          // Only spread if random check passes
+          if (Math.random() < spreadChance) {
+            const gxSign = gravityX > 0 ? 1 : (gravityX < 0 ? -1 : 0);
+            const spreadDirs = gxSign !== 0 ? [gxSign, -gxSign] : (Math.random() < 0.5 ? [-1, 1] : [1, -1]);
+            for (const dx of spreadDirs) {
+              const nx = x + dx;
+              if (nx >= 0 && nx < cols) {
+                const si = idx(nx, y);
+                if (canDisplace(types[i], types[si])) {
+                  swap(i, si);
+                  processed[si] = 1;
+                  markChunkActive(nx, y);
+                  break;
+                }
+              }
+            }
+          }
+        }
+
+        // Extra push in gravity direction when strongly tilted
+        const gravMagnitude = Math.sqrt(gravityX * gravityX + gravityY * gravityY);
+        if (gravMagnitude > 0.5 && Math.random() < gravMagnitude * 0.5) {
+          const gxSign = gravityX > 0 ? 1 : (gravityX < 0 ? -1 : 0);
+          const gySign = gravityY > 0 ? 1 : (gravityY < 0 ? -1 : 0);
+          const pushX = x + gxSign;
+          const pushY = y + gySign;
+          if (pushX >= 0 && pushX < cols && pushY >= 0 && pushY < rows) {
+            const pi = idx(pushX, pushY);
+            if (canDisplace(types[i], types[pi])) {
+              swap(i, pi);
+              processed[pi] = 1;
+              markChunkActive(pushX, pushY);
+            }
+          }
+        }
+      }
+
+      // Rising - OPPOSITE to gravity direction
+      if (elem.r) {
+        // Rise direction is opposite to gravity
+        const riseX = gravityX > 0.3 ? -1 : (gravityX < -0.3 ? 1 : 0);
+        const riseY = gravityY > 0.3 ? -1 : (gravityY < -0.3 ? 1 : 0);
+
+        // If no clear gravity, default to rising up
+        const finalRiseY = (riseX === 0 && riseY === 0) ? -1 : riseY;
+
+        const drift = elem.dr ? Math.floor(Math.random() * 3) - 1 : 0;
+        const nx = Math.max(0, Math.min(cols - 1, x + riseX + drift));
+        const ny = y + finalRiseY;
+
+        if (ny >= 0 && ny < rows) {
+          const ai = idx(nx, ny);
+          if (types[ai] === 0 || (E[TYPE_NAMES[types[ai]]] && E[TYPE_NAMES[types[ai]]].d > elem.d)) {
+            if (canDisplace(types[i], types[ai])) {
+              swap(i, ai);
+              processed[ai] = 1;
+              markChunkActive(nx, ny);
+            }
+          }
+        }
+
+        // Horizontal drift
+        if (elem.dr && Math.random() < 0.3) {
+          const dx = Math.random() < 0.5 ? -1 : 1;
+          const sx = x + dx;
+          if (sx >= 0 && sx < cols) {
+            const si = idx(sx, y);
+            if (types[si] === 0) {
+              swap(i, si);
+              processed[si] = 1;
+              markChunkActive(sx, y);
+            }
+          }
+        }
+      }
+    }
+  }
+}
+
+// Update active chunks - deactivate empty ones
+function updateActiveChunks() {
+  const newActive = new Set();
+
+  for (const chunkId of activeChunks) {
+    const cx = chunkId % chunkCols;
+    const cy = Math.floor(chunkId / chunkCols);
+    const startX = cx * CHUNK_SIZE;
+    const startY = cy * CHUNK_SIZE;
+    const endX = Math.min(startX + CHUNK_SIZE, cols);
+    const endY = Math.min(startY + CHUNK_SIZE, rows);
+
+    let hasContent = false;
+    for (let y = startY; y < endY && !hasContent; y++) {
+      for (let x = startX; x < endX && !hasContent; x++) {
+        if (types[idx(x, y)] !== 0) hasContent = true;
+      }
+    }
+
+    if (hasContent) {
+      // Keep this and neighbors active
+      for (let dy = -1; dy <= 1; dy++) {
+        for (let dx = -1; dx <= 1; dx++) {
+          const ncx = cx + dx, ncy = cy + dy;
+          if (ncx >= 0 && ncx < chunkCols && ncy >= 0 && ncy < chunkRows) {
+            newActive.add(chunkIdx(ncx, ncy));
+          }
+        }
+      }
+    }
+  }
+
+  activeChunks = newActive;
+}
+
+function simulate() {
+  // OPTIMIZATION: Heat every 4th frame (was 2nd)
+  if (frameCount % 4 === 0) {
+    simulateHeat();
+  }
+
+  // OPTIMIZATION: Reactions every 2nd frame
+  if (frameCount % 2 === 0) {
+    simulateReactions();
+  }
+
+  simulateMovement();
+
+  // Update the buddy character
+  if (buddy) {
+    buddy.update();
+  }
+
+  // Update active chunks every 10 frames
+  if (frameCount % 10 === 0) {
+    updateActiveChunks();
+  }
+
+  frameCount++;
+}
+
+// Dummy for compatibility
+function initImageData() {}
+
+function draw() {
+  // Apply screen shake
+  ctx.save();
+  if (screenShake > 0.5) {
+    const shakeX = (Math.random() - 0.5) * screenShake * 2;
+    const shakeY = (Math.random() - 0.5) * screenShake * 2;
+    ctx.translate(shakeX, shakeY);
+    screenShake *= screenShakeDecay;
+  } else {
+    screenShake = 0;
+  }
+
+  ctx.fillStyle = '#0a0a0a';
+  ctx.fillRect(-10, -10, w + 20, h + 20);
+
+  // Set font once per frame (not per cell)
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.font = `${cellSize * 0.9}px "Noto Sans JP", sans-serif`;
+
+  // Pre-calculate half cell
+  const halfCell = cellSize / 2;
+
+  // Draw kanji characters
+  for (const chunkId of activeChunks) {
+    const cx = chunkId % chunkCols;
+    const cy = Math.floor(chunkId / chunkCols);
+    const startX = cx * CHUNK_SIZE;
+    const startY = cy * CHUNK_SIZE;
+    const endX = Math.min(startX + CHUNK_SIZE, cols);
+    const endY = Math.min(startY + CHUNK_SIZE, rows);
+
+    for (let y = startY; y < endY; y++) {
+      for (let x = startX; x < endX; x++) {
+        const i = idx(x, y);
+        if (types[i] === 0) continue;
+
+        const color = getColor(i);
+        if (!color) continue;
+
+        ctx.fillStyle = `rgb(${color[0]},${color[1]},${color[2]})`;
+        ctx.fillText(chars[i], x * cellSize + halfCell, y * cellSize + halfCell);
+      }
+    }
+  }
+
+  // Draw the buddy character ON TOP of particles
+  if (buddy) {
+    buddy.render(ctx, cellSize);
+  }
+
+  // Draw flash overlay
+  if (flashAlpha > 0.01) {
+    ctx.fillStyle = flashColor || '#ffffff';
+    ctx.globalAlpha = flashAlpha;
+    ctx.fillRect(-10, -10, w + 20, h + 20);
+    ctx.globalAlpha = 1;
+    flashAlpha *= 0.85;
+  }
+
+  ctx.restore();
+}
+
+function placeElement(clientX, clientY) {
+  const rect = canvas.getBoundingClientRect();
+  const cx = Math.floor((clientX - rect.left) / cellSize);
+  const cy = Math.floor((clientY - rect.top) / cellSize);
+
+  for (let dy = -brushSize; dy <= brushSize; dy++) {
+    for (let dx = -brushSize; dx <= brushSize; dx++) {
+      if (dx*dx + dy*dy > brushSize*brushSize) continue;
+      const x = cx + dx, y = cy + dy;
+      if (x < 0 || x >= cols || y < 0 || y >= rows) continue;
+      const i = idx(x, y);
+      if (types[i] === 0 || Math.random() < 0.3) {
+        setCell(i, selectedElement);
+      }
+    }
+  }
+}
+
+function eraseElement(clientX, clientY) {
+  const rect = canvas.getBoundingClientRect();
+  const cx = Math.floor((clientX - rect.left) / cellSize);
+  const cy = Math.floor((clientY - rect.top) / cellSize);
+
+  for (let dy = -brushSize; dy <= brushSize; dy++) {
+    for (let dx = -brushSize; dx <= brushSize; dx++) {
+      if (dx*dx + dy*dy > brushSize*brushSize) continue;
+      const x = cx + dx, y = cy + dy;
+      if (x < 0 || x >= cols || y < 0 || y >= rows) continue;
+      setCell(idx(x, y), 'empty');
+    }
+  }
+}
+
+// Input
+let isDrawing = false, isErasing = false;
+let eraserMode = false;  // For mobile eraser button
+let grabMode = false;    // For grabbing/moving the buddy
+let isGrabbing = false;  // Currently holding the buddy
+let grabOffsetX = 0;     // Offset from grab point to buddy position
+let grabOffsetY = 0;
+let lastTouchX = 0;      // For petting detection
+let lastTouchY = 0;
+let touchSpeed = 0;
+
+// Check if point is over the buddy
+function isOverBuddy(clientX, clientY) {
+  if (!buddy) return false;
+  const rect = canvas.getBoundingClientRect();
+  const gx = Math.floor((clientX - rect.left) / cellSize);
+  const gy = Math.floor((clientY - rect.top) / cellSize);
+  const bx = Math.floor(buddy.x);
+  const by = Math.floor(buddy.y);
+  return gx >= bx && gx < bx + buddy.width && gy >= by && gy < by + buddy.height;
+}
+
+// Try to grab the buddy
+function tryGrabBuddy(clientX, clientY) {
+  if (!buddy) return false;
+  const rect = canvas.getBoundingClientRect();
+  const gx = (clientX - rect.left) / cellSize;
+  const gy = (clientY - rect.top) / cellSize;
+  if (isOverBuddy(clientX, clientY)) {
+    isGrabbing = true;
+    grabOffsetX = buddy.x - gx;
+    grabOffsetY = buddy.y - gy;
+    buddy.vx = 0;
+    buddy.vy = 0;
+    buddy.state = 'grabbed';
+    return true;
+  }
+  return false;
+}
+
+// Move the grabbed buddy
+function moveBuddy(clientX, clientY) {
+  if (!buddy || !isGrabbing) return;
+  const rect = canvas.getBoundingClientRect();
+  const gx = (clientX - rect.left) / cellSize;
+  const gy = (clientY - rect.top) / cellSize;
+  buddy.x = gx + grabOffsetX;
+  buddy.y = gy + grabOffsetY;
+  // Keep in bounds
+  if (buddy.x < 0) buddy.x = 0;
+  if (buddy.x > cols - buddy.width) buddy.x = cols - buddy.width;
+  if (buddy.y < 0) buddy.y = 0;
+  if (buddy.y > rows - buddy.height) buddy.y = rows - buddy.height;
+}
+
+// Release the buddy
+function releaseBuddy() {
+  if (!buddy || !isGrabbing) return;
+  isGrabbing = false;
+  buddy.state = 'fall';
+}
+
+canvas.addEventListener('mousedown', e => {
+  if (e.button === 2) { isErasing = true; eraseElement(e.clientX, e.clientY); }
+  else if (grabMode && tryGrabBuddy(e.clientX, e.clientY)) {
+    // Grabbed the buddy!
+  } else {
+    isDrawing = true;
+    placeElement(e.clientX, e.clientY);
+  }
+});
+canvas.addEventListener('mousemove', e => {
+  if (isGrabbing) moveBuddy(e.clientX, e.clientY);
+  else if (isDrawing) placeElement(e.clientX, e.clientY);
+  if (isErasing) eraseElement(e.clientX, e.clientY);
+});
+canvas.addEventListener('mouseup', () => {
+  isDrawing = isErasing = false;
+  releaseBuddy();
+});
+canvas.addEventListener('mouseleave', () => {
+  isDrawing = isErasing = false;
+  releaseBuddy();
+});
+canvas.addEventListener('contextmenu', e => e.preventDefault());
+
+canvas.addEventListener('touchstart', e => {
+  e.preventDefault();
+  // Unlock audio on first touch
+  for (const audio of Object.values(audioElements)) {
+    audio.play().then(() => audio.pause()).catch(() => {});
+  }
+  const t = e.touches[0];
+  lastTouchX = t.clientX;
+  lastTouchY = t.clientY;
+  touchSpeed = 0;
+  if (grabMode && tryGrabBuddy(t.clientX, t.clientY)) {
+    // Grabbed the buddy!
+  } else {
+    isDrawing = true;
+    for (const t of e.touches) {
+      if (eraserMode) eraseElement(t.clientX, t.clientY);
+      else placeElement(t.clientX, t.clientY);
+    }
+  }
+});
+canvas.addEventListener('touchmove', e => {
+  e.preventDefault();
+  const t = e.touches[0];
+
+  // Calculate touch speed for petting detection
+  const dx = t.clientX - lastTouchX;
+  const dy = t.clientY - lastTouchY;
+  touchSpeed = Math.sqrt(dx * dx + dy * dy);
+  lastTouchX = t.clientX;
+  lastTouchY = t.clientY;
+
+  if (isGrabbing) {
+    moveBuddy(t.clientX, t.clientY);
+  } else {
+    // Check for petting (slow movement over buddy)
+    if (touchSpeed < 15 && touchSpeed > 2 && isOverBuddy(t.clientX, t.clientY)) {
+      if (buddy) buddy.pet();
+    }
+
+    for (const touch of e.touches) {
+      if (eraserMode) eraseElement(touch.clientX, touch.clientY);
+      else placeElement(touch.clientX, touch.clientY);
+    }
+  }
+});
+canvas.addEventListener('touchend', () => {
+  isDrawing = false;
+  releaseBuddy();
+});
+
+// Lightning strike - creates fulgurite (glass tubes in sand)!
+function strikeLightning(startX, startY) {
+  let x = startX;
+  let y = startY;
+  const branches = [[x, y, 0]];  // x, y, depth
+
+  while (branches.length > 0) {
+    const [bx, by, depth] = branches.pop();
+    let cx = bx, cy = by;
+
+    // Draw this branch
+    for (let step = 0; step < 50 && cy < rows; step++) {
+      // Zigzag downward
+      cx += Math.floor(Math.random() * 3) - 1;
+      cy += 1;
+      if (cx < 0) cx = 0;
+      if (cx >= cols) cx = cols - 1;
+
+      const i = idx(cx, cy);
+      if (i < 0 || i >= types.length) continue;
+
+      const typeName = TYPE_NAMES[types[i]];
+
+      // Lightning effects on materials
+      if (typeName === 'sand') {
+        // FULGURITE! Sand turns to glass
+        setCell(i, 'glass');
+        temps[i] = 800;
+      } else if (typeName === 'water') {
+        // Instant steam
+        setCell(i, 'steam');
+        lives[i] = 60;
+      } else if (typeName === 'ice') {
+        // Ice shatters to water
+        setCell(i, 'water');
+      } else if (typeName === 'wood' || typeName === 'plant') {
+        // Ignite!
+        setCell(i, 'fire');
+        lives[i] = 30;
+      } else if (typeName === 'gunpowder' || typeName === 'nitro') {
+        // BOOM
+        explode(cx, cy, typeName === 'nitro' ? 12 : 6);
+        return;  // Lightning ends on explosion
+      } else if (typeName === 'oil') {
+        setCell(i, 'fire');
+        lives[i] = 50;
+      } else if (typeName === 'stone' || typeName === 'glass') {
+        // Blocked - lightning stops or branches
+        if (Math.random() < 0.5) break;
+      }
+
+      // Check if lightning hits buddy
+      if (buddy && cx >= buddy.x && cx < buddy.x + buddy.width &&
+          cy >= buddy.y && cy < buddy.y + buddy.height) {
+        buddy.shocked = true;
+        buddy.shockTimer = 40;
+        buddy.chargeLevel = 100;
+        buddy.painTimer = 20;
+        buddy.state = 'shocked';
+        buddy.vx += (Math.random() - 0.5) * 3;
+        buddy.vy -= 2;  // Jump from shock
+        playSound('zap');
+        shake(10);
+        flash('#ffff00', 0.5);
+      }
+
+      // Heat nearby cells
+      for (const [dx, dy] of [[0,-1],[0,1],[-1,0],[1,0],[-1,-1],[1,-1],[-1,1],[1,1]]) {
+        const nx = cx + dx, ny = cy + dy;
+        if (nx >= 0 && nx < cols && ny >= 0 && ny < rows) {
+          const ni = idx(nx, ny);
+          temps[ni] = Math.min(temps[ni] + 200, 1000);
+          markChunkActive(nx, ny);
+        }
+      }
+
+      markChunkActive(cx, cy);
+
+      // Random branching
+      if (depth < 3 && Math.random() < 0.15) {
+        branches.push([cx, cy, depth + 1]);
+      }
+    }
+  }
+}
+
+// Toolbar
+function buildToolbar() {
+  toolbar.innerHTML = '';
+
+  // Hidden elements (smoke, steam, ember - generated by fire, not placed; hive - only bees make hives)
+  const hiddenElements = ['smoke', 'steam', 'ember', 'hive'];
+
+  // === ELEMENTS FIRST (most used) ===
+  for (const [key, elem] of Object.entries(E)) {
+    if (hiddenElements.includes(key)) continue;
+    const btn = document.createElement('button');
+    btn.className = 'element-btn' + (key === selectedElement ? ' selected' : '');
+    btn.textContent = elem.e;
+    btn.title = elem.n;
+    btn.onclick = () => {
+      selectedElement = key;
+      eraserMode = false;
+      grabMode = false;
+      document.querySelectorAll('.element-btn').forEach(b => b.classList.remove('selected'));
+      btn.classList.add('selected');
+    };
+    toolbar.appendChild(btn);
+  }
+
+  // === BRUSH SIZE ===
+  const brushDown = document.createElement('button');
+  brushDown.className = 'element-btn';
+  brushDown.textContent = '−';
+  brushDown.title = 'Smaller brush';
+  toolbar.appendChild(brushDown);
+
+  const brushUp = document.createElement('button');
+  brushUp.className = 'element-btn';
+  brushUp.textContent = '+';
+  brushUp.title = 'Larger brush';
+  toolbar.appendChild(brushUp);
+
+  // === TOOLS ===
+  const grabBtn = document.createElement('button');
+  grabBtn.className = 'element-btn';
+  grabBtn.id = 'grab-btn';
+  grabBtn.textContent = '✋';
+  grabBtn.title = 'Grab buddy';
+  toolbar.appendChild(grabBtn);
+
+  const eraserBtn = document.createElement('button');
+  eraserBtn.className = 'element-btn';
+  eraserBtn.id = 'eraser-btn';
+  eraserBtn.textContent = '🧹';
+  eraserBtn.title = 'Eraser';
+  toolbar.appendChild(eraserBtn);
+
+  // === ACTIONS ===
+  const lightningBtn = document.createElement('button');
+  lightningBtn.className = 'element-btn';
+  lightningBtn.textContent = '⚡';
+  lightningBtn.title = 'Lightning strike!';
+  lightningBtn.onclick = () => {
+    const x = Math.floor(Math.random() * cols);
+    strikeLightning(x, 0);
+  };
+  toolbar.appendChild(lightningBtn);
+
+  const clearBtn = document.createElement('button');
+  clearBtn.className = 'element-btn';
+  clearBtn.textContent = '🗑';
+  clearBtn.title = 'Clear all & respawn';
+  toolbar.appendChild(clearBtn);
+
+  // === SAVE/LOAD ===
+  const saveBtn = document.createElement('button');
+  saveBtn.className = 'element-btn';
+  saveBtn.textContent = '💾';
+  saveBtn.title = 'Save scene';
+  saveBtn.onclick = () => {
+    saveScene();
+    saveBtn.textContent = '✅';
+    setTimeout(() => saveBtn.textContent = '💾', 1000);
+  };
+  toolbar.appendChild(saveBtn);
+
+  const loadBtn = document.createElement('button');
+  loadBtn.className = 'element-btn';
+  loadBtn.textContent = '📂';
+  loadBtn.title = 'Load scene';
+  loadBtn.onclick = () => {
+    if (loadScene()) {
+      loadBtn.textContent = '✅';
+      setTimeout(() => loadBtn.textContent = '📂', 1000);
+    }
+  };
+  toolbar.appendChild(loadBtn);
+
+  // === SETTINGS ===
+  const cbBtn = document.createElement('button');
+  cbBtn.className = 'element-btn';
+  cbBtn.textContent = colorblindMode ? '👁️' : '🎨';
+  cbBtn.title = 'Colorblind mode';
+  cbBtn.onclick = () => {
+    colorblindMode = !colorblindMode;
+    cbBtn.textContent = colorblindMode ? '👁️' : '🎨';
+  };
+  toolbar.appendChild(cbBtn);
+
+  const soundBtn = document.createElement('button');
+  soundBtn.className = 'element-btn';
+  soundBtn.textContent = soundEnabled ? '🔊' : '🔇';
+  soundBtn.title = 'Toggle sound';
+  soundBtn.onclick = () => {
+    soundEnabled = !soundEnabled;
+    soundBtn.textContent = soundEnabled ? '🔊' : '🔇';
+  };
+  toolbar.appendChild(soundBtn);
+
+  // === TOOL CLICK HANDLERS ===
+  grabBtn.onclick = () => {
+    grabMode = !grabMode;
+    grabBtn.classList.toggle('selected', grabMode);
+    if (grabMode) {
+      eraserMode = false;
+      eraserBtn.classList.remove('selected');
+      document.querySelectorAll('.element-btn').forEach(b => {
+        if (b !== grabBtn) b.classList.remove('selected');
+      });
+    }
+  };
+
+  eraserBtn.onclick = () => {
+    eraserMode = !eraserMode;
+    eraserBtn.classList.toggle('selected', eraserMode);
+    if (eraserMode) {
+      grabMode = false;
+      grabBtn.classList.remove('selected');
+      document.querySelectorAll('.element-btn').forEach(b => {
+        if (b !== eraserBtn) b.classList.remove('selected');
+      });
+    }
+  };
+
+  clearBtn.onclick = () => {
+    types.fill(0);
+    temps.fill(TEMP_AMBIENT);
+    lives.fill(0);
+    activeChunks.clear();
+    localStorage.removeItem('buddySandbox');
+    if (buddy) buddy.spawn();
+  };
+
+  brushDown.onclick = () => { brushSize = Math.max(0, brushSize - 1); };
+  brushUp.onclick = () => { brushSize = Math.min(10, brushSize + 1); };
+}
+
+window.addEventListener('resize', resize);
+
+// Accelerometer support
+const permissionOverlay = document.getElementById('permission-overlay');
+const enableTiltBtn = document.getElementById('enable-tilt-btn');
+
+function hideOverlay() {
+  permissionOverlay.classList.remove('show');
+}
+
+function handleOrientation(event) {
+  // gamma: left-right tilt (-90 to 90)
+  // beta: front-back tilt (-180 to 180)
+  const gamma = event.gamma || 0;
+  const beta = event.beta || 0;
+
+  hasAccelerometer = true;
+
+  // CONTINUOUS gravity based on actual accelerometer values
+  // Normalize to -1 to 1 range
+  tiltX = gamma / 90;  // -1 (left) to 1 (right)
+  tiltY = Math.sin(beta * Math.PI / 180);  // -1 (up) to 1 (down)
+
+  // Apply smoothing to reduce jitter
+  smoothTiltX = smoothTiltX * 0.8 + tiltX * 0.2;
+  smoothTiltY = smoothTiltY * 0.8 + tiltY * 0.2;
+
+  // TRUE 360-degree continuous gravity - no discretization!
+  // Small dead zone to prevent drift when flat
+  const DEADZONE = 0.1;
+  if (Math.abs(smoothTiltX) < DEADZONE && Math.abs(smoothTiltY) < DEADZONE) {
+    gravityX = 0;
+    gravityY = 1; // default down when flat
+  } else {
+    gravityX = smoothTiltX;
+    gravityY = smoothTiltY;
+  }
+
+  // Update indicator
+  updateGravityIndicator();
+}
+
+function updateGravityIndicator() {
+  // Calculate angle from gravity vector (in degrees)
+  // atan2(x, y) gives angle where 0 = down, rotating clockwise
+  const angle = Math.atan2(gravityX, gravityY) * 180 / Math.PI;
+  const magnitude = Math.sqrt(gravityX * gravityX + gravityY * gravityY);
+
+}
+
+// Shake detection handler
+function handleShake(event) {
+  const acc = event.accelerationIncludingGravity;
+  if (!acc) return;
+
+  const magnitude = Math.sqrt(acc.x * acc.x + acc.y * acc.y + acc.z * acc.z);
+  const now = Date.now();
+
+  if (magnitude > SHAKE_THRESHOLD && now - lastShakeTime > SHAKE_COOLDOWN) {
+    lastShakeTime = now;
+    shakeTriggered = true;
+    // Visual feedback
+    document.body.style.backgroundColor = '#400';
+    setTimeout(() => document.body.style.backgroundColor = '', 100);
+  }
+}
+
+// Explosion function - converts area to fire and debris
+function explode(cx, cy, radius) {
+  for (let dy = -radius; dy <= radius; dy++) {
+    for (let dx = -radius; dx <= radius; dx++) {
+      const dist = Math.sqrt(dx * dx + dy * dy);
+      if (dist > radius) continue;
+
+      const x = cx + dx;
+      const y = cy + dy;
+      if (x < 0 || x >= cols || y < 0 || y >= rows) continue;
+
+      const i = idx(x, y);
+      const typeId = types[i];
+      const typeName = TYPE_NAMES[typeId];
+      const elem = E[typeName];
+
+      // Skip empty and stone (blast resistant)
+      if (typeId === 0 || typeId === TYPE_MAP.stone) continue;
+
+      // Breakables shatter from explosion shockwave
+      if (elem && elem.br) {
+        shatter(i, x, y);
+        continue;
+      }
+
+      // Convert to fire near center, debris further out
+      if (dist < radius * 0.5) {
+        setCell(i, 'fire');
+        temps[i] = 900;  // Very hot
+      } else if (Math.random() < 0.7) {
+        // Outer area: fire or debris (sand)
+        if (Math.random() < 0.5) {
+          setCell(i, 'fire');
+          temps[i] = 600;
+        } else {
+          setCell(i, 'smoke');
+        }
+      }
+
+      markChunkActive(x, y);
+    }
+  }
+}
+
+function requestOrientationPermission() {
+  const statusDiv = document.getElementById('permission-status');
+
+  // iOS 13+ with requestPermission
+  if (typeof DeviceOrientationEvent !== 'undefined' &&
+      typeof DeviceOrientationEvent.requestPermission === 'function') {
+    statusDiv.textContent = 'Requesting permission...';
+    DeviceOrientationEvent.requestPermission()
+      .then(permissionState => {
+        statusDiv.textContent = 'Permission: ' + permissionState;
+        if (permissionState === 'granted') {
+          window.addEventListener('deviceorientation', handleOrientation);
+          window.addEventListener('devicemotion', handleShake);
+          hasAccelerometer = true;
+          updateGravityIndicator();
+          setTimeout(hideOverlay, 1000);
+        } else {
+          statusDiv.textContent = 'Permission denied. Check Settings > Safari > Motion & Orientation Access';
+        }
+      })
+      .catch(err => {
+        statusDiv.textContent = 'Error: ' + err.message + ' (HTTPS required?)';
+        console.error('Permission error:', err);
+      });
+  } else if ('DeviceOrientationEvent' in window) {
+    // Android and older iOS - just add listener
+    statusDiv.textContent = 'Adding listener (no permission needed)...';
+    window.addEventListener('deviceorientation', handleOrientation);
+    window.addEventListener('devicemotion', handleShake);
+    setTimeout(hideOverlay, 1000);
+  } else {
+    statusDiv.textContent = 'DeviceOrientation not supported';
+  }
+}
+
+// Button click handler - THIS is the user gesture iOS needs
+enableTiltBtn.addEventListener('click', function(e) {
+  e.stopPropagation();
+  requestOrientationPermission();
+});
+
+// Click anywhere else to skip
+permissionOverlay.addEventListener('click', hideOverlay);
+
+// Always show permission overlay on mobile - let user tap to enable
+if (/iPhone|iPad|iPod|Android/i.test(navigator.userAgent)) {
+  permissionOverlay.classList.add('show');
+}
+
+// Try to lock orientation to portrait
+if (screen.orientation && screen.orientation.lock) {
+  screen.orientation.lock('portrait').catch(() => {});
+}
+
+console.log('Starting init...');
+resize();
+console.log('Resize done, cols:', cols, 'rows:', rows);
+buildToolbar();
+console.log('Toolbar built');
+
+// Create and spawn the buddy!
+buddy = new Character();
+console.log('Buddy created');
+buddy.spawn();
+console.log('Buddy spawned at', buddy.x, buddy.y);
+
+// SAVE/LOAD game state to localStorage
+function saveGameState() {
+  try {
+    const state = {
+      cols: cols,
+      rows: rows,
+      types: Array.from(types),
+      temps: Array.from(temps),
+      lives: Array.from(lives),
+      chars: chars.slice(),
+      falls: Array.from(falls),
+      timestamp: Date.now(),
+      buddyX: buddy ? buddy.x : 0,
+      buddyY: buddy ? buddy.y : 0
+    };
+    localStorage.setItem('buddySandbox', JSON.stringify(state));
+  } catch (e) {
+    console.error('Save failed:', e);
+  }
+}
+
+function loadGameState() {
+  try {
+    const saved = localStorage.getItem('buddySandbox');
+    if (!saved) return false;
+
+    const state = JSON.parse(saved);
+    if (state.cols !== cols || state.rows !== rows) {
+      console.log('Grid size changed, starting fresh');
+      return false;
+    }
+
+    for (let i = 0; i < state.types.length && i < types.length; i++) {
+      types[i] = state.types[i];
+      temps[i] = state.temps[i];
+      lives[i] = state.lives[i];
+      chars[i] = state.chars[i];
+      falls[i] = state.falls[i];
+    }
+
+    if (buddy && state.buddyX !== undefined) {
+      buddy.x = state.buddyX;
+      buddy.y = state.buddyY;
+    }
+
+    for (let cy = 0; cy < chunkRows; cy++) {
+      for (let cx = 0; cx < chunkCols; cx++) {
+        activeChunks.add(chunkIdx(cx, cy));
+      }
+    }
+
+    console.log('Game loaded');
+    return true;
+  } catch (e) {
+    console.error('Load failed:', e);
+    return false;
+  }
+}
+
+function clearSavedGame() {
+  localStorage.removeItem('buddySandbox');
+}
+
+// Clear any corrupted saves and start fresh
+localStorage.removeItem('buddySandbox');
+console.log('Cleared saved game, starting fresh');
+
+// Auto-save every 10 seconds
+setInterval(saveGameState, 10000);
+
+// Save when leaving page
+window.addEventListener('beforeunload', saveGameState);
+window.addEventListener('pagehide', saveGameState);
+
+// Main loop
+function loop() {
+  simulate();
+  draw();
+  shakeTriggered = false;  // Reset shake trigger after each frame
+  requestAnimationFrame(loop);
+}
+loop();
+</script>
+</body>
+</html>

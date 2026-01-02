@@ -571,6 +571,19 @@
                         this.otherPlayers.set(data.player.id, data.player);
                         this.playerLastSeen.set(data.player.id, Date.now());
                         this.showStatus(`${data.player.name} joined!`);
+                        // If we're playing/spectating, send them our arena state
+                        if (gameState === 'playing' || gameState === 'dead') {
+                            this.sendArenaSync(data.player.id);
+                        }
+                        break;
+
+                    case 'arena_sync':
+                        // Received arena state from another player
+                        if (data.enemies && data.enemies.length > 0 && !this.arenaSynced) {
+                            console.log('[MP] Received arena sync with', data.enemies.length, 'enemies');
+                            this.applyArenaSync(data.enemies, data.pickups);
+                            this.arenaSynced = true;
+                        }
                         break;
 
                     case 'player_left':
@@ -628,6 +641,72 @@
             // Send direction change
             sendMove(dir) {
                 this.send({ type: 'move', dir });
+            },
+
+            // Arena sync - share our enemies with a new joiner
+            arenaSynced: false,
+
+            sendArenaSync(targetId) {
+                // Send simplified enemy data (positions only, they'll regenerate details)
+                const enemyData = enemies.map(e => ({
+                    x: e.segments[0]?.x || 0,
+                    y: e.segments[0]?.y || 0,
+                    len: e.segments.length,
+                    color: e.color,
+                    name: e.name
+                })).filter(e => e.len > 0);
+
+                console.log('[MP] Sending arena sync to', targetId, 'with', enemyData.length, 'enemies');
+                this.send({
+                    type: 'arena_sync',
+                    targetId: targetId,
+                    enemies: enemyData,
+                    pickups: pickups.slice(0, 100).map(p => ({ x: p.x, y: p.y, isHealth: p.isHealth }))
+                });
+            },
+
+            applyArenaSync(enemyData, pickupData) {
+                // Replace our enemies with synced ones
+                enemies = [];
+                for (const e of enemyData) {
+                    // Spawn enemy at synced position with synced length
+                    const startDir = DIR.RIGHT;
+                    const segments = [];
+                    for (let i = 0; i < e.len; i++) {
+                        segments.push({
+                            x: e.x - i,
+                            y: e.y,
+                            hp: i === 0 ? Infinity : 50,
+                            maxHp: i === 0 ? Infinity : 50,
+                            type: i === 0 ? GUNS.HEAD : GUNS.MACHINEGUN,
+                            lastFired: 0
+                        });
+                    }
+                    enemies.push({
+                        team: enemies.length % 2 === 0 ? 'blue' : 'red',
+                        name: e.name || 'Train',
+                        segments,
+                        dir: startDir,
+                        nextDir: startDir,
+                        baseSpeed: 8,
+                        damage: 15,
+                        moveTimer: 0,
+                        lastFired: 0,
+                        fireRate: 1000,
+                        score: 10 * e.len,
+                        personality: { aggression: 0.5, greed: 0.5, caution: 0.5, neural: Math.random() < 0.5 },
+                        color: e.color || '#f0f',
+                        targetPos: null,
+                        avoidPos: null,
+                        lastDecision: 0,
+                        decisionInterval: 400,
+                        recentPoints: 0,
+                        lastPointTime: 0,
+                        isMVP: false,
+                        id: enemies.length
+                    });
+                }
+                console.log('[MP] Applied arena sync:', enemies.length, 'enemies');
             },
 
             setUsername(name) {

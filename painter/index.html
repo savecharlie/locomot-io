@@ -1,0 +1,1859 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <meta name="screen-orientation" content="portrait">
+    <title>Live Portrait Painter</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        html, body {
+            width: 100%;
+            height: 100%;
+            background: #0a0a0f;
+            overflow: hidden;
+            font-family: -apple-system, sans-serif;
+            touch-action: none;
+        }
+        #container {
+            position: relative;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+        }
+        #canvas-container {
+            flex: 1;
+            position: relative;
+            overflow: hidden;
+        }
+        #video {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            transform: scaleX(-1);
+            opacity: 0;  /* Hidden from user */
+            pointer-events: none;
+        }
+        #paint-canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            transform: scaleX(-1);
+        }
+        #controls {
+            display: flex;
+            gap: 6px;
+            padding: 10px;
+            background: rgba(0,0,0,0.8);
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+        .btn {
+            background: #1a1a2e;
+            border: 2px solid #ff00ff;
+            color: #ff00ff;
+            padding: 8px 12px;
+            font-size: 12px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: bold;
+            text-transform: uppercase;
+            min-width: 50px;
+        }
+        @media (min-width: 600px) {
+            .btn { padding: 12px 24px; font-size: 14px; }
+            #controls { gap: 10px; padding: 15px; }
+        }
+        .btn:active {
+            background: #ff00ff;
+            color: #000;
+        }
+        .btn.active {
+            background: #ff00ff;
+            color: #000;
+        }
+        #status {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            color: #00ffff;
+            font-size: 12px;
+            font-family: monospace;
+            text-shadow: 0 0 10px #00ffff;
+            z-index: 100;
+        }
+        #loading {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: #ff00ff;
+            font-size: 18px;
+            text-align: center;
+            z-index: 100;
+        }
+        .hidden { display: none !important; }
+
+        /* Slider styles */
+        input[type="range"] {
+            -webkit-appearance: none;
+            width: 100px;
+            height: 8px;
+            background: #333;
+            border-radius: 4px;
+            outline: none;
+        }
+        input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            width: 20px;
+            height: 20px;
+            background: #ff00ff;
+            border-radius: 50%;
+            cursor: pointer;
+        }
+        .slider-group {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            color: #888;
+            font-size: 11px;
+        }
+
+        /* Nav Menu */
+        #nav-toggle { position: fixed; top: 10px; right: 10px; z-index: 9999; width: 40px; height: 40px; background: rgba(0,0,0,0.7); border: 2px solid #f5a; border-radius: 8px; color: #f5a; font-size: 20px; cursor: pointer; }
+        #nav-menu { position: fixed; top: 60px; right: 10px; z-index: 9998; background: rgba(0,0,0,0.9); border: 2px solid #f5a; border-radius: 8px; padding: 10px; display: none; }
+        #nav-menu.show { display: block; }
+        #nav-menu a { display: block; color: #fff; text-decoration: none; padding: 8px 12px; font-size: 12px; border-radius: 4px; margin: 4px 0; }
+        #nav-menu a:hover { background: #f5a; color: #000; }
+        #nav-menu .kofi { background: #ff5e5b; }
+    </style>
+</head>
+<body>
+
+    <button id="nav-toggle" onclick="document.getElementById('nav-menu').classList.toggle('show')">☰</button>
+    <div id="nav-menu">
+        <a href="https://locomot.io">🚂 LOCOMOT.IO</a>
+        <a href="https://sandbox.locomot.io">🏖️ Sand Buddy</a>
+        <a href="https://ko-fi.com/sendivylove" class="kofi">☕ Support on Ko-fi</a>
+    </div>
+    <div id="container">
+        <div id="canvas-container">
+            <video id="video" autoplay playsinline muted></video>
+            <canvas id="paint-canvas"></canvas>
+            <div id="status">Loading...</div>
+            <div id="loading">
+                <div>LIVE PORTRAIT PAINTER</div>
+                <div style="margin-top:10px;font-size:14px;">Loading face detection...</div>
+            </div>
+        </div>
+        <div id="controls">
+            <button class="btn" id="start-btn">START</button>
+            <button class="btn" id="cam-btn">CAM</button>
+            <button class="btn" id="clear-btn">CLEAR</button>
+            <button class="btn" id="end-btn" style="background:#5a2a2a;">END</button>
+            <button class="btn" id="save-btn">SAVE</button>
+            <button class="btn" id="frame-btn" style="background:#2a5a2a;">FRAME</button>
+            <div class="slider-group">
+                <span>SIZE</span>
+                <input type="range" id="size-slider" min="15" max="60" value="30">
+            </div>
+            <div class="slider-group">
+                <span>SPEED</span>
+                <input type="range" id="speed-slider" min="5" max="60" value="25">
+            </div>
+        </div>
+    </div>
+
+    <!-- face-api.js from CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/@vladmandic/face-api/dist/face-api.min.js"></script>
+
+    <script>
+        // Try to lock to portrait orientation
+        if (screen.orientation && screen.orientation.lock) {
+            screen.orientation.lock('portrait').catch(() => {});
+        }
+
+        // ============ FACE PLANE DEFINITIONS ============
+        // Ported from Python face_planes.py
+        // Each landmark index maps to a stroke direction in degrees
+        const LANDMARK_DIRECTIONS = {
+            // Jaw - follows contour
+            0: -80, 1: -70, 2: -60, 3: -50, 4: -40, 5: -30, 6: -20, 7: -10, 8: 0,
+            9: 10, 10: 20, 11: 30, 12: 40, 13: 50, 14: 60, 15: 70, 16: 80,
+            // Right eyebrow - horizontal slight curve
+            17: -15, 18: -10, 19: -5, 20: 0, 21: 5,
+            // Left eyebrow
+            22: -5, 23: 0, 24: 5, 25: 10, 26: 15,
+            // Nose bridge - vertical
+            27: 90, 28: 90, 29: 90, 30: 90,
+            // Nose bottom - horizontal
+            31: -30, 32: 0, 33: 0, 34: 0, 35: 30,
+            // Right eye - follow eye shape
+            36: -20, 37: -10, 38: 10, 39: 20, 40: 10, 41: -10,
+            // Left eye
+            42: -20, 43: -10, 44: 10, 45: 20, 46: 10, 47: -10,
+            // Outer lip
+            48: -20, 49: -10, 50: 0, 51: 0, 52: 0, 53: 10, 54: 20,
+            55: 20, 56: 10, 57: 0, 58: -10, 59: -20,
+            // Inner lip
+            60: 0, 61: 0, 62: 0, 63: 0, 64: 0, 65: 0, 66: 0, 67: 0
+        };
+
+        // Stroke size multipliers per region
+        const LANDMARK_SIZE_MULT = {
+            // Eyes - smaller strokes
+            36: 0.5, 37: 0.5, 38: 0.5, 39: 0.5, 40: 0.5, 41: 0.5,
+            42: 0.5, 43: 0.5, 44: 0.5, 45: 0.5, 46: 0.5, 47: 0.5,
+            // Lips - medium
+            48: 0.6, 49: 0.6, 50: 0.6, 51: 0.6, 52: 0.6, 53: 0.6, 54: 0.6,
+            55: 0.6, 56: 0.6, 57: 0.6, 58: 0.6, 59: 0.6,
+            // Nose - medium
+            27: 0.7, 28: 0.7, 29: 0.7, 30: 0.7, 31: 0.6, 32: 0.6, 33: 0.6, 34: 0.6, 35: 0.6,
+            // Brows
+            17: 0.7, 18: 0.7, 19: 0.7, 20: 0.7, 21: 0.7,
+            22: 0.7, 23: 0.7, 24: 0.7, 25: 0.7, 26: 0.7,
+        };
+
+        // ============ GLOBALS ============
+        let video, canvas, ctx, hiddenCanvas, hiddenCtx;
+        let isRunning = false;
+        let landmarks = null;
+        let faceBox = null;
+        let prevImageData = null;
+        let facingMode = 'user';  // 'user' = front, 'environment' = back
+        let strokeSize = 30;  // Base size - smart sizing scales 0.4x to 2x
+        let strokesPerFrame = 25;  // Fewer strokes, bigger coverage
+        let frameCount = 0;
+        let detectEveryN = 5;  // Only run face detection every N frames
+        let lastVideoTime = 0;
+        let videoStallCount = 0;
+
+        // Smart painting - movement-based with time decay
+        let currentStrokeRate = 25;  // Current strokes per frame (fewer, bigger)
+        let maxStrokeRate = 25;      // Maximum when movement detected
+        let minStrokeRate = 1;       // Minimum during stillness
+        let decayRate = 0.95;        // Multiply by this each frame with no movement
+        let lastMovementFrame = 0;   // When movement was last detected
+
+        // Ghost landmarks - temporal memory of face position
+        let ghostLandmarks = null;
+        let ghostSmoothingFactor = 0.95;  // Higher = slower ghost (more lag)
+        let ghostStrokeChance = 0.15;     // 15% of strokes use ghost position
+
+        // Smoothed landmarks - filters out jitter from detection
+        let smoothedLandmarks = null;
+        let landmarkSmoothingFactor = 0.7;  // 70% old + 30% new - reduces jitter
+
+        // Release ritual state
+        let isReleasing = false;
+        let releaseStrokesRemaining = 0;
+        let releasedPortrait = false;  // True after release complete
+
+        // Selective decay - attention map
+        let attentionMap = null;  // 2D grid tracking recent paint activity
+        let attentionGridSize = 20;  // Grid cell size in pixels
+        let attentionDecayRate = 0.98;  // How fast attention fades
+        let decayStrength = 0.015;  // How much to fade unattended areas
+
+        // Brush images (loaded from embedded base64 - actual portrait_painter brushes)
+        let dryBrushImg = null;
+        let roundBrushImg = null;
+        let brushCanvas = null;
+        let brushCtx = null;
+
+        // Auto-composition framing
+        let autoFrame = true;  // Enable auto-framing
+        let currentFrame = null;  // Current crop region {x, y, w, h}
+        let targetFrame = null;  // Target crop region (smooth transition)
+        let frameSmoothing = 0.03;  // How fast to move to new frame (0-1) - slower = steadier
+
+        const DRY_BRUSH_DATA = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAGQAAAAUCAAAAABeq8dJAAAE9ElEQVQ4y3WV2W8bRRzH59jZw3v4Suw4d9I0TSlVEYfKIVGJIgoICegTQuKFh0pI/AE8IvHEI/8A/AmVeKIqogeHqtCKNCmhgiStnW1Tu14nPvaa2Z1hHTfO0XSk1Y7m+vzmO78Dgn7DhWktb+mmIYGYAGQgjIlJACBIlXjkSikFSTJECEhYwghBwVngCsiFQELEEYeMxuHKbxc9cLDBPuKrCwPdrd0huGeBgN1P7BvbM9v/Cx4+frB487ItIRgeWCXtdKyTOew2sy1DFlhFO8f3rNiHjZkCnxyesHl9HSudQJduw82Va0fUNomjZ9/EfGuq9V/K47Nqe2rI0ybTR3MS7KM8BW+vCjpVtnIiLbIa7M4IES0vkywMqltmsPTob98xUqX86op4BgTAwnvHZQ0SQDApDIw1dVlBEO7otWdLFOOYawdkE5Fz1xbEXqoEK9lz2pVl/3CI0J4/+2l7SPUYapg8p2Z7MnWfA+5/FY72ESL/+7+skn38ufW6ajb/vB5O1srx4TcB8NsvFIh6IzByJAkLWenPNjtRCSMYVUb8RDoJrtdeTOTyhYpcb3HeMPOrtuUzQ49Xgbx6J2pG/FCI8vrnJeJ3dA/mlMERBYrDHeqgd7kt1pSwlzfsP+r5WXM0F8H1bxZsnz3tXVAxT8+tdbLjmklUiHXliX/2Qa3FIDcDhSJ1PcALFTfKqt1pHta3AgfqG5JU9NduTEwbx9M/XEQ+P0Qu47uPje0gSbQPmEoCaqIDRnP8pNNQUgLtbIwThWkZm9S/fX8jqMtCqt9b3g2g/XJlLozE5Y2jDfrGsPzTwgzV5z7IwNSuYvRWvkicIvln8c1CVK7HWjGSVWIJ4Va4X/E0TjtBTq04EMag0Pz5rsfEfkhiPs7kBsYLg80ObT6qqaTlpc+8+8Io3oHw+5eUWW1rWl+Y/zWbmZ6S0MOxY+wa0GhZCm7EPp2BenCFanl1yNUl1vD0BquFXOxCIDryyZcmRn2k79RxNvGl/tOLzk0OYLpI74EqzqTIeI5HIWzbqRi5lMQAtW41Q2eenjpiDFt6khLMaG1pvlZnPdl6xyjn354S/uKg7ETDD6/TicKqctoc1wYzmtyLbND+vdZ0/VL7R85QLt9RqmLGYiN36IT5gFXtdRTrpkOjbdsNeQrzeLOWEKKnXDj/2cmsEUlp4CwlCSz8UGfc4tq2YkI4V/mot6YUb19pg6OvYM/UvDiQLZ3mPL6x7IxNwOqCi9p2W0B1oOWyEcBarMOfgnTjmpTesabiek3aFNb0KKGv0a38GPDdsv9LZU7J+g0YBaLGjEERe211kuc2SkpUb6zwjiJvhDxFENhahTERTKGYAQ7pQQggEdBmCmj43xvS6LqCTrw0VZ6kgXFmTtBLX9e0TNySfZCYJ2O9yoFeZI1Rn5JAYR3KtvOSYFjv0N3wZnxPMEoqydhi5tTLeaodU9vwweVgAG0OfTS52pAUPZa5OHb2aoxn00ubfqYh47iVHq16QQOVXy2mLc+p8k3IOYSB8Jw9mT7c48IQCnz+/ZNFk0NBBI80IgDq1QzUWyKSwpGICYH/WOnU6UDmESrYldKshBUCmENTj2/66eqGfbcJQxs8u54QK0xqaZL6QJixNqlFVOJjYKXcUMJhyBGzttRYh65WSZl+U5dITaS5qsLQSDdt0gRIxnQypNCJGIoPQP4HIS52X8QRCCsAAAAASUVORK5CYII=';
+
+        const ROUND_BRUSH_DATA = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAB4AAAAeCAAAAAAeW/F+AAACL0lEQVQoz22Sy08TURSH77nzcGprsa0Za00JIcSFNRIfmKiJJjTBdOGChXHja0HiH8AC49K4dOXKuJDEuPKxAGKIxoaHNcSFWBCQhoiCCMVOX7adGdqZud4yU2g7nMXMzfnu+d3zQqjJuOoH4yYvmD9PW6PbutZ+bfsADgnAx8EOZszI/h9EDqU6B3uEyL1wFC7g3I5o99HXV8nfU+GnriduA6Pkgy8PpbuFGnY+HnacORAJzmQusdsuLZ36/PxrwRK/41gY4G60gNjKWum42Pjtdmcgp1IMoY7rQpsXEOwWIxzkF88X5Y0qDrRE/CI0VulDIZGNZgjF/K0TQnMX0H4NeeXeDwST384cIJspfLBXuEjbUtJkOwUpj5TZmzRzEujiORv362vzwT+zVFeYPLuH+qYyszJeHY36SbVTJM5llzbmaSvgF2+nZK24/kIuV0sanLZj460yka8gGk3wRJcNy/G4DIbZ5CtF0mwfjzCHrHmTZeUy2xhcGI0VFWJtC/esL9X48nhSNRhzmQAdv//m5Aipw9JYYsutm+LgyPrd31/BudoDeiL9MrqlEgszUF4nEJvq9JUx7Z8iZ96NFHTAxExNqyTzzDGpx7UiqZ5VnElMDS3oGFvRtIGCu8+zHJOzuqvkXionh8YMqkJq63/40ftJglaBwd7Tanfr8Nxi/Z6j0mjwWzpP7xoFxVuqdOg/tXqMtESFQsA6+pcKTPtj+/J7zBAw5rmwKDK7rv+az95MytQ0egAAAABJRU5ErkJggg==';
+
+        // ============ INITIALIZATION ============
+        async function init() {
+            video = document.getElementById('video');
+            canvas = document.getElementById('paint-canvas');
+            ctx = canvas.getContext('2d');
+
+            // Hidden canvas for video sampling
+            hiddenCanvas = document.createElement('canvas');
+            hiddenCtx = hiddenCanvas.getContext('2d', { willReadFrequently: true });
+
+            // Offscreen canvas for brush stamping
+            brushCanvas = document.createElement('canvas');
+            brushCtx = brushCanvas.getContext('2d');
+
+            // Load brush images
+            dryBrushImg = new Image();
+            dryBrushImg.src = DRY_BRUSH_DATA;
+            roundBrushImg = new Image();
+            roundBrushImg.src = ROUND_BRUSH_DATA;
+
+            // Load face-api models
+            const MODEL_URL = 'https://cdn.jsdelivr.net/npm/@vladmandic/face-api/model';
+            try {
+                await faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL);
+                await faceapi.nets.faceLandmark68TinyNet.loadFromUri(MODEL_URL);
+                document.getElementById('loading').classList.add('hidden');
+                document.getElementById('status').textContent = 'Tap START to begin';
+            } catch (e) {
+                document.getElementById('loading').innerHTML = 'Error loading models: ' + e.message;
+                console.error(e);
+                return;
+            }
+
+            // Setup controls
+            document.getElementById('start-btn').onclick = togglePainting;
+            document.getElementById('cam-btn').onclick = switchCamera;
+            document.getElementById('clear-btn').onclick = clearCanvas;
+            document.getElementById('end-btn').onclick = beginRelease;
+            document.getElementById('save-btn').onclick = saveImage;
+            document.getElementById('frame-btn').onclick = toggleAutoFrame;
+            document.getElementById('size-slider').oninput = (e) => strokeSize = parseInt(e.target.value);
+            document.getElementById('speed-slider').oninput = (e) => {
+                strokesPerFrame = parseInt(e.target.value);
+                maxStrokeRate = strokesPerFrame;  // Sync with smart painting
+            };
+        }
+
+        // ============ RELEASE RITUAL ============
+        function beginRelease() {
+            if (releasedPortrait || isReleasing) return;  // Already released or releasing
+            if (!landmarks) return;  // Need face to release
+
+            isReleasing = true;
+            releaseStrokesRemaining = 7;  // Number of slow final strokes
+            document.getElementById('end-btn').textContent = '...';
+            document.getElementById('end-btn').style.background = '#8a4a4a';
+            document.getElementById('status').textContent = 'Completing portrait...';
+
+            // Stop normal painting
+            isRunning = false;
+            document.getElementById('start-btn').textContent = 'START';
+            document.getElementById('start-btn').classList.remove('active');
+
+            // Begin release stroke sequence
+            performReleaseStroke();
+        }
+
+        function performReleaseStroke() {
+            if (releaseStrokesRemaining <= 0) {
+                // Release complete
+                isReleasing = false;
+                releasedPortrait = true;
+                document.getElementById('end-btn').textContent = 'DONE';
+                document.getElementById('end-btn').style.background = '#2a5a2a';
+                document.getElementById('status').textContent = 'Portrait released. Save when ready.';
+                return;
+            }
+
+            // Get hidden canvas image data for color sampling
+            hiddenCtx.drawImage(video, 0, 0);
+            const imageData = hiddenCtx.getImageData(0, 0, hiddenCanvas.width, hiddenCanvas.height);
+
+            // Paint a deliberate stroke at a key facial feature
+            const keyFeatures = [
+                landmarks[30],  // Nose tip
+                landmarks[36],  // Right eye outer
+                landmarks[45],  // Left eye outer
+                landmarks[48],  // Right mouth corner
+                landmarks[54],  // Left mouth corner
+                landmarks[8],   // Chin
+                landmarks[27],  // Between brows
+            ];
+
+            const idx = 7 - releaseStrokesRemaining;
+            const pt = keyFeatures[idx % keyFeatures.length];
+
+            if (pt) {
+                const color = sampleColor(imageData, Math.floor(pt.x), Math.floor(pt.y));
+                const direction = LANDMARK_DIRECTIONS[idx] || 0;
+                // Larger, more deliberate strokes
+                drawStroke(pt.x, pt.y, color, direction, strokeSize * 1.5);
+            }
+
+            releaseStrokesRemaining--;
+
+            // Slow, deliberate pacing
+            setTimeout(performReleaseStroke, 400);
+        }
+
+        // ============ SELECTIVE DECAY (Attention-based) ============
+        function initAttentionMap() {
+            if (!canvas.width || !canvas.height) return;
+            const cols = Math.ceil(canvas.width / attentionGridSize);
+            const rows = Math.ceil(canvas.height / attentionGridSize);
+            attentionMap = Array(rows).fill(null).map(() => Array(cols).fill(0));
+        }
+
+        function markAttention(x, y, radius = 1) {
+            // Mark grid cells around (x, y) as recently attended
+            if (!attentionMap) return;
+            const col = Math.floor(x / attentionGridSize);
+            const row = Math.floor(y / attentionGridSize);
+
+            // Mark nearby cells
+            for (let dr = -radius; dr <= radius; dr++) {
+                for (let dc = -radius; dc <= radius; dc++) {
+                    const r = row + dr;
+                    const c = col + dc;
+                    if (r >= 0 && r < attentionMap.length && c >= 0 && c < attentionMap[0].length) {
+                        attentionMap[r][c] = 1.0;  // Full attention
+                    }
+                }
+            }
+        }
+
+        function applySelectiveDecay() {
+            // Fade areas with low attention, preserve high-attention areas
+            if (!attentionMap || releasedPortrait) return;
+
+            const w = canvas.width;
+            const h = canvas.height;
+
+            // Decay attention values
+            for (let r = 0; r < attentionMap.length; r++) {
+                for (let c = 0; c < attentionMap[0].length; c++) {
+                    attentionMap[r][c] *= attentionDecayRate;
+                }
+            }
+
+            // Apply fade to low-attention areas
+            ctx.save();
+            for (let r = 0; r < attentionMap.length; r++) {
+                for (let c = 0; c < attentionMap[0].length; c++) {
+                    const attention = attentionMap[r][c];
+                    if (attention < 0.3) {  // Low attention threshold
+                        const fadeAmount = (0.3 - attention) * decayStrength;
+                        ctx.globalAlpha = fadeAmount;
+                        // Fade toward canvas texture color (warm cream)
+                        ctx.fillStyle = '#f5f0e6';
+                        ctx.fillRect(
+                            c * attentionGridSize,
+                            r * attentionGridSize,
+                            attentionGridSize,
+                            attentionGridSize
+                        );
+                    }
+                }
+            }
+            ctx.globalAlpha = 1.0;
+            ctx.restore();
+        }
+
+        function toggleAutoFrame() {
+            autoFrame = !autoFrame;
+            const btn = document.getElementById('frame-btn');
+            btn.style.background = autoFrame ? '#2a5a2a' : '#333';
+            btn.textContent = autoFrame ? 'FRAME' : 'NO FRAME';
+            // Reset frame on toggle
+            currentFrame = null;
+        }
+
+        async function switchCamera() {
+            // Stop current stream
+            if (video.srcObject) {
+                video.srcObject.getTracks().forEach(track => track.stop());
+            }
+            // Toggle facing mode
+            facingMode = facingMode === 'user' ? 'environment' : 'user';
+            const btn = document.getElementById('cam-btn');
+            btn.textContent = facingMode === 'user' ? 'CAM' : 'BACK';
+            // Restart camera
+            await startCamera();
+            // Update canvas flip based on camera
+            canvas.style.transform = facingMode === 'user' ? 'scaleX(-1)' : 'none';
+        }
+
+        async function startCamera() {
+            try {
+                // Match exact pattern from working face tracking code
+                const stream = await navigator.mediaDevices.getUserMedia({
+                    video: {
+                        facingMode: facingMode,
+                        width: { ideal: 640 },
+                        height: { ideal: 480 }
+                    }
+                });
+                video.srcObject = stream;
+                await video.play();
+
+                // Wait for video dimensions
+                await new Promise(resolve => {
+                    if (video.videoWidth > 0) resolve();
+                    else video.onloadedmetadata = resolve;
+                });
+
+                // Set canvas size to match video
+                canvas.width = video.videoWidth || 640;
+                canvas.height = video.videoHeight || 480;
+                hiddenCanvas.width = canvas.width;
+                hiddenCanvas.height = canvas.height;
+
+                // Paint initial canvas texture
+                paintCanvasTexture();
+
+                // Initialize attention map
+                initAttentionMap();
+
+                document.getElementById('status').textContent = 'Camera ready!';
+                return true;
+            } catch (e) {
+                let msg = 'Camera error: ' + e.message;
+                if (e.name === 'NotAllowedError') {
+                    msg = 'Camera blocked. Check browser settings → Camera → Allow for this site';
+                } else if (e.name === 'NotFoundError') {
+                    msg = 'No camera found';
+                }
+                document.getElementById('status').textContent = msg;
+                document.getElementById('loading').innerHTML = msg + '<br><br><button onclick="location.reload()" style="padding:10px 20px;font-size:16px;">RETRY</button>';
+                document.getElementById('loading').classList.remove('hidden');
+                console.error(e);
+                return false;
+            }
+        }
+
+        async function restartCamera() {
+            console.log('Restarting camera...');
+
+            // Save current canvas content before restart
+            const savedImage = ctx.getImageData(0, 0, canvas.width, canvas.height);
+
+            // Stop old stream
+            if (video.srcObject) {
+                video.srcObject.getTracks().forEach(track => track.stop());
+                video.srcObject = null;
+            }
+            // Small delay before restart
+            await new Promise(r => setTimeout(r, 500));
+
+            // Start fresh stream (but don't resize canvas)
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({
+                    video: {
+                        facingMode: facingMode,
+                        width: { ideal: 640 },
+                        height: { ideal: 480 }
+                    }
+                });
+                video.srcObject = stream;
+                await video.play();
+                document.getElementById('status').textContent = 'Camera restarted!';
+            } catch (e) {
+                document.getElementById('status').textContent = 'Restart failed: ' + e.message;
+            }
+
+            // Restore canvas content
+            ctx.putImageData(savedImage, 0, 0);
+        }
+
+        // ============ PAINTING LOOP ============
+        async function togglePainting() {
+            const btn = document.getElementById('start-btn');
+            if (isRunning) {
+                isRunning = false;
+                btn.textContent = 'START';
+                btn.classList.remove('active');
+            } else {
+                if (!video.srcObject) {
+                    const ok = await startCamera();
+                    if (!ok) return;
+                }
+                isRunning = true;
+                btn.textContent = 'STOP';
+                btn.classList.add('active');
+                paintLoop();
+            }
+        }
+
+        async function paintLoop() {
+            if (!isRunning) return;
+
+            frameCount++;
+
+            // Check if video has stalled (currentTime not changing)
+            if (video.currentTime === lastVideoTime) {
+                videoStallCount++;
+                if (videoStallCount > 30) {  // Stalled for ~30 frames
+                    document.getElementById('status').textContent = 'Video stalled - restarting...';
+                    videoStallCount = 0;
+                    await restartCamera();
+                }
+            } else {
+                videoStallCount = 0;
+                lastVideoTime = video.currentTime;
+            }
+
+            // Only run face detection every N frames (expensive!)
+            if (frameCount % detectEveryN === 0) {
+                try {
+                    const detection = await faceapi.detectSingleFace(
+                        video,
+                        new faceapi.TinyFaceDetectorOptions({ inputSize: 224, scoreThreshold: 0.4 })
+                    ).withFaceLandmarks(true);
+
+                    if (detection) {
+                        // Store raw landmarks for frame calculation
+                        const rawLandmarks = detection.landmarks.positions;
+                        const rawFaceBox = detection.detection.box;
+
+                        // Update auto-frame target based on raw detection
+                        updateAutoFrame(video.videoWidth, video.videoHeight);
+
+                        // Transform landmarks and faceBox to canvas coordinates
+                        let newLandmarks;
+                        if (currentFrame && autoFrame) {
+                            const scaleX = canvas.width / currentFrame.w;
+                            const scaleY = canvas.height / currentFrame.h;
+                            newLandmarks = rawLandmarks.map(p => ({
+                                x: (p.x - currentFrame.x) * scaleX,
+                                y: (p.y - currentFrame.y) * scaleY
+                            }));
+                            faceBox = {
+                                x: (rawFaceBox.x - currentFrame.x) * scaleX,
+                                y: (rawFaceBox.y - currentFrame.y) * scaleY,
+                                width: rawFaceBox.width * scaleX,
+                                height: rawFaceBox.height * scaleY
+                            };
+                        } else {
+                            newLandmarks = rawLandmarks.map(p => ({ x: p.x, y: p.y }));
+                            faceBox = rawFaceBox;
+                        }
+
+                        // Apply smoothing to landmarks to reduce jitter
+                        if (!smoothedLandmarks) {
+                            smoothedLandmarks = newLandmarks.map(p => ({ x: p.x, y: p.y }));
+                        } else {
+                            smoothedLandmarks = smoothedLandmarks.map((s, i) => ({
+                                x: s.x * landmarkSmoothingFactor + newLandmarks[i].x * (1 - landmarkSmoothingFactor),
+                                y: s.y * landmarkSmoothingFactor + newLandmarks[i].y * (1 - landmarkSmoothingFactor)
+                            }));
+                        }
+                        landmarks = smoothedLandmarks;
+
+                        // Update ghost landmarks with exponential smoothing
+                        if (!ghostLandmarks) {
+                            // Initialize ghost to current position
+                            ghostLandmarks = landmarks.map(p => ({ x: p.x, y: p.y }));
+                        } else {
+                            // Smooth ghost toward current (ghost lags behind)
+                            ghostLandmarks = ghostLandmarks.map((g, i) => ({
+                                x: g.x * ghostSmoothingFactor + landmarks[i].x * (1 - ghostSmoothingFactor),
+                                y: g.y * ghostSmoothingFactor + landmarks[i].y * (1 - ghostSmoothingFactor)
+                            }));
+                        }
+                    }
+                } catch (e) {
+                    console.log('Detection error:', e);
+                }
+            }
+
+            // Update status - show stroke rate and frame info
+            const rateDisplay = Math.floor(currentStrokeRate);
+            if (faceBox) {
+                const frameInfo = autoFrame ? ' [auto-framed]' : '';
+                document.getElementById('status').textContent = `Painting... ${rateDisplay} strokes/frame${frameInfo}`;
+            } else {
+                document.getElementById('status').textContent = `Painting (no face)... ${rateDisplay} strokes/frame`;
+            }
+
+            // Get video frame - with auto-framing crop if enabled
+            if (autoFrame && currentFrame) {
+                // Draw cropped region scaled to fill hidden canvas
+                hiddenCtx.drawImage(
+                    video,
+                    currentFrame.x, currentFrame.y, currentFrame.w, currentFrame.h,  // Source crop
+                    0, 0, hiddenCanvas.width, hiddenCanvas.height  // Dest (full canvas)
+                );
+            } else {
+                hiddenCtx.drawImage(video, 0, 0);
+            }
+            const imageData = hiddenCtx.getImageData(0, 0, hiddenCanvas.width, hiddenCanvas.height);
+
+            // Generate change mask (compare to previous)
+            let changeMask = null;
+            if (prevImageData && frameCount % 2 === 0) {  // Only compute changes every other frame
+                changeMask = computeChangeMask(prevImageData, imageData);
+            }
+
+            // Store current as previous (but don't keep old data around)
+            prevImageData = imageData;
+
+            // Generate strokes
+            generateStrokes(imageData, changeMask);
+
+            // Eye detail pass every 3 frames
+            if (frameCount % 3 === 0) {
+                eyeDetailPass(imageData);
+            }
+
+            // Face/BG carve pass every 5 frames
+            if (frameCount % 5 === 0) {
+                faceCarvePass(imageData);
+            }
+
+            // Edge cleanup pass every 4 frames
+            if (frameCount % 4 === 0) {
+                edgeCleanupPass(imageData);
+            }
+
+            // Chin outline pass every 6 frames
+            if (frameCount % 6 === 0) {
+                chinOutlinePass(imageData);
+            }
+
+            // Lip paint pass every 4 frames
+            if (frameCount % 4 === 1) {
+                lipPaintPass(imageData);
+            }
+
+            // Nose bridge outline pass every 5 frames
+            if (frameCount % 5 === 2) {
+                noseBridgePass(imageData);
+            }
+
+            // Catchlight pass every 8 frames
+            if (frameCount % 8 === 0) {
+                catchlightPass(imageData);
+            }
+
+            // Halftone/soft transition pass every 3 frames
+            if (frameCount % 3 === 2) {
+                halftonePass(imageData);
+            }
+
+            // Apply selective decay every 10 frames
+            if (frameCount % 10 === 0) {
+                applySelectiveDecay();
+            }
+
+            // Continue loop - use setTimeout to prevent blocking
+            setTimeout(() => requestAnimationFrame(paintLoop), 0);
+        }
+
+        function computeChangeMask(prev, curr) {
+            const w = curr.width;
+            const h = curr.height;
+            const threshold = 30;
+            const changes = [];
+
+            // Sample every 10th pixel for performance
+            for (let y = 0; y < h; y += 10) {
+                for (let x = 0; x < w; x += 10) {
+                    const i = (y * w + x) * 4;
+                    const dr = Math.abs(curr.data[i] - prev.data[i]);
+                    const dg = Math.abs(curr.data[i+1] - prev.data[i+1]);
+                    const db = Math.abs(curr.data[i+2] - prev.data[i+2]);
+                    if (dr + dg + db > threshold * 3) {
+                        changes.push({x, y});
+                    }
+                }
+            }
+            return changes;
+        }
+
+        function generateStrokes(imageData, changeMask) {
+            const w = canvas.width;
+            const h = canvas.height;
+
+            // Smart painting: movement detection controls stroke rate
+            const hasMovement = changeMask && changeMask.length > 15;
+
+            if (hasMovement) {
+                // Movement detected - reset to max rate
+                currentStrokeRate = maxStrokeRate;
+                lastMovementFrame = frameCount;
+            } else {
+                // No movement - decay stroke rate
+                currentStrokeRate = Math.max(minStrokeRate, currentStrokeRate * decayRate);
+            }
+
+            const actualStrokes = Math.floor(currentStrokeRate);
+
+            // Skip painting entirely if rate is very low and no movement
+            if (actualStrokes < 3 && !hasMovement) {
+                return;  // Don't paint, just wait for movement
+            }
+
+            for (let i = 0; i < actualStrokes; i++) {
+                let x, y;
+
+                // When there's movement, heavily prioritize movement areas
+                // When still, only paint face area slowly
+                const r = Math.random();
+                if (hasMovement && changeMask.length > 5 && r < 0.85) {
+                    // 85%: paint in changed/moving regions (up from 60%)
+                    const change = changeMask[Math.floor(Math.random() * changeMask.length)];
+                    x = change.x + (Math.random() - 0.5) * 30;
+                    y = change.y + (Math.random() - 0.5) * 30;
+                } else if (faceBox && r < 0.95) {
+                    // Paint in face region
+                    x = faceBox.x + Math.random() * faceBox.width;
+                    y = faceBox.y + Math.random() * faceBox.height;
+                } else {
+                    // Rare random for background
+                    x = Math.random() * w;
+                    y = Math.random() * h;
+                }
+
+                // Clamp to bounds
+                x = Math.max(0, Math.min(w - 1, x));
+                y = Math.max(0, Math.min(h - 1, y));
+
+                // Sample color
+                const color = sampleColor(imageData, Math.floor(x), Math.floor(y));
+
+                // Get direction and size from nearest landmark
+                let direction = Math.random() * 360; // default random
+                let sizeMult = 1.0;
+
+                // Decide whether to use ghost landmarks (temporal memory)
+                const useGhost = ghostLandmarks && Math.random() < ghostStrokeChance;
+                const activeLandmarks = useGhost ? ghostLandmarks : landmarks;
+
+                if (activeLandmarks) {
+                    const nearest = findNearestLandmark(x, y, activeLandmarks);
+                    if (nearest !== null) {
+                        direction = LANDMARK_DIRECTIONS[nearest] || direction;
+                        sizeMult = LANDMARK_SIZE_MULT[nearest] || 1.0;
+
+                        // Add some variation
+                        direction += (Math.random() - 0.5) * 30;
+
+                        // If using ghost, also shift position toward ghost landmark
+                        if (useGhost && nearest < activeLandmarks.length) {
+                            const ghostPt = activeLandmarks[nearest];
+                            const currentPt = landmarks[nearest];
+                            // Blend position toward ghost
+                            x = x * 0.7 + ghostPt.x * 0.3;
+                            y = y * 0.7 + ghostPt.y * 0.3;
+                        }
+                    }
+                }
+
+                // SMART STROKE SIZING based on local variance
+                // Low variance (uniform area) = big strokes to fill quickly
+                // High variance (edges/details) = small precise strokes
+                const variance = getLocalVariance(imageData, Math.floor(x), Math.floor(y));
+
+                // Scale: variance 0 → 2x size, variance 1 → 0.4x size
+                const varianceScale = 2.0 - (variance * 1.6);
+
+                let size = strokeSize * sizeMult * varianceScale;
+
+                // Still boost for background areas
+                if (faceBox) {
+                    const faceCenterX = faceBox.x + faceBox.width / 2;
+                    const faceCenterY = faceBox.y + faceBox.height / 2;
+                    const distFromCenter = Math.sqrt(
+                        Math.pow(x - faceCenterX, 2) + Math.pow(y - faceCenterY, 2)
+                    );
+                    const maxDist = Math.max(faceBox.width, faceBox.height);
+                    if (distFromCenter > maxDist) {
+                        size *= 1.3; // Larger strokes outside face
+                    }
+                }
+
+                // Draw the stroke
+                drawStroke(x, y, color, direction, size);
+            }
+        }
+
+        function sampleColor(imageData, x, y) {
+            const i = (y * imageData.width + x) * 4;
+            let r = imageData.data[i];
+            let g = imageData.data[i + 1];
+            let b = imageData.data[i + 2];
+
+            // Boost saturation slightly
+            const avg = (r + g + b) / 3;
+            const boost = 1.2;
+            r = Math.min(255, avg + (r - avg) * boost);
+            g = Math.min(255, avg + (g - avg) * boost);
+            b = Math.min(255, avg + (b - avg) * boost);
+
+            // Add slight color variation
+            r = Math.max(0, Math.min(255, r + (Math.random() - 0.5) * 20));
+            g = Math.max(0, Math.min(255, g + (Math.random() - 0.5) * 20));
+            b = Math.max(0, Math.min(255, b + (Math.random() - 0.5) * 20));
+
+            return `rgb(${Math.round(r)}, ${Math.round(g)}, ${Math.round(b)})`;
+        }
+
+        function getLocalVariance(imageData, x, y, radius = 8) {
+            // Sample local area and return variance (0-1)
+            // Low variance = uniform area (use big strokes)
+            // High variance = detail/edge area (use small strokes)
+            const w = imageData.width;
+            const h = imageData.height;
+            const samples = [];
+
+            // Sample in a small grid around the point
+            for (let dy = -radius; dy <= radius; dy += 4) {
+                for (let dx = -radius; dx <= radius; dx += 4) {
+                    const sx = Math.floor(x + dx);
+                    const sy = Math.floor(y + dy);
+                    if (sx >= 0 && sx < w && sy >= 0 && sy < h) {
+                        const i = (sy * w + sx) * 4;
+                        // Use luminance
+                        const lum = imageData.data[i] * 0.299 +
+                                   imageData.data[i+1] * 0.587 +
+                                   imageData.data[i+2] * 0.114;
+                        samples.push(lum);
+                    }
+                }
+            }
+
+            if (samples.length < 2) return 0.5;
+
+            // Calculate variance
+            const mean = samples.reduce((a, b) => a + b, 0) / samples.length;
+            const variance = samples.reduce((sum, s) => sum + Math.pow(s - mean, 2), 0) / samples.length;
+
+            // Normalize to 0-1 range (sqrt for better distribution)
+            // Max variance for 8-bit is ~16000, but typical edges are 500-2000
+            const normalizedVariance = Math.min(1, Math.sqrt(variance) / 40);
+
+            return normalizedVariance;
+        }
+
+        function findNearestLandmark(x, y, landmarkArray = null) {
+            const lms = landmarkArray || landmarks;
+            if (!lms || lms.length === 0) return null;
+
+            let nearest = null;
+            let minDist = Infinity;
+
+            for (let i = 0; i < lms.length; i++) {
+                const lm = lms[i];
+                const dist = Math.sqrt(Math.pow(x - lm.x, 2) + Math.pow(y - lm.y, 2));
+                if (dist < minDist) {
+                    minDist = dist;
+                    nearest = i;
+                }
+            }
+
+            // Only use landmark if reasonably close
+            return minDist < 100 ? nearest : null;
+        }
+
+        function eyeDetailPass(imageData) {
+            // Paint detailed eye features based on portrait_painter.py eye_detail_pass
+            // Components: sclera, iris, pupil, catchlight, upper lash line
+            if (!landmarks) return;
+
+            // Skip eye detail if face is too far away (small)
+            // faceBox.width < 100 pixels means face is far, landmarks unreliable
+            if (faceBox && faceBox.width < 100) {
+                return; // Face too small for eye detail
+            }
+
+            const eyeIndices = {
+                right: [36, 37, 38, 39, 40, 41],
+                left: [42, 43, 44, 45, 46, 47]
+            };
+
+            for (const [eyeName, indices] of Object.entries(eyeIndices)) {
+                const pts = indices.map(i => landmarks[i]);
+                const xs = pts.map(p => p.x);
+                const ys = pts.map(p => p.y);
+                const minX = Math.min(...xs);
+                const maxX = Math.max(...xs);
+                const minY = Math.min(...ys);
+                const maxY = Math.max(...ys);
+                const eyeW = maxX - minX;
+                const eyeH = maxY - minY;
+
+                if (eyeW < 5 || eyeH < 5) continue;
+
+                // Skip if eye is closed (aspect ratio too low)
+                // Eye Aspect Ratio: height / width - closed eyes have very low ratio
+                const eyeAspectRatio = eyeH / eyeW;
+                if (eyeAspectRatio < 0.15) continue; // Eye is closed, skip detail
+
+                // Eye corners (pts[0] = inner, pts[3] = outer for right eye)
+                const innerCorner = pts[0];
+                const outerCorner = pts[3];
+
+                // Eye center (between corners, vertically between upper and lower lids)
+                const eyeCenterX = (pts[0].x + pts[3].x) / 2;
+                const eyeCenterY = (pts[1].y + pts[4].y) / 2;
+
+                // Size calculations relative to eye width (from portrait_painter)
+                const irisSize = eyeW * 0.35;
+                const pupilSize = eyeW * 0.15;
+                const scleraSize = eyeW * 0.12;
+                const catchlightSize = eyeW * 0.08;
+
+                // === 1. SCLERA (eye whites at corners) ===
+                const scleraColor = sampleColor(imageData, Math.floor(innerCorner.x + eyeW * 0.1), Math.floor(eyeCenterY));
+                // Inner sclera
+                drawRoundStroke(innerCorner.x + eyeW / 6, eyeCenterY, scleraSize, scleraColor);
+                // Outer sclera
+                drawRoundStroke(outerCorner.x - eyeW / 6, eyeCenterY, scleraSize, scleraColor);
+
+                // === 2. IRIS (larger colored circle) ===
+                // Sample iris color from ring around center
+                const irisColor = sampleColor(imageData, Math.floor(eyeCenterX + eyeW * 0.1), Math.floor(eyeCenterY));
+                drawRoundStroke(eyeCenterX, eyeCenterY, irisSize, irisColor);
+
+                // === 3. PUPIL (smaller dark circle) ===
+                const pupilColor = sampleColor(imageData, Math.floor(eyeCenterX), Math.floor(eyeCenterY));
+                drawRoundStroke(eyeCenterX, eyeCenterY, pupilSize, pupilColor);
+
+                // === 4. CATCHLIGHT (bright reflection) ===
+                // Usually upper-right of pupil
+                const catchlightX = eyeCenterX + irisSize * 0.3;
+                const catchlightY = eyeCenterY - irisSize * 0.3;
+                const catchlightColor = 'rgb(255, 255, 255)';
+                drawRoundStroke(catchlightX, catchlightY, catchlightSize, catchlightColor);
+
+                // === 5. UPPER LASH LINE ===
+                // Draw along upper lid (pts 0-1-2-3)
+                const upperLidPts = [pts[0], pts[1], pts[2], pts[3]];
+                for (let i = 0; i < 5; i++) {
+                    const t = Math.random();
+                    const idx = Math.floor(t * 2);  // 0, 1, or 2
+                    const localT = (t * 2) - idx;
+                    const p1 = upperLidPts[idx];
+                    const p2 = upperLidPts[idx + 1];
+                    const x = p1.x + (p2.x - p1.x) * localT;
+                    const y = p1.y + (p2.y - p1.y) * localT - eyeH * 0.1;  // Slightly above lid
+                    const lashColor = sampleColor(imageData, Math.floor(x), Math.floor(y));
+                    // Horizontal strokes for lash line
+                    drawStroke(x, y, lashColor, 0, strokeSize * 0.4);
+                }
+            }
+        }
+
+        function chinOutlinePass(imageData) {
+            // Paint horizontal strokes along chin edge (landmarks 5-11)
+            // Based on portrait_painter's chin_outline_pass
+            if (!landmarks) return;
+
+            const w = imageData.width;
+            const h = imageData.height;
+            const data = imageData.data;
+
+            // Chin landmarks: 5, 6, 7, 8, 9, 10, 11 (bottom curve of jaw)
+            const chinIndices = [5, 6, 7, 8, 9, 10, 11];
+            const chinPts = chinIndices.map(i => landmarks[i]);
+
+            // Get chin region bounds
+            const chinXs = chinPts.map(p => p.x);
+            const chinYs = chinPts.map(p => p.y);
+            const minX = Math.min(...chinXs);
+            const maxX = Math.max(...chinXs);
+            const minY = Math.min(...chinYs);
+            const maxY = Math.max(...chinYs);
+            const margin = 20;
+
+            // Detect edges in chin region using gradient
+            const chinEdges = [];
+            const step = 8;
+
+            for (let y = Math.max(step, minY - margin); y < Math.min(h - step, maxY + margin); y += step) {
+                for (let x = Math.max(step, minX - margin); x < Math.min(w - step, maxX + margin); x += step) {
+                    const idx = (y * w + x) * 4;
+
+                    // Vertical gradient (chin edges are mostly horizontal)
+                    const idxUp = ((y - step) * w + x) * 4;
+                    const idxDown = ((y + step) * w + x) * 4;
+                    const grayUp = (data[idxUp] + data[idxUp+1] + data[idxUp+2]) / 3;
+                    const grayDown = (data[idxDown] + data[idxDown+1] + data[idxDown+2]) / 3;
+                    const gradY = Math.abs(grayDown - grayUp);
+
+                    // Lower threshold for chin (softer edges)
+                    if (gradY > 20) {
+                        chinEdges.push({ x, y, grad: gradY });
+                    }
+                }
+            }
+
+            // Paint horizontal strokes along chin edges (both sides)
+            const strokeCount = Math.min(chinEdges.length, 12);
+            for (let i = 0; i < strokeCount; i++) {
+                const edge = chinEdges[Math.floor(Math.random() * chinEdges.length)];
+
+                // Paint on both sides of the edge (above and below)
+                for (const offset of [-6, 6]) {
+                    const x = edge.x;
+                    const y = edge.y + offset;
+
+                    if (y < 0 || y >= h) continue;
+
+                    // Sample color - make it slightly darker for definition
+                    let color = sampleColor(imageData, Math.floor(x), Math.floor(y));
+                    // Darken slightly
+                    color = darkenColor(color, 0.9);
+
+                    // Horizontal strokes for chin (per portrait_painter)
+                    drawStroke(x, y, color, 0, strokeSize * 0.5);
+                }
+            }
+
+            // Also paint along the actual chin curve using landmarks
+            for (let i = 0; i < 6; i++) {
+                const idx = Math.floor(Math.random() * (chinIndices.length - 1));
+                const pt = chinPts[idx];
+                const nextPt = chinPts[idx + 1];
+
+                // Interpolate along chin
+                const t = Math.random();
+                const x = pt.x + (nextPt.x - pt.x) * t;
+                const y = pt.y + (nextPt.y - pt.y) * t;
+
+                // Paint just below the chin line
+                const belowY = y + 8 + Math.random() * 10;
+                const color = sampleColor(imageData, Math.floor(x), Math.floor(belowY));
+                drawStroke(x, belowY, darkenColor(color, 0.85), 0, strokeSize * 0.6);
+            }
+        }
+
+        function lipPaintPass(imageData) {
+            // Paint strokes inside lip boundaries following horizontal flow
+            // Based on portrait_painter's lip_paint_pass
+            if (!landmarks) return;
+
+            const w = imageData.width;
+            const h = imageData.height;
+
+            // Lip landmark indices (face-api 68-point model)
+            // Upper lip: 48-54 (outer), 60-64 (inner top)
+            // Lower lip: 54-60 (outer), 64-67 + 60 (inner bottom)
+            const lips = [
+                { name: 'upper', indices: [48, 49, 50, 51, 52, 53, 54, 64, 63, 62, 61, 60] },
+                { name: 'lower', indices: [54, 55, 56, 57, 58, 59, 60, 67, 66, 65, 64] }
+            ];
+
+            for (const lip of lips) {
+                // Get lip polygon points
+                const lipPts = lip.indices.map(i => landmarks[i]).filter(p => p);
+                if (lipPts.length < 6) continue;
+
+                // Bounding box
+                const xs = lipPts.map(p => p.x);
+                const ys = lipPts.map(p => p.y);
+                const minX = Math.min(...xs);
+                const maxX = Math.max(...xs);
+                const minY = Math.min(...ys);
+                const maxY = Math.max(...ys);
+                const lipW = maxX - minX;
+                const lipH = maxY - minY;
+
+                if (lipW < 5 || lipH < 3) continue;
+
+                // Paint strokes inside lip
+                const strokeCount = 5;
+                let painted = 0;
+                let attempts = 0;
+
+                while (painted < strokeCount && attempts < strokeCount * 4) {
+                    attempts++;
+
+                    // Random point in bounding box
+                    const x = minX + Math.random() * lipW;
+                    const y = minY + Math.random() * lipH;
+
+                    // Check if inside lip polygon (simple point-in-polygon)
+                    if (!pointInPolygon(x, y, lipPts)) continue;
+
+                    // Sample color at this position
+                    const color = sampleColor(imageData, Math.floor(x), Math.floor(y));
+
+                    // Horizontal strokes for lips (follow mouth direction)
+                    const strokeLen = Math.max(8, lipW / 5);
+                    drawStroke(x, y, color, 0, strokeLen);
+                    painted++;
+                }
+            }
+        }
+
+        function noseBridgePass(imageData) {
+            // Paint strokes along nose bridge edges
+            // Based on portrait_painter's nose_bridge_outline_pass
+            if (!landmarks) return;
+
+            const w = imageData.width;
+            const h = imageData.height;
+            const data = imageData.data;
+
+            // Nose bridge landmarks: 27, 28, 29, 30
+            const noseBridgeIndices = [27, 28, 29, 30];
+            const nosePts = noseBridgeIndices.map(i => landmarks[i]).filter(p => p);
+
+            if (nosePts.length < 3) return;
+
+            // Get nose region bounds
+            const noseXs = nosePts.map(p => p.x);
+            const noseYs = nosePts.map(p => p.y);
+            const margin = 15;
+            const minX = Math.max(0, Math.min(...noseXs) - margin);
+            const maxX = Math.min(w, Math.max(...noseXs) + margin);
+            const minY = Math.max(0, Math.min(...noseYs) - margin);
+            const maxY = Math.min(h, Math.max(...noseYs) + margin);
+
+            // Detect edges in nose region
+            const edges = [];
+            const step = 4;
+
+            for (let y = minY + step; y < maxY - step; y += step) {
+                for (let x = minX + step; x < maxX - step; x += step) {
+                    const idx = (y * w + x) * 4;
+
+                    // Horizontal gradient (nose sides are vertical edges)
+                    const idxLeft = (y * w + (x - step)) * 4;
+                    const idxRight = (y * w + (x + step)) * 4;
+                    const grayLeft = (data[idxLeft] + data[idxLeft+1] + data[idxLeft+2]) / 3;
+                    const grayRight = (data[idxRight] + data[idxRight+1] + data[idxRight+2]) / 3;
+                    const gradX = Math.abs(grayRight - grayLeft);
+
+                    if (gradX > 25) {
+                        edges.push({ x, y, grad: gradX });
+                    }
+                }
+            }
+
+            // Paint strokes along edges
+            const strokeCount = Math.min(edges.length, 10);
+            for (let i = 0; i < strokeCount; i++) {
+                const edge = edges[Math.floor(Math.random() * edges.length)];
+                const x = edge.x;
+                const y = edge.y;
+
+                // Sample color and darken for definition
+                let color = sampleColor(imageData, Math.floor(x), Math.floor(y));
+                color = darkenColor(color, 0.85);
+
+                // Vertical strokes along nose bridge
+                drawStroke(x, y, color, 90, strokeSize * 0.4);
+            }
+        }
+
+        function pointInPolygon(x, y, polygon) {
+            // Ray casting algorithm for point-in-polygon
+            let inside = false;
+            for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
+                const xi = polygon[i].x, yi = polygon[i].y;
+                const xj = polygon[j].x, yj = polygon[j].y;
+                if (((yi > y) !== (yj > y)) && (x < (xj - xi) * (y - yi) / (yj - yi) + xi)) {
+                    inside = !inside;
+                }
+            }
+            return inside;
+        }
+
+        function catchlightPass(imageData) {
+            // Find and paint bright catchlights in eyes
+            // Based on portrait_painter's catchlight_pass
+            if (!landmarks) return;
+
+            const w = imageData.width;
+            const h = imageData.height;
+            const data = imageData.data;
+
+            // Eye landmark indices (face-api 68-point)
+            const eyes = [
+                { name: 'left', indices: [36, 37, 38, 39, 40, 41] },
+                { name: 'right', indices: [42, 43, 44, 45, 46, 47] }
+            ];
+
+            for (const eye of eyes) {
+                const eyePts = eye.indices.map(i => landmarks[i]).filter(p => p);
+                if (eyePts.length < 4) continue;
+
+                // Eye bounds
+                const xs = eyePts.map(p => p.x);
+                const ys = eyePts.map(p => p.y);
+                const minX = Math.floor(Math.min(...xs));
+                const maxX = Math.floor(Math.max(...xs));
+                const minY = Math.floor(Math.min(...ys));
+                const maxY = Math.floor(Math.max(...ys));
+
+                if (maxX - minX < 5 || maxY - minY < 5) continue;
+
+                // Find brightest point in eye region
+                let maxBrightness = 0;
+                let brightestX = 0, brightestY = 0;
+
+                for (let y = minY; y < maxY; y++) {
+                    for (let x = minX; x < maxX; x++) {
+                        // Check if inside eye polygon
+                        if (!pointInPolygon(x, y, eyePts)) continue;
+
+                        const idx = (y * w + x) * 4;
+                        const brightness = (data[idx] + data[idx+1] + data[idx+2]) / 3;
+                        if (brightness > maxBrightness) {
+                            maxBrightness = brightness;
+                            brightestX = x;
+                            brightestY = y;
+                        }
+                    }
+                }
+
+                // Draw catchlight if we found a bright spot
+                if (maxBrightness > 180) {
+                    const catchlightSize = Math.max(4, (maxX - minX) / 6);
+                    drawRoundStroke(brightestX, brightestY, catchlightSize, '#fff', 'catchlight');
+                }
+            }
+        }
+
+        function halftonePass(imageData) {
+            // Paint strokes in gradient/transition areas for softer forms
+            // Based on portrait_painter's halftone_pass - finds soft edges
+            if (!landmarks || !faceBox) return;
+
+            const w = imageData.width;
+            const h = imageData.height;
+            const data = imageData.data;
+
+            // Work within face region
+            const fx = Math.floor(faceBox.x);
+            const fy = Math.floor(faceBox.y);
+            const fw = Math.floor(faceBox.width);
+            const fh = Math.floor(faceBox.height);
+            const step = 8;
+
+            // Find gradient areas (not hard edges, but soft transitions)
+            const gradientAreas = [];
+
+            for (let y = fy + step; y < fy + fh - step; y += step) {
+                for (let x = fx + step; x < fx + fw - step; x += step) {
+                    const idx = (y * w + x) * 4;
+
+                    // Calculate gradient magnitude
+                    const idxL = (y * w + (x - step)) * 4;
+                    const idxR = (y * w + (x + step)) * 4;
+                    const idxU = ((y - step) * w + x) * 4;
+                    const idxD = ((y + step) * w + x) * 4;
+
+                    const grayC = (data[idx] + data[idx+1] + data[idx+2]) / 3;
+                    const grayL = (data[idxL] + data[idxL+1] + data[idxL+2]) / 3;
+                    const grayR = (data[idxR] + data[idxR+1] + data[idxR+2]) / 3;
+                    const grayU = (data[idxU] + data[idxU+1] + data[idxU+2]) / 3;
+                    const grayD = (data[idxD] + data[idxD+1] + data[idxD+2]) / 3;
+
+                    const gx = grayR - grayL;
+                    const gy = grayD - grayU;
+                    const gradMag = Math.sqrt(gx*gx + gy*gy);
+
+                    // Look for moderate gradients (soft transitions, not hard edges)
+                    // Too high = hard edge, too low = uniform area
+                    if (gradMag > 15 && gradMag < 60) {
+                        const gradDir = Math.atan2(gy, gx);
+                        gradientAreas.push({ x, y, mag: gradMag, dir: gradDir });
+                    }
+                }
+            }
+
+            // Paint strokes along gradient direction
+            const strokeCount = Math.min(gradientAreas.length, 8);
+            for (let i = 0; i < strokeCount; i++) {
+                const area = gradientAreas[Math.floor(Math.random() * gradientAreas.length)];
+                const x = area.x;
+                const y = area.y;
+
+                // Sample color
+                const color = sampleColor(imageData, Math.floor(x), Math.floor(y));
+
+                // Stroke perpendicular to gradient (along the transition)
+                const strokeDir = (area.dir * 180 / Math.PI) + 90;
+                drawStroke(x, y, color, strokeDir, strokeSize * 0.6);
+            }
+        }
+
+        function computeIdealFrame(videoW, videoH) {
+            // Calculate ideal composition crop based on face position
+            // Goal: Eyes on upper third, good headroom, balanced framing
+            if (!faceBox || !landmarks) {
+                return { x: 0, y: 0, w: videoW, h: videoH };
+            }
+
+            // Get eye positions for rule of thirds
+            const leftEye = landmarks[36];  // Left eye corner
+            const rightEye = landmarks[45]; // Right eye corner
+            const eyeCenterX = (leftEye.x + rightEye.x) / 2;
+            const eyeCenterY = (leftEye.y + rightEye.y) / 2;
+
+            // Face dimensions
+            const faceW = faceBox.width;
+            const faceH = faceBox.height;
+
+            // Target: face should be about 50-60% of frame height
+            // with eyes on upper third line
+            const targetFaceRatio = 0.55;
+            const frameH = faceH / targetFaceRatio;
+            const frameW = frameH * (videoW / videoH);  // Maintain aspect ratio
+
+            // Position frame so eyes are on upper third
+            const upperThirdY = frameH / 3;
+            const frameY = eyeCenterY - upperThirdY;
+
+            // Center horizontally on face
+            const frameX = eyeCenterX - frameW / 2;
+
+            // Clamp to video bounds
+            const clampedX = Math.max(0, Math.min(videoW - frameW, frameX));
+            const clampedY = Math.max(0, Math.min(videoH - frameH, frameY));
+            const clampedW = Math.min(frameW, videoW - clampedX);
+            const clampedH = Math.min(frameH, videoH - clampedY);
+
+            return {
+                x: clampedX,
+                y: clampedY,
+                w: Math.max(100, clampedW),
+                h: Math.max(100, clampedH)
+            };
+        }
+
+        function updateAutoFrame(videoW, videoH) {
+            // Smoothly transition to ideal frame
+            if (!autoFrame) {
+                currentFrame = { x: 0, y: 0, w: videoW, h: videoH };
+                return;
+            }
+
+            targetFrame = computeIdealFrame(videoW, videoH);
+
+            if (!currentFrame) {
+                currentFrame = { ...targetFrame };
+            } else {
+                // Smooth interpolation
+                currentFrame.x += (targetFrame.x - currentFrame.x) * frameSmoothing;
+                currentFrame.y += (targetFrame.y - currentFrame.y) * frameSmoothing;
+                currentFrame.w += (targetFrame.w - currentFrame.w) * frameSmoothing;
+                currentFrame.h += (targetFrame.h - currentFrame.h) * frameSmoothing;
+            }
+        }
+
+        function darkenColor(colorStr, factor) {
+            // Darken an rgb color string
+            const match = colorStr.match(/rgb\((\d+),\s*(\d+),\s*(\d+)\)/);
+            if (match) {
+                const r = Math.floor(parseInt(match[1]) * factor);
+                const g = Math.floor(parseInt(match[2]) * factor);
+                const b = Math.floor(parseInt(match[3]) * factor);
+                return `rgb(${r}, ${g}, ${b})`;
+            }
+            return colorStr;
+        }
+
+        function edgeCleanupPass(imageData) {
+            // Detect edges and paint strokes on both sides to clean them up
+            const w = imageData.width;
+            const h = imageData.height;
+            const data = imageData.data;
+
+            // Simple edge detection using grayscale gradient
+            // Sample sparse points and check for edges
+            const edgePoints = [];
+            const step = 15;  // Sample every 15 pixels
+
+            for (let y = step; y < h - step; y += step) {
+                for (let x = step; x < w - step; x += step) {
+                    const idx = (y * w + x) * 4;
+
+                    // Get grayscale at this point and neighbors
+                    const gray = (data[idx] + data[idx+1] + data[idx+2]) / 3;
+
+                    // Check horizontal gradient
+                    const idxLeft = (y * w + (x - step)) * 4;
+                    const idxRight = (y * w + (x + step)) * 4;
+                    const grayLeft = (data[idxLeft] + data[idxLeft+1] + data[idxLeft+2]) / 3;
+                    const grayRight = (data[idxRight] + data[idxRight+1] + data[idxRight+2]) / 3;
+                    const gradX = Math.abs(grayRight - grayLeft);
+
+                    // Check vertical gradient
+                    const idxUp = ((y - step) * w + x) * 4;
+                    const idxDown = ((y + step) * w + x) * 4;
+                    const grayUp = (data[idxUp] + data[idxUp+1] + data[idxUp+2]) / 3;
+                    const grayDown = (data[idxDown] + data[idxDown+1] + data[idxDown+2]) / 3;
+                    const gradY = Math.abs(grayDown - grayUp);
+
+                    // Edge magnitude
+                    const edgeMag = Math.sqrt(gradX * gradX + gradY * gradY);
+
+                    // If strong edge, record it
+                    if (edgeMag > 30) {
+                        // Edge direction is perpendicular to gradient
+                        const edgeDir = Math.atan2(gradX, gradY);  // Perpendicular to gradient
+                        edgePoints.push({ x, y, dir: edgeDir, mag: edgeMag });
+                    }
+                }
+            }
+
+            // Paint strokes on both sides of detected edges
+            const strokeCount = Math.min(edgePoints.length, 20);
+            for (let i = 0; i < strokeCount; i++) {
+                const edge = edgePoints[Math.floor(Math.random() * edgePoints.length)];
+
+                // Perpendicular to edge direction (normal)
+                const normalDir = edge.dir + Math.PI / 2;
+
+                // Offset distance from edge
+                const offset = 5 + Math.random() * 8;
+
+                // Paint stroke on one side
+                const x1 = edge.x + Math.cos(normalDir) * offset;
+                const y1 = edge.y + Math.sin(normalDir) * offset;
+                const color1 = sampleColor(imageData, Math.floor(x1), Math.floor(y1));
+                const strokeDir1 = edge.dir * 180 / Math.PI;  // Stroke follows edge
+                drawStroke(x1, y1, color1, strokeDir1, strokeSize * 0.6);
+
+                // Paint stroke on other side
+                const x2 = edge.x - Math.cos(normalDir) * offset;
+                const y2 = edge.y - Math.sin(normalDir) * offset;
+                const color2 = sampleColor(imageData, Math.floor(x2), Math.floor(y2));
+                const strokeDir2 = edge.dir * 180 / Math.PI;
+                drawStroke(x2, y2, color2, strokeDir2, strokeSize * 0.6);
+            }
+        }
+
+        function faceCarvePass(imageData) {
+            // Treat face as a figure mask and do proper carving passes
+            // Based on portrait_painter's bg_carve_pass and figure_outline_carve_pass
+            if (!landmarks) return;
+
+            const w = canvas.width;
+            const h = canvas.height;
+
+            // Build face contour from landmarks (jaw + forehead approximation)
+            // Jaw: 0-16, then estimate forehead by extending above eyebrows
+            const jawIndices = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16];
+            const browIndices = [17, 18, 19, 20, 21, 22, 23, 24, 25, 26];
+
+            // Get face contour points
+            const contourPts = [];
+
+            // Add jaw points
+            for (const idx of jawIndices) {
+                contourPts.push({ x: landmarks[idx].x, y: landmarks[idx].y });
+            }
+
+            // Add forehead estimate (above brows)
+            const browCenter = landmarks[27];  // Between brows
+            const foreheadHeight = (landmarks[8].y - landmarks[27].y) * 0.6;  // Estimate forehead
+            contourPts.push({ x: landmarks[26].x, y: landmarks[26].y - foreheadHeight });
+            contourPts.push({ x: browCenter.x, y: browCenter.y - foreheadHeight * 1.1 });
+            contourPts.push({ x: landmarks[17].x, y: landmarks[17].y - foreheadHeight });
+
+            // === BG CARVE PASS - paint in band around face contour ===
+            const minDist = 10;
+            const maxDist = 35;
+
+            for (let i = 0; i < 20; i++) {
+                // Pick random point on contour
+                const idx = Math.floor(Math.random() * contourPts.length);
+                const nextIdx = (idx + 1) % contourPts.length;
+                const pt = contourPts[idx];
+                const nextPt = contourPts[nextIdx];
+
+                // Interpolate along contour
+                const t = Math.random();
+                const cx = pt.x + (nextPt.x - pt.x) * t;
+                const cy = pt.y + (nextPt.y - pt.y) * t;
+
+                // Get tangent direction
+                const dx = nextPt.x - pt.x;
+                const dy = nextPt.y - pt.y;
+                const tangent = Math.atan2(dy, dx);
+
+                // Normal (perpendicular, pointing outward)
+                const normal = tangent + Math.PI / 2;
+
+                // Offset into background (outside face)
+                const dist = minDist + Math.random() * (maxDist - minDist);
+                const x = cx + Math.cos(normal) * dist;
+                const y = cy + Math.sin(normal) * dist;
+
+                // Clamp to bounds
+                if (x < 0 || x >= w || y < 0 || y >= h) continue;
+
+                // Sample color from this background position
+                const color = sampleColor(imageData, Math.floor(x), Math.floor(y));
+
+                // Stroke follows tangent (along the contour)
+                const direction = tangent * 180 / Math.PI;
+                drawStroke(x, y, color, direction, strokeSize * 1.0);
+            }
+
+            // === FIGURE OUTLINE CARVE - strokes tangent to contour, just outside ===
+            for (let i = 0; i < 15; i++) {
+                const idx = Math.floor(Math.random() * contourPts.length);
+                const nextIdx = (idx + 1) % contourPts.length;
+                const pt = contourPts[idx];
+                const nextPt = contourPts[nextIdx];
+
+                const t = Math.random();
+                const cx = pt.x + (nextPt.x - pt.x) * t;
+                const cy = pt.y + (nextPt.y - pt.y) * t;
+
+                const dx = nextPt.x - pt.x;
+                const dy = nextPt.y - pt.y;
+                const tangent = Math.atan2(dy, dx);
+                const normal = tangent + Math.PI / 2;
+
+                // Small offset just outside contour
+                const offset = 5 + Math.random() * 10;
+                const x = cx + Math.cos(normal) * offset;
+                const y = cy + Math.sin(normal) * offset;
+
+                if (x < 0 || x >= w || y < 0 || y >= h) continue;
+
+                const color = sampleColor(imageData, Math.floor(x), Math.floor(y));
+                const direction = tangent * 180 / Math.PI;
+
+                // Smaller strokes for outline carving
+                drawStroke(x, y, color, direction, strokeSize * 0.7);
+            }
+
+            // === INSIDE FACE CARVE - clean up inside edges ===
+            for (let i = 0; i < 10; i++) {
+                const idx = Math.floor(Math.random() * contourPts.length);
+                const nextIdx = (idx + 1) % contourPts.length;
+                const pt = contourPts[idx];
+                const nextPt = contourPts[nextIdx];
+
+                const t = Math.random();
+                const cx = pt.x + (nextPt.x - pt.x) * t;
+                const cy = pt.y + (nextPt.y - pt.y) * t;
+
+                const dx = nextPt.x - pt.x;
+                const dy = nextPt.y - pt.y;
+                const tangent = Math.atan2(dy, dx);
+                const normal = tangent - Math.PI / 2;  // Inward normal
+
+                // Offset INTO face
+                const offset = 5 + Math.random() * 15;
+                const x = cx + Math.cos(normal) * offset;
+                const y = cy + Math.sin(normal) * offset;
+
+                if (x < 0 || x >= w || y < 0 || y >= h) continue;
+
+                const color = sampleColor(imageData, Math.floor(x), Math.floor(y));
+                const direction = tangent * 180 / Math.PI;
+
+                drawStroke(x, y, color, direction, strokeSize * 0.8);
+            }
+        }
+
+        function drawRoundStroke(x, y, size, color, brushType = 'pupil') {
+            // IMAGE-BASED ROUND STROKE - uses actual portrait_painter eye brush
+            if (!roundBrushImg || !roundBrushImg.complete) {
+                // Fallback
+                ctx.globalAlpha = 0.9;
+                ctx.fillStyle = color;
+                ctx.beginPath();
+                ctx.arc(x, y, size / 2, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.globalAlpha = 1.0;
+                return;
+            }
+
+            const diameter = size;
+
+            // Resize brush to desired size on offscreen canvas
+            brushCanvas.width = Math.ceil(diameter);
+            brushCanvas.height = Math.ceil(diameter);
+            brushCtx.clearRect(0, 0, brushCanvas.width, brushCanvas.height);
+
+            // Draw round brush scaled
+            brushCtx.drawImage(roundBrushImg, 0, 0, diameter, diameter);
+
+            // Get brush data to colorize
+            const brushData = brushCtx.getImageData(0, 0, brushCanvas.width, brushCanvas.height);
+
+            // Parse color
+            let r, g, b;
+            if (brushType === 'catchlight') {
+                r = g = b = 255;  // White
+            } else {
+                const colorMatch = color.match(/rgb\((\d+),\s*(\d+),\s*(\d+)\)/);
+                r = colorMatch ? parseInt(colorMatch[1]) : 128;
+                g = colorMatch ? parseInt(colorMatch[2]) : 128;
+                b = colorMatch ? parseInt(colorMatch[3]) : 128;
+            }
+
+            // Colorize - grayscale luminance becomes alpha
+            for (let i = 0; i < brushData.data.length; i += 4) {
+                const lum = brushData.data[i];
+                brushData.data[i] = r;
+                brushData.data[i + 1] = g;
+                brushData.data[i + 2] = b;
+                brushData.data[i + 3] = lum > 30 ? 255 : 0;
+            }
+            brushCtx.putImageData(brushData, 0, 0);
+
+            // Stamp centered at x, y
+            ctx.drawImage(brushCanvas, x - diameter / 2, y - diameter / 2);
+        }
+
+        function drawStroke(x, y, color, direction, size) {
+            // Mark this area as attended (for selective decay)
+            markAttention(x, y, Math.ceil(size / attentionGridSize));
+
+            // IMAGE-BASED BRUSH STROKE - stamps actual brush texture like portrait_painter
+            if (!dryBrushImg || !dryBrushImg.complete) {
+                // Fallback if brush not loaded
+                ctx.globalAlpha = 0.85;
+                ctx.fillStyle = color;
+                ctx.beginPath();
+                ctx.arc(x, y, size / 2, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.globalAlpha = 1.0;
+                return;
+            }
+
+            const length = size * (1.5 + Math.random() * 0.6);
+            const width = size * 0.5;
+            const rad = direction * Math.PI / 180;
+
+            // Resize brush to stroke dimensions on offscreen canvas
+            brushCanvas.width = Math.ceil(length);
+            brushCanvas.height = Math.ceil(width);
+            brushCtx.clearRect(0, 0, brushCanvas.width, brushCanvas.height);
+
+            // Draw brush image scaled to stroke size
+            brushCtx.drawImage(dryBrushImg, 0, 0, brushCanvas.width, brushCanvas.height);
+
+            // Get brush pixel data to use as opacity mask
+            const brushData = brushCtx.getImageData(0, 0, brushCanvas.width, brushCanvas.height);
+
+            // Parse color
+            const colorMatch = color.match(/rgb\((\d+),\s*(\d+),\s*(\d+)\)/);
+            const r = colorMatch ? parseInt(colorMatch[1]) : 128;
+            const g = colorMatch ? parseInt(colorMatch[2]) : 128;
+            const b = colorMatch ? parseInt(colorMatch[3]) : 128;
+
+            // Colorize brush - replace grayscale with color, using luminance as alpha
+            for (let i = 0; i < brushData.data.length; i += 4) {
+                const lum = brushData.data[i];  // Grayscale value
+                brushData.data[i] = r;
+                brushData.data[i + 1] = g;
+                brushData.data[i + 2] = b;
+                brushData.data[i + 3] = lum > 30 ? 255 : 0;  // Threshold for clean edges
+            }
+            brushCtx.putImageData(brushData, 0, 0);
+
+            // Stamp onto main canvas with rotation
+            ctx.save();
+            ctx.translate(x, y);
+            ctx.rotate(rad);
+            ctx.drawImage(brushCanvas, -length / 2, -width / 2);
+            ctx.restore();
+        }
+
+        function paintCanvasTexture() {
+            // Paint a stained/textured canvas background
+            const w = canvas.width;
+            const h = canvas.height;
+
+            // Base warm canvas color
+            ctx.fillStyle = '#f5f0e6';
+            ctx.fillRect(0, 0, w, h);
+
+            // Add stained texture with random strokes
+            const stainColors = [
+                'rgba(210, 180, 140, 0.15)',  // tan
+                'rgba(180, 160, 130, 0.12)',  // darker tan
+                'rgba(200, 190, 170, 0.10)',  // light brown
+                'rgba(220, 200, 160, 0.08)',  // cream
+                'rgba(160, 140, 120, 0.06)',  // shadow
+            ];
+
+            // Large stain patches
+            for (let i = 0; i < 20; i++) {
+                const x = Math.random() * w;
+                const y = Math.random() * h;
+                const radius = 50 + Math.random() * 150;
+                const gradient = ctx.createRadialGradient(x, y, 0, x, y, radius);
+                const color = stainColors[Math.floor(Math.random() * stainColors.length)];
+                gradient.addColorStop(0, color);
+                gradient.addColorStop(1, 'rgba(0,0,0,0)');
+                ctx.fillStyle = gradient;
+                ctx.fillRect(x - radius, y - radius, radius * 2, radius * 2);
+            }
+
+            // Fine grain texture
+            for (let i = 0; i < 500; i++) {
+                const x = Math.random() * w;
+                const y = Math.random() * h;
+                const size = 1 + Math.random() * 3;
+                ctx.globalAlpha = 0.03 + Math.random() * 0.05;
+                ctx.fillStyle = Math.random() > 0.5 ? '#d0c0a0' : '#e8e0d0';
+                ctx.fillRect(x, y, size, size);
+            }
+
+            // Canvas weave lines (very subtle)
+            ctx.globalAlpha = 0.02;
+            ctx.strokeStyle = '#c0b090';
+            ctx.lineWidth = 1;
+            for (let y = 0; y < h; y += 8) {
+                ctx.beginPath();
+                ctx.moveTo(0, y);
+                ctx.lineTo(w, y);
+                ctx.stroke();
+            }
+            for (let x = 0; x < w; x += 8) {
+                ctx.beginPath();
+                ctx.moveTo(x, 0);
+                ctx.lineTo(x, h);
+                ctx.stroke();
+            }
+
+            ctx.globalAlpha = 1.0;
+        }
+
+        // ============ CONTROLS ============
+        function clearCanvas() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            paintCanvasTexture();  // Repaint texture on clear
+
+            // Reset release state
+            releasedPortrait = false;
+            isReleasing = false;
+            document.getElementById('end-btn').textContent = 'END';
+            document.getElementById('end-btn').style.background = '#5a2a2a';
+
+            // Reset ghost landmarks and smoothed landmarks
+            ghostLandmarks = null;
+            smoothedLandmarks = null;
+
+            // Reset attention map
+            attentionMap = null;
+        }
+
+        function saveImage() {
+            // Save just the painting canvas (flipped to correct orientation)
+            const saveCanvas = document.createElement('canvas');
+            saveCanvas.width = canvas.width;
+            saveCanvas.height = canvas.height;
+            const saveCtx = saveCanvas.getContext('2d');
+
+            // Draw painting (flipped to match how user sees it)
+            saveCtx.save();
+            saveCtx.scale(-1, 1);
+            saveCtx.drawImage(canvas, -canvas.width, 0);
+            saveCtx.restore();
+
+            // Download
+            const link = document.createElement('a');
+            link.download = 'portrait_' + Date.now() + '.png';
+            link.href = saveCanvas.toDataURL('image/png');
+            link.click();
+        }
+
+        // ============ START ============
+        init();
+    </script>
+</body>
+</html>

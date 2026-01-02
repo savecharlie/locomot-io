@@ -196,6 +196,21 @@ export default class LocomotServer implements Party.Server {
             }
           }
           break;
+
+        case 'arena_sync':
+          // Forward arena sync to the target player (for syncing AI enemies)
+          for (const [id, conn] of this.room.getConnections()) {
+            if (id === data.targetId) {
+              conn.send(JSON.stringify({
+                type: 'arena_sync',
+                enemies: data.enemies,
+                pickups: data.pickups
+              }));
+              console.log(`Arena sync forwarded from ${sender.id} to ${data.targetId}`);
+              break;
+            }
+          }
+          break;
       }
 
       // Broadcast state to all players

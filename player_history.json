@@ -1,0 +1,350 @@
+{
+  "players": [
+    {
+      "name": "Ivy",
+      "firstSeen": "2026-01-01T14:46:00.194846",
+      "lastSeen": "2026-01-01T18:31:35.893102",
+      "sessions": 20,
+      "totalKills": 17488,
+      "bestScore": 4610
+    },
+    {
+      "name": "Train306",
+      "firstSeen": "2026-01-01T17:07:28.967610",
+      "lastSeen": "2026-01-01T17:07:28.967612",
+      "sessions": 1,
+      "totalKills": 0,
+      "bestScore": 0
+    },
+    {
+      "name": "VERA",
+      "firstSeen": "2026-01-01T17:12:51.672383",
+      "lastSeen": "2026-01-01T17:13:14.488616",
+      "sessions": 1,
+      "totalKills": 0,
+      "bestScore": 0
+    },
+    {
+      "name": "Train68",
+      "firstSeen": "2026-01-01T17:46:39.778962",
+      "lastSeen": "2026-01-01T17:53:23.038725",
+      "sessions": 1,
+      "totalKills": 982,
+      "bestScore": 990
+    },
+    {
+      "name": "Train721",
+      "firstSeen": "2026-01-01T17:56:51.826871",
+      "lastSeen": "2026-01-01T17:57:15.757653",
+      "sessions": 1,
+      "totalKills": 440,
+      "bestScore": 710
+    },
+    {
+      "name": "Train280",
+      "firstSeen": "2026-01-01T18:00:18.852706",
+      "lastSeen": "2026-01-01T18:00:18.852707",
+      "sessions": 1,
+      "totalKills": 0,
+      "bestScore": 0
+    },
+    {
+      "name": "IVY",
+      "firstSeen": "2026-01-01T18:07:14.266170",
+      "lastSeen": "2026-01-01T18:30:13.914147",
+      "sessions": 7,
+      "totalKills": 5576,
+      "bestScore": 3970
+    }
+  ],
+  "sessions": [
+    {
+      "name": "Ivy",
+      "id": "2079a42e-8286-4ea0-9738-96bebec61d49",
+      "joined": "2026-01-01T14:46:00.194831",
+      "left": "2026-01-01T14:47:19.967659",
+      "maxLength": 20,
+      "kills": 382,
+      "score": 3350
+    },
+    {
+      "name": "Ivy",
+      "id": "ed979310-8974-4037-bc5a-bf95ab915bed",
+      "joined": "2026-01-01T14:48:45.298397",
+      "left": "2026-01-01T14:49:23.884899",
+      "maxLength": 10,
+      "kills": 335,
+      "score": 1920
+    },
+    {
+      "name": "Ivy",
+      "id": "5dc516d8-7f69-4908-ba65-e53852935c5a",
+      "joined": "2026-01-01T15:07:19.519178",
+      "left": "2026-01-01T15:08:17.080535",
+      "maxLength": 18,
+      "kills": 377,
+      "score": 2640
+    },
+    {
+      "name": "Ivy",
+      "id": "e4fab940-6167-4179-bd20-467e89b0b788",
+      "joined": "2026-01-01T15:15:33.199269",
+      "left": "2026-01-01T15:15:42.015878",
+      "maxLength": 5,
+      "kills": 125,
+      "score": 1280
+    },
+    {
+      "name": "Ivy",
+      "id": "5725f7b3-623d-4243-864a-b4fef42724c2",
+      "joined": "2026-01-01T15:26:41.988775",
+      "left": "2026-01-01T15:27:57.108545",
+      "maxLength": 18,
+      "kills": 452,
+      "score": 2710
+    },
+    {
+      "name": "Ivy",
+      "id": null,
+      "joined": "2026-01-01T15:30:00.743845",
+      "left": "2026-01-01T15:30:57.617271",
+      "maxLength": 19,
+      "kills": 369,
+      "score": 2380
+    },
+    {
+      "name": "Ivy",
+      "id": "d13b6947-2ebb-47dc-b4b7-d8e1ca021059",
+      "joined": "2026-01-01T15:41:07.633752",
+      "left": "2026-01-01T15:42:46.578637",
+      "maxLength": 47,
+      "kills": 604,
+      "score": 4610
+    },
+    {
+      "name": "Ivy",
+      "id": null,
+      "joined": "2026-01-01T15:51:35.312228",
+      "left": "2026-01-01T15:53:01.858470",
+      "maxLength": 22,
+      "kills": 487,
+      "score": 3160
+    },
+    {
+      "name": "Ivy",
+      "id": null,
+      "joined": "2026-01-01T15:57:02.853883",
+      "left": "2026-01-01T15:57:58.412261",
+      "maxLength": 21,
+      "kills": 363,
+      "score": 2610
+    },
+    {
+      "name": "Ivy",
+      "id": "832e4c3f-f268-4bb8-8a3f-186e6bcf45a6",
+      "joined": "2026-01-01T16:00:55.540115",
+      "left": "2026-01-01T16:04:20.315763",
+      "maxLength": 19,
+      "kills": 342,
+      "score": 2380
+    },
+    {
+      "name": "Ivy",
+      "id": null,
+      "joined": "2026-01-01T16:03:37.181580",
+      "left": "2026-01-01T16:04:20.315224",
+      "maxLength": 19,
+      "kills": 342,
+      "score": 2380
+    },
+    {
+      "name": "Ivy",
+      "id": "aa6cb0ae-0975-4a05-9401-9f67fab0aecd",
+      "joined": "2026-01-01T16:19:39.822806",
+      "left": "2026-01-01T16:20:16.357668",
+      "maxLength": 7,
+      "kills": 227,
+      "score": 1550
+    },
+    {
+      "name": "Ivy",
+      "id": "1dc4e541-324b-41f3-8142-fbf174bd9d42",
+      "joined": "2026-01-01T16:24:41.167903",
+      "left": "2026-01-01T16:24:56.249358",
+      "maxLength": 7,
+      "kills": 191,
+      "score": 1210
+    },
+    {
+      "name": "Ivy",
+      "id": "e2cf28db-b84c-4c97-a870-733df9775c1f",
+      "joined": "2026-01-01T16:27:29.236880",
+      "left": "2026-01-01T16:27:45.780970",
+      "maxLength": 9,
+      "kills": 179,
+      "score": 1170
+    },
+    {
+      "name": "Ivy",
+      "id": "34818d1d-8a02-496e-9326-2818592b69b8",
+      "joined": "2026-01-01T16:36:28.863099",
+      "left": "2026-01-01T16:37:00.998971",
+      "maxLength": 12,
+      "kills": 267,
+      "score": 1740
+    },
+    {
+      "name": "Ivy",
+      "id": "4fc64360-3a1a-4354-9521-79bedbc6fa73",
+      "joined": "2026-01-01T16:41:19.410981",
+      "left": "2026-01-01T16:41:49.801498",
+      "maxLength": 10,
+      "kills": 295,
+      "score": 1930
+    },
+    {
+      "name": "Ivy",
+      "id": null,
+      "joined": "2026-01-01T17:01:40.611794",
+      "left": "2026-01-01T17:02:15.741353",
+      "maxLength": 6,
+      "kills": 265,
+      "score": 1440
+    },
+    {
+      "name": "Train306",
+      "id": "1d7b571c-ab9d-4a22-a062-5decd34f9c9d",
+      "joined": "2026-01-01T17:07:28.967592",
+      "left": null,
+      "maxLength": 0,
+      "kills": 0,
+      "score": 0
+    },
+    {
+      "name": "Ivy",
+      "id": "d16f7b72-82a3-4a25-baab-82df6ff132ae",
+      "joined": "2026-01-01T17:11:28.091750",
+      "left": "2026-01-01T17:12:51.701733",
+      "maxLength": 32,
+      "kills": 346,
+      "score": 3440
+    },
+    {
+      "name": "VERA",
+      "id": "42fca4d2-e81c-4525-86bc-6f572590904e",
+      "joined": "2026-01-01T17:12:51.672370",
+      "left": null,
+      "maxLength": 4,
+      "kills": 0,
+      "score": 1240
+    },
+    {
+      "name": "Ivy",
+      "id": null,
+      "joined": "2026-01-01T17:33:11.307279",
+      "left": "2026-01-01T17:33:51.131833",
+      "maxLength": 13,
+      "kills": 265,
+      "score": 1780
+    },
+    {
+      "name": "Train68",
+      "id": "f9b19ac6-80bf-40ad-8727-bfb5cd0c5999",
+      "joined": "2026-01-01T17:46:39.778946",
+      "left": "2026-01-01T17:46:52.409455",
+      "maxLength": 6,
+      "kills": 173,
+      "score": 990
+    },
+    {
+      "name": "Train721",
+      "id": "1ac8b288-7fd3-46fd-9a83-53405e330890",
+      "joined": "2026-01-01T17:56:51.826852",
+      "left": "2026-01-01T17:57:15.756839",
+      "maxLength": 8,
+      "kills": 220,
+      "score": 710
+    },
+    {
+      "name": "Train280",
+      "id": null,
+      "joined": "2026-01-01T18:00:18.852660",
+      "left": null,
+      "maxLength": 0,
+      "kills": 0,
+      "score": 0
+    },
+    {
+      "name": "IVY",
+      "id": "a9a4b235-9e71-41fa-887c-ad7827faad8f",
+      "joined": "2026-01-01T18:07:14.266148",
+      "left": "2026-01-01T18:07:31.456098",
+      "maxLength": 25,
+      "kills": 298,
+      "score": 1410
+    },
+    {
+      "name": "IVY",
+      "id": "b55a3706-3a62-4ee7-b120-76bc2a241d95",
+      "joined": "2026-01-01T18:15:40.637892",
+      "left": "2026-01-01T18:16:42.716618",
+      "maxLength": 6,
+      "kills": 368,
+      "score": 1080
+    },
+    {
+      "name": "IVY",
+      "id": "ddb98b04-96e0-4868-acc2-300ff7864498",
+      "joined": "2026-01-01T18:18:26.896082",
+      "left": "2026-01-01T18:20:44.452516",
+      "maxLength": 37,
+      "kills": 686,
+      "score": 3970
+    },
+    {
+      "name": "IVY",
+      "id": "a781cbd5-91e2-4136-9559-7011d2e8b34d",
+      "joined": "2026-01-01T18:25:36.195570",
+      "left": "2026-01-01T18:26:33.323823",
+      "maxLength": 15,
+      "kills": 273,
+      "score": 1420
+    },
+    {
+      "name": "IVY",
+      "id": "acd13d8a-77e9-43f6-bb9c-81a3c1bf99cb",
+      "joined": "2026-01-01T18:27:53.508878",
+      "left": "2026-01-01T18:27:56.189176",
+      "maxLength": 4,
+      "kills": 88,
+      "score": 100
+    },
+    {
+      "name": "IVY",
+      "id": "e8019fda-d53a-488e-8947-724454502260",
+      "joined": "2026-01-01T18:29:23.284470",
+      "left": null,
+      "maxLength": 0,
+      "kills": 0,
+      "score": 0
+    },
+    {
+      "name": "IVY",
+      "id": null,
+      "joined": "2026-01-01T18:29:31.992661",
+      "left": "2026-01-01T18:30:13.914130",
+      "maxLength": 9,
+      "kills": 257,
+      "score": 1230
+    },
+    {
+      "name": "Ivy",
+      "id": "03eb9562-a21a-46e1-956d-ac96e89be869",
+      "joined": "2026-01-01T18:31:17.799391",
+      "left": null,
+      "maxLength": 5,
+      "kills": 0,
+      "score": 430
+    }
+  ]
+}
