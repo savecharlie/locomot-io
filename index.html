@@ -779,6 +779,14 @@
                             this.showStatus('You are now HOST');
                         }
                         break;
+
+                    case 'enemy_hit':
+                        if (this.isHost) applyEnemyHit(data);
+                        break;
+
+                    case 'enemy_aoe':
+                        if (this.isHost) applyEnemyAoe(data);
+                        break;
                 }
             },
 
@@ -790,6 +798,8 @@
 
             recentKillAt: new Map(),
             KILL_COOLDOWN_MS: 1000,
+            recentHitAt: new Map(),
+            HIT_COOLDOWN_MS: 200,
 
             // Send our position to server
             sendUpdate(x, y, segments, score) {
@@ -3855,6 +3865,91 @@
             return false;
         }
 
+        function applyEnemyHit(data) {
+            if (!data || !enemies.length) return;
+            const tx = data.x;
+            const ty = data.y;
+            const damage = data.damage || 0;
+            if (typeof tx !== 'number' || typeof ty !== 'number' || damage <= 0) return;
+
+            const candidates = enemies.filter(e => {
+                if (!e.segments || e.segments.length === 0) return false;
+                if (data.name && e.name !== data.name) return false;
+                if (data.team && e.team !== data.team) return false;
+                return true;
+            });
+            const search = candidates.length ? candidates : enemies;
+
+            let best = null;
+            let bestDist = Infinity;
+            for (const e of search) {
+                if (!e.segments) continue;
+                for (const seg of e.segments) {
+                    const dist = Math.abs(seg.x - tx) + Math.abs(seg.y - ty);
+                    if (dist < bestDist) {
+                        bestDist = dist;
+                        best = seg;
+                    }
+                }
+            }
+            if (best && bestDist <= 2) {
+                best.hp -= damage;
+            }
+        }
+
+        function applyEnemyAoe(data) {
+            if (!data || !enemies.length) return;
+            const cx = data.x;
+            const cy = data.y;
+            const range = data.range;
+            const damage = data.damage || 0;
+            if (typeof cx !== 'number' || typeof cy !== 'number' || typeof range !== 'number' || damage <= 0) return;
+
+            const calcAoeDamage = (dist) => {
+                const falloff = 1 - (dist / range) ** 0.5;
+                return damage * Math.max(0.1, falloff);
+            };
+
+            for (const e of enemies) {
+                if (!e.segments) continue;
+                for (let si = 0; si < e.segments.length; si++) {
+                    if (si === 0 && e.segments.length > 1) continue;
+                    const seg = e.segments[si];
+                    const sx = seg.x * GRID + GRID/2;
+                    const sy = seg.y * GRID + GRID/2;
+                    const dist = Math.sqrt((sx - cx)**2 + (sy - cy)**2);
+                    if (dist < range) {
+                        seg.hp -= calcAoeDamage(dist);
+                    }
+                }
+            }
+        }
+
+        function sendProxyHit(targetId, damage) {
+            if (!Multiplayer.connected || !Multiplayer.isHost) return false;
+            if (!targetId || !damage) return false;
+            const now = Date.now();
+            const last = Multiplayer.recentHitAt.get(targetId) || 0;
+            if (now - last < Multiplayer.HIT_COOLDOWN_MS) return false;
+            Multiplayer.recentHitAt.set(targetId, now);
+            Multiplayer.send({ type: 'hit', targetId, damage, proxy: true });
+            return true;
+        }
+
+        function sendProxyKill(targetId, segments, droppedBy) {
+            if (!Multiplayer.connected || !Multiplayer.isHost) return false;
+            if (!targetId) return false;
+            const now = Date.now();
+            const last = Multiplayer.recentKillAt.get(targetId) || 0;
+            if (now - last < Multiplayer.KILL_COOLDOWN_MS) return false;
+            Multiplayer.recentKillAt.set(targetId, now);
+            if (segments && segments.length) {
+                dropPickupsFromSegments(segments, droppedBy ?? targetId);
+            }
+            Multiplayer.send({ type: 'kill', targetId, fromId: 'enemy' });
+            return true;
+        }
+
         function hostResolvePlayerCollisions() {
             if (!Multiplayer.connected || !Multiplayer.isHost) return false;
 
@@ -3862,7 +3957,7 @@
             const players = [];
             const hostInvUntil = invincibleTimer > 0 ? now + invincibleTimer : 0;
 
-            if (snake.length > 0) {
+            if (gameState === 'playing' && snake.length > 0) {
                 players.push({
                     id: Multiplayer.playerId,
                     name: Multiplayer.username || playerName,
@@ -3982,6 +4077,7 @@
         function updateEnemies(dt) {
             const playerHead = snake[0];
             const playerLen = snake.length;
+            const nowMs = Date.now();
             
             // Track which player segments have been damaged this frame (prevent stacking)
             const playerSegmentsDamagedThisFrame = new Set();
@@ -4497,6 +4593,64 @@
                         if (e.segments.length === 0) break;
                     }
                 }
+
+                // Body collisions with other players (host authoritative)
+                if (Multiplayer.connected && Multiplayer.isHost) {
+                    for (const [pid, op] of Multiplayer.otherPlayers) {
+                        if (!op.segments || op.segments.length === 0) continue;
+                        if (teamMode && e.team === (op.team || 'blue')) continue;
+                        if (op.invincibleUntil && nowMs < op.invincibleUntil) continue;
+
+                        const opHead = op.segments[0];
+                        if (!opHead) continue;
+                        let playerKilled = false;
+
+                        if (head.x === opHead.x && head.y === opHead.y) {
+                            const eCount = e.segments.length;
+                            dropPickupsFromSegments(e.segments, e.id);
+                            waveKills += eCount;
+                            e.segments = [];
+                            playerKilled = sendProxyKill(pid, op.segments, pid);
+                            break;
+                        }
+
+                        // Enemy head hit player body: enemy dies
+                        for (let j = 1; j < op.segments.length; j++) {
+                            const ps = op.segments[j];
+                            if (head.x === ps.x && head.y === ps.y) {
+                                const eCount = e.segments.length;
+                                dropPickupsFromSegments(e.segments, e.id);
+                                waveKills += eCount;
+                                e.segments = [];
+                                break;
+                            }
+                        }
+                        if (e.segments.length === 0) break;
+
+                        // Player head hit enemy body: player dies
+                        for (let si = 1; si < e.segments.length; si++) {
+                            const seg = e.segments[si];
+                            if (opHead.x === seg.x && opHead.y === seg.y) {
+                                playerKilled = sendProxyKill(pid, op.segments, pid);
+                                break;
+                            }
+                        }
+                        if (playerKilled) continue;
+
+                        // Body-body collisions: damage both
+                        for (let si = 1; si < e.segments.length; si++) {
+                            const seg = e.segments[si];
+                            for (let j = 1; j < op.segments.length; j++) {
+                                const ps = op.segments[j];
+                                if (seg.x === ps.x && seg.y === ps.y) {
+                                    seg.hp -= 30;
+                                    sendProxyHit(pid, e.damage);
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                }
                 
                 // Remove dead segments
                 for (let j = e.segments.length - 1; j >= 0; j--) {
@@ -4569,6 +4723,7 @@
         }
         
         function updateEnemyProjectiles(dt) {
+            const now = Date.now();
             for (let i = enemyProjectiles.length - 1; i >= 0; i--) {
                 const p = enemyProjectiles[i];
                 if (!p.owner || !p.owner.segments || p.owner.segments.length === 0) {
@@ -4594,6 +4749,28 @@
                                 break;
                             }
                         }
+                    }
+                }
+
+                // Host: apply enemy projectile hits to other players
+                if (p.life > 0 && Multiplayer.connected && Multiplayer.isHost) {
+                    for (const [pid, op] of Multiplayer.otherPlayers) {
+                        if (!op.segments || op.segments.length === 0) continue;
+                        if (teamMode && p.owner && (op.team || 'blue') === p.owner.team) continue;
+                        if (op.invincibleUntil && now < op.invincibleUntil) continue;
+                        for (let si = 0; si < op.segments.length; si++) {
+                            if (si === 0 && op.segments.length > 1) continue;
+                            const seg = op.segments[si];
+                            const sx = seg.x * GRID + GRID/2, sy = seg.y * GRID + GRID/2;
+                            const dist = Math.sqrt((p.x - sx)**2 + (p.y - sy)**2);
+                            if (dist < p.size + GRID/2) {
+                                sendProxyHit(pid, p.damage);
+                                p.life = 0;
+                                particles.push({ x: p.x, y: p.y, vx: 0, vy: 0, life: 10, color: '#f00' });
+                                break;
+                            }
+                        }
+                        if (p.life <= 0) break;
                     }
                 }
                 
@@ -4668,8 +4845,19 @@
                                 Multiplayer.send({ type: 'hit', targetId: e.playerId, damage: p.damage });
                             } else {
                                 // Hit enemy AI
-                                seg.hp -= p.damage;
-                                SpawnDirector.onCombat(p.damage, 0); // Player dealt damage
+                                if (Multiplayer.connected && !Multiplayer.isHost) {
+                                    Multiplayer.send({
+                                        type: 'enemy_hit',
+                                        name: e.name,
+                                        team: e.team,
+                                        x: seg.x,
+                                        y: seg.y,
+                                        damage: p.damage
+                                    });
+                                } else {
+                                    seg.hp -= p.damage;
+                                    SpawnDirector.onCombat(p.damage, 0); // Player dealt damage
+                                }
                                 // sounds disabled
                             }
                             break outer;
@@ -4696,16 +4884,26 @@
                         const falloff = 1 - (dist / type.range) ** 0.5; // sqrt falloff = steep near edge
                         return type.damage * Math.max(0.1, falloff); // min 10% damage
                     };
-                    for (const e of enemies) {
-                        for (let si = 0; si < e.segments.length; si++) {
-                            if (si === 0 && e.segments.length > 1) continue;
-                            const seg = e.segments[si];
-                            const sx = seg.x * GRID + GRID/2, sy = seg.y * GRID + GRID/2;
-                            const dist = Math.sqrt((sx - cx)**2 + (sy - cy)**2);
-                            if (dist < type.range) {
-                                const dmg = calcAoeDamage(dist);
-                                seg.hp -= dmg;
-                                SpawnDirector.onCombat(dmg, 0);
+                    if (Multiplayer.connected && !Multiplayer.isHost) {
+                        Multiplayer.send({
+                            type: 'enemy_aoe',
+                            x: cx,
+                            y: cy,
+                            range: type.range,
+                            damage: type.damage
+                        });
+                    } else {
+                        for (const e of enemies) {
+                            for (let si = 0; si < e.segments.length; si++) {
+                                if (si === 0 && e.segments.length > 1) continue;
+                                const seg = e.segments[si];
+                                const sx = seg.x * GRID + GRID/2, sy = seg.y * GRID + GRID/2;
+                                const dist = Math.sqrt((sx - cx)**2 + (sy - cy)**2);
+                                if (dist < type.range) {
+                                    const dmg = calcAoeDamage(dist);
+                                    seg.hp -= dmg;
+                                    SpawnDirector.onCombat(dmg, 0);
+                                }
                             }
                         }
                     }
@@ -5683,7 +5881,10 @@
                 
                 // SPECTATOR MODE: Keep updating when dead so player can watch
                 if (gameState === 'dead') {
-                    if (Multiplayer.connected && Multiplayer.isHost) updateEnemies(dt);
+                    if (Multiplayer.connected && Multiplayer.isHost) {
+                        hostResolvePlayerCollisions();
+                        updateEnemies(dt);
+                    }
                     updateEnemyProjectiles(dt);
                     updateParticles();
                     updateCamera();
@@ -5694,7 +5895,10 @@
 
                 // CONTINUOUS ARENA: Keep arena alive during start screen
                 if (gameState === 'start' && enemies.length > 0) {
-                    if (Multiplayer.connected && Multiplayer.isHost) updateEnemies(dt);
+                    if (Multiplayer.connected && Multiplayer.isHost) {
+                        hostResolvePlayerCollisions();
+                        updateEnemies(dt);
+                    }
                     updateEnemyProjectiles(dt);
                     updateParticles();
                     updateLeaderboard();

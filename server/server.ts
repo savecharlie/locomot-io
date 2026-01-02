@@ -382,20 +382,32 @@ export default class LocomotServer implements Party.Server {
 
         case 'hit':
           // Validate hit - check proximity before broadcasting
-          const attacker = this.state.players.get(sender.id);
-          const target = this.state.players.get(data.targetId);
-          if (attacker && target && attacker.segments && target.segments) {
-            const ax = attacker.x, ay = attacker.y;
-            const tx = target.x, ty = target.y;
-            const dist = Math.abs(ax - tx) + Math.abs(ay - ty);
-            // Only allow hits within reasonable range (15 tiles)
-            if (dist < 15) {
+          {
+            const target = this.state.players.get(data.targetId);
+            if (!target) break;
+            if (sender.id === this.state.hostId && data.proxy) {
               this.room.broadcast(JSON.stringify({
                 type: 'hit',
                 targetId: data.targetId,
                 damage: Math.min(data.damage, 50), // Cap damage
                 fromId: sender.id
               }));
+              break;
+            }
+            const attacker = this.state.players.get(sender.id);
+            if (attacker && attacker.segments && target.segments) {
+              const ax = attacker.x, ay = attacker.y;
+              const tx = target.x, ty = target.y;
+              const dist = Math.abs(ax - tx) + Math.abs(ay - ty);
+              // Only allow hits within reasonable range (15 tiles)
+              if (dist < 15) {
+                this.room.broadcast(JSON.stringify({
+                  type: 'hit',
+                  targetId: data.targetId,
+                  damage: Math.min(data.damage, 50), // Cap damage
+                  fromId: sender.id
+                }));
+              }
             }
           }
           break;
@@ -449,6 +461,17 @@ export default class LocomotServer implements Party.Server {
             fromId: sender.id
           }), [sender.id]); // Exclude requester
           console.log(`Arena request from ${sender.id} broadcast to others`);
+          break;
+
+        case 'enemy_hit':
+        case 'enemy_aoe':
+          if (!this.state.hostId || sender.id === this.state.hostId) break;
+          for (const [id, conn] of this.room.getConnections()) {
+            if (id === this.state.hostId) {
+              conn.send(JSON.stringify(data));
+              break;
+            }
+          }
           break;
 
         case 'enemy_state':
