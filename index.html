@@ -15,12 +15,17 @@
         html, body { width: 100%; height: 100%; overflow: hidden; touch-action: none; }
         body { background: #0a0610; font-family: 'Press Start 2P', monospace; display: flex; flex-direction: column; color: #fff; user-select: none; -webkit-user-select: none; }
         
-        .leaderboard { position: absolute; top: 50px; right: 10px; background: rgba(10, 6, 16, 0.85); border: 1px solid #333; border-radius: 8px; padding: 10px; min-width: 120px; z-index: 20; pointer-events: none; }
+        .leaderboard { position: absolute; top: 70px; right: 10px; background: rgba(10, 6, 16, 0.85); border: 1px solid #333; border-radius: 8px; padding: 10px; min-width: 120px; z-index: 20; pointer-events: none; transition: opacity 0.3s, transform 0.3s; }
         .leaderboard h3 { font-size: 8px; color: #888; margin-bottom: 8px; text-align: center; }
         .leaderboard-entry { display: flex; justify-content: space-between; align-items: center; font-size: 7px; padding: 3px 0; border-bottom: 1px solid #222; }
         .leaderboard-entry:last-child { border-bottom: none; }
         .leaderboard-entry.player { color: #0f0; }
         .leaderboard-entry.neural { color: #f0f; }
+        /* Hide leaderboard on mobile, show on tap */
+        @media (max-width: 768px) {
+            .leaderboard { opacity: 0; transform: translateX(100%); pointer-events: none; }
+            .leaderboard.expanded { opacity: 1; transform: translateX(0); pointer-events: auto; }
+        }
         .leaderboard-entry.mvp { background: rgba(255,255,0,0.2); border-left: 2px solid #ff0; }
         .leaderboard-rank { color: #666; width: 16px; }
         .leaderboard-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin: 0 6px; }
@@ -31,7 +36,67 @@
         .len-color { color: #0f0; }
         .wave-color { color: #5ff; }
         .score-color { color: #ff5; }
-        
+
+        /* Railroad Dispatch Ticker */
+        .ticker {
+            position: absolute;
+            top: 38px;
+            left: 0;
+            right: 0;
+            height: 28px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 15;
+            pointer-events: none;
+            overflow: hidden;
+        }
+        .ticker-content {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 4px 16px;
+            background: rgba(10, 6, 16, 0.85);
+            border-radius: 4px;
+            font-size: 12px;
+            opacity: 0;
+            transform: translateY(-10px);
+            transition: opacity 0.3s, transform 0.3s;
+            white-space: nowrap;
+            max-width: 90%;
+        }
+        .ticker-content.visible {
+            opacity: 1;
+            transform: translateY(0);
+        }
+        .ticker-badge {
+            font-size: 10px;
+            font-weight: bold;
+            padding: 2px 6px;
+            border-radius: 3px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        .ticker-badge.dispatch { background: #0aa; color: #000; }
+        .ticker-badge.alert { background: #f44; color: #fff; animation: alertPulse 0.5s ease-in-out infinite; }
+        .ticker-badge.report { background: #fa0; color: #000; }
+        .ticker-badge.status { background: #0c0; color: #000; }
+        @keyframes alertPulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.7; }
+        }
+        .ticker-message { color: #fff; text-shadow: 0 0 8px currentColor; }
+        .ticker-expand {
+            position: absolute;
+            top: 38px;
+            left: 0;
+            right: 0;
+            height: 28px;
+            z-index: 14;
+            pointer-events: auto;
+            cursor: pointer;
+        }
+
         .game-container { flex: 1; position: relative; overflow: hidden; }
         #gameCanvas { display: block; width: 100%; height: 100%; cursor: crosshair; }
         #gameCanvas.playing { cursor: none; }
@@ -155,7 +220,16 @@
         <div class="hud-item score-color"><span>★</span><span id="score">0</span></div>
         <div class="hud-item" style="color: #0fc;"><span>👁</span><span id="patternHud">-</span></div>
     </div>
-    
+
+    <!-- Railroad Dispatch Ticker -->
+    <div class="ticker" id="ticker">
+        <div class="ticker-content" id="tickerContent">
+            <span class="ticker-badge dispatch">DISPATCH</span>
+            <span class="ticker-message" id="tickerMessage">Awaiting dispatch...</span>
+        </div>
+    </div>
+    <div class="ticker-expand" id="tickerExpand"></div>
+
     <div class="game-container">
         <canvas id="gameCanvas"></canvas>
         <div class="touch-indicator">MOBILE: SWIPE TO TURN • HOLD+DRAG TO AIM | DESKTOP: WASD/ARROWS • MOUSE TO AIM</div>
@@ -1219,7 +1293,222 @@
                 }
             }
         };
-        
+
+        // === RAILROAD DISPATCH TICKER ===
+        const Ticker = {
+            queue: [],
+            current: null,
+            lastDisplay: 0,
+            minInterval: 2000,      // Min ms between messages
+            displayDuration: 3500,  // How long each shows
+            lastEventTypes: {},     // Cooldown per event type
+
+            // Player state tracking
+            lastRank: null,
+            lastLength: 0,
+            personalBest: 0,
+            lastLeaderId: null,
+            leaderNearbyWarned: false,
+            lastLeaderName: null,
+
+            // DOM refs
+            content: null,
+            badge: null,
+            message: null,
+
+            init() {
+                this.content = document.getElementById('tickerContent');
+                this.badge = this.content?.querySelector('.ticker-badge');
+                this.message = document.getElementById('tickerMessage');
+                // Tap to expand leaderboard
+                document.getElementById('tickerExpand')?.addEventListener('click', () => {
+                    const lb = document.getElementById('leaderboard');
+                    if (lb) lb.classList.toggle('expanded');
+                });
+            },
+
+            // Queue an event with priority (1=highest)
+            queue(type, msg, priority = 3) {
+                // Cooldown check - same event type can't repeat within 10s
+                const now = Date.now();
+                const typeKey = type + ':' + msg.substring(0, 20);
+                if (this.lastEventTypes[typeKey] && now - this.lastEventTypes[typeKey] < 10000) {
+                    return; // Skip duplicate
+                }
+                this.lastEventTypes[typeKey] = now;
+
+                // Add to queue
+                this.queue.push({ type, msg, priority, time: now });
+
+                // Sort by priority (lower = more important)
+                this.queue.sort((a, b) => a.priority - b.priority);
+
+                // Keep queue manageable
+                if (this.queue.length > 5) this.queue.pop();
+
+                // Priority 1 events interrupt immediately
+                if (priority === 1 && this.current) {
+                    this.hide();
+                    setTimeout(() => this.showNext(), 100);
+                }
+            },
+
+            // Alias for queue (cleaner API)
+            dispatch(msg, priority = 3) { this.queue('dispatch', msg, priority); },
+            alert(msg, priority = 1) { this.queue('alert', msg, priority); },
+            report(msg, priority = 2) { this.queue('report', msg, priority); },
+            status(msg, priority = 3) { this.queue('status', msg, priority); },
+
+            show(type, msg) {
+                if (!this.content || !this.badge || !this.message) return;
+
+                // Update badge
+                this.badge.className = 'ticker-badge ' + type;
+                this.badge.textContent = type.toUpperCase();
+
+                // Update message
+                this.message.textContent = msg;
+
+                // Show with animation
+                this.content.classList.add('visible');
+                this.current = { type, msg };
+                this.lastDisplay = Date.now();
+
+                // Auto-hide after duration
+                setTimeout(() => {
+                    if (this.current?.msg === msg) {
+                        this.hide();
+                    }
+                }, this.displayDuration);
+            },
+
+            hide() {
+                if (!this.content) return;
+                this.content.classList.remove('visible');
+                this.current = null;
+                // Check queue for next message
+                setTimeout(() => this.showNext(), 300);
+            },
+
+            showNext() {
+                const now = Date.now();
+                // Rate limit
+                if (now - this.lastDisplay < this.minInterval) return;
+                // Get next from queue
+                if (this.queue.length > 0 && !this.current) {
+                    const event = this.queue.shift();
+                    this.show(event.type, event.msg);
+                }
+            },
+
+            // Called every frame to check for events
+            update(gameState) {
+                if (gameState !== 'playing') return;
+
+                const now = Date.now();
+
+                // Process queue if idle
+                if (!this.current && this.queue.length > 0 && now - this.lastDisplay >= this.minInterval) {
+                    this.showNext();
+                }
+            },
+
+            // === Event Detectors ===
+
+            // Check if player rank changed
+            checkRank(currentRank, playerLength) {
+                if (this.lastRank !== null && currentRank !== this.lastRank) {
+                    if (currentRank < this.lastRank) {
+                        if (currentRank === 1) {
+                            this.alert("YOU'RE THE LEADER - all aboard!", 1);
+                        } else {
+                            this.status(`Climbed to #${currentRank}!`, 3);
+                        }
+                    } else if (this.lastRank <= 5 && currentRank > this.lastRank) {
+                        this.status(`Dropped to #${currentRank}`, 4);
+                    }
+                }
+                this.lastRank = currentRank;
+
+                // Personal best
+                if (playerLength > this.personalBest) {
+                    if (this.personalBest > 5 && playerLength >= this.personalBest + 3) {
+                        this.status(`NEW PERSONAL BEST: ${playerLength} cars!`, 2);
+                    }
+                    this.personalBest = playerLength;
+                }
+                this.lastLength = playerLength;
+            },
+
+            // Check if leader is hunting player
+            checkHunted(playerPos, leaderPos, leaderId, leaderName, playerId) {
+                if (!leaderPos || leaderId === playerId) {
+                    this.leaderNearbyWarned = false;
+                    return;
+                }
+
+                const dx = playerPos.x - leaderPos.x;
+                const dy = playerPos.y - leaderPos.y;
+                const dist = Math.sqrt(dx * dx + dy * dy);
+
+                if (dist < 200 && !this.leaderNearbyWarned) {
+                    this.alert(`${leaderName} is hunting you!`, 1);
+                    this.leaderNearbyWarned = true;
+                } else if (dist > 350) {
+                    this.leaderNearbyWarned = false;
+                }
+            },
+
+            // New leader crowned
+            onNewLeader(name, length, isNeural = false) {
+                if (name !== this.lastLeaderName) {
+                    if (isNeural) {
+                        this.dispatch(`Neural AI ${name} takes the lead at ${length} cars`, 2);
+                    } else {
+                        this.dispatch(`${name} takes the lead at ${length} cars`, 2);
+                    }
+                    this.lastLeaderName = name;
+                }
+            },
+
+            // Someone got a kill
+            onKill(killer, victim, victimLength, isPlayerKill = false) {
+                // Big kill (victim was long)
+                if (victimLength >= 10) {
+                    this.report(`${killer} derails ${victim} (${victimLength} cars)`, 2);
+                }
+                // Player killed neural AI
+                if (isPlayerKill && victim.includes('Bot') || victim.includes('Neural')) {
+                    this.status(`Neural ${victim} shut down!`, 3);
+                }
+            },
+
+            // Kill streak
+            onKillStreak(name, count, isPlayer = false) {
+                if (count >= 3) {
+                    if (isPlayer) {
+                        this.report(`YOU'RE ON A ${count}-KILL STREAK!`, 1);
+                    } else {
+                        this.report(`${name} on a ${count}-kill streak!`, 2);
+                    }
+                }
+            },
+
+            // Leader was dethroned
+            onLeaderDied(leaderName, killerName) {
+                this.report(`${killerName} derails the leader ${leaderName}!`, 1);
+                this.lastLeaderName = null;
+            },
+
+            // Zone activity (future)
+            onHotZone(zone) {
+                this.dispatch(`Heavy fighting ${zone} side`, 4);
+            }
+        };
+
+        // Initialize ticker when DOM ready
+        document.addEventListener('DOMContentLoaded', () => Ticker.init());
+
         // === HIGHLIGHT CLIP RECORDER ===
         const HighlightRecorder = {
             isRecording: false,
@@ -1375,6 +1664,10 @@
 
                 if (this.killStreak >= 2) {
                     this.triggerHighlight('kill_streak', { streak: this.killStreak, killer: killerName, victim: victimName });
+                    // Announce kill streak on ticker
+                    if (this.killStreak >= 3) {
+                        Ticker.onKillStreak(killerName, this.killStreak, killerName === playerName);
+                    }
                 } else {
                     this.triggerHighlight('kill', { killer: killerName, victim: victimName });
                 }
@@ -4564,11 +4857,16 @@
                                 if (si === 0 && j > 0) {
                                     // Enemy head hit player body: enemy dies
                                     const segCount = e.segments.length;
+                                    const victimName = e.name || 'Train';
+                                    const wasNeural = e.personality?.neural;
                                     dropPickupsFromSegments(e.segments, e.id);
                                     score += segCount * 15;
                                     waveKills += segCount;
                                     strategyClassifier.onKill(e.segments.length);
                                     strategyClassifier.onPlayerKilledEnemy(e.id);
+                                    HighlightRecorder.onKill(playerName, victimName);
+                                    Ticker.onKill(playerName, victimName, segCount, true);
+                                    if (wasNeural) Ticker.status(`Neural ${victimName} shut down!`, 3);
                                     e.segments = [];
                                     haptic('medium');
                                     break;
@@ -5311,10 +5609,34 @@
             document.getElementById('snakeLen').textContent = snake.length;
             // Calculate rank
             let rank = 1;
+            let leaderName = playerName;
+            let leaderLength = snake.length;
+            let leaderId = 'player';
+            let leaderPos = snake[0] ? { x: snake[0].x * GRID, y: snake[0].y * GRID } : null;
+            let leaderIsNeural = false;
+
             for (const e of enemies) {
                 if (e.segments && e.segments.length > snake.length) rank++;
+                if (e.segments && e.segments.length > leaderLength) {
+                    leaderLength = e.segments.length;
+                    leaderName = e.name || 'Train';
+                    leaderId = e.id;
+                    leaderPos = { x: e.segments[0].x * GRID, y: e.segments[0].y * GRID };
+                    leaderIsNeural = e.personality?.neural || false;
+                }
             }
             document.getElementById('waveNum').textContent = '#' + rank;
+
+            // Ticker updates
+            if (gameState === 'playing') {
+                Ticker.checkRank(rank, snake.length);
+                Ticker.onNewLeader(leaderName, leaderLength, leaderIsNeural);
+                // Check if being hunted
+                if (snake[0] && leaderId !== 'player') {
+                    const playerPos = { x: snake[0].x * GRID, y: snake[0].y * GRID };
+                    Ticker.checkHunted(playerPos, leaderPos, leaderId, leaderName, 'player');
+                }
+            }
 
             // Show active power-ups or score
             let powerupStatus = [];
@@ -5856,7 +6178,7 @@
                         respawn();
                     }
                     updateEnemyProjectiles(dt); updateProjectiles(dt); fireGuns(time); updateParticles();
-                    updateWaves(time, dt); updateCamera(); updateHUD(); updateLeaderboard();
+                    updateWaves(time, dt); updateCamera(); updateHUD(); updateLeaderboard(); Ticker.update(gameState);
                     Multiplayer.broadcastEnemyState(); // Host syncs enemies to all clients
                     Multiplayer.debugStatus(); // Debug logging
                     ruleEngine.update(); // Gödel layer tick
@@ -6095,6 +6417,10 @@
             canvas.classList.add('playing');
             // Report join to server for player history
             devMode.reportJoin(Multiplayer.username || 'Anonymous', Multiplayer.playerId);
+            // Welcome dispatch
+            Ticker.dispatch(`${playerName} has joined the rails`, 4);
+            Ticker.lastRank = null; // Reset rank tracking
+            Ticker.personalBest = 0;
         });
 
         document.getElementById('startTeams').addEventListener('click', () => {
@@ -6116,6 +6442,10 @@
             canvas.classList.add('playing');
             // Report join to server for player history
             devMode.reportJoin(Multiplayer.username || 'Anonymous', Multiplayer.playerId);
+            // Welcome dispatch
+            Ticker.dispatch(`${playerName} has joined the rails`, 4);
+            Ticker.lastRank = null;
+            Ticker.personalBest = 0;
         });
 
         document.getElementById('usernameInputDeath').addEventListener('change', (e) => {
