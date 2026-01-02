@@ -4,192 +4,344 @@
     <title>Train Turn Spark Concepts</title>
     <style>
         body { background: #0a0610; color: #fff; font-family: monospace; padding: 20px; }
-        .concept { display: inline-block; margin: 20px; text-align: center; }
+        .row { margin-bottom: 30px; }
+        h1 { color: #0f0; }
+        h2 { color: #ff0; font-size: 14px; margin-top: 30px; border-bottom: 1px solid #333; padding-bottom: 8px; }
+        .concept { display: inline-block; margin: 10px; text-align: center; vertical-align: top; }
         canvas { border: 1px solid #333; background: #0a0610; }
-        h2 { color: #ff0; font-size: 14px; }
-        p { color: #888; font-size: 12px; max-width: 200px; }
+        h3 { color: #0ff; font-size: 11px; margin: 5px 0; }
+        p { color: #888; font-size: 10px; max-width: 150px; margin: 5px auto; }
     </style>
 </head>
 <body>
     <h1>🚂 Train Turn Spark Concepts</h1>
 
+    <h2>ARC BURST VARIATIONS (Based on C)</h2>
+
     <div class="concept">
-        <h2>A: Classic Wheel Sparks</h2>
-        <canvas id="conceptA" width="200" height="200"></canvas>
-        <p>Sparks fly from wheels during turn, trailing behind</p>
+        <h3>C1: Tight Arc Burst</h3>
+        <canvas id="c1" width="150" height="150"></canvas>
+        <p>Sparks in 90° arc behind turn</p>
     </div>
 
     <div class="concept">
-        <h2>B: Rail Grind Sparks</h2>
-        <canvas id="conceptB" width="200" height="200"></canvas>
-        <p>Sparks along the rail/ground as train pivots</p>
+        <h3>C2: Wide Spray</h3>
+        <canvas id="c2" width="150" height="150"></canvas>
+        <p>120° spray with velocity</p>
     </div>
 
     <div class="concept">
-        <h2>C: Burst Sparks</h2>
-        <canvas id="conceptC" width="200" height="200"></canvas>
-        <p>Explosive burst on sharp turns</p>
+        <h3>C3: Dense Shower</h3>
+        <canvas id="c3" width="150" height="150"></canvas>
+        <p>Many small sparks, tight arc</p>
     </div>
 
     <div class="concept">
-        <h2>D: Arc Trail</h2>
-        <canvas id="conceptD" width="200" height="200"></canvas>
-        <p>Curved spark trail following turn arc</p>
+        <h3>C4: Streak Lines</h3>
+        <canvas id="c4" width="150" height="150"></canvas>
+        <p>Long streak sparks</p>
+    </div>
+
+    <div class="concept">
+        <h3>C5: Gradient Fade</h3>
+        <canvas id="c5" width="150" height="150"></canvas>
+        <p>Fading intensity across arc</p>
+    </div>
+
+    <div class="concept">
+        <h3>C6: Double Layer</h3>
+        <canvas id="c6" width="150" height="150"></canvas>
+        <p>Inner hot, outer cool</p>
+    </div>
+
+    <div class="concept">
+        <h3>C7: Blocky Pixels</h3>
+        <canvas id="c7" width="150" height="150"></canvas>
+        <p>Retro pixel sparks</p>
+    </div>
+
+    <div class="concept">
+        <h3>C8: Rail Scrape</h3>
+        <canvas id="c8" width="150" height="150"></canvas>
+        <p>Ground-hugging arc</p>
     </div>
 
 <script>
-// Concept A: Classic Wheel Sparks
-const ctxA = document.getElementById('conceptA').getContext('2d');
-function drawConceptA(frame) {
-    ctxA.fillStyle = '#0a0610';
-    ctxA.fillRect(0, 0, 200, 200);
+const GRID = 12;
 
-    // Draw train head
-    ctxA.fillStyle = '#0f0';
-    ctxA.fillRect(90, 80, 20, 20);
-
-    // Turn indicator
-    ctxA.strokeStyle = '#0f044';
-    ctxA.lineWidth = 2;
-    ctxA.beginPath();
-    ctxA.arc(100, 90, 30, Math.PI, Math.PI * 1.5);
-    ctxA.stroke();
-
-    // Wheel sparks - small particles trailing from corners
-    const sparks = [];
-    for (let i = 0; i < 8; i++) {
-        sparks.push({
-            x: 90 + Math.random() * 5,
-            y: 100 + i * 3,
-            size: 2 + Math.random() * 2,
-            color: Math.random() > 0.5 ? '#ff0' : '#f80'
-        });
-    }
-
-    for (const s of sparks) {
-        ctxA.fillStyle = s.color;
-        ctxA.shadowColor = s.color;
-        ctxA.shadowBlur = 5;
-        ctxA.fillRect(s.x - s.size/2, s.y - s.size/2, s.size, s.size);
-    }
-    ctxA.shadowBlur = 0;
-
-    // Label
-    ctxA.fillStyle = '#888';
-    ctxA.font = '10px monospace';
-    ctxA.fillText('Sparks trail from wheel', 30, 180);
+function drawTrain(ctx, x, y, color) {
+    ctx.fillStyle = color;
+    ctx.fillRect(x - GRID/2, y - GRID/2, GRID, GRID);
+    ctx.strokeStyle = '#fff';
+    ctx.lineWidth = 1;
+    ctx.strokeRect(x - GRID/2, y - GRID/2, GRID, GRID);
 }
-drawConceptA(0);
 
-// Concept B: Rail Grind Sparks
-const ctxB = document.getElementById('conceptB').getContext('2d');
-function drawConceptB() {
-    ctxB.fillStyle = '#0a0610';
-    ctxB.fillRect(0, 0, 200, 200);
+// C1: Tight Arc Burst - 90° arc behind turn point
+(function() {
+    const ctx = document.getElementById('c1').getContext('2d');
+    ctx.fillStyle = '#0a0610';
+    ctx.fillRect(0, 0, 150, 150);
 
-    // Draw train head
-    ctxB.fillStyle = '#f0f';
-    ctxB.fillRect(90, 80, 20, 20);
+    drawTrain(ctx, 75, 60, '#0f0');
 
-    // Rail line
-    ctxB.strokeStyle = '#333';
-    ctxB.lineWidth = 3;
-    ctxB.beginPath();
-    ctxB.moveTo(50, 100);
-    ctxB.lineTo(100, 100);
-    ctxB.lineTo(100, 50);
-    ctxB.stroke();
+    // 90° arc of sparks (pointing back-left for a right turn)
+    const cx = 75, cy = 72;
+    const startAngle = Math.PI * 0.5;  // down
+    const endAngle = Math.PI;           // left
 
-    // Ground sparks along turn
     for (let i = 0; i < 12; i++) {
-        const angle = (Math.PI / 2) * (i / 12);
-        const x = 100 - Math.sin(angle) * 15;
-        const y = 100 - Math.cos(angle) * 15;
+        const t = i / 11;
+        const angle = startAngle + t * (endAngle - startAngle);
+        const dist = 8 + Math.random() * 15;
+        const x = cx + Math.cos(angle) * dist;
+        const y = cy + Math.sin(angle) * dist;
 
-        ctxB.fillStyle = i % 2 ? '#ff0' : '#fa0';
-        ctxB.shadowColor = '#ff0';
-        ctxB.shadowBlur = 4;
-        ctxB.beginPath();
-        ctxB.arc(x, y, 1.5, 0, Math.PI * 2);
-        ctxB.fill();
+        ctx.fillStyle = Math.random() > 0.3 ? '#ff0' : '#f80';
+        ctx.shadowColor = '#ff0';
+        ctx.shadowBlur = 4;
+        ctx.beginPath();
+        ctx.arc(x, y, 1.5 + Math.random(), 0, Math.PI * 2);
+        ctx.fill();
     }
-    ctxB.shadowBlur = 0;
+    ctx.shadowBlur = 0;
+})();
 
-    ctxB.fillStyle = '#888';
-    ctxB.font = '10px monospace';
-    ctxB.fillText('Sparks along turn arc', 35, 180);
-}
-drawConceptB();
+// C2: Wide Spray - 120° with velocity lines
+(function() {
+    const ctx = document.getElementById('c2').getContext('2d');
+    ctx.fillStyle = '#0a0610';
+    ctx.fillRect(0, 0, 150, 150);
 
-// Concept C: Burst Sparks
-const ctxC = document.getElementById('conceptC').getContext('2d');
-function drawConceptC() {
-    ctxC.fillStyle = '#0a0610';
-    ctxC.fillRect(0, 0, 200, 200);
+    drawTrain(ctx, 75, 60, '#f0f');
 
-    // Draw train head
-    ctxC.fillStyle = '#0ff';
-    ctxC.fillRect(90, 80, 20, 20);
+    const cx = 75, cy = 72;
+    const startAngle = Math.PI * 0.4;
+    const endAngle = Math.PI * 1.1;
 
-    // Burst of sparks
-    for (let i = 0; i < 16; i++) {
-        const angle = (Math.PI * 2 / 16) * i + Math.PI * 0.75;
-        const dist = 15 + Math.random() * 20;
-        const x = 90 + Math.cos(angle) * dist;
-        const y = 100 + Math.sin(angle) * dist;
+    for (let i = 0; i < 10; i++) {
+        const t = i / 9;
+        const angle = startAngle + t * (endAngle - startAngle);
+        const dist = 12 + Math.random() * 18;
+        const x = cx + Math.cos(angle) * dist;
+        const y = cy + Math.sin(angle) * dist;
 
-        const colors = ['#ff0', '#f80', '#fa0', '#fff'];
-        ctxC.fillStyle = colors[i % 4];
-        ctxC.shadowColor = ctxC.fillStyle;
-        ctxC.shadowBlur = 6;
+        // Velocity line
+        ctx.strokeStyle = `rgba(255, ${150 + Math.random() * 100}, 0, 0.8)`;
+        ctx.shadowColor = '#ff0';
+        ctx.shadowBlur = 3;
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(cx + Math.cos(angle) * 8, cy + Math.sin(angle) * 8);
+        ctx.lineTo(x, y);
+        ctx.stroke();
 
-        // Spark shape - small line
-        ctxC.save();
-        ctxC.translate(x, y);
-        ctxC.rotate(angle);
-        ctxC.fillRect(-4, -1, 8, 2);
-        ctxC.restore();
+        // Spark head
+        ctx.fillStyle = '#fff';
+        ctx.beginPath();
+        ctx.arc(x, y, 2, 0, Math.PI * 2);
+        ctx.fill();
     }
-    ctxC.shadowBlur = 0;
+    ctx.shadowBlur = 0;
+})();
 
-    ctxC.fillStyle = '#888';
-    ctxC.font = '10px monospace';
-    ctxC.fillText('Burst on sharp turn', 45, 180);
-}
-drawConceptC();
+// C3: Dense Shower - many small sparks
+(function() {
+    const ctx = document.getElementById('c3').getContext('2d');
+    ctx.fillStyle = '#0a0610';
+    ctx.fillRect(0, 0, 150, 150);
 
-// Concept D: Arc Trail
-const ctxD = document.getElementById('conceptD').getContext('2d');
-function drawConceptD() {
-    ctxD.fillStyle = '#0a0610';
-    ctxD.fillRect(0, 0, 200, 200);
+    drawTrain(ctx, 75, 60, '#0ff');
 
-    // Draw train head
-    ctxD.fillStyle = '#ff0';
-    ctxD.fillRect(90, 80, 20, 20);
+    const cx = 75, cy = 72;
 
-    // Arc trail of fading sparks
-    for (let i = 0; i < 20; i++) {
-        const t = i / 20;
-        const angle = Math.PI * 0.5 + t * Math.PI * 0.5;
-        const x = 100 + Math.cos(angle) * 25;
-        const y = 90 + Math.sin(angle) * 25;
+    for (let i = 0; i < 30; i++) {
+        const angle = Math.PI * 0.5 + Math.random() * Math.PI * 0.6;
+        const dist = 5 + Math.random() * 20;
+        const x = cx + Math.cos(angle) * dist;
+        const y = cy + Math.sin(angle) * dist;
 
-        const alpha = 1 - t;
-        ctxD.fillStyle = `rgba(255, ${180 + t * 75}, 0, ${alpha})`;
-        ctxD.shadowColor = '#ff0';
-        ctxD.shadowBlur = 3 * alpha;
+        const colors = ['#ff0', '#fa0', '#f80', '#fff'];
+        ctx.fillStyle = colors[Math.floor(Math.random() * colors.length)];
+        ctx.shadowColor = ctx.fillStyle;
+        ctx.shadowBlur = 2;
 
-        const size = 3 * (1 - t * 0.5);
-        ctxD.fillRect(x - size/2, y - size/2, size, size);
+        const size = 1 + Math.random() * 1.5;
+        ctx.fillRect(x - size/2, y - size/2, size, size);
     }
-    ctxD.shadowBlur = 0;
+    ctx.shadowBlur = 0;
+})();
 
-    ctxD.fillStyle = '#888';
-    ctxD.font = '10px monospace';
-    ctxD.fillText('Fading arc trail', 50, 180);
-}
-drawConceptD();
+// C4: Streak Lines - long sparks
+(function() {
+    const ctx = document.getElementById('c4').getContext('2d');
+    ctx.fillStyle = '#0a0610';
+    ctx.fillRect(0, 0, 150, 150);
+
+    drawTrain(ctx, 75, 60, '#ff0');
+
+    const cx = 75, cy = 72;
+
+    for (let i = 0; i < 8; i++) {
+        const angle = Math.PI * 0.55 + (i / 7) * Math.PI * 0.5;
+        const len = 15 + Math.random() * 12;
+
+        const grad = ctx.createLinearGradient(
+            cx, cy,
+            cx + Math.cos(angle) * len,
+            cy + Math.sin(angle) * len
+        );
+        grad.addColorStop(0, '#fff');
+        grad.addColorStop(0.3, '#ff0');
+        grad.addColorStop(1, 'transparent');
+
+        ctx.strokeStyle = grad;
+        ctx.lineWidth = 2;
+        ctx.shadowColor = '#ff0';
+        ctx.shadowBlur = 4;
+        ctx.beginPath();
+        ctx.moveTo(cx + Math.cos(angle) * 6, cy + Math.sin(angle) * 6);
+        ctx.lineTo(cx + Math.cos(angle) * len, cy + Math.sin(angle) * len);
+        ctx.stroke();
+    }
+    ctx.shadowBlur = 0;
+})();
+
+// C5: Gradient Fade - fading intensity
+(function() {
+    const ctx = document.getElementById('c5').getContext('2d');
+    ctx.fillStyle = '#0a0610';
+    ctx.fillRect(0, 0, 150, 150);
+
+    drawTrain(ctx, 75, 60, '#f80');
+
+    const cx = 75, cy = 72;
+
+    for (let i = 0; i < 15; i++) {
+        const t = i / 14;
+        const angle = Math.PI * 0.5 + t * Math.PI * 0.6;
+        const dist = 10 + Math.random() * 12;
+        const x = cx + Math.cos(angle) * dist;
+        const y = cy + Math.sin(angle) * dist;
+
+        // Fade from bright to dim across arc
+        const brightness = 1 - t * 0.7;
+        ctx.fillStyle = `rgba(255, ${200 * brightness}, 0, ${brightness})`;
+        ctx.shadowColor = `rgba(255, 200, 0, ${brightness})`;
+        ctx.shadowBlur = 4 * brightness;
+
+        const size = 3 * brightness + 1;
+        ctx.beginPath();
+        ctx.arc(x, y, size, 0, Math.PI * 2);
+        ctx.fill();
+    }
+    ctx.shadowBlur = 0;
+})();
+
+// C6: Double Layer - inner hot, outer cool
+(function() {
+    const ctx = document.getElementById('c6').getContext('2d');
+    ctx.fillStyle = '#0a0610';
+    ctx.fillRect(0, 0, 150, 150);
+
+    drawTrain(ctx, 75, 60, '#5f5');
+
+    const cx = 75, cy = 72;
+
+    // Outer layer - orange/red
+    for (let i = 0; i < 10; i++) {
+        const angle = Math.PI * 0.5 + (i / 9) * Math.PI * 0.5;
+        const dist = 18 + Math.random() * 8;
+        const x = cx + Math.cos(angle) * dist;
+        const y = cy + Math.sin(angle) * dist;
+
+        ctx.fillStyle = Math.random() > 0.5 ? '#f80' : '#f50';
+        ctx.shadowColor = '#f80';
+        ctx.shadowBlur = 3;
+        ctx.beginPath();
+        ctx.arc(x, y, 1.5, 0, Math.PI * 2);
+        ctx.fill();
+    }
+
+    // Inner layer - white/yellow (hotter)
+    for (let i = 0; i < 8; i++) {
+        const angle = Math.PI * 0.55 + (i / 7) * Math.PI * 0.4;
+        const dist = 8 + Math.random() * 6;
+        const x = cx + Math.cos(angle) * dist;
+        const y = cy + Math.sin(angle) * dist;
+
+        ctx.fillStyle = Math.random() > 0.5 ? '#fff' : '#ff0';
+        ctx.shadowColor = '#fff';
+        ctx.shadowBlur = 5;
+        ctx.beginPath();
+        ctx.arc(x, y, 2, 0, Math.PI * 2);
+        ctx.fill();
+    }
+    ctx.shadowBlur = 0;
+})();
+
+// C7: Blocky Pixels - retro style
+(function() {
+    const ctx = document.getElementById('c7').getContext('2d');
+    ctx.fillStyle = '#0a0610';
+    ctx.fillRect(0, 0, 150, 150);
+
+    drawTrain(ctx, 75, 60, '#f0f');
+
+    const cx = 75, cy = 72;
+    const pixelSize = 4;
+
+    for (let i = 0; i < 12; i++) {
+        const angle = Math.PI * 0.5 + (i / 11) * Math.PI * 0.55;
+        const dist = 8 + Math.floor(Math.random() * 4) * pixelSize;
+        let x = cx + Math.cos(angle) * dist;
+        let y = cy + Math.sin(angle) * dist;
+
+        // Snap to pixel grid
+        x = Math.floor(x / pixelSize) * pixelSize;
+        y = Math.floor(y / pixelSize) * pixelSize;
+
+        const colors = ['#ff0', '#fa0', '#fff'];
+        ctx.fillStyle = colors[Math.floor(Math.random() * colors.length)];
+        ctx.fillRect(x, y, pixelSize, pixelSize);
+    }
+})();
+
+// C8: Rail Scrape - ground hugging
+(function() {
+    const ctx = document.getElementById('c8').getContext('2d');
+    ctx.fillStyle = '#0a0610';
+    ctx.fillRect(0, 0, 150, 150);
+
+    drawTrain(ctx, 75, 60, '#0ff');
+
+    // Ground line
+    ctx.strokeStyle = '#333';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(30, 72);
+    ctx.lineTo(120, 72);
+    ctx.stroke();
+
+    const cx = 75, cy = 70;
+
+    // Sparks along ground in arc
+    for (let i = 0; i < 14; i++) {
+        const t = i / 13;
+        const x = cx - 5 + t * 25;
+        const y = cy + 2 + Math.sin(t * Math.PI) * 8;
+
+        ctx.fillStyle = Math.random() > 0.4 ? '#ff0' : '#fa0';
+        ctx.shadowColor = '#ff0';
+        ctx.shadowBlur = 3;
+
+        // Small bounce sparks
+        ctx.beginPath();
+        ctx.arc(x, y, 1 + Math.random(), 0, Math.PI * 2);
+        ctx.fill();
+    }
+    ctx.shadowBlur = 0;
+})();
 </script>
 </body>
 </html>

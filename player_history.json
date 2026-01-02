@@ -51,10 +51,26 @@
     {
       "name": "IVY",
       "firstSeen": "2026-01-01T18:07:14.266170",
-      "lastSeen": "2026-01-01T18:30:13.914147",
-      "sessions": 7,
-      "totalKills": 5576,
+      "lastSeen": "2026-01-01T18:38:43.314529",
+      "sessions": 8,
+      "totalKills": 5962,
       "bestScore": 3970
+    },
+    {
+      "name": "Iris",
+      "firstSeen": "2026-01-01T18:40:12.479270",
+      "lastSeen": "2026-01-01T18:41:40.300488",
+      "sessions": 1,
+      "totalKills": 403,
+      "bestScore": 850
+    },
+    {
+      "name": "Compy",
+      "firstSeen": "2026-01-01T18:47:24.281558",
+      "lastSeen": "2026-01-01T18:47:24.281560",
+      "sessions": 1,
+      "totalKills": 0,
+      "bestScore": 0
     }
   ],
   "sessions": [
@@ -323,10 +339,10 @@
       "name": "IVY",
       "id": "e8019fda-d53a-488e-8947-724454502260",
       "joined": "2026-01-01T18:29:23.284470",
-      "left": null,
-      "maxLength": 0,
-      "kills": 0,
-      "score": 0
+      "left": "2026-01-01T18:38:43.314524",
+      "maxLength": 6,
+      "kills": 193,
+      "score": 420
     },
     {
       "name": "IVY",
@@ -345,6 +361,33 @@
       "maxLength": 5,
       "kills": 0,
       "score": 430
+    },
+    {
+      "name": "IVY",
+      "id": "260e11d6-5e0e-460b-a2a5-feda8c5b11f2",
+      "joined": "2026-01-01T18:38:30.568618",
+      "left": "2026-01-01T18:38:43.312988",
+      "maxLength": 6,
+      "kills": 193,
+      "score": 420
+    },
+    {
+      "name": "Iris",
+      "id": "cfde72f9-fbcd-47cd-bc37-ca58afffc613",
+      "joined": "2026-01-01T18:40:12.479251",
+      "left": "2026-01-01T18:41:40.300473",
+      "maxLength": 10,
+      "kills": 403,
+      "score": 850
+    },
+    {
+      "name": "Compy",
+      "id": "cb712ab6-b5fe-4bea-9b1a-34d3d1ccf826",
+      "joined": "2026-01-01T18:47:24.281536",
+      "left": null,
+      "maxLength": 0,
+      "kills": 0,
+      "score": 0
     }
   ]
 }

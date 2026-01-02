@@ -172,17 +172,17 @@
             <div style="padding-top: 15px; border-top: 1px solid #222;">
                 <div id="kofiWidgetContainer" style="display: flex; justify-content: center; margin-bottom: 12px;"></div>
                 <script>kofiwidget2.init('Support me on Ko-fi', '#72a4f2', 'S6S21JNSQJ');kofiwidget2.draw();</script>
-                <div style="display: flex; gap: 8px; justify-content: center; flex-wrap: wrap;">
+                <div style="display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; margin-top: 8px;">
                     <a href="https://painter.locomot.io" target="_blank"
-                       style="font-family: 'Press Start 2P'; font-size: 6px; padding: 5px 8px; background: #222; color: #f5a; text-decoration: none; border-radius: 4px;">
+                       style="font-family: 'Press Start 2P'; font-size: 10px; padding: 12px 18px; background: linear-gradient(180deg, #333, #222); color: #f5a; text-decoration: none; border-radius: 6px; border: 1px solid #444;">
                         🎨 PAINTER
                     </a>
                     <a href="https://sandbox.locomot.io" target="_blank"
-                       style="font-family: 'Press Start 2P'; font-size: 6px; padding: 5px 8px; background: #222; color: #fa5; text-decoration: none; border-radius: 4px;">
+                       style="font-family: 'Press Start 2P'; font-size: 10px; padding: 12px 18px; background: linear-gradient(180deg, #333, #222); color: #fa5; text-decoration: none; border-radius: 6px; border: 1px solid #444;">
                         🏖️ SANDBOX
                     </a>
                 </div>
-                <button id="submitIdeaBtn" style="font-family: 'Press Start 2P'; font-size: 6px; padding: 6px 12px; background: #f80; color: #fff; border: none; border-radius: 4px; margin-top: 10px; cursor: pointer;">
+                <button id="submitIdeaBtn" style="font-family: 'Press Start 2P'; font-size: 10px; padding: 12px 20px; background: linear-gradient(180deg, #f90, #d70); color: #fff; border: none; border-radius: 6px; margin-top: 12px; cursor: pointer; border: 1px solid #fa0;">
                     💡 SUBMIT IDEA
                 </button>
             </div>
@@ -564,6 +564,11 @@
                                 this.playerLastSeen.set(p.id, Date.now());
                             }
                         }
+                        // If there are other players, request arena sync from them
+                        if (this.otherPlayers.size > 0) {
+                            console.log('[MP] Other players exist, requesting arena sync');
+                            this.send({ type: 'request_arena' });
+                        }
                         break;
 
                     case 'player_joined':
@@ -578,11 +583,20 @@
                         break;
 
                     case 'arena_sync':
-                        // Received arena state from another player
-                        if (data.enemies && data.enemies.length > 0 && !this.arenaSynced) {
-                            console.log('[MP] Received arena sync with', data.enemies.length, 'enemies');
+                        // Received arena state from another player - always apply if we have fewer enemies
+                        // This handles the case where we generated our own arena before sync arrived
+                        if (data.enemies && data.enemies.length > 0) {
+                            console.log('[MP] Received arena sync with', data.enemies.length, 'enemies (we have', enemies.length, ')');
                             this.applyArenaSync(data.enemies, data.pickups);
                             this.arenaSynced = true;
+                        }
+                        break;
+
+                    case 'arena_request':
+                        // Another player is requesting our arena state
+                        console.log('[MP] Arena request from', data.fromId);
+                        if (enemies.length > 0) {
+                            this.sendArenaSync(data.fromId);
                         }
                         break;
 
