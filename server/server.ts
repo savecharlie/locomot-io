@@ -242,17 +242,36 @@ export default class LocomotServer implements Party.Server {
     }
   }
 
-  // Handle HTTP requests (for training data upload)
+  // Handle HTTP requests (for training data upload + debug)
   async onRequest(req: Party.Request) {
     // Enable CORS
     const headers = {
       'Access-Control-Allow-Origin': '*',
-      'Access-Control-Allow-Methods': 'POST, OPTIONS',
+      'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
       'Access-Control-Allow-Headers': 'Content-Type'
     };
 
     if (req.method === 'OPTIONS') {
       return new Response(null, { headers });
+    }
+
+    // DEBUG: GET returns current server state
+    if (req.method === 'GET') {
+      const state = {
+        timestamp: Date.now(),
+        playerCount: this.state.players.size,
+        enemyCount: this.state.enemies?.length || 0,
+        pickupCount: this.state.pickups?.length || 0,
+        enemies: (this.state.enemies || []).slice(0, 3).map(e => ({
+          id: e.id,
+          name: e.name,
+          pos: e.segments?.[0] ? { x: e.segments[0].x, y: e.segments[0].y } : null,
+          len: e.segments?.length || 0
+        }))
+      };
+      return new Response(JSON.stringify(state, null, 2), {
+        headers: { ...headers, 'Content-Type': 'application/json' }
+      });
     }
 
     if (req.method === 'POST') {
