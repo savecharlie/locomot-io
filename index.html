@@ -198,12 +198,7 @@
                 </div>
             </div>
         </div>
-        
-        <div class="overlay pause-screen hidden" id="pauseScreen">
-            <h2>PAUSED</h2>
-            <button class="start-btn" id="resumeBtn">RESUME</button>
-        </div>
-        
+
         <div class="overlay game-over-screen hidden" id="gameOverScreen">
             <div id="spectatingLabel" style="position:absolute; top:20px; left:50%; transform:translateX(-50%); color:#5ff; font-size:12px; text-shadow:0 0 10px #5ff; display:none;">SPECTATING LEADER</div>
 
@@ -4685,7 +4680,7 @@
         }
         
         function fireGuns(time) {
-            if (!isAiming) return;
+            // Always firing - can't stop this train!
             let fired = false;
             for (let i = 0; i < snake.length; i++) {
                 const seg = snake[i];
@@ -5265,34 +5260,15 @@
             const head = snake[0];
             const hx = head.x * GRID + GRID/2, hy = head.y * GRID + GRID/2;
 
-            // Aim line is more visible when actively aiming (touch hold or mouse)
-            const isActive = isHolding || isMouseAiming;
-            ctx.strokeStyle = isActive ? '#0f0' : '#0f04';
-            ctx.lineWidth = isActive ? 3 : 2;
-            ctx.setLineDash(isActive ? [] : [8, 8]);
+            // Simple aim indicator - aim always follows movement direction
+            ctx.strokeStyle = '#0f04';
+            ctx.lineWidth = 2;
+            ctx.setLineDash([8, 8]);
             ctx.beginPath();
             ctx.moveTo(hx, hy);
-            ctx.lineTo(hx + Math.cos(aimAngle) * 100, hy + Math.sin(aimAngle) * 100);
+            ctx.lineTo(hx + Math.cos(aimAngle) * 80, hy + Math.sin(aimAngle) * 80);
             ctx.stroke();
             ctx.setLineDash([]);
-
-            // Reticle at aim point
-            if (isActive) {
-                const rx = hx + Math.cos(aimAngle) * 80, ry = hy + Math.sin(aimAngle) * 80;
-                ctx.strokeStyle = '#0f0';
-                ctx.lineWidth = 2;
-                // Crosshair
-                ctx.beginPath();
-                ctx.moveTo(rx - 10, ry); ctx.lineTo(rx - 4, ry);
-                ctx.moveTo(rx + 4, ry); ctx.lineTo(rx + 10, ry);
-                ctx.moveTo(rx, ry - 10); ctx.lineTo(rx, ry - 4);
-                ctx.moveTo(rx, ry + 4); ctx.lineTo(rx, ry + 10);
-                ctx.stroke();
-                // Circle
-                ctx.beginPath();
-                ctx.arc(rx, ry, 12, 0, Math.PI * 2);
-                ctx.stroke();
-            }
         }
 
         // Draw queued direction indicator above snake head (max 1 turn)
@@ -5762,69 +5738,120 @@
                 dirQueue.push(newDir);
             }
             nextDir = newDir;
-            if (!isHolding) {
-                if (newDir === DIR.UP) aimAngle = -Math.PI / 2;
-                else if (newDir === DIR.DOWN) aimAngle = Math.PI / 2;
-                else if (newDir === DIR.LEFT) aimAngle = Math.PI;
-                else if (newDir === DIR.RIGHT) aimAngle = 0;
-            }
+            // Aim always follows movement direction
+            if (newDir === DIR.UP) aimAngle = -Math.PI / 2;
+            else if (newDir === DIR.DOWN) aimAngle = Math.PI / 2;
+            else if (newDir === DIR.LEFT) aimAngle = Math.PI;
+            else if (newDir === DIR.RIGHT) aimAngle = 0;
             haptic('light');
         }
         
+        // Multi-modal touch controls: Swipe, Tap, or Floating Joystick
+        const TAP_TIME = 200; // ms - shorter = tap
+        const TAP_DISTANCE = 25; // px - less movement = tap
+        const JOYSTICK_DELAY = 250; // ms - hold this long for joystick
+        const JOYSTICK_DEADZONE = 35; // px - center dead zone
+        let joystickTimer = null;
+        let joystickActive = false;
+        let joystickCenter = { x: 0, y: 0 };
+
+        // Relative turn: rotate 90° left or right from current direction
+        function turnRelative(turnLeft) {
+            const newDir = turnLeft
+                ? { x: dir.y, y: -dir.x }  // 90° counter-clockwise
+                : { x: -dir.y, y: dir.x }; // 90° clockwise
+            setDirection(newDir);
+        }
+
+        // Get direction from joystick offset (4 zones)
+        function getJoystickDirection(dx, dy) {
+            const dist = Math.sqrt(dx*dx + dy*dy);
+            if (dist < JOYSTICK_DEADZONE) return null;
+            const angle = Math.atan2(dy, dx);
+            if (angle > -Math.PI/4 && angle <= Math.PI/4) return DIR.RIGHT;
+            if (angle > Math.PI/4 && angle <= 3*Math.PI/4) return DIR.DOWN;
+            if (angle > -3*Math.PI/4 && angle <= -Math.PI/4) return DIR.UP;
+            return DIR.LEFT;
+        }
+
         document.addEventListener('touchstart', e => {
             const touch = e.changedTouches[0];
-            // Check dev mode tap first
             if (devMode.handleTap(touch.clientX, touch.clientY)) {
                 e.preventDefault();
                 return;
             }
             if (gameState !== 'playing') return;
             e.preventDefault();
-            activeTouch = touch.identifier; touchStartX = touch.clientX; touchStartY = touch.clientY;
-            lastSwipeX = touch.clientX; lastSwipeY = touch.clientY;
-            isHolding = false; holdStartTime = Date.now();
+
+            activeTouch = touch.identifier;
+            touchStartX = touch.clientX;
+            touchStartY = touch.clientY;
+            lastSwipeX = touch.clientX;
+            lastSwipeY = touch.clientY;
+            holdStartTime = Date.now();
+            joystickActive = false;
+
+            // Start joystick timer
+            joystickTimer = setTimeout(() => {
+                joystickActive = true;
+                joystickCenter = { x: touchStartX, y: touchStartY };
+                haptic('soft');
+            }, JOYSTICK_DELAY);
         }, { passive: false });
-        
+
         document.addEventListener('touchmove', e => {
             if (gameState !== 'playing') return;
             e.preventDefault();
             for (const touch of e.changedTouches) {
                 if (touch.identifier === activeTouch) {
-                    const dx = touch.clientX - lastSwipeX, dy = touch.clientY - lastSwipeY;
-                    const totalDx = touch.clientX - touchStartX, totalDy = touch.clientY - touchStartY;
+                    const dx = touch.clientX - lastSwipeX;
+                    const dy = touch.clientY - lastSwipeY;
+                    const totalDx = touch.clientX - touchStartX;
+                    const totalDy = touch.clientY - touchStartY;
                     const totalDist = Math.sqrt(totalDx * totalDx + totalDy * totalDy);
-                    if (!isHolding && (Math.abs(dx) > SWIPE_THRESHOLD || Math.abs(dy) > SWIPE_THRESHOLD)) {
+
+                    if (joystickActive) {
+                        // Joystick mode - 4 directional zones
+                        const joyDir = getJoystickDirection(totalDx, totalDy);
+                        if (joyDir) setDirection(joyDir);
+                    } else if (Math.abs(dx) > SWIPE_THRESHOLD || Math.abs(dy) > SWIPE_THRESHOLD) {
+                        // Swipe detected - cancel joystick, do absolute direction
+                        clearTimeout(joystickTimer);
                         if (Math.abs(dx) > Math.abs(dy)) setDirection(dx > 0 ? DIR.RIGHT : DIR.LEFT);
                         else setDirection(dy > 0 ? DIR.DOWN : DIR.UP);
-                        lastSwipeX = touch.clientX; lastSwipeY = touch.clientY;
-                    }
-                    if (Date.now() - holdStartTime > HOLD_DELAY && totalDist > 20) {
-                        isHolding = true; isAiming = true;
-                        aimAngle = Math.atan2(totalDy, totalDx);
+                        lastSwipeX = touch.clientX;
+                        lastSwipeY = touch.clientY;
                     }
                 }
             }
         }, { passive: false });
-        
+
         document.addEventListener('touchend', e => {
             for (const touch of e.changedTouches) {
                 if (touch.identifier === activeTouch) {
-                    activeTouch = null; isHolding = false;
-                    if (dir === DIR.UP) aimAngle = -Math.PI / 2;
-                    else if (dir === DIR.DOWN) aimAngle = Math.PI / 2;
-                    else if (dir === DIR.LEFT) aimAngle = Math.PI;
-                    else if (dir === DIR.RIGHT) aimAngle = 0;
+                    clearTimeout(joystickTimer);
+                    const elapsed = Date.now() - holdStartTime;
+                    const dx = touch.clientX - touchStartX;
+                    const dy = touch.clientY - touchStartY;
+                    const dist = Math.sqrt(dx*dx + dy*dy);
+
+                    if (!joystickActive && elapsed < TAP_TIME && dist < TAP_DISTANCE) {
+                        // TAP detected - relative turn based on screen side
+                        const isLeftSide = touch.clientX < window.innerWidth / 2;
+                        turnRelative(isLeftSide);
+                    }
+
+                    activeTouch = null;
+                    joystickActive = false;
                 }
             }
         }, { passive: true });
-        
-        document.addEventListener('touchcancel', e => { activeTouch = null; isHolding = false; }, { passive: true });
-        
-        function updateAimAngle(touchX, touchY) {
-            const head = snake[0];
-            const hx = head.x * GRID + GRID/2, hy = head.y * GRID + GRID/2;
-            aimAngle = Math.atan2(touchY - hy, touchX - hx);
-        }
+
+        document.addEventListener('touchcancel', e => {
+            clearTimeout(joystickTimer);
+            activeTouch = null;
+            joystickActive = false;
+        }, { passive: true });
         
         // Initialize username inputs with saved value
         const savedName = localStorage.getItem('locomot_username') || '';
@@ -5885,7 +5912,6 @@
         document.getElementById('usernameInputDeath').addEventListener('change', (e) => {
             if (e.target.value) Multiplayer.setUsername(e.target.value);
         });
-        document.getElementById('resumeBtn').addEventListener('click', () => { document.getElementById('pauseScreen').classList.add('hidden'); gameState = 'playing'; canvas.classList.add('playing'); });
         document.getElementById('restartBtn').addEventListener('click', () => { doRespawn(); });
         document.getElementById('spectateBtn').addEventListener('click', () => {
             document.getElementById('gameOverScreen').classList.add('hidden');
@@ -6191,29 +6217,15 @@
                     }
                 }
             }
-            else if (e.code === 'Space') { gameState = 'paused'; canvas.classList.remove('playing'); document.getElementById('pauseScreen').classList.remove('hidden'); }
-        });
-        
-        // Desktop mouse aiming - continuous tracking
-        document.addEventListener('mousemove', e => {
-            if (gameState !== 'playing') return;
-            mouseX = e.clientX;
-            mouseY = e.clientY;
-            isMouseAiming = true;
-            // Update aim angle to point at mouse cursor
-            const head = snake[0];
-            if (head) {
-                const hx = (head.x * GRID + GRID/2 - cameraX) * cameraZoom;
-                const hy = (head.y * GRID + GRID/2 - cameraY) * cameraZoom;
-                aimAngle = Math.atan2(mouseY - hy, mouseX - hx);
+            else if (e.code === 'Escape') {
+                // Quit to menu - can't pause an online train game!
+                gameState = 'start';
+                canvas.classList.remove('playing');
+                document.getElementById('startScreen').classList.remove('hidden');
             }
         });
-        document.addEventListener('mouseleave', () => { isMouseAiming = false; });
-        document.addEventListener('mouseenter', e => {
-            mouseX = e.clientX;
-            mouseY = e.clientY;
-            isMouseAiming = true;
-        });
+        
+        // Mouse aiming removed - aim follows movement direction on all platforms
 
         let arenaBootstrapped = false;
         function bootstrapArena() {
