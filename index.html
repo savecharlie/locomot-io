@@ -5596,6 +5596,12 @@
             }
             patternTracker.recordTurn(dir, newDir, nearestThreat);
 
+            // Queue the move (replaces any existing queued move)
+            if (dirQueue.length > 0) {
+                dirQueue[0] = newDir;
+            } else {
+                dirQueue.push(newDir);
+            }
             nextDir = newDir;
             if (!isHolding) {
                 if (newDir === DIR.UP) aimAngle = -Math.PI / 2;
@@ -6005,11 +6011,15 @@
             else if (e.code === 'ArrowLeft' || e.code === 'KeyA') newDir = DIR.LEFT;
             else if (e.code === 'ArrowRight' || e.code === 'KeyD') newDir = DIR.RIGHT;
 
-            if (newDir && dirQueue.length < 1) {
-                const lastDir = dirQueue.length > 0 ? dirQueue[dirQueue.length - 1] : dir;
-                // Prevent 180 degree turns
-                if (!(lastDir.x === -newDir.x && lastDir.y === -newDir.y)) {
-                    dirQueue.push(newDir);
+            if (newDir) {
+                // Prevent 180 degree turns (check against current direction, not queued)
+                if (!(dir.x === -newDir.x && dir.y === -newDir.y)) {
+                    // Replace any queued move (or add if empty)
+                    if (dirQueue.length > 0) {
+                        dirQueue[0] = newDir;
+                    } else {
+                        dirQueue.push(newDir);
+                    }
                 }
             }
             else if (e.code === 'Space') { gameState = 'paused'; canvas.classList.remove('playing'); document.getElementById('pauseScreen').classList.remove('hidden'); }
