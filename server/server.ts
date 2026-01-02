@@ -19,6 +19,7 @@ interface Player {
   segments: { x: number; y: number }[];
   color: string;
   score: number;
+  team: 'blue' | 'red';
   invincibleUntil: number;
   lastUpdate: number;
 }
@@ -265,10 +266,21 @@ export default class LocomotServer implements Party.Server {
     return { x, y };
   }
 
+  getNextTeam(): 'blue' | 'red' {
+    let blue = 0;
+    let red = 0;
+    for (const p of this.state.players.values()) {
+      if (p.team === 'blue') blue++;
+      else if (p.team === 'red') red++;
+    }
+    return blue <= red ? 'blue' : 'red';
+  }
+
   onConnect(conn: Party.Connection, ctx: Party.ConnectionContext) {
     const spawn = this.getSpawnPosition();
     // "All Same Gun" - everyone starts with MACHINEGUN color (orange)
     const color = '#f80';
+    const team = this.getNextTeam();
 
     const player: Player = {
       id: conn.id,
@@ -284,6 +296,7 @@ export default class LocomotServer implements Party.Server {
       ],
       color,
       score: 0,
+      team,
       invincibleUntil: 0,
       lastUpdate: Date.now()
     };

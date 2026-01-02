@@ -637,6 +637,9 @@
                     case 'init':
                         this.playerId = data.playerId;
                         console.log('[MP] Assigned ID:', this.playerId);
+                        if (data.player?.team) {
+                            playerTeam = data.player.team;
+                        }
                         if (data.hostId) {
                             this.hostId = data.hostId;
                             this.isHost = this.playerId === data.hostId;
@@ -714,10 +717,12 @@
                     case 'state':
                         // Update all other players
                         for (const p of data.players) {
-                            if (p.id !== this.playerId) {
-                                this.otherPlayers.set(p.id, p);
-                                this.playerLastSeen.set(p.id, Date.now());
+                            if (p.id === this.playerId) {
+                                if (p.team) playerTeam = p.team;
+                                continue;
                             }
+                            this.otherPlayers.set(p.id, p);
+                            this.playerLastSeen.set(p.id, Date.now());
                         }
                         break;
                     
@@ -1136,6 +1141,10 @@
                 }
             },
 
+            getTeamColor(team) {
+                return team === 'red' ? '#f55' : '#0af';
+            },
+
             // Draw other players
             drawOtherPlayers(ctx) {
                 for (const player of this.otherPlayers.values()) {
@@ -1146,7 +1155,8 @@
                         const seg = player.segments[i];
                         const isHead = i === 0;
 
-                        const teamColor = teamMode ? '#0ff' : player.color; ctx.fillStyle = isHead ? teamColor : this.dimColor(teamColor);
+                        const baseColor = teamMode ? this.getTeamColor(player.team) : player.color;
+                        ctx.fillStyle = isHead ? baseColor : this.dimColor(baseColor);
                         ctx.fillRect(seg.x * 12, seg.y * 12, 12, 12);
 
                         // Outline
@@ -3707,6 +3717,7 @@
                 if (!blocked && Multiplayer.connected) {
                     for (const [, op] of Multiplayer.otherPlayers) {
                         if (!op.segments || op.segments.length === 0) continue;
+                        if ((op.team || 'blue') !== playerTeam) continue;
                         for (const seg of op.segments) {
                             if (seg.x === wrappedX && seg.y === wrappedY) {
                                 blocked = true;
@@ -3839,10 +3850,11 @@
                 Multiplayer.sendUpdate(snake[0].x, snake[0].y, snake, score);
 
                 // PVP COLLISION DETECTION
-                if (!teamMode && invincibleTimer <= 0) {
+                if (invincibleTimer <= 0) {
                     const canSpawnPlayerDrops = Multiplayer.isHost;
                     for (const [playerId, otherPlayer] of Multiplayer.otherPlayers) {
                         if (!otherPlayer.segments || otherPlayer.segments.length === 0) continue;
+                        if (teamMode && (otherPlayer.team || 'blue') === playerTeam) continue;
                         const otherInvincible = otherPlayer.invincibleUntil && Date.now() < otherPlayer.invincibleUntil;
                         if (otherInvincible) continue;
 
@@ -3883,12 +3895,13 @@
                 for (const ps of snake) {
                     if (ps.x === x && ps.y === y) return true;
                 }
-                if (Multiplayer.connected) {
-                    for (const [, op] of Multiplayer.otherPlayers) {
-                        if (!op.segments || op.segments.length === 0) continue;
-                        for (const seg of op.segments) {
-                            if (seg.x === x && seg.y === y) return true;
-                        }
+            }
+            if (Multiplayer.connected) {
+                for (const [, op] of Multiplayer.otherPlayers) {
+                    if (!op.segments || op.segments.length === 0) continue;
+                    if ((op.team || 'blue') !== enemy.team) continue;
+                    for (const seg of op.segments) {
+                        if (seg.x === x && seg.y === y) return true;
                     }
                 }
             }
@@ -4552,7 +4565,7 @@
                             color: op.color,
                             isPlayer: true,
                             invincibleUntil: op.invincibleUntil || 0,
-                            team: teamMode ? "blue" : null, // All human players on blue in team mode
+                            team: teamMode ? (op.team || 'blue') : null,
                             playerId: playerId
                         });
                     }
