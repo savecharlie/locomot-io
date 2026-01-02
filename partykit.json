@@ -1,0 +1,4 @@
+{
+  "name": "locomot-io",
+  "main": "server/server.ts"
+}
