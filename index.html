@@ -1138,7 +1138,9 @@
             getTotalPopulation() {
                 const aiCount = enemies.filter(e => e.segments && e.segments.length > 0).length;
                 const realCount = Multiplayer.connected ? Multiplayer.otherPlayers.size : 0;
-                return aiCount + realCount + 1; // +1 for the player
+                // Only count player if they're alive
+                const playerAlive = (gameState === 'playing' && snake && snake.length > 0) ? 1 : 0;
+                return aiCount + realCount + playerAlive;
             },
 
             // Main update - call each frame
@@ -1167,15 +1169,8 @@
                     spawnRate = 400;  // Break the lull!
                 }
 
-                // Debug every 5 seconds
-                if (!this._lastDebug || now - this._lastDebug > 5000) {
-                    console.log(`[SpawnDirector] Pop: ${currentPop}/${targetPop}, Rate: ${spawnRate}ms, TimeSince: ${timeSinceSpawn}ms`);
-                    this._lastDebug = now;
-                }
-
                 // Spawn if under population and rate allows
                 if (currentPop < targetPop && timeSinceSpawn > spawnRate) {
-                    console.log(`[SpawnDirector] SPAWNING! Pop: ${currentPop}/${targetPop}`);
                     // If in combat lull, spawn near player
                     if (inCombatLull && snake && snake[0]) {
                         this.spawnNearPlayer();
@@ -2796,6 +2791,59 @@
 
             const el = document.getElementById('waveAnnounce');
             el.textContent = '🛡️ RESPAWNING...';
+            el.classList.add('show');
+            haptic('medium');
+            setTimeout(() => el.classList.remove('show'), 1500);
+        }
+
+        // Join an existing arena without resetting it (continuous arena mode)
+        function joinExistingArena() {
+            // Find safe spawn location away from existing enemies
+            let spawnX, spawnY, attempts = 0;
+            do {
+                spawnX = Math.floor(Math.random() * (WORLD_COLS - 10)) + 5;
+                spawnY = Math.floor(Math.random() * (WORLD_ROWS - 10)) + 5;
+                attempts++;
+
+                let safe = true;
+                for (const e of enemies) {
+                    if (e.segments.length === 0) continue;
+                    const head = e.segments[0];
+                    const dist = Math.abs(head.x - spawnX) + Math.abs(head.y - spawnY);
+                    if (e.segments.length > 5 && dist < 30) safe = false;
+                    if (dist < 15) safe = false;
+                }
+                if (safe || attempts > 100) break;
+            } while (true);
+
+            // Initial player snake - head is 5x tougher
+            const HEAD_HP_INIT = 1500;
+            score = 0; wave = 3;
+            maxLength = 4; bestRank = 999;
+            invincibleTimer = 10000; // 10 seconds spawn protection
+            speedTimer = 0; magnetTimer = 0;
+            SpawnDirector.reset();
+            patternTracker.reset();
+            strategyClassifier.reset();
+
+            snake = [
+                { x: spawnX, y: spawnY, type: GUNS.HEAD, hp: HEAD_HP_INIT, maxHp: HEAD_HP_INIT, lastFired: 0 },
+                { x: spawnX - 1, y: spawnY, type: GUNS.MACHINEGUN, hp: 300, maxHp: 300, lastFired: 0 },
+                { x: spawnX - 2, y: spawnY, type: GUNS.SHOTGUN, hp: 300, maxHp: 300, lastFired: 0 },
+                { x: spawnX - 3, y: spawnY, type: GUNS.CANNON, hp: 300, maxHp: 300, lastFired: 0 }
+            ];
+
+            dir = DIR.RIGHT; nextDir = DIR.RIGHT;
+            aimAngle = 0; isAiming = true;
+            dirQueue = [];
+            projectiles = []; enemyProjectiles = []; particles = [];
+
+            cameraZoom = 2; targetZoom = 2;
+            cameraX = spawnX * GRID - canvas.width / 2 / cameraZoom;
+            cameraY = spawnY * GRID - canvas.height / 2 / cameraZoom;
+
+            const el = document.getElementById('waveAnnounce');
+            el.textContent = '🚂 JOINING ARENA...';
             el.classList.add('show');
             haptic('medium');
             setTimeout(() => el.classList.remove('show'), 1500);
@@ -4549,6 +4597,14 @@
                     updateCamera();
                     updateLeaderboard();
                 }
+
+                // CONTINUOUS ARENA: Keep arena alive during start screen
+                if (gameState === 'start' && enemies.length > 0) {
+                    updateEnemies(dt);
+                    updateEnemyProjectiles(dt);
+                    updateParticles();
+                    updateLeaderboard();
+                }
                 
                 ctx.save(); ctx.scale(cameraZoom, cameraZoom); ctx.translate(-cameraX, -cameraY);
                 drawGrid(); drawPickups(time); drawEnemies(); Multiplayer.drawOtherPlayers(ctx);
@@ -4664,7 +4720,9 @@
 
         document.getElementById('startFFA').addEventListener('click', () => {
             startGame(false);
-            init();
+            // Only init if arena is empty (continuous arena)
+            if (enemies.length === 0) init();
+            else joinExistingArena();
             gameState = 'playing';
             canvas.classList.add('playing');
             // Report join to server for player history
@@ -4673,7 +4731,9 @@
 
         document.getElementById('startTeams').addEventListener('click', () => {
             startGame(true);
-            init();
+            // Only init if arena is empty (continuous arena)
+            if (enemies.length === 0) init();
+            else joinExistingArena();
             gameState = 'playing';
             canvas.classList.add('playing');
             // Report join to server for player history
