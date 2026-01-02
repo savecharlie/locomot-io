@@ -3454,10 +3454,12 @@
             gameState = 'dead';
             canvas.classList.remove('playing');
             document.getElementById('gameOverScreen').classList.remove('hidden');
+            document.getElementById('pageFooter').style.display = 'block';
         }
 
         function doRespawn() {
             document.getElementById('gameOverScreen').classList.add('hidden');
+            document.getElementById('pageFooter').style.display = 'none';
             SpawnDirector.reset(); // Reset intensity for fresh start
 
             // Find safe spawn location
@@ -5741,6 +5743,7 @@
             const nameInput = document.getElementById('usernameInput').value;
             if (nameInput) Multiplayer.setUsername(nameInput);
             document.getElementById('startScreen').classList.add('hidden');
+            document.getElementById('pageFooter').style.display = 'none';
             // Initialize highlight recorder
             HighlightRecorder.init();
         }
@@ -5794,6 +5797,7 @@
         document.getElementById('restartBtn').addEventListener('click', () => { doRespawn(); });
         document.getElementById('spectateBtn').addEventListener('click', () => {
             document.getElementById('gameOverScreen').classList.add('hidden');
+            document.getElementById('pageFooter').style.display = 'none';
             document.getElementById('spectatingLabel').style.display = 'block';
             // Create floating label that stays visible
             let floatingLabel = document.getElementById('floatingSpectateLabel');
