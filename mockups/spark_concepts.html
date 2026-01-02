@@ -66,6 +66,44 @@
         <p>Ground-hugging arc</p>
     </div>
 
+    <h2>C4 x C7 HYBRIDS (Pixel Streaks)</h2>
+
+    <div class="concept">
+        <h3>H1: Pixel Streaks</h3>
+        <canvas id="h1" width="150" height="150"></canvas>
+        <p>Blocky lines that fade</p>
+    </div>
+
+    <div class="concept">
+        <h3>H2: Stacked Pixels</h3>
+        <canvas id="h2" width="150" height="150"></canvas>
+        <p>Pixel trail segments</p>
+    </div>
+
+    <div class="concept">
+        <h3>H3: Dithered Fade</h3>
+        <canvas id="h3" width="150" height="150"></canvas>
+        <p>Retro dither gradient</p>
+    </div>
+
+    <div class="concept">
+        <h3>H4: Chunky Bolts</h3>
+        <canvas id="h4" width="150" height="150"></canvas>
+        <p>Thick pixel lightning</p>
+    </div>
+
+    <div class="concept">
+        <h3>H5: Pixel Rain</h3>
+        <canvas id="h5" width="150" height="150"></canvas>
+        <p>Falling pixel streaks</p>
+    </div>
+
+    <div class="concept">
+        <h3>H6: 8-bit Comet</h3>
+        <canvas id="h6" width="150" height="150"></canvas>
+        <p>Pixel head + fade tail</p>
+    </div>
+
 <script>
 const GRID = 12;
 
@@ -341,6 +379,226 @@ function drawTrain(ctx, x, y, color) {
         ctx.fill();
     }
     ctx.shadowBlur = 0;
+})();
+
+// ========== C4 x C7 HYBRIDS ==========
+
+// H1: Pixel Streaks - blocky lines that fade
+(function() {
+    const ctx = document.getElementById('h1').getContext('2d');
+    ctx.fillStyle = '#0a0610';
+    ctx.fillRect(0, 0, 150, 150);
+
+    drawTrain(ctx, 75, 60, '#0f0');
+
+    const cx = 75, cy = 72;
+    const px = 3; // pixel size
+
+    for (let i = 0; i < 7; i++) {
+        const angle = Math.PI * 0.55 + (i / 6) * Math.PI * 0.5;
+        const len = 4 + Math.floor(Math.random() * 3);
+
+        for (let j = 0; j < len; j++) {
+            const dist = 6 + j * px;
+            let x = cx + Math.cos(angle) * dist;
+            let y = cy + Math.sin(angle) * dist;
+
+            // Snap to grid
+            x = Math.floor(x / px) * px;
+            y = Math.floor(y / px) * px;
+
+            // Fade alpha
+            const alpha = 1 - (j / len) * 0.8;
+            const colors = ['#fff', '#ff0', '#fa0'];
+            const c = colors[Math.min(j, colors.length - 1)];
+            ctx.fillStyle = c;
+            ctx.globalAlpha = alpha;
+            ctx.fillRect(x, y, px, px);
+        }
+    }
+    ctx.globalAlpha = 1;
+})();
+
+// H2: Stacked Pixels - pixel trail segments
+(function() {
+    const ctx = document.getElementById('h2').getContext('2d');
+    ctx.fillStyle = '#0a0610';
+    ctx.fillRect(0, 0, 150, 150);
+
+    drawTrain(ctx, 75, 60, '#f0f');
+
+    const cx = 75, cy = 72;
+    const px = 4;
+
+    for (let i = 0; i < 6; i++) {
+        const angle = Math.PI * 0.5 + (i / 5) * Math.PI * 0.5;
+        const segments = 3 + Math.floor(Math.random() * 2);
+
+        for (let j = 0; j < segments; j++) {
+            const dist = 8 + j * (px + 2);
+            let x = cx + Math.cos(angle) * dist;
+            let y = cy + Math.sin(angle) * dist;
+
+            x = Math.floor(x / px) * px;
+            y = Math.floor(y / px) * px;
+
+            // Color gradient: white -> yellow -> orange
+            if (j === 0) ctx.fillStyle = '#fff';
+            else if (j === 1) ctx.fillStyle = '#ff0';
+            else ctx.fillStyle = '#f80';
+
+            ctx.fillRect(x, y, px, px);
+        }
+    }
+})();
+
+// H3: Dithered Fade - retro dither gradient
+(function() {
+    const ctx = document.getElementById('h3').getContext('2d');
+    ctx.fillStyle = '#0a0610';
+    ctx.fillRect(0, 0, 150, 150);
+
+    drawTrain(ctx, 75, 60, '#ff0');
+
+    const cx = 75, cy = 72;
+    const px = 2;
+
+    for (let i = 0; i < 8; i++) {
+        const angle = Math.PI * 0.5 + (i / 7) * Math.PI * 0.55;
+
+        for (let j = 0; j < 12; j++) {
+            const dist = 6 + j * px;
+            let x = cx + Math.cos(angle) * dist;
+            let y = cy + Math.sin(angle) * dist;
+
+            x = Math.floor(x / px) * px;
+            y = Math.floor(y / px) * px;
+
+            // Dither: skip some pixels based on distance
+            const skipChance = j / 15;
+            if (Math.random() < skipChance) continue;
+
+            // Color based on distance
+            if (j < 3) ctx.fillStyle = '#fff';
+            else if (j < 6) ctx.fillStyle = '#ff0';
+            else if (j < 9) ctx.fillStyle = '#fa0';
+            else ctx.fillStyle = '#f80';
+
+            ctx.fillRect(x, y, px, px);
+        }
+    }
+})();
+
+// H4: Chunky Bolts - thick pixel lightning
+(function() {
+    const ctx = document.getElementById('h4').getContext('2d');
+    ctx.fillStyle = '#0a0610';
+    ctx.fillRect(0, 0, 150, 150);
+
+    drawTrain(ctx, 75, 60, '#0ff');
+
+    const cx = 75, cy = 72;
+    const px = 4;
+
+    for (let i = 0; i < 5; i++) {
+        const baseAngle = Math.PI * 0.55 + (i / 4) * Math.PI * 0.45;
+        let x = cx, y = cy;
+
+        // Draw jagged bolt
+        for (let j = 0; j < 4; j++) {
+            const jitter = (Math.random() - 0.5) * 0.3;
+            const angle = baseAngle + jitter;
+            const step = px + 1;
+
+            x += Math.cos(angle) * step;
+            y += Math.sin(angle) * step;
+
+            const gx = Math.floor(x / px) * px;
+            const gy = Math.floor(y / px) * px;
+
+            // Fade color
+            if (j === 0) ctx.fillStyle = '#fff';
+            else if (j === 1) ctx.fillStyle = '#ff0';
+            else ctx.fillStyle = '#f80';
+
+            ctx.fillRect(gx, gy, px, px);
+        }
+    }
+})();
+
+// H5: Pixel Rain - falling pixel streaks
+(function() {
+    const ctx = document.getElementById('h5').getContext('2d');
+    ctx.fillStyle = '#0a0610';
+    ctx.fillRect(0, 0, 150, 150);
+
+    drawTrain(ctx, 75, 60, '#f80');
+
+    const cx = 75, cy = 72;
+    const px = 3;
+
+    for (let i = 0; i < 10; i++) {
+        const angle = Math.PI * 0.4 + (i / 9) * Math.PI * 0.7;
+        const len = 2 + Math.floor(Math.random() * 4);
+
+        for (let j = 0; j < len; j++) {
+            const dist = 8 + j * px;
+            let x = cx + Math.cos(angle) * dist;
+            let y = cy + Math.sin(angle) * dist + j * 1; // slight downward drift
+
+            x = Math.floor(x / px) * px;
+            y = Math.floor(y / px) * px;
+
+            const alpha = 1 - j / (len + 1);
+            ctx.globalAlpha = alpha;
+
+            if (j === 0) ctx.fillStyle = '#fff';
+            else ctx.fillStyle = '#ff0';
+
+            ctx.fillRect(x, y, px, px);
+        }
+    }
+    ctx.globalAlpha = 1;
+})();
+
+// H6: 8-bit Comet - pixel head + fade tail
+(function() {
+    const ctx = document.getElementById('h6').getContext('2d');
+    ctx.fillStyle = '#0a0610';
+    ctx.fillRect(0, 0, 150, 150);
+
+    drawTrain(ctx, 75, 60, '#5f5');
+
+    const cx = 75, cy = 72;
+    const px = 3;
+
+    for (let i = 0; i < 6; i++) {
+        const angle = Math.PI * 0.5 + (i / 5) * Math.PI * 0.5;
+        const tailLen = 3 + Math.floor(Math.random() * 3);
+
+        // Tail (fading small pixels)
+        for (let j = tailLen; j >= 0; j--) {
+            const dist = 8 + j * (px - 1);
+            let x = cx + Math.cos(angle) * dist;
+            let y = cy + Math.sin(angle) * dist;
+
+            x = Math.floor(x / px) * px;
+            y = Math.floor(y / px) * px;
+
+            const alpha = 0.3 + (1 - j / tailLen) * 0.7;
+            ctx.globalAlpha = alpha;
+
+            if (j === 0) {
+                // Head - bigger and white
+                ctx.fillStyle = '#fff';
+                ctx.fillRect(x - 1, y - 1, px + 2, px + 2);
+            } else {
+                ctx.fillStyle = j < tailLen / 2 ? '#ff0' : '#f80';
+                ctx.fillRect(x, y, px - 1, px - 1);
+            }
+        }
+    }
+    ctx.globalAlpha = 1;
 })();
 </script>
 </body>
