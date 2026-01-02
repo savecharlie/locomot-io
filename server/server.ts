@@ -404,6 +404,12 @@ export default class LocomotServer implements Party.Server {
           const killFromId = (sender.id === this.state.hostId && typeof data.fromId === 'string')
             ? data.fromId
             : sender.id;
+          {
+            const target = this.state.players.get(data.targetId);
+            if (target) {
+              target.segments = [];
+            }
+          }
           this.room.broadcast(JSON.stringify({
             type: 'kill',
             targetId: data.targetId,
