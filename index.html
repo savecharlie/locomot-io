@@ -4037,32 +4037,35 @@
 
             // Only add player to leaderboard if alive
             if (gameState === 'playing') {
-                entries.push({ name: playerName || 'YOU', length: snake.length, isPlayer: true });
+                entries.push({ name: playerName || 'YOU', length: snake.length, isPlayer: true, isHuman: true });
             }
 
             // Add other multiplayer players
             if (Multiplayer.connected) {
                 for (const [pid, op] of Multiplayer.otherPlayers) {
                     if (op.segments && op.segments.length > 0) {
-                        entries.push({ 
-                            name: op.name || 'Player', 
-                            length: op.segments.length, 
-                            isPlayer: false, 
+                        entries.push({
+                            name: op.name || 'Player',
+                            length: op.segments.length,
+                            isPlayer: false,
                             isMultiplayer: true,
-                            color: op.color 
+                            isHuman: true,
+                            color: op.color,
+                            isMVP: op === currentMVP && gameState === 'dead'
                         });
                     }
                 }
             }
-            
+
             // Add AI enemies
             for (const e of enemies) {
                 if (e.segments.length > 0) {
-                    entries.push({ 
-                        name: e.name || 'Train', 
-                        length: e.segments.length, 
-                        isPlayer: false, 
-                        color: e.color, 
+                    entries.push({
+                        name: e.name || 'Train',
+                        length: e.segments.length,
+                        isPlayer: false,
+                        isHuman: false,
+                        color: e.color,
                         isNeural: e.personality.neural,
                         isMVP: e.isMVP && gameState === 'dead'
                     });
@@ -4071,8 +4074,9 @@
             entries.sort((a, b) => b.length - a.length);
             const top = entries.slice(0, 12);
             document.getElementById('leaderboardEntries').innerHTML = top.map((e, i) => {
-                const mvpIcon = e.isMVP ? '📹 ' : '';
-                return `<div class="leaderboard-entry ${e.isPlayer ? 'player' : ''} ${e.isNeural ? 'neural' : ''} ${e.isMultiplayer ? 'multiplayer' : ''} ${e.isMVP ? 'mvp' : ''}" style="${!e.isPlayer ? 'color:' + (e.color && /^#[0-9a-f]{3,6}$/i.test(e.color) ? e.color : '#fff') : ''}"><span class="leaderboard-rank">${i + 1}.</span><span class="leaderboard-name">${mvpIcon}${esc(e.name)}</span><span class="leaderboard-score">${e.length}</span></div>`;
+                const cameraIcon = e.isMVP ? '📷 ' : '';
+                const typeIcon = e.isHuman ? '👤' : '🤖';
+                return `<div class="leaderboard-entry ${e.isPlayer ? 'player' : ''} ${e.isNeural ? 'neural' : ''} ${e.isMultiplayer ? 'multiplayer' : ''} ${e.isMVP ? 'mvp' : ''}" style="${!e.isPlayer ? 'color:' + (e.color && /^#[0-9a-f]{3,6}$/i.test(e.color) ? e.color : '#fff') : ''}"><span class="leaderboard-rank">${i + 1}.</span><span class="leaderboard-name">${cameraIcon}${typeIcon} ${esc(e.name)}</span><span class="leaderboard-score">${e.length}</span></div>`;
             }).join('');
         }
         
