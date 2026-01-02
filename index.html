@@ -701,6 +701,7 @@
                     case 'enemy_state':
                         // Continuous enemy state from host - update positions
                         console.log('[MP] Received enemy_state:', data.enemies?.length, 'enemies,', data.pickups?.length, 'pickups, isHost:', this.isHost);
+                        this.lastEnemyStateAt = Date.now();
                         if (!this.isHost && data.enemies) {
                             this.applyEnemyState(data.enemies);
                         }
@@ -743,6 +744,19 @@
                         }
                         break;
 
+                    case 'kill':
+                        if (data.targetId === this.playerId) {
+                            const killer = this.otherPlayers.get(data.fromId);
+                            deathReason = `Killed by ${killer?.name || 'player'}`;
+                            if (gameState === 'playing') {
+                                respawn();
+                            }
+                        } else if (this.otherPlayers.has(data.targetId)) {
+                            this.otherPlayers.delete(data.targetId);
+                            this.playerLastSeen.delete(data.targetId);
+                        }
+                        break;
+
                     case 'pickup_collected':
                         this.removePickupById(data.pickupId, data.x, data.y);
                         break;
@@ -780,6 +794,14 @@
                 this.send({ type: 'move', dir });
             },
 
+            requestArenaSync(reason = '') {
+                const now = Date.now();
+                if (!this.connected) return;
+                if (now - this.lastArenaSyncRequest < this.ARENA_SYNC_COOLDOWN) return;
+                this.lastArenaSyncRequest = now;
+                this.send({ type: 'request_arena', reason });
+            },
+
             sendPickupCollected(pickup) {
                 if (!pickup) return;
                 this.send({ type: 'pickup_collected', pickupId: pickup.id, x: pickup.x, y: pickup.y });
@@ -797,22 +819,30 @@
                     isPowerup: !!p.isPowerup,
                     healAmount: p.healAmount || 40,
                     type,
-                    bob: p.bob || 0
+                    bob: p.bob || 0,
+                    droppedBy: p.droppedBy ?? null,
+                    droppedAt: p.droppedAt ?? null
                 };
             },
 
             removePickupById(pickupId, x, y) {
+                let removed = false;
                 if (pickupId !== undefined && pickupId !== null) {
                     const idx = pickups.findIndex(p => p.id === pickupId);
                     if (idx !== -1) {
                         pickups.splice(idx, 1);
-                        return;
+                        removed = true;
                     }
-                    return;
                 }
-                if (typeof x === 'number' && typeof y === 'number') {
+                if (!removed && typeof x === 'number' && typeof y === 'number') {
                     const idx = pickups.findIndex(p => Math.hypot(p.x - x, p.y - y) < GRID * 0.6);
-                    if (idx !== -1) pickups.splice(idx, 1);
+                    if (idx !== -1) {
+                        pickups.splice(idx, 1);
+                        removed = true;
+                    }
+                }
+                if (!removed) {
+                    this.requestArenaSync('pickup_miss');
                 }
             },
 
@@ -823,6 +853,9 @@
             lastStateBroadcast: 0,
             STATE_BROADCAST_INTERVAL: 150, // ms between state broadcasts
             pendingArenaSync: false, // Prevents spamming arena sync requests
+            lastArenaSyncRequest: 0,
+            ARENA_SYNC_COOLDOWN: 1200,
+            lastEnemyStateAt: 0,
             lastDebugLog: 0,
 
             // Debug: update overlay every 500ms
@@ -918,7 +951,9 @@
                         type: p.isPowerup ? (POWERUPS[p.type] || POWERUPS.SPEED) :
                               (p.isHealth ? { color: '#4f4', name: 'HEALTH' } :
                                   (GUNS[p.type] || GUNS.MACHINEGUN)),
-                        bob: p.bob || Math.random() * Math.PI * 2
+                        bob: p.bob || Math.random() * Math.PI * 2,
+                        droppedBy: p.droppedBy ?? null,
+                        droppedAt: p.droppedAt ?? null
                     }));
                     syncPickupIdCounter(pickups);
                     console.log('[MP] Synced', pickups.length, 'pickups');
@@ -1046,7 +1081,9 @@
                     type: p.isPowerup ? (POWERUPS[p.type] || POWERUPS.SPEED) :
                           (p.isHealth ? { color: '#4f4', name: 'HEALTH' } :
                               (GUNS[p.type] || GUNS.MACHINEGUN)),
-                    bob: p.bob || Math.random() * Math.PI * 2
+                    bob: p.bob || Math.random() * Math.PI * 2,
+                    droppedBy: p.droppedBy ?? null,
+                    droppedAt: p.droppedAt ?? null
                 }));
                 syncPickupIdCounter(pickups);
             },
@@ -5683,13 +5720,18 @@
 
         document.getElementById('startFFA').addEventListener('click', () => {
             startGame(false);
+            const canInitArena = (!Multiplayer.connected && !Multiplayer.socket) ||
+                (Multiplayer.connected && Multiplayer.isHost);
             // Only init if arena is empty AND we haven't received a sync
-            if (enemies.length === 0 && !Multiplayer.arenaReceived) {
+            if (canInitArena && enemies.length === 0 && !Multiplayer.arenaReceived) {
                 console.log('[START] No enemies and no sync received, calling init()');
                 init();
             } else {
                 console.log('[START] Joining existing arena with', enemies.length, 'enemies (synced:', Multiplayer.arenaReceived, ')');
                 joinExistingArena();
+            }
+            if (Multiplayer.connected && !Multiplayer.isHost) {
+                Multiplayer.requestArenaSync('start');
             }
             gameState = 'playing';
             canvas.classList.add('playing');
@@ -5699,13 +5741,18 @@
 
         document.getElementById('startTeams').addEventListener('click', () => {
             startGame(true);
+            const canInitArena = (!Multiplayer.connected && !Multiplayer.socket) ||
+                (Multiplayer.connected && Multiplayer.isHost);
             // Only init if arena is empty AND we haven't received a sync
-            if (enemies.length === 0 && !Multiplayer.arenaReceived) {
+            if (canInitArena && enemies.length === 0 && !Multiplayer.arenaReceived) {
                 console.log('[START] No enemies and no sync received, calling init()');
                 init();
             } else {
                 console.log('[START] Joining existing arena with', enemies.length, 'enemies (synced:', Multiplayer.arenaReceived, ')');
                 joinExistingArena();
+            }
+            if (Multiplayer.connected && !Multiplayer.isHost) {
+                Multiplayer.requestArenaSync('start');
             }
             gameState = 'playing';
             canvas.classList.add('playing');
@@ -6045,11 +6092,38 @@
             mouseY = e.clientY;
             isMouseAiming = true;
         });
+
+        let arenaBootstrapped = false;
+        function bootstrapArena() {
+            if (arenaBootstrapped) return;
+            const startTime = Date.now();
+            const maxWaitMs = 5000;
+
+            const tick = () => {
+                if (arenaBootstrapped) return;
+                if (Multiplayer.connected) {
+                    arenaBootstrapped = true;
+                    if (Multiplayer.isHost) {
+                        init();
+                    } else {
+                        Multiplayer.requestArenaSync('bootstrap');
+                    }
+                    return;
+                }
+                if (Date.now() - startTime > maxWaitMs) {
+                    arenaBootstrapped = true;
+                    init(); // offline fallback
+                    return;
+                }
+                setTimeout(tick, 200);
+            };
+            tick();
+        }
         
         patternTracker.load(); // Load saved patterns from localStorage
         reputationSystem.load(); // Load player reputation from localStorage
         devMode.fetchHistory(); // Fetch recent player history
-        init();
+        bootstrapArena();
         requestAnimationFrame(gameLoop);
 
         // Periodic activity heartbeat (every 30 seconds)
@@ -6066,6 +6140,16 @@
                 Multiplayer.cleanupInactivePlayers();
             }
         }, 10000);
+
+        // Self-heal: request arena sync if enemy_state stream stalls
+        setInterval(() => {
+            if (Multiplayer.connected && !Multiplayer.isHost) {
+                const now = Date.now();
+                if (!Multiplayer.lastEnemyStateAt || now - Multiplayer.lastEnemyStateAt > 2000) {
+                    Multiplayer.requestArenaSync('stale_enemy_state');
+                }
+            }
+        }, 1500);
 
         // PWA: Register service worker for offline play
         if ('serviceWorker' in navigator) {

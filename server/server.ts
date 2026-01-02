@@ -379,6 +379,14 @@ export default class LocomotServer implements Party.Server {
           }
           break;
 
+        case 'kill':
+          this.room.broadcast(JSON.stringify({
+            type: 'kill',
+            targetId: data.targetId,
+            fromId: sender.id
+          }));
+          break;
+
         case 'pickup_collected':
           this.room.broadcast(JSON.stringify({
             type: 'pickup_collected',
