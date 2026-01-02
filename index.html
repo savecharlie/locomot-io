@@ -41,7 +41,83 @@
         .overlay.hidden { display: none; }
         .overlay h2 { font-size: 20px; margin-bottom: 20px; }
         .overlay p { font-size: 8px; color: #888; margin-bottom: 8px; line-height: 2; }
-        .start-screen h2 { color: #0f0; text-shadow: 0 0 30px #0f08; }
+        .start-screen h2 {
+            font-size: 28px;
+            background: linear-gradient(180deg, #4f8, #0f0 40%, #0a0);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            text-shadow: none;
+            filter: drop-shadow(0 0 20px #0f08) drop-shadow(0 0 40px #0f04);
+            animation: titlePulse 2s ease-in-out infinite;
+        }
+        @keyframes titlePulse {
+            0%, 100% { filter: drop-shadow(0 0 20px #0f08) drop-shadow(0 0 40px #0f04); }
+            50% { filter: drop-shadow(0 0 30px #0f0a) drop-shadow(0 0 60px #0f06); }
+        }
+        .start-screen .tagline { color: #d4a017; font-size: 9px; margin-bottom: 12px; }
+        .start-screen .subtitle { color: #aaa; font-size: 8px; margin-bottom: 16px; }
+        .start-screen .neural-badge {
+            display: inline-block;
+            background: linear-gradient(135deg, #808 0%, #f0f 50%, #808 100%);
+            background-size: 200% 100%;
+            animation: shimmer 2s linear infinite;
+            color: #fff;
+            padding: 6px 12px;
+            border-radius: 20px;
+            font-size: 8px;
+            margin: 8px 0;
+        }
+        @keyframes shimmer {
+            0% { background-position: 200% 0; }
+            100% { background-position: -200% 0; }
+        }
+        .start-screen input {
+            font-family: 'Press Start 2P';
+            font-size: 10px;
+            padding: 12px 16px;
+            border: 2px solid #0f0;
+            background: rgba(0, 50, 0, 0.3);
+            color: #0f0;
+            text-align: center;
+            width: 220px;
+            border-radius: 6px;
+            outline: none;
+            transition: all 0.2s;
+        }
+        .start-screen input:focus {
+            border-color: #4f8;
+            box-shadow: 0 0 20px #0f04, inset 0 0 10px #0f02;
+        }
+        .start-screen input::placeholder { color: #060; }
+        .mode-buttons { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; }
+        .mode-btn {
+            font-family: 'Press Start 2P';
+            font-size: 10px;
+            padding: 14px 20px;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.2s;
+            text-shadow: 1px 1px 2px rgba(0,0,0,0.5);
+        }
+        .mode-btn:hover { transform: translateY(-2px); filter: brightness(1.1); }
+        .mode-btn:active { transform: translateY(0); }
+        .mode-btn.ffa { background: linear-gradient(135deg, #600 0%, #c00 100%); color: #fff; box-shadow: 0 4px 20px #f004; }
+        .mode-btn.teams { background: linear-gradient(135deg, #006 0%, #00c 100%); color: #fff; box-shadow: 0 4px 20px #00f4; }
+        .game-links { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; margin-top: 10px; }
+        .game-link {
+            font-family: 'Press Start 2P';
+            font-size: 7px;
+            padding: 8px 12px;
+            background: linear-gradient(180deg, #2a2a2a, #1a1a1a);
+            text-decoration: none;
+            border-radius: 6px;
+            border: 1px solid #333;
+            transition: all 0.2s;
+        }
+        .game-link:hover { border-color: #555; transform: translateY(-1px); }
+        .game-link.painter { color: #f5a; }
+        .game-link.sandbox { color: #fa5; }
         .game-over-screen { justify-content: flex-start; overflow-y: auto; padding-top: 40px; padding-bottom: 40px; }
         .game-over-screen h2 { color: #f55; text-shadow: 0 0 30px #f558; }
         .pause-screen h2 { color: #5ff; text-shadow: 0 0 30px #5ff8; }
@@ -90,42 +166,31 @@
         
         
         <div class="overlay start-screen" id="startScreen">
+            <div style="margin-bottom: 8px;">🚂</div>
             <h2>LOCOMOT.IO</h2>
-            <p style="color:#d4a017;">All aboard the pain train</p>
-            <p>Build your train • Collect gun cars • Survive</p>
-            <p style="color:#f0f;">🧠 Neural Network AI Enemies!</p>
-            <div style="margin: 15px 0;">
-                <input type="text" id="usernameInput" placeholder="Enter your name..." maxlength="12"
-                    style="font-family: 'Press Start 2P'; font-size: 10px; padding: 10px; border: 2px solid #0f0; background: #111; color: #0f0; text-align: center; width: 200px;">
+            <p class="tagline">🔥 All aboard the pain train 🔥</p>
+            <p class="subtitle">Build your train • Collect gun cars • Survive</p>
+            <div class="neural-badge">🧠 NEURAL NETWORK AI</div>
+            <div style="margin: 20px 0;">
+                <input type="text" id="usernameInput" placeholder="Enter your name..." maxlength="12">
             </div>
             <div class="controls-help">
-                <div class="control-item"><div class="icon">🎮</div><div>WASD/ARROWS<br>to turn</div></div>
-                <div class="control-item"><div class="icon">🖱️</div><div>MOUSE<br>to aim</div></div>
-                <div class="control-item"><div class="icon">👋</div><div>SWIPE<br>mobile</div></div>
+                <div class="control-item"><div class="icon">🎮</div><div>WASD/ARROWS</div></div>
+                <div class="control-item"><div class="icon">🖱️</div><div>MOUSE AIM</div></div>
+                <div class="control-item"><div class="icon">📱</div><div>SWIPE</div></div>
             </div>
-            <div class="legend">
-                <div class="legend-item"><div class="legend-color" style="background:#f0f;"></div> NEURAL AI</div>
-                <div class="legend-item"><div class="legend-color" style="background:#f55;"></div> HUNTER</div>
-                <div class="legend-item"><div class="legend-color" style="background:#ff0;"></div> ALPHA</div>
-                <div class="legend-item"><div class="legend-color" style="background:#4f4;"></div> HEALTH</div>
+            <div style="margin-top: 24px;">
+                <div class="mode-buttons">
+                    <button class="mode-btn ffa" id="startFFA">⚔️ FREE FOR ALL</button>
+                    <button class="mode-btn teams" id="startTeams">👥 TEAM BATTLE</button>
+                </div>
             </div>
-            <div style="margin-top: 20px;">
-                <p style="color:#0ff; font-size: 10px; margin-bottom: 10px;">CHOOSE YOUR MODE:</p>
-                <button class="start-btn" id="startFFA" style="background: linear-gradient(135deg, #500 0%, #a00 100%); margin: 5px;">⚔️ FREE FOR ALL</button>
-                <button class="start-btn" id="startTeams" style="background: linear-gradient(135deg, #005 0%, #00a 100%); margin: 5px;">👥 TEAM BATTLE</button>
-            </div>
-            <div style="margin-top: 15px;">
-                <div id="kofiWidgetContainerStart" style="display: flex; justify-content: center; margin-bottom: 10px;"></div>
+            <div style="margin-top: 20px; padding-top: 16px; border-top: 1px solid #222;">
+                <div id="kofiWidgetContainerStart" style="display: flex; justify-content: center; margin-bottom: 12px;"></div>
                 <script>kofiwidget2.init('Support me on Ko-fi', '#72a4f2', 'S6S21JNSQJ');kofiwidget2.draw();</script>
-                <div style="display: flex; gap: 10px; justify-content: center; flex-wrap: wrap;">
-                    <a href="https://painter.locomot.io" target="_blank"
-                       style="font-family: 'Press Start 2P'; font-size: 8px; padding: 10px 14px; background: linear-gradient(180deg, #333, #222); color: #f5a; text-decoration: none; border-radius: 6px; border: 1px solid #444;">
-                        🎨 PAINTER
-                    </a>
-                    <a href="https://sandbox.locomot.io" target="_blank"
-                       style="font-family: 'Press Start 2P'; font-size: 8px; padding: 10px 14px; background: linear-gradient(180deg, #333, #222); color: #fa5; text-decoration: none; border-radius: 6px; border: 1px solid #444;">
-                        🏖️ SANDBOX
-                    </a>
+                <div class="game-links">
+                    <a href="https://painter.locomot.io" target="_blank" class="game-link painter">🎨 PAINTER</a>
+                    <a href="https://sandbox.locomot.io" target="_blank" class="game-link sandbox">🏖️ SANDBOX</a>
                 </div>
             </div>
         </div>
@@ -3653,12 +3718,48 @@
                         const neuralNorm = output.map(v => (v - minNeural) / range);
                         
                         // If lookahead predicts death (very negative), heavily penalize
+                        let safeDirections = 0;
                         for (let i = 0; i < 3; i++) {
                             if (lookaheadScores[i] < -50) {
                                 output[i] -= 100; // Veto this direction
                             } else {
+                                safeDirections++;
                                 // Add lookahead bonus scaled by neural confidence
                                 output[i] += lookaheadScores[i] * 0.1;
+                            }
+                        }
+
+                        // PICKUP BEELINE: If safe, aggressively pursue nearest pickup
+                        if (safeDirections > 0 && pickups.length > 0) {
+                            // Find nearest pickup
+                            let nearestPickup = null;
+                            let nearestDist = Infinity;
+                            for (const p of pickups) {
+                                const px = Math.floor(p.x / GRID);
+                                const py = Math.floor(p.y / GRID);
+                                const dist = Math.abs(head.x - px) + Math.abs(head.y - py);
+                                if (dist < nearestDist) {
+                                    nearestDist = dist;
+                                    nearestPickup = { x: px, y: py };
+                                }
+                            }
+
+                            if (nearestPickup && nearestDist < 30) {
+                                // Calculate direction to pickup relative to heading
+                                const dx = nearestPickup.x - head.x;
+                                const dy = nearestPickup.y - head.y;
+
+                                let pickupAhead = false, pickupLeft = false, pickupRight = false;
+                                if (e.dir === DIR.UP) { pickupAhead = dy < 0; pickupLeft = dx < 0; pickupRight = dx > 0; }
+                                else if (e.dir === DIR.DOWN) { pickupAhead = dy > 0; pickupLeft = dx > 0; pickupRight = dx < 0; }
+                                else if (e.dir === DIR.LEFT) { pickupAhead = dx < 0; pickupLeft = dy > 0; pickupRight = dy < 0; }
+                                else { pickupAhead = dx > 0; pickupLeft = dy < 0; pickupRight = dy > 0; }
+
+                                // Strong bias toward pickup if that direction is safe
+                                const pickupBias = 5 + (10 / Math.max(nearestDist, 1)); // Stronger when closer
+                                if (pickupAhead && lookaheadScores[1] >= -50) output[1] += pickupBias;
+                                if (pickupLeft && lookaheadScores[0] >= -50) output[0] += pickupBias;
+                                if (pickupRight && lookaheadScores[2] >= -50) output[2] += pickupBias;
                             }
                         }
 
