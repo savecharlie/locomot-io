@@ -4596,6 +4596,7 @@
                     updateParticles();
                     updateCamera();
                     updateLeaderboard();
+                    updateWaves(time, dt); // Keep spawning during spectate!
                 }
 
                 // CONTINUOUS ARENA: Keep arena alive during start screen
@@ -4604,6 +4605,7 @@
                     updateEnemyProjectiles(dt);
                     updateParticles();
                     updateLeaderboard();
+                    updateWaves(time, dt); // Keep spawning on start screen!
                 }
                 
                 ctx.save(); ctx.scale(cameraZoom, cameraZoom); ctx.translate(-cameraX, -cameraY);
