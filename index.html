@@ -4732,44 +4732,29 @@
             }
         }
 
-        // Draw queued direction indicators above snake head
+        // Draw queued direction indicator above snake head (max 1 turn)
         function drawDirectionQueue() {
             if (!snake[0]) return;
             const head = snake[0];
             const hx = head.x * GRID + GRID/2, hy = head.y * GRID + GRID/2;
 
-            // Show nextDir if different from current dir, plus queued directions
-            const dirsToShow = [];
-            if (nextDir !== dir) dirsToShow.push(nextDir);
-            for (const d of dirQueue) dirsToShow.push(d);
+            // Show nextDir if different from current, or first queued direction
+            const nextTurn = (nextDir !== dir) ? nextDir : dirQueue[0];
+            if (!nextTurn) return;
 
-            if (dirsToShow.length === 0) return;
-
-            // Draw small arrows above the head
+            // Draw arrow above the head
             ctx.save();
-            for (let i = 0; i < Math.min(dirsToShow.length, 3); i++) {
-                const d = dirsToShow[i];
-                const offsetY = -25 - (i * 12);
-                const alpha = 1 - (i * 0.25);
+            ctx.fillStyle = 'rgba(0, 255, 100, 0.9)';
+            ctx.translate(hx, hy - 25);
+            ctx.rotate(Math.atan2(nextTurn.y, nextTurn.x));
 
-                ctx.fillStyle = `rgba(0, 255, 100, ${alpha})`;
-                ctx.strokeStyle = `rgba(0, 255, 100, ${alpha})`;
-                ctx.lineWidth = 2;
-
-                // Draw arrow pointing in direction
-                ctx.save();
-                ctx.translate(hx, hy + offsetY);
-                ctx.rotate(Math.atan2(d.y, d.x));
-
-                // Arrow shape
-                ctx.beginPath();
-                ctx.moveTo(8, 0);
-                ctx.lineTo(-4, -5);
-                ctx.lineTo(-4, 5);
-                ctx.closePath();
-                ctx.fill();
-                ctx.restore();
-            }
+            // Arrow shape
+            ctx.beginPath();
+            ctx.moveTo(8, 0);
+            ctx.lineTo(-4, -5);
+            ctx.lineTo(-4, 5);
+            ctx.closePath();
+            ctx.fill();
             ctx.restore();
         }
 
@@ -5595,7 +5580,7 @@
             else if (e.code === 'ArrowLeft' || e.code === 'KeyA') newDir = DIR.LEFT;
             else if (e.code === 'ArrowRight' || e.code === 'KeyD') newDir = DIR.RIGHT;
 
-            if (newDir && dirQueue.length < 3) {
+            if (newDir && dirQueue.length < 1) {
                 const lastDir = dirQueue.length > 0 ? dirQueue[dirQueue.length - 1] : dir;
                 // Prevent 180 degree turns
                 if (!(lastDir.x === -newDir.x && lastDir.y === -newDir.y)) {
