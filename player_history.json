@@ -59,17 +59,17 @@
     {
       "name": "Iris",
       "firstSeen": "2026-01-01T18:40:12.479270",
-      "lastSeen": "2026-01-01T21:03:06.846689",
-      "sessions": 16,
-      "totalKills": 12831,
+      "lastSeen": "2026-01-01T21:07:41.754012",
+      "sessions": 17,
+      "totalKills": 12951,
       "bestScore": 12990
     },
     {
       "name": "Compy",
       "firstSeen": "2026-01-01T18:47:24.281558",
-      "lastSeen": "2026-01-01T21:03:00.304802",
-      "sessions": 20,
-      "totalKills": 12861,
+      "lastSeen": "2026-01-01T21:08:00.617131",
+      "sessions": 21,
+      "totalKills": 14100,
       "bestScore": 31180
     }
   ],
@@ -708,19 +708,37 @@
       "name": "Compy",
       "id": "9086bbdd-787f-45f1-9ca6-009bd0464726",
       "joined": "2026-01-01T21:01:02.124338",
-      "left": null,
-      "maxLength": 10,
-      "kills": 0,
-      "score": 2600
+      "left": "2026-01-01T21:03:22.170399",
+      "maxLength": 11,
+      "kills": 743,
+      "score": 3030
     },
     {
       "name": "Iris",
       "id": null,
       "joined": "2026-01-01T21:01:08.969363",
-      "left": null,
+      "left": "2026-01-01T21:03:22.111161",
       "maxLength": 4,
-      "kills": 0,
+      "kills": 69,
       "score": 50
+    },
+    {
+      "name": "Compy",
+      "id": "f967c367-1ca0-4758-bb5c-2458e3c5a8c0",
+      "joined": "2026-01-01T21:04:02.236155",
+      "left": "2026-01-01T21:05:52.067270",
+      "maxLength": 27,
+      "kills": 496,
+      "score": 2850
+    },
+    {
+      "name": "Iris",
+      "id": "910e983f-8949-4bea-aa08-dc8fac6ff416",
+      "joined": "2026-01-01T21:04:14.318622",
+      "left": "2026-01-01T21:04:35.440093",
+      "maxLength": 4,
+      "kills": 51,
+      "score": 150
     }
   ]
 }

@@ -800,84 +800,41 @@
                 this.send({ type: 'enemy_state', enemies: enemyState });
             },
 
-            // Non-host applies enemy state from host
+            // Non-host: just replace enemies array with what host sends (like otherPlayers)
             applyEnemyState(stateData) {
                 this._enemyStateCount++;
 
-                // If counts don't match, rebuild entirely from state data
-                if (enemies.length !== stateData.length) {
-                    console.log(`[MP] Enemy count mismatch: local=${enemies.length} host=${stateData.length}, rebuilding`);
-                    this.rebuildEnemiesFromState(stateData);
-                    return;
-                }
-
-                // Counts match - update in place with FULL data
-                for (let i = 0; i < stateData.length; i++) {
-                    const s = stateData[i];
-                    const enemy = enemies[i];
-                    if (enemy && s.segs) {
-                        // Sync all properties
-                        enemy.name = s.name || enemy.name;
-                        enemy.color = s.color || enemy.color;
-                        enemy.team = s.team || enemy.team;
-                        enemy.score = s.score || enemy.score;
-                        enemy.dir = s.dir;
-                        enemy.nextDir = s.dir;
-                        enemy.isMVP = s.isMVP || false;
-
-                        // Rebuild segments to match exactly
-                        while (enemy.segments.length < s.segs.length) {
-                            enemy.segments.push({ x: 0, y: 0, hp: 50, maxHp: 50, type: GUNS.MACHINEGUN, lastFired: 0 });
-                        }
-                        while (enemy.segments.length > s.segs.length) {
-                            enemy.segments.pop();
-                        }
-
-                        // Update all segment data
-                        for (let j = 0; j < s.segs.length; j++) {
-                            enemy.segments[j].x = s.segs[j].x;
-                            enemy.segments[j].y = s.segs[j].y;
-                            enemy.segments[j].hp = s.segs[j].hp || enemy.segments[j].hp;
-                        }
-                    }
-                }
-            },
-
-            // Rebuild enemies array from host state - uses FULL enemy data from host
-            rebuildEnemiesFromState(stateData) {
-                enemies = stateData.map((s, idx) => {
-                    const segments = s.segs.map((seg, i) => ({
+                // Direct replacement - same pattern as otherPlayers
+                enemies = stateData.map((s, idx) => ({
+                    team: s.team || 'blue',
+                    name: s.name || 'Train',
+                    segments: s.segs.map((seg, i) => ({
                         x: seg.x,
                         y: seg.y,
                         hp: seg.hp || (i === 0 ? Infinity : 50),
                         maxHp: i === 0 ? Infinity : 50,
                         type: GUNS[seg.type] || (i === 0 ? GUNS.HEAD : GUNS.MACHINEGUN),
                         lastFired: 0
-                    }));
-                    return {
-                        team: s.team || (idx % 2 === 0 ? 'blue' : 'red'),
-                        name: s.name || 'Train',
-                        segments,
-                        dir: s.dir,
-                        nextDir: s.dir,
-                        baseSpeed: 8,
-                        damage: 15,
-                        moveTimer: 0,
-                        lastFired: 0,
-                        fireRate: 1000,
-                        score: s.score || 10 * segments.length,
-                        personality: { aggression: 0.5, greed: 0.5, caution: 0.5, neural: false },
-                        color: s.color || '#f0f',
-                        targetPos: null,
-                        avoidPos: null,
-                        lastDecision: 0,
-                        decisionInterval: 400,
-                        recentPoints: 0,
-                        lastPointTime: 0,
-                        isMVP: s.isMVP || false,
-                        id: idx
-                    };
-                });
+                    })),
+                    dir: s.dir || { x: 1, y: 0 },
+                    nextDir: s.dir || { x: 1, y: 0 },
+                    baseSpeed: 8,
+                    damage: 15,
+                    moveTimer: 0,
+                    lastFired: 0,
+                    fireRate: 1000,
+                    score: s.score || 0,
+                    personality: { aggression: 0.5, greed: 0.5, caution: 0.5, neural: false },
+                    color: s.color || '#f0f',
+                    targetPos: null,
+                    avoidPos: null,
+                    lastDecision: 0,
+                    decisionInterval: 400,
+                    recentPoints: 0,
+                    lastPointTime: 0,
+                    isMVP: s.isMVP || false,
+                    id: idx
+                }));
             },
 
             setUsername(name) {
