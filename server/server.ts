@@ -222,10 +222,11 @@ export default class LocomotServer implements Party.Server {
           break;
 
         case 'enemy_state':
-          // Host broadcasting enemy state - relay to all other clients
+          // Host broadcasting enemy state + pickups - relay to all other clients
           this.room.broadcast(JSON.stringify({
             type: 'enemy_state',
-            enemies: data.enemies
+            enemies: data.enemies,
+            pickups: data.pickups
           }), [sender.id]); // Exclude sender
           break;
       }

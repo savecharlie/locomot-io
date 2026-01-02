@@ -610,8 +610,12 @@
 
                     case 'enemy_state':
                         // Continuous enemy state from host - update positions
+                        console.log('[MP] Received enemy_state:', data.enemies?.length, 'enemies,', data.pickups?.length, 'pickups, isHost:', this.isHost);
                         if (!this.isHost && data.enemies) {
                             this.applyEnemyState(data.enemies);
+                        }
+                        if (!this.isHost && data.pickups) {
+                            this.applyPickupState(data.pickups);
                         }
                         break;
 
@@ -620,6 +624,8 @@
                         this.otherPlayers.delete(data.playerId);
                         this.playerLastSeen.delete(data.playerId);
                         if (left) this.showStatus(`${left.name} left`);
+                        // Host migration: if we're not host but no one else exists, become host
+                        this.checkHostMigration();
                         break;
 
                     case 'state':
@@ -691,9 +697,8 @@
                 const el = document.getElementById('mp-debug');
                 if (el) {
                     const role = this.isHost ? 'HOST' : 'CLIENT';
-                    const sync = this.arenaSynced ? 'synced' : 'waiting';
-                    const pos = e0?.segments?.[0] ? `${e0.segments[0].x?.toFixed?.(0) || e0.segments[0].x},${e0.segments[0].y?.toFixed?.(0) || e0.segments[0].y}` : 'none';
-                    el.textContent = `${role} | ${sync} | updates=${this._enemyStateCount} | enemies=${enemies.length} | e0=${pos}`;
+                    const name = e0?.name || 'none';
+                    el.textContent = `${role} | updates=${this._enemyStateCount} | e0=${name}`;
                 }
             },
 
@@ -793,48 +798,132 @@
                     team: e.team,
                     score: e.score,
                     dir: { x: e.dir.x, y: e.dir.y },
-                    segs: e.segments.map(s => ({ x: s.x, y: s.y, hp: s.hp, type: s.type?.name || 'MACHINEGUN' })),
+                    segs: e.segments.map(s => ({ x: s.x, y: s.y, hp: s.hp, type: Object.keys(GUNS).find(k => GUNS[k] === s.type) || 'MACHINEGUN' })),
                     isMVP: e.isMVP
                 })).filter(e => e.segs.length > 0);
 
-                this.send({ type: 'enemy_state', enemies: enemyState });
+                // Also sync pickups so all clients see same world
+                const pickupState = pickups.slice(0, 200).map(p => ({
+                    x: p.x, y: p.y,
+                    isHealth: !!p.isHealth,
+                    isPowerup: !!p.isPowerup,
+                    healAmount: p.healAmount || 40,
+                    type: p.isPowerup ? (p.type?.name || 'SPEED') :
+                          (Object.keys(GUNS).find(k => GUNS[k] === p.type) || 'MACHINEGUN'),
+                    bob: p.bob || 0
+                }));
+
+                console.log('[MP] Broadcasting:', enemyState.length, 'enemies,', pickupState.length, 'pickups');
+                this.send({ type: 'enemy_state', enemies: enemyState, pickups: pickupState });
             },
 
-            // Non-host: just replace enemies array with what host sends (like otherPlayers)
+            // Non-host: update enemies in-place to preserve state (guns, timers, personality)
             applyEnemyState(stateData) {
                 this._enemyStateCount++;
 
-                // Direct replacement - same pattern as otherPlayers
-                enemies = stateData.map((s, idx) => ({
-                    team: s.team || 'blue',
-                    name: s.name || 'Train',
-                    segments: s.segs.map((seg, i) => ({
-                        x: seg.x,
-                        y: seg.y,
-                        hp: seg.hp || (i === 0 ? Infinity : 50),
-                        maxHp: i === 0 ? Infinity : 50,
-                        type: GUNS[seg.type] || (i === 0 ? GUNS.HEAD : GUNS.MACHINEGUN),
-                        lastFired: 0
-                    })),
-                    dir: s.dir || { x: 1, y: 0 },
-                    nextDir: s.dir || { x: 1, y: 0 },
-                    baseSpeed: 8,
-                    damage: 15,
-                    moveTimer: 0,
-                    lastFired: 0,
-                    fireRate: 1000,
-                    score: s.score || 0,
-                    personality: { aggression: 0.5, greed: 0.5, caution: 0.5, neural: false },
-                    color: s.color || '#f0f',
-                    targetPos: null,
-                    avoidPos: null,
-                    lastDecision: 0,
-                    decisionInterval: 400,
-                    recentPoints: 0,
-                    lastPointTime: 0,
-                    isMVP: s.isMVP || false,
-                    id: idx
+                // Build lookup of existing enemies by name+team
+                const existingMap = new Map();
+                for (const e of enemies) {
+                    if (e.name && e.segments?.length > 0) {
+                        existingMap.set(`${e.name}_${e.team}`, e);
+                    }
+                }
+
+                // Update existing or create new
+                const newEnemies = [];
+                for (let idx = 0; idx < stateData.length; idx++) {
+                    const s = stateData[idx];
+                    const key = `${s.name}_${s.team}`;
+                    const existing = existingMap.get(key);
+
+                    if (existing) {
+                        // UPDATE existing enemy - preserve guns, personality, timers
+                        existing.dir = s.dir || existing.dir;
+                        existing.nextDir = s.dir || existing.nextDir;
+                        existing.isMVP = s.isMVP || false;
+                        existing.score = s.score || existing.score;
+                        existing.color = s.color || existing.color;
+
+                        // Update segment positions and HP, preserve gun types
+                        for (let i = 0; i < s.segs.length; i++) {
+                            if (i < existing.segments.length) {
+                                existing.segments[i].x = s.segs[i].x;
+                                existing.segments[i].y = s.segs[i].y;
+                                if (s.segs[i].hp !== undefined) existing.segments[i].hp = s.segs[i].hp;
+                            } else {
+                                // Enemy grew - add new segment
+                                existing.segments.push({
+                                    x: s.segs[i].x, y: s.segs[i].y,
+                                    hp: s.segs[i].hp || 50, maxHp: 50,
+                                    type: GUNS[s.segs[i].type] || GUNS.MACHINEGUN,
+                                    lastFired: 0
+                                });
+                            }
+                        }
+                        // Enemy shrunk - remove extra segments
+                        if (existing.segments.length > s.segs.length) {
+                            existing.segments.length = s.segs.length;
+                        }
+                        existingMap.delete(key); // Mark as used
+                        newEnemies.push(existing);
+                    } else {
+                        // CREATE new enemy (spawned mid-game)
+                        newEnemies.push({
+                            team: s.team || 'blue',
+                            name: s.name || 'Train',
+                            segments: s.segs.map((seg, i) => ({
+                                x: seg.x, y: seg.y,
+                                hp: seg.hp || (i === 0 ? Infinity : 50),
+                                maxHp: i === 0 ? Infinity : 50,
+                                type: GUNS[seg.type] || (i === 0 ? GUNS.HEAD : GUNS.MACHINEGUN),
+                                lastFired: 0
+                            })),
+                            dir: s.dir || { x: 1, y: 0 },
+                            nextDir: s.dir || { x: 1, y: 0 },
+                            baseSpeed: 8, damage: 15, moveTimer: 0,
+                            lastFired: 0, fireRate: 1000,
+                            score: s.score || 0,
+                            personality: { aggression: 0.5, greed: 0.5, caution: 0.5, neural: false },
+                            color: s.color || '#f0f',
+                            targetPos: null, avoidPos: null,
+                            lastDecision: 0, decisionInterval: 400,
+                            recentPoints: 0, lastPointTime: 0,
+                            isMVP: s.isMVP || false,
+                            id: idx
+                        });
+                    }
+                }
+                enemies = newEnemies;
+            },
+
+            // Non-host: sync pickups from host
+            applyPickupState(pickupData) {
+                console.log('[MP] Applying pickup state:', pickupData?.length, 'pickups');
+                if (!pickupData || pickupData.length === 0) return;
+                pickups = pickupData.map(p => ({
+                    x: p.x, y: p.y,
+                    isHealth: p.isHealth || false,
+                    isPowerup: p.isPowerup || false,
+                    healAmount: p.healAmount || 40,
+                    type: p.isPowerup ? (POWERUPS[p.type] || POWERUPS.SPEED) :
+                          (GUNS[p.type] || GUNS.MACHINEGUN),
+                    bob: p.bob || Math.random() * Math.PI * 2
                 }));
+            },
+
+            // Deterministic host migration: lowest playerId becomes host
+            checkHostMigration() {
+                if (!this.playerId || !this.connected) return;
+
+                // Collect all player IDs (including self)
+                const allIds = [this.playerId, ...this.otherPlayers.keys()].sort();
+                const shouldBeHost = allIds[0] === this.playerId;
+
+                if (shouldBeHost && !this.isHost) {
+                    console.log('[MP] Host migration: becoming HOST');
+                    this.isHost = true;
+                    this.showStatus('You are now HOST');
+                }
             },
 
             setUsername(name) {
