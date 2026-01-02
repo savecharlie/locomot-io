@@ -682,6 +682,7 @@
             lastDebugLog: 0,
 
             // Debug: update overlay every 500ms
+            _enemyStateCount: 0,
             debugStatus() {
                 const now = Date.now();
                 if (now - this.lastDebugLog < 500) return;
@@ -689,7 +690,10 @@
                 const e0 = enemies[0];
                 const el = document.getElementById('mp-debug');
                 if (el) {
-                    el.textContent = `${this.isHost ? 'HOST' : 'CLIENT'} | conn=${this.connected} | enemies=${enemies.length} | e0=${e0?.segments?.[0]?.x?.toFixed(0)},${e0?.segments?.[0]?.y?.toFixed(0)}`;
+                    const role = this.isHost ? 'HOST' : 'CLIENT';
+                    const sync = this.arenaSynced ? 'synced' : 'waiting';
+                    const pos = e0?.segments?.[0] ? `${e0.segments[0].x?.toFixed?.(0) || e0.segments[0].x},${e0.segments[0].y?.toFixed?.(0) || e0.segments[0].y}` : 'none';
+                    el.textContent = `${role} | ${sync} | updates=${this._enemyStateCount} | enemies=${enemies.length} | e0=${pos}`;
                 }
             },
 
@@ -797,6 +801,8 @@
 
             // Non-host applies enemy state from host
             applyEnemyState(stateData) {
+                this._enemyStateCount++;
+
                 // Debug: log first call and periodically
                 if (!this._lastApplyLog || Date.now() - this._lastApplyLog > 2000) {
                     this._lastApplyLog = Date.now();
@@ -4217,7 +4223,11 @@
             
             // SpawnDirector handles adaptive spawning (L4D-style intensity pacing)
             // Only host spawns enemies - non-hosts get enemies via arena sync
-            if (!Multiplayer.connected || Multiplayer.isHost) {
+            // IMPORTANT: Don't spawn until connected (to know if we're host)
+            if (Multiplayer.connected && Multiplayer.isHost) {
+                SpawnDirector.update(Date.now());
+            } else if (!Multiplayer.connected && !Multiplayer.socket) {
+                // Not connected yet and never tried - spawn locally (single player fallback)
                 SpawnDirector.update(Date.now());
             }
             
@@ -4881,7 +4891,7 @@
                         respawn();
                     }
                     // Only host runs enemy AI - non-hosts get enemy positions from host
-                    const gameOver = (!Multiplayer.connected || Multiplayer.isHost) ? updateEnemies(dt) : false;
+                    const gameOver = (Multiplayer.connected && Multiplayer.isHost) ? updateEnemies(dt) : false;
                     if (gameOver) {
                         console.log('RESPAWN:', deathReason || 'Destroyed');
                         haptic('death');
@@ -4913,7 +4923,7 @@
                 
                 // SPECTATOR MODE: Keep updating when dead so player can watch
                 if (gameState === 'dead') {
-                    if (!Multiplayer.connected || Multiplayer.isHost) updateEnemies(dt);
+                    if (Multiplayer.connected && Multiplayer.isHost) updateEnemies(dt);
                     updateEnemyProjectiles(dt);
                     updateParticles();
                     updateCamera();
@@ -4924,7 +4934,7 @@
 
                 // CONTINUOUS ARENA: Keep arena alive during start screen
                 if (gameState === 'start' && enemies.length > 0) {
-                    if (!Multiplayer.connected || Multiplayer.isHost) updateEnemies(dt);
+                    if (Multiplayer.connected && Multiplayer.isHost) updateEnemies(dt);
                     updateEnemyProjectiles(dt);
                     updateParticles();
                     updateLeaderboard();
