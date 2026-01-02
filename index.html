@@ -1150,6 +1150,7 @@
                 const inCombatLull = (now - this.lastCombatTime) > this.COMBAT_LULL_MS;
                 const currentPop = this.getTotalPopulation();
                 const targetPop = this.TARGET_POPULATION + Math.floor((snake.length || 0) / 3);
+                const timeSinceSpawn = time - this.lastSpawnTime;
 
                 // Calculate spawn rate based on intensity
                 let spawnRate;
@@ -1166,9 +1167,15 @@
                     spawnRate = 400;  // Break the lull!
                 }
 
+                // Debug every 5 seconds
+                if (!this._lastDebug || now - this._lastDebug > 5000) {
+                    console.log(`[SpawnDirector] Pop: ${currentPop}/${targetPop}, Rate: ${spawnRate}ms, TimeSince: ${timeSinceSpawn}ms`);
+                    this._lastDebug = now;
+                }
+
                 // Spawn if under population and rate allows
-                if (currentPop < targetPop && (time - this.lastSpawnTime) > spawnRate) {
-                    console.log(`[SpawnDirector] Spawning! Pop: ${currentPop}/${targetPop}, Intensity: ${this.intensity.toFixed(1)}`);
+                if (currentPop < targetPop && timeSinceSpawn > spawnRate) {
+                    console.log(`[SpawnDirector] SPAWNING! Pop: ${currentPop}/${targetPop}`);
                     // If in combat lull, spawn near player
                     if (inCombatLull && snake && snake[0]) {
                         this.spawnNearPlayer();
