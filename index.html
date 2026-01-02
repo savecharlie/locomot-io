@@ -1131,6 +1131,7 @@
             reset() {
                 this.intensity = 50;
                 this.lastCombatTime = Date.now();
+                this.lastSpawnTime = Date.now(); // Ensure spawning can start fresh
             },
 
             // Get current population (AI + real players)
@@ -2523,6 +2524,7 @@
             bestRank = 999; maxLength = 4; // Reset tracking
             invincibleTimer = 10000; // 10 seconds of spawn protection
             speedTimer = 0; magnetTimer = 0; // Reset power-up timers
+            SpawnDirector.reset(); // Initialize spawn director
             patternTracker.reset(); // Reset pattern tracking for new game
             strategyClassifier.reset(); // Reset strategy classifier
             reputationSystem.reset(); // Reset enemy reputations for new game
