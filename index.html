@@ -3461,11 +3461,11 @@
                             for (let p = 0; p < type.pellets; p++) {
                                 const spread = (Math.random() - 0.5) * type.spread * 2;
                                 const a = angle + spread;
-                                enemyProjectiles.push({ x: sx, y: sy, vx: Math.cos(a)*5, vy: Math.sin(a)*5, damage: type.damage, size: 3, color: type.color, life: 300, owner: e });
+                                enemyProjectiles.push({ x: sx, y: sy, vx: Math.cos(a)*5, vy: Math.sin(a)*5, damage: type.damage, size: 3, color: type.color, life: 120, owner: e });
                             }
                         } else {
                             const size = type.size || 4;
-                            enemyProjectiles.push({ x: sx, y: sy, vx: Math.cos(angle)*5, vy: Math.sin(angle)*5, damage: type.damage, size, color: type.color, life: 400, owner: e });
+                            enemyProjectiles.push({ x: sx, y: sy, vx: Math.cos(angle)*5, vy: Math.sin(angle)*5, damage: type.damage, size, color: type.color, life: 150, owner: e });
                         }
                     }
                 }
@@ -3801,11 +3801,11 @@
                     for (let p = 0; p < type.pellets; p++) {
                         const spread = (Math.random() - 0.5) * type.spread * 2;
                         const angle = aimAngle + spread;
-                        projectiles.push({ x: cx, y: cy, vx: Math.cos(angle)*6, vy: Math.sin(angle)*6, damage: type.damage, size: 3, color: type.color, life: 300 });
+                        projectiles.push({ x: cx, y: cy, vx: Math.cos(angle)*6, vy: Math.sin(angle)*6, damage: type.damage, size: 3, color: type.color, life: 120 });
                     }
                 } else {
                     const size = type.size || 4;
-                    projectiles.push({ x: cx, y: cy, vx: Math.cos(aimAngle)*7, vy: Math.sin(aimAngle)*7, damage: type.damage, size, color: type.color, life: 400 });
+                    projectiles.push({ x: cx, y: cy, vx: Math.cos(aimAngle)*7, vy: Math.sin(aimAngle)*7, damage: type.damage, size, color: type.color, life: 150 });
                 }
                 fired = true;
             }
