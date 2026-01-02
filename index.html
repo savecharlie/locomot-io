@@ -3139,7 +3139,8 @@
                         // Don't reverse
                         if (newDir.x === -e.dir.x && newDir.y === -e.dir.y) newDir = e.dir;
                         e.dir = newDir;
-                        
+                        e.aimAngle = Math.atan2(e.dir.y, e.dir.x); // AI aim follows movement too
+
                         // Move
                         const prevPositions = e.segments.map(s => ({ x: s.x, y: s.y }));
                         head.x = (head.x + e.dir.x + WORLD_COLS) % WORLD_COLS;
@@ -3681,6 +3682,8 @@
             } else {
                 dir = nextDir;
             }
+            // Update aim to match actual direction (aim follows movement)
+            aimAngle = Math.atan2(dir.y, dir.x);
 
             // Record training data: what vision the player saw and what action they took
             if (snake.length >= 4) {
@@ -4273,7 +4276,8 @@
                     }
                     
                     e.dir = newDir;
-                    
+                    e.aimAngle = Math.atan2(e.dir.y, e.dir.x); // AI aim follows movement too
+
                     // Move
                     const prevPositions = e.segments.map(s => ({ x: s.x, y: s.y }));
                     head.x = (head.x + e.dir.x + WORLD_COLS) % WORLD_COLS;
@@ -4351,11 +4355,9 @@
                         seg.lastFired = now;
                         
                         const sx = seg.x * GRID + GRID/2, sy = seg.y * GRID + GRID/2;
-                        const tx = targetX * GRID + GRID/2, ty = targetY * GRID + GRID/2;
-                        const angle = Math.atan2(ty - sy, tx - sx);
-                        
-                        if (si === 0) { e.aimAngle = angle; e.aimX = sx; e.aimY = sy; }
-                        
+                        // AI aim follows movement direction (set when e.dir changes)
+                        const angle = e.aimAngle || 0;
+
                         if (type.aoe) {
                             // AOE damages player (if not invincible) and other enemies
                             // Damage decays with distance: max at center, ~10% at edge
