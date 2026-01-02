@@ -18,6 +18,7 @@ interface GameState {
   players: Map<string, Player>;
   pickups: { x: number; y: number; type: string }[];
   worldSize: { cols: number; rows: number };
+  hostId: string | null;
 }
 
 const COLORS = ['#f0f', '#0ff', '#ff0', '#f80', '#8f0', '#08f', '#f08', '#80f'];
@@ -32,7 +33,8 @@ export default class LocomotServer implements Party.Server {
     this.state = {
       players: new Map(),
       pickups: this.generatePickups(50),
-      worldSize: { cols: WORLD_COLS, rows: WORLD_ROWS }
+      worldSize: { cols: WORLD_COLS, rows: WORLD_ROWS },
+      hostId: null
     };
 
     // Clean up stale players every 10 seconds
@@ -62,6 +64,17 @@ export default class LocomotServer implements Party.Server {
 
     if (toRemove.length > 0) {
       console.log(`Cleaned up ${toRemove.length} stale player(s). Remaining: ${this.state.players.size}`);
+    }
+  }
+
+  assignHost(newHostId: string | null) {
+    if (this.state.hostId === newHostId) return;
+    this.state.hostId = newHostId;
+    if (newHostId) {
+      this.room.broadcast(JSON.stringify({
+        type: 'host_assigned',
+        hostId: newHostId
+      }));
     }
   }
 
@@ -118,6 +131,9 @@ export default class LocomotServer implements Party.Server {
     };
 
     this.state.players.set(conn.id, player);
+    if (!this.state.hostId) {
+      this.assignHost(conn.id);
+    }
 
     // Send initial state to new player
     conn.send(JSON.stringify({
@@ -126,7 +142,8 @@ export default class LocomotServer implements Party.Server {
       player,
       players: Array.from(this.state.players.values()),
       pickups: this.state.pickups,
-      worldSize: this.state.worldSize
+      worldSize: this.state.worldSize,
+      hostId: this.state.hostId
     }));
 
     // Notify others of new player
@@ -147,6 +164,12 @@ export default class LocomotServer implements Party.Server {
       type: 'player_left',
       playerId: conn.id
     }));
+
+    if (this.state.hostId === conn.id) {
+      const remainingIds = Array.from(this.state.players.keys()).sort();
+      const nextHost = remainingIds.length > 0 ? remainingIds[0] : null;
+      this.assignHost(nextHost);
+    }
 
     console.log(`Player ${conn.id} left. Total: ${this.state.players.size}`);
   }

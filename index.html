@@ -513,6 +513,7 @@
             connected: false,
             playerId: null,
             roomId: null,
+            hostId: null,
             otherPlayers: new Map(), // id -> player state
             playerLastSeen: new Map(), // id -> timestamp for inactive cleanup
             INACTIVE_TIMEOUT: 10000, // Boot players after 10 seconds of no updates
@@ -559,6 +560,10 @@
                     case 'init':
                         this.playerId = data.playerId;
                         console.log('[MP] Assigned ID:', this.playerId);
+                        if (data.hostId) {
+                            this.hostId = data.hostId;
+                            this.isHost = this.playerId === data.hostId;
+                        }
                         // Initialize other players
                         for (const p of data.players) {
                             if (p.id !== this.playerId) {
@@ -566,14 +571,16 @@
                                 this.playerLastSeen.set(p.id, Date.now());
                             }
                         }
-                        // If there are other players, request arena sync from them
-                        if (this.otherPlayers.size > 0) {
+                        if (!data.hostId) {
+                            this.isHost = this.otherPlayers.size === 0;
+                        }
+                        // If we are not host, request arena sync from them
+                        if (!this.isHost && this.otherPlayers.size > 0) {
                             console.log('[MP] Other players exist, requesting arena sync');
-                            this.isHost = false; // We're joining, not hosting
                             this.send({ type: 'request_arena' });
-                        } else {
-                            console.log('[MP] We are first player - becoming HOST');
-                            this.isHost = true; // We're the host
+                        } else if (this.isHost) {
+                            console.log('[MP] We are host');
+                            this.showStatus('You are HOST');
                         }
                         break;
 
@@ -583,7 +590,7 @@
                         this.playerLastSeen.set(data.player.id, Date.now());
                         this.showStatus(`${data.player.name} joined!`);
                         // Send arena state if we have enemies (any game state)
-                        if (enemies.length > 0) {
+                        if (this.isHost && enemies.length > 0) {
                             console.log('[MP] Sending arena to new player');
                             this.sendArenaSync(data.player.id);
                         }
@@ -602,7 +609,7 @@
                     case 'arena_request':
                         // Another player is requesting our arena state
                         console.log('[MP] Arena request from', data.fromId, '- we have', enemies.length, 'enemies');
-                        if (enemies.length > 0) {
+                        if (this.isHost && enemies.length > 0) {
                             console.log('[MP] Responding with arena sync');
                             this.sendArenaSync(data.fromId);
                         }
@@ -624,8 +631,6 @@
                         this.otherPlayers.delete(data.playerId);
                         this.playerLastSeen.delete(data.playerId);
                         if (left) this.showStatus(`${left.name} left`);
-                        // Host migration: if we're not host but no one else exists, become host
-                        this.checkHostMigration();
                         break;
 
                     case 'state':
@@ -657,6 +662,15 @@
 
                     case 'pickup_collected':
                         this.removePickupById(data.pickupId, data.x, data.y);
+                        break;
+
+                    case 'host_assigned':
+                        this.hostId = data.hostId;
+                        const wasHost = this.isHost;
+                        this.isHost = this.playerId === data.hostId;
+                        if (this.isHost && !wasHost) {
+                            this.showStatus('You are now HOST');
+                        }
                         break;
                 }
             },
@@ -950,21 +964,6 @@
                     bob: p.bob || Math.random() * Math.PI * 2
                 }));
                 syncPickupIdCounter(pickups);
-            },
-
-            // Deterministic host migration: lowest playerId becomes host
-            checkHostMigration() {
-                if (!this.playerId || !this.connected) return;
-
-                // Collect all player IDs (including self)
-                const allIds = [this.playerId, ...this.otherPlayers.keys()].sort();
-                const shouldBeHost = allIds[0] === this.playerId;
-
-                if (shouldBeHost && !this.isHost) {
-                    console.log('[MP] Host migration: becoming HOST');
-                    this.isHost = true;
-                    this.showStatus('You are now HOST');
-                }
             },
 
             setUsername(name) {
