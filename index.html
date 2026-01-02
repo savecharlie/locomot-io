@@ -793,6 +793,9 @@
                 }
             },
 
+            recentKillAt: new Map(),
+            KILL_COOLDOWN_MS: 1000,
+
             // Send our position to server
             sendUpdate(x, y, segments, score) {
                 this.send({
@@ -3848,45 +3851,107 @@
             // Send position to multiplayer server (only when alive!)
             if (Multiplayer.connected && gameState === 'playing') {
                 Multiplayer.sendUpdate(snake[0].x, snake[0].y, snake, score);
+            }
 
-                // PVP COLLISION DETECTION
-                if (invincibleTimer <= 0) {
-                    const canSpawnPlayerDrops = Multiplayer.isHost;
-                    for (const [playerId, otherPlayer] of Multiplayer.otherPlayers) {
-                        if (!otherPlayer.segments || otherPlayer.segments.length === 0) continue;
-                        if (teamMode && (otherPlayer.team || 'blue') === playerTeam) continue;
-                        const otherInvincible = otherPlayer.invincibleUntil && Date.now() < otherPlayer.invincibleUntil;
-                        if (otherInvincible) continue;
+            return false;
+        }
 
-                        // Check head vs other player's body (with 1-tile tolerance for lag)
-                        for (let i = 0; i < otherPlayer.segments.length; i++) {
-                            const seg = otherPlayer.segments[i];
-                            const dx = Math.abs(wrappedX - seg.x);
-                            const dy = Math.abs(wrappedY - seg.y);
+        function hostResolvePlayerCollisions() {
+            if (!Multiplayer.connected || !Multiplayer.isHost) return false;
 
-                            // Exact collision or within 1 tile (lag compensation)
-                            if (dx <= 1 && dy <= 1 && dx + dy <= 1) {
-                                if (i === 0) {
-                                    // Head-to-head collision: both die
-                                    if (canSpawnPlayerDrops) {
-                                        dropPickupsFromSegments(snake, 'player');
-                                        dropPickupsFromSegments(otherPlayer.segments, playerId);
-                                    }
-                                    Multiplayer.send({ type: 'kill', targetId: playerId });
-                                    deathReason = 'Head-on collision with ' + otherPlayer.name;
-                                    return true;
-                                }
-                                // Head into body: head dies
-                                if (canSpawnPlayerDrops) dropPickupsFromSegments(snake, 'player');
-                                deathReason = 'Ran into ' + otherPlayer.name + "'s body (seg " + i + ')';
-                                return true;
-                            }
-                        }
+            const now = Date.now();
+            const players = [];
+            const hostInvUntil = invincibleTimer > 0 ? now + invincibleTimer : 0;
+
+            if (snake.length > 0) {
+                players.push({
+                    id: Multiplayer.playerId,
+                    name: Multiplayer.username || playerName,
+                    segments: snake,
+                    team: playerTeam,
+                    invincibleUntil: hostInvUntil,
+                    isHost: true
+                });
+            }
+
+            for (const [id, op] of Multiplayer.otherPlayers) {
+                if (!op.segments || op.segments.length === 0) continue;
+                players.push({
+                    id,
+                    name: op.name || 'player',
+                    segments: op.segments,
+                    team: op.team || 'blue',
+                    invincibleUntil: op.invincibleUntil || 0,
+                    isHost: false
+                });
+            }
+
+            const killed = new Set();
+            let hostDied = false;
+
+            const canKill = (targetId) => {
+                const last = Multiplayer.recentKillAt.get(targetId) || 0;
+                return now - last >= Multiplayer.KILL_COOLDOWN_MS;
+            };
+
+            const markKill = (targetId) => {
+                Multiplayer.recentKillAt.set(targetId, now);
+                killed.add(targetId);
+            };
+
+            const headHitsBody = (head, segments) => {
+                for (let i = 1; i < segments.length; i++) {
+                    if (segments[i].x === head.x && segments[i].y === head.y) return true;
+                }
+                return false;
+            };
+
+            const applyKill = (target, killer, reason) => {
+                if (!canKill(target.id)) return;
+                markKill(target.id);
+                const droppedBy = target.id === Multiplayer.playerId ? 'player' : target.id;
+                dropPickupsFromSegments(target.segments, droppedBy);
+                if (target.id === Multiplayer.playerId) {
+                    deathReason = reason;
+                    hostDied = true;
+                    return;
+                }
+                Multiplayer.send({ type: 'kill', targetId: target.id, fromId: killer?.id || Multiplayer.playerId });
+            };
+
+            for (let i = 0; i < players.length; i++) {
+                for (let j = i + 1; j < players.length; j++) {
+                    const a = players[i];
+                    const b = players[j];
+                    if (killed.has(a.id) || killed.has(b.id)) continue;
+                    if (teamMode && a.team === b.team) continue;
+
+                    const aInv = a.invincibleUntil && now < a.invincibleUntil;
+                    const bInv = b.invincibleUntil && now < b.invincibleUntil;
+                    if (aInv || bInv) continue;
+
+                    const aHead = a.segments[0];
+                    const bHead = b.segments[0];
+                    if (!aHead || !bHead) continue;
+
+                    if (aHead.x === bHead.x && aHead.y === bHead.y) {
+                        applyKill(a, b, `Head-on collision with ${b.name}`);
+                        applyKill(b, a, `Head-on collision with ${a.name}`);
+                        continue;
+                    }
+
+                    if (headHitsBody(aHead, b.segments)) {
+                        applyKill(a, b, `Ran into ${b.name}'s body`);
+                        continue;
+                    }
+
+                    if (headHitsBody(bHead, a.segments)) {
+                        applyKill(b, a, `Ran into ${a.name}'s body`);
                     }
                 }
             }
 
-            return false;
+            return hostDied;
         }
 
         function isFriendlyOccupiedForEnemy(x, y, enemy) {
@@ -5588,6 +5653,14 @@
                         console.log('RESPAWN: Self collision');
                         haptic('death');
                         respawn();
+                    }
+                    if (Multiplayer.connected && Multiplayer.isHost) {
+                        const hostDied = hostResolvePlayerCollisions();
+                        if (hostDied) {
+                            console.log('RESPAWN: Host collision');
+                            haptic('death');
+                            respawn();
+                        }
                     }
                     // Only host runs enemy AI - non-hosts get enemy positions from host
                     const gameOver = (Multiplayer.connected && Multiplayer.isHost) ? updateEnemies(dt) : false;

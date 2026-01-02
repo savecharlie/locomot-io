@@ -401,10 +401,13 @@ export default class LocomotServer implements Party.Server {
           break;
 
         case 'kill':
+          const killFromId = (sender.id === this.state.hostId && typeof data.fromId === 'string')
+            ? data.fromId
+            : sender.id;
           this.room.broadcast(JSON.stringify({
             type: 'kill',
             targetId: data.targetId,
-            fromId: sender.id
+            fromId: killFromId
           }));
           break;
 
