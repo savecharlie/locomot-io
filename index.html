@@ -654,6 +654,10 @@
                             }
                         }
                         break;
+
+                    case 'pickup_collected':
+                        this.removePickupById(data.pickupId, data.x, data.y);
+                        break;
                 }
             },
 
@@ -676,6 +680,42 @@
             // Send direction change
             sendMove(dir) {
                 this.send({ type: 'move', dir });
+            },
+
+            sendPickupCollected(pickup) {
+                if (!pickup) return;
+                this.send({ type: 'pickup_collected', pickupId: pickup.id, x: pickup.x, y: pickup.y });
+            },
+
+            serializePickup(p) {
+                const type = p.isPowerup ? (p.type?.name || 'SPEED') :
+                    (p.isHealth ? 'HEALTH' :
+                        (Object.keys(GUNS).find(k => GUNS[k] === p.type) || 'MACHINEGUN'));
+                return {
+                    id: p.id,
+                    x: p.x,
+                    y: p.y,
+                    isHealth: !!p.isHealth,
+                    isPowerup: !!p.isPowerup,
+                    healAmount: p.healAmount || 40,
+                    type,
+                    bob: p.bob || 0
+                };
+            },
+
+            removePickupById(pickupId, x, y) {
+                if (pickupId !== undefined && pickupId !== null) {
+                    const idx = pickups.findIndex(p => p.id === pickupId);
+                    if (idx !== -1) {
+                        pickups.splice(idx, 1);
+                        return;
+                    }
+                    return;
+                }
+                if (typeof x === 'number' && typeof y === 'number') {
+                    const idx = pickups.findIndex(p => Math.hypot(p.x - x, p.y - y) < GRID * 0.6);
+                    if (idx !== -1) pickups.splice(idx, 1);
+                }
             },
 
             // Arena sync - share our enemies with a new joiner
@@ -717,7 +757,7 @@
                     type: 'arena_sync',
                     targetId: targetId,
                     enemies: enemyData,
-                    pickups: pickups.slice(0, 100).map(p => ({ x: p.x, y: p.y, isHealth: p.isHealth }))
+                    pickups: pickups.slice(0, 200).map(p => this.serializePickup(p))
                 });
             },
 
@@ -770,12 +810,18 @@
                 // Also sync pickups if provided
                 if (pickupData && pickupData.length > 0) {
                     pickups = pickupData.map(p => ({
+                        id: p.id,
                         x: p.x,
                         y: p.y,
-                        type: GUNS.MACHINEGUN,
-                        isHealth: p.isHealth || false,
-                        bob: Math.random() * Math.PI * 2
+                        isHealth: !!p.isHealth,
+                        isPowerup: !!p.isPowerup,
+                        healAmount: p.healAmount || 40,
+                        type: p.isPowerup ? (POWERUPS[p.type] || POWERUPS.SPEED) :
+                              (p.isHealth ? { color: '#4f4', name: 'HEALTH' } :
+                                  (GUNS[p.type] || GUNS.MACHINEGUN)),
+                        bob: p.bob || Math.random() * Math.PI * 2
                     }));
+                    syncPickupIdCounter(pickups);
                     console.log('[MP] Synced', pickups.length, 'pickups');
                 }
 
@@ -803,15 +849,7 @@
                 })).filter(e => e.segs.length > 0);
 
                 // Also sync pickups so all clients see same world
-                const pickupState = pickups.slice(0, 200).map(p => ({
-                    x: p.x, y: p.y,
-                    isHealth: !!p.isHealth,
-                    isPowerup: !!p.isPowerup,
-                    healAmount: p.healAmount || 40,
-                    type: p.isPowerup ? (p.type?.name || 'SPEED') :
-                          (Object.keys(GUNS).find(k => GUNS[k] === p.type) || 'MACHINEGUN'),
-                    bob: p.bob || 0
-                }));
+                const pickupState = pickups.slice(0, 200).map(p => this.serializePickup(p));
 
                 console.log('[MP] Broadcasting:', enemyState.length, 'enemies,', pickupState.length, 'pickups');
                 this.send({ type: 'enemy_state', enemies: enemyState, pickups: pickupState });
@@ -901,14 +939,17 @@
                 console.log('[MP] Applying pickup state:', pickupData?.length, 'pickups');
                 if (!pickupData || pickupData.length === 0) return;
                 pickups = pickupData.map(p => ({
+                    id: p.id,
                     x: p.x, y: p.y,
-                    isHealth: p.isHealth || false,
-                    isPowerup: p.isPowerup || false,
+                    isHealth: !!p.isHealth,
+                    isPowerup: !!p.isPowerup,
                     healAmount: p.healAmount || 40,
                     type: p.isPowerup ? (POWERUPS[p.type] || POWERUPS.SPEED) :
-                          (GUNS[p.type] || GUNS.MACHINEGUN),
+                          (p.isHealth ? { color: '#4f4', name: 'HEALTH' } :
+                              (GUNS[p.type] || GUNS.MACHINEGUN)),
                     bob: p.bob || Math.random() * Math.PI * 2
                 }));
+                syncPickupIdCounter(pickups);
             },
 
             // Deterministic host migration: lowest playerId becomes host
@@ -1730,6 +1771,21 @@
         let dirQueue = []; // Queue for fast direction changes
         let tronTrail = [];
         let enemies = [], projectiles = [], enemyProjectiles = [], pickups = [], particles = [];
+        let pickupIdCounter = 1;
+
+        function addPickup(data) {
+            const pickup = { id: pickupIdCounter++, ...data };
+            pickups.push(pickup);
+            return pickup;
+        }
+
+        function syncPickupIdCounter(list) {
+            for (const p of list) {
+                if (p && typeof p.id === 'number') {
+                    pickupIdCounter = Math.max(pickupIdCounter, p.id + 1);
+                }
+            }
+        }
         let isLeader = false, trailBoostTimer = 0;
         let waveEnemies = 0, waveKills = 0, spawnTimer = 0, waveDelay = 0;
         let bestRank = 999, maxLength = 2;
@@ -2807,7 +2863,7 @@
                 if (t % 60 === 0 && pickups.length < 20) {
                     const px = Math.floor(Math.random() * WORLD_COLS) * GRID + GRID/2;
                     const py = Math.floor(Math.random() * WORLD_ROWS) * GRID + GRID/2;
-                    pickups.push({
+                    addPickup({
                         x: px, y: py,
                         type: GUNS[GUN_NAMES[Math.floor(Math.random() * GUN_NAMES.length)]],
                         isHealth: false, bob: Math.random() * Math.PI * 2
@@ -2819,7 +2875,7 @@
                     const py = Math.floor(Math.random() * WORLD_ROWS) * GRID + GRID/2;
                     const powerupTypes = Object.values(POWERUPS);
                     const powerup = powerupTypes[Math.floor(Math.random() * powerupTypes.length)];
-                    pickups.push({
+                    addPickup({
                         x: px, y: py,
                         type: powerup,
                         isPowerup: true,
@@ -2832,6 +2888,7 @@
         function init() {
             score = 0; wave = 3; // Start at wave 3 - world is already established
             enemies = []; projectiles = []; enemyProjectiles = []; pickups = []; particles = [];
+            pickupIdCounter = 1;
             waveEnemies = 0; waveKills = 0; spawnTimer = 0; waveDelay = 0;
             bestRank = 999; maxLength = 4; // Reset tracking
             invincibleTimer = 10000; // 10 seconds of spawn protection
@@ -2841,56 +2898,61 @@
             strategyClassifier.reset(); // Reset strategy classifier
             reputationSystem.reset(); // Reset enemy reputations for new game
 
-            // Scatter pickups around the world first
-            for (let i = 0; i < 200; i++) {
-                const px = Math.floor(Math.random() * WORLD_COLS) * GRID + GRID/2;
-                const py = Math.floor(Math.random() * WORLD_ROWS) * GRID + GRID/2;
-                pickups.push({
-                    x: px, y: py,
-                    type: GUNS[GUN_NAMES[Math.floor(Math.random() * GUN_NAMES.length)]],
-                    isHealth: Math.random() < 0.15,
-                    healAmount: 40,
-                    bob: Math.random() * Math.PI * 2
-                });
+            const canInitArena = (Multiplayer.connected && Multiplayer.isHost) ||
+                (!Multiplayer.connected && !Multiplayer.socket);
+
+            if (canInitArena) {
+                // Scatter pickups around the world first
+                for (let i = 0; i < 200; i++) {
+                    const px = Math.floor(Math.random() * WORLD_COLS) * GRID + GRID/2;
+                    const py = Math.floor(Math.random() * WORLD_ROWS) * GRID + GRID/2;
+                    addPickup({
+                        x: px, y: py,
+                        type: GUNS[GUN_NAMES[Math.floor(Math.random() * GUN_NAMES.length)]],
+                        isHealth: Math.random() < 0.15,
+                        healAmount: 40,
+                        bob: Math.random() * Math.PI * 2
+                    });
+                }
+                
+                // Spawn initial power-ups
+                const powerupTypes = Object.values(POWERUPS);
+                for (let i = 0; i < 5; i++) {
+                    const px = Math.floor(Math.random() * WORLD_COLS) * GRID + GRID/2;
+                    const py = Math.floor(Math.random() * WORLD_ROWS) * GRID + GRID/2;
+                    addPickup({
+                        x: px, y: py,
+                        type: powerupTypes[Math.floor(Math.random() * powerupTypes.length)],
+                        isPowerup: true,
+                        bob: Math.random() * Math.PI * 2
+                    });
+                }
+                
+                // Spawn established enemies across the map
+                // Alpha predators (big snakes, 12-25 segments) - fewer of them
+                for (let i = 0; i < 6; i++) {
+                    const x = Math.floor(Math.random() * (WORLD_COLS - 20)) + 10;
+                    const y = Math.floor(Math.random() * (WORLD_ROWS - 20)) + 10;
+                    spawnEstablishedEnemy(x, y, 12 + Math.floor(Math.random() * 14), true);
+                }
+                
+                // Medium snakes (5-11 segments) - fewer
+                for (let i = 0; i < 20; i++) {
+                    const x = Math.floor(Math.random() * (WORLD_COLS - 10)) + 5;
+                    const y = Math.floor(Math.random() * (WORLD_ROWS - 10)) + 5;
+                    spawnEstablishedEnemy(x, y, 5 + Math.floor(Math.random() * 7));
+                }
+                
+                // Small snakes (2-5 segments) - your peers
+                for (let i = 0; i < 50; i++) {
+                    const x = Math.floor(Math.random() * (WORLD_COLS - 6)) + 3;
+                    const y = Math.floor(Math.random() * (WORLD_ROWS - 6)) + 3;
+                    spawnEstablishedEnemy(x, y, 2 + Math.floor(Math.random() * 4));
+                }
+                
+                // Simulate the world for a bit so snakes have moved around
+                simulateWorld(600);
             }
-            
-            // Spawn initial power-ups
-            const powerupTypes = Object.values(POWERUPS);
-            for (let i = 0; i < 5; i++) {
-                const px = Math.floor(Math.random() * WORLD_COLS) * GRID + GRID/2;
-                const py = Math.floor(Math.random() * WORLD_ROWS) * GRID + GRID/2;
-                pickups.push({
-                    x: px, y: py,
-                    type: powerupTypes[Math.floor(Math.random() * powerupTypes.length)],
-                    isPowerup: true,
-                    bob: Math.random() * Math.PI * 2
-                });
-            }
-            
-            // Spawn established enemies across the map
-            // Alpha predators (big snakes, 12-25 segments) - fewer of them
-            for (let i = 0; i < 6; i++) {
-                const x = Math.floor(Math.random() * (WORLD_COLS - 20)) + 10;
-                const y = Math.floor(Math.random() * (WORLD_ROWS - 20)) + 10;
-                spawnEstablishedEnemy(x, y, 12 + Math.floor(Math.random() * 14), true);
-            }
-            
-            // Medium snakes (5-11 segments) - fewer
-            for (let i = 0; i < 20; i++) {
-                const x = Math.floor(Math.random() * (WORLD_COLS - 10)) + 5;
-                const y = Math.floor(Math.random() * (WORLD_ROWS - 10)) + 5;
-                spawnEstablishedEnemy(x, y, 5 + Math.floor(Math.random() * 7));
-            }
-            
-            // Small snakes (2-5 segments) - your peers
-            for (let i = 0; i < 50; i++) {
-                const x = Math.floor(Math.random() * (WORLD_COLS - 6)) + 3;
-                const y = Math.floor(Math.random() * (WORLD_ROWS - 6)) + 3;
-                spawnEstablishedEnemy(x, y, 2 + Math.floor(Math.random() * 4));
-            }
-            
-            // Simulate the world for a bit so snakes have moved around
-            simulateWorld(600);
             
             // Find a safe spawn location for player (away from big snakes)
             let spawnX, spawnY, attempts = 0;
@@ -3317,12 +3379,13 @@
             
             const headPx = wrappedX * GRID + GRID / 2;
             const headPy = wrappedY * GRID + GRID / 2;
+            const pickupRange = magnetTimer > 0 ? GRID * 3 : GRID;
             
             for (let i = pickups.length - 1; i >= 0; i--) {
                 const p = pickups[i];
                 const dist = Math.sqrt((p.x - headPx) ** 2 + (p.y - headPy) ** 2);
                 
-                if (dist < GRID) {
+                if (dist < pickupRange) {
                     if (p.isPowerup) {
                         // Collect power-up!
                         if (p.type.name === 'SPEED') {
@@ -3338,6 +3401,7 @@
                         for (let j = 0; j < 20; j++) {
                             particles.push({ x: p.x, y: p.y, vx: (Math.random() - 0.5) * 8, vy: (Math.random() - 0.5) * 8, life: 40, color: p.type.color });
                         }
+                        Multiplayer.sendPickupCollected(p);
                         pickups.splice(i, 1);
                         continue;
                     } else if (p.isHealth) {
@@ -3367,6 +3431,7 @@
                     }
                     // Track pickup for strategy classification
                     strategyClassifier.onPickup(p.isHealth);
+                    Multiplayer.sendPickupCollected(p);
                     pickups.splice(i, 1);
                 }
             }
@@ -3826,7 +3891,7 @@
                         strategyClassifier.onKill(e.segments.length);
                         strategyClassifier.onPlayerKilledEnemy(e.id);
                         for (const seg of e.segments) {
-                            pickups.push({ x: seg.x*GRID+GRID/2, y: seg.y*GRID+GRID/2, type: GUNS[GUN_NAMES[Math.floor(Math.random()*GUN_NAMES.length)]], isHealth: false, bob: Math.random()*Math.PI*2 });
+                            addPickup({ x: seg.x*GRID+GRID/2, y: seg.y*GRID+GRID/2, type: GUNS[GUN_NAMES[Math.floor(Math.random()*GUN_NAMES.length)]], isHealth: false, bob: Math.random()*Math.PI*2 });
                             score += 15; waveKills++;
                         }
                         e.segments = [];
@@ -3859,7 +3924,7 @@
                     if (head.x === otherHead.x && head.y === otherHead.y) {
                         const otherLen = other.segments.length;
                         if (myLen > otherLen) {
-                            for (const seg of other.segments) { pickups.push({ x: seg.x*GRID+GRID/2, y: seg.y*GRID+GRID/2, type: GUNS[GUN_NAMES[Math.floor(Math.random()*GUN_NAMES.length)]], isHealth: false, bob: Math.random()*Math.PI*2 }); waveKills++; }
+                            for (const seg of other.segments) { addPickup({ x: seg.x*GRID+GRID/2, y: seg.y*GRID+GRID/2, type: GUNS[GUN_NAMES[Math.floor(Math.random()*GUN_NAMES.length)]], isHealth: false, bob: Math.random()*Math.PI*2 }); waveKills++; }
                             ruleEngine.onOutcome(other.id, 'death');
                             ruleEngine.analyzeDeathAndGenerateRule(other.id);
                             ruleEngine.onOutcome(e.id, 'got_kill');
@@ -3868,7 +3933,7 @@
                             if (e.isMVP) HighlightRecorder.onKill(e.name, other.name); // MVP kill!
                             other.segments = [];
                         } else if (myLen < otherLen) {
-                            for (const seg of e.segments) { pickups.push({ x: seg.x*GRID+GRID/2, y: seg.y*GRID+GRID/2, type: GUNS[GUN_NAMES[Math.floor(Math.random()*GUN_NAMES.length)]], isHealth: false, bob: Math.random()*Math.PI*2 }); waveKills++; }
+                            for (const seg of e.segments) { addPickup({ x: seg.x*GRID+GRID/2, y: seg.y*GRID+GRID/2, type: GUNS[GUN_NAMES[Math.floor(Math.random()*GUN_NAMES.length)]], isHealth: false, bob: Math.random()*Math.PI*2 }); waveKills++; }
                             ruleEngine.onOutcome(e.id, 'death');
                             ruleEngine.analyzeDeathAndGenerateRule(e.id);
                             ruleEngine.onOutcome(other.id, 'got_kill');
@@ -3877,8 +3942,8 @@
                             if (other.isMVP) HighlightRecorder.onKill(other.name, e.name); // MVP kill!
                             e.segments = [];
                         } else {
-                            for (const seg of e.segments) { pickups.push({ x: seg.x*GRID+GRID/2, y: seg.y*GRID+GRID/2, type: GUNS[GUN_NAMES[Math.floor(Math.random()*GUN_NAMES.length)]], isHealth: false, bob: Math.random()*Math.PI*2 }); waveKills++; }
-                            for (const seg of other.segments) { pickups.push({ x: seg.x*GRID+GRID/2, y: seg.y*GRID+GRID/2, type: GUNS[GUN_NAMES[Math.floor(Math.random()*GUN_NAMES.length)]], isHealth: false, bob: Math.random()*Math.PI*2 }); waveKills++; }
+                            for (const seg of e.segments) { addPickup({ x: seg.x*GRID+GRID/2, y: seg.y*GRID+GRID/2, type: GUNS[GUN_NAMES[Math.floor(Math.random()*GUN_NAMES.length)]], isHealth: false, bob: Math.random()*Math.PI*2 }); waveKills++; }
+                            for (const seg of other.segments) { addPickup({ x: seg.x*GRID+GRID/2, y: seg.y*GRID+GRID/2, type: GUNS[GUN_NAMES[Math.floor(Math.random()*GUN_NAMES.length)]], isHealth: false, bob: Math.random()*Math.PI*2 }); waveKills++; }
                             ruleEngine.onOutcome(e.id, 'death');
                             ruleEngine.analyzeDeathAndGenerateRule(e.id);
                             ruleEngine.onOutcome(other.id, 'death');
@@ -3892,7 +3957,7 @@
                 // Self collision
                 for (let j = 1; j < e.segments.length; j++) {
                     if (head.x === e.segments[j].x && head.y === e.segments[j].y) {
-                        for (const seg of e.segments) { pickups.push({ x: seg.x*GRID+GRID/2, y: seg.y*GRID+GRID/2, type: GUNS[GUN_NAMES[Math.floor(Math.random()*GUN_NAMES.length)]], isHealth: false, bob: Math.random()*Math.PI*2 }); waveKills++; }
+                        for (const seg of e.segments) { addPickup({ x: seg.x*GRID+GRID/2, y: seg.y*GRID+GRID/2, type: GUNS[GUN_NAMES[Math.floor(Math.random()*GUN_NAMES.length)]], isHealth: false, bob: Math.random()*Math.PI*2 }); waveKills++; }
                         ruleEngine.onOutcome(e.id, 'death');
                         ruleEngine.analyzeDeathAndGenerateRule(e.id);
                         e.segments = [];
@@ -3945,9 +4010,9 @@
                         if (healthPct >= 0.95) dropHealth = false;
                         
                         if (dropHealth) {
-                            pickups.push({ x: seg.x*GRID+GRID/2, y: seg.y*GRID+GRID/2, type: { color: '#4f4', name: 'HEALTH' }, isHealth: true, healAmount: 40, bob: Math.random()*Math.PI*2 });
+                            addPickup({ x: seg.x*GRID+GRID/2, y: seg.y*GRID+GRID/2, type: { color: '#4f4', name: 'HEALTH' }, isHealth: true, healAmount: 40, bob: Math.random()*Math.PI*2 });
                         } else {
-                            pickups.push({ x: seg.x*GRID+GRID/2, y: seg.y*GRID+GRID/2, type: GUNS[GUN_NAMES[Math.floor(Math.random()*GUN_NAMES.length)]], isHealth: false, bob: Math.random()*Math.PI*2 });
+                            addPickup({ x: seg.x*GRID+GRID/2, y: seg.y*GRID+GRID/2, type: GUNS[GUN_NAMES[Math.floor(Math.random()*GUN_NAMES.length)]], isHealth: false, bob: Math.random()*Math.PI*2 });
                         }
                         for (let k = 0; k < 8; k++) { particles.push({ x: seg.x*GRID+GRID/2, y: seg.y*GRID+GRID/2, vx: (Math.random()-0.5)*6, vy: (Math.random()-0.5)*6, life: 25, color: e.color }); }
                         e.segments.splice(j);
@@ -4272,8 +4337,8 @@
             if (speedTimer > 0) speedTimer -= dt; if (trailBoostTimer > 0) trailBoostTimer -= dt;
             if (magnetTimer > 0) magnetTimer -= dt;
             
-            // Magnet effect - pull pickups toward player
-            if (magnetTimer > 0 && snake.length > 0) {
+            // Magnet effect (offline only) - pull pickups toward player
+            if (magnetTimer > 0 && snake.length > 0 && !Multiplayer.connected) {
                 const head = snake[0];
                 const hx = head.x * GRID + GRID/2;
                 const hy = head.y * GRID + GRID/2;
@@ -4298,12 +4363,15 @@
                 // Not connected yet and never tried - spawn locally (single player fallback)
                 SpawnDirector.update(Date.now());
             }
+
+            const canSpawnPickups = (Multiplayer.connected && Multiplayer.isHost) ||
+                (!Multiplayer.connected && !Multiplayer.socket);
             
             // Spawn pickups to keep the world interesting
-            if (pickups.length < 120 && Math.random() < 0.05) {
+            if (canSpawnPickups && pickups.length < 120 && Math.random() < 0.05) {
                 const px = Math.floor(Math.random() * WORLD_COLS) * GRID + GRID/2;
                 const py = Math.floor(Math.random() * WORLD_ROWS) * GRID + GRID/2;
-                pickups.push({
+                addPickup({
                     x: px, y: py,
                     type: GUNS[GUN_NAMES[Math.floor(Math.random() * GUN_NAMES.length)]],
                     isHealth: Math.random() < 0.1,

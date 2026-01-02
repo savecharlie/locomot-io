@@ -197,6 +197,15 @@ export default class LocomotServer implements Party.Server {
           }
           break;
 
+        case 'pickup_collected':
+          this.room.broadcast(JSON.stringify({
+            type: 'pickup_collected',
+            pickupId: data.pickupId,
+            x: data.x,
+            y: data.y
+          }));
+          break;
+
         case 'arena_sync':
           // Forward arena sync to the target player (for syncing AI enemies)
           for (const [id, conn] of this.room.getConnections()) {
