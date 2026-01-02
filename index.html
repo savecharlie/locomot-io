@@ -67,27 +67,10 @@
         }
         @media (max-width: 768px) {
             .ticker-content { font-size: 10px; padding: 5px 10px; max-width: 98%; }
-            .ticker-badge { font-size: 8px; padding: 2px 4px; }
         }
         .ticker-content.visible {
             opacity: 1;
             transform: translateY(0);
-        }
-        .ticker-badge {
-            font-size: 10px;
-            font-weight: bold;
-            padding: 2px 6px;
-            border-radius: 3px;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-        }
-        .ticker-badge.dispatch { background: #0aa; color: #000; }
-        .ticker-badge.alert { background: #f44; color: #fff; animation: alertPulse 0.5s ease-in-out infinite; }
-        .ticker-badge.report { background: #fa0; color: #000; }
-        .ticker-badge.status { background: #0c0; color: #000; }
-        @keyframes alertPulse {
-            0%, 100% { opacity: 1; }
-            50% { opacity: 0.7; }
         }
         .ticker-message { color: #fff; text-shadow: 0 0 8px currentColor; word-wrap: break-word; overflow-wrap: break-word; }
         .ticker-expand {
@@ -225,11 +208,10 @@
         <div class="hud-item" style="color: #0fc;"><span>👁</span><span id="patternHud">-</span></div>
     </div>
 
-    <!-- Railroad Dispatch Ticker -->
+    <!-- Ticker -->
     <div class="ticker" id="ticker">
         <div class="ticker-content" id="tickerContent">
-            <span class="ticker-badge dispatch">DISPATCH</span>
-            <span class="ticker-message" id="tickerMessage">Awaiting dispatch...</span>
+            <span class="ticker-message" id="tickerMessage"></span>
         </div>
     </div>
     <div class="ticker-expand" id="tickerExpand"></div>
@@ -1317,12 +1299,10 @@
 
             // DOM refs
             content: null,
-            badge: null,
             message: null,
 
             init() {
                 this.content = document.getElementById('tickerContent');
-                this.badge = this.content?.querySelector('.ticker-badge');
                 this.message = document.getElementById('tickerMessage');
                 // Tap to expand leaderboard
                 document.getElementById('tickerExpand')?.addEventListener('click', () => {
@@ -1364,11 +1344,7 @@
             status(msg, priority = 3) { this.queue('status', msg, priority); },
 
             show(type, msg) {
-                if (!this.content || !this.badge || !this.message) return;
-
-                // Update badge
-                this.badge.className = 'ticker-badge ' + type;
-                this.badge.textContent = type.toUpperCase();
+                if (!this.content || !this.message) return;
 
                 // Update message
                 this.message.textContent = msg;
