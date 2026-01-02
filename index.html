@@ -2001,6 +2001,7 @@
         let magnetTimer = 0; // Magnet pull duration
         const BASE_MOVE_INTERVAL = 80; // Normal move speed (ms)
         const HEAD_HP_STANDARD = 1500; // 5x body HP (300)
+        let isSpectating = false;
         
         // Power-up types
         const POWERUPS = {
@@ -3451,6 +3452,7 @@
 
         function doRespawn() {
             document.getElementById('gameOverScreen').classList.add('hidden');
+            isSpectating = false;
             SpawnDirector.reset(); // Reset intensity for fresh start
 
             // Find safe spawn location
@@ -5060,9 +5062,10 @@
         
         function updateLeaderboard() {
             const entries = [];
+            const showPlayerEntry = gameState === 'playing' && !isSpectating && !devMode.spectating;
 
             // Only add player to leaderboard if alive
-            if (gameState === 'playing') {
+            if (showPlayerEntry) {
                 entries.push({ name: playerName || 'YOU', length: snake.length, isPlayer: true, isHuman: true });
             }
 
@@ -5860,6 +5863,7 @@
 
         function startGame(isTeamMode) {
             teamMode = isTeamMode;
+            isSpectating = false;
             const nameInput = document.getElementById('usernameInput').value;
             if (nameInput) Multiplayer.setUsername(nameInput);
             document.getElementById('startScreen').classList.add('hidden');
@@ -5916,6 +5920,7 @@
         document.getElementById('spectateBtn').addEventListener('click', () => {
             document.getElementById('gameOverScreen').classList.add('hidden');
             document.getElementById('spectatingLabel').style.display = 'block';
+            isSpectating = true;
             // Create floating label that stays visible
             let floatingLabel = document.getElementById('floatingSpectateLabel');
             if (!floatingLabel) {
