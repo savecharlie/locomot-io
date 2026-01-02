@@ -257,7 +257,8 @@ export default class LocomotServer implements Party.Server {
 
   onConnect(conn: Party.Connection, ctx: Party.ConnectionContext) {
     const spawn = this.getSpawnPosition();
-    const color = COLORS[this.state.players.size % COLORS.length];
+    // "All Same Gun" - everyone starts with MACHINEGUN color (orange)
+    const color = '#f80';
 
     const player: Player = {
       id: conn.id,
@@ -350,6 +351,7 @@ export default class LocomotServer implements Party.Server {
           player.y = data.y;
           player.segments = data.segments;
           player.score = data.score;
+          if (data.color) player.color = data.color; // "All Same Gun" - sync gun color
           player.lastUpdate = Date.now();
           break;
 
@@ -612,6 +614,33 @@ export default class LocomotServer implements Party.Server {
           }
 
           return new Response(JSON.stringify(allData), {
+            headers: { ...headers, 'Content-Type': 'application/json' }
+          });
+        }
+
+        if (data.type === 'get_brain') {
+          // Retrieve stored brain weights for training
+          const brain = await this.room.storage.get('brain_weights');
+          if (brain) {
+            return new Response(JSON.stringify(brain), {
+              headers: { ...headers, 'Content-Type': 'application/json' }
+            });
+          }
+          return new Response(JSON.stringify(null), {
+            headers: { ...headers, 'Content-Type': 'application/json' }
+          });
+        }
+
+        if (data.type === 'set_brain') {
+          // Store brain weights after training
+          if (data.brain && data.brain['net.0.weight']) {
+            await this.room.storage.put('brain_weights', data.brain);
+            return new Response(JSON.stringify({ success: true }), {
+              headers: { ...headers, 'Content-Type': 'application/json' }
+            });
+          }
+          return new Response(JSON.stringify({ error: 'Invalid brain data' }), {
+            status: 400,
             headers: { ...headers, 'Content-Type': 'application/json' }
           });
         }

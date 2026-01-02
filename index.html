@@ -772,7 +772,8 @@
                     type: 'update',
                     x, y,
                     segments: segments.map(s => ({ x: s.x, y: s.y })),
-                    score
+                    score,
+                    color: playerGunType?.color || '#f80' // "All Same Gun" - sync gun color
                 });
             },
 
@@ -893,7 +894,8 @@
                         fireRate: 1000,
                         score: 10 * e.len,
                         personality: { aggression: 0.5, greed: 0.5, caution: 0.5, neural: Math.random() < 0.5 },
-                        color: e.color || '#f0f',
+                        color: e.color || GUNS.MACHINEGUN.color, // "All Same Gun" - default to MACHINEGUN color
+                        gunType: GUNS.MACHINEGUN, // "All Same Gun" - track current gun type
                         targetPos: null,
                         avoidPos: null,
                         lastDecision: 0,
@@ -1680,23 +1682,46 @@
             green_light: '#2ecc71'
         };
 
+        // Helper to lighten a hex color
+        function lightenColor(hex, percent) {
+            const num = parseInt(hex.replace('#', ''), 16);
+            const r = Math.min(255, (num >> 16) + Math.round(255 * percent / 100));
+            const g = Math.min(255, ((num >> 8) & 0x00FF) + Math.round(255 * percent / 100));
+            const b = Math.min(255, (num & 0x0000FF) + Math.round(255 * percent / 100));
+            return `#${(r << 16 | g << 8 | b).toString(16).padStart(6, '0')}`;
+        }
+
+        // Helper to darken a hex color
+        function darkenColor(hex, percent) {
+            const num = parseInt(hex.replace('#', ''), 16);
+            const r = Math.max(0, (num >> 16) - Math.round(255 * percent / 100));
+            const g = Math.max(0, ((num >> 8) & 0x00FF) - Math.round(255 * percent / 100));
+            const b = Math.max(0, (num & 0x0000FF) - Math.round(255 * percent / 100));
+            return `#${(r << 16 | g << 8 | b).toString(16).padStart(6, '0')}`;
+        }
+
         // Smoke puffs from locomotive
         let smokePuffs = [];
 
-        function drawLocomotive(ctx, x, y, size, direction, frame) {
+        function drawLocomotive(ctx, x, y, size, direction, frame, gunColor = null) {
             // CHUNKY BLOCKY DESIGN - reads at any distance
+            // gunColor: if provided, use this color instead of default red (for "All Same Gun")
             ctx.save();
             ctx.translate(x, y);
             ctx.rotate(Math.atan2(direction.y, direction.x));
 
             const s = size * 0.5;
 
-            // Main body - big red block
-            ctx.fillStyle = TRAIN.red;
+            // Main body color - use gun color or default red
+            const bodyColor = gunColor || TRAIN.red;
+            const lightColor = gunColor ? lightenColor(gunColor, 30) : TRAIN.red_light;
+
+            // Main body - colored block
+            ctx.fillStyle = bodyColor;
             ctx.fillRect(-s, -s*0.7, s*1.8, s*1.4);
 
             // Cabin (taller back section)
-            ctx.fillStyle = TRAIN.red_light;
+            ctx.fillStyle = lightColor;
             ctx.fillRect(-s*1.1, -s, s*0.5, s*2);
 
             // Smokestack - obvious block on top
@@ -1878,6 +1903,7 @@
         let snake = [], dir = DIR.RIGHT, nextDir = DIR.RIGHT;
         let dirQueue = []; // Queue for fast direction changes
         let tronTrail = [];
+        let playerGunType = null; // "All Same Gun" - current gun type for entire train
         let enemies = [], projectiles = [], enemyProjectiles = [], pickups = [], particles = [];
         let pickupIdCounter = 1;
         const PICKUP_COOLOFF_MS = 3000; // 3 seconds before you can pick up your own drops
@@ -2729,7 +2755,7 @@
             return scores; // [leftScore, straightScore, rightScore]
         }
 
-        function getVision(headX, headY, currentDir, segments, allEnemies, allPickups, playerSnake) {
+        function getVision(headX, headY, currentDir, segments, allEnemies, allPickups, playerSnake, selfEnemy = null) {
             // 8 directions relative to heading (matches training order)
             const angles = [0, Math.PI/4, Math.PI/2, 3*Math.PI/4, Math.PI, -3*Math.PI/4, -Math.PI/2, -Math.PI/4];
             const RAY_DIST = 25;
@@ -2743,13 +2769,14 @@
 
             const myLength = segments.length;
 
-            // 8 directions × 10 values = 80 spatial + 5 state = 85 inputs
-            // Per direction: [health_pickup, machinegun_pickup, shotgun_pickup, cannon_pickup, pulse_pickup, self, wall, smaller_head, bigger_head, enemy_body]
-            // State: [health_ratio, arena_position, threat_density, my_length_normalized, current_gun_type]
-            const input = new Array(85).fill(0);
+            // 8 directions × 11 values = 88 spatial + 8 state = 96 inputs
+            // Per direction: [health_pickup, machinegun_pickup, shotgun_pickup, cannon_pickup, pulse_pickup, self, wall, smaller_head, bigger_head, enemy_body, enemy_gun_type]
+            // State: [health_ratio, arena_position, threat_density, my_length_normalized, current_gun_type, is_mvp, mvp_time, mvp_distance]
+            const input = new Array(96).fill(0);
 
-            // Gun type index map for pickups
+            // Gun type encoding: 0=none, 0.25=MACHINEGUN, 0.5=SHOTGUN, 0.75=CANNON, 1.0=PULSE
             const GUN_TYPE_INDEX = { 'MACHINEGUN': 0, 'SHOTGUN': 1, 'CANNON': 2, 'PULSE': 3 };
+            const GUN_TYPE_VALUE = { 'MACHINEGUN': 0.25, 'SHOTGUN': 0.5, 'CANNON': 0.75, 'PULSE': 1.0 };
 
             for (let i = 0; i < 8; i++) {
                 const angle = headingAngle + angles[i];
@@ -2760,6 +2787,8 @@
                 let gunPickupDists = [0, 0, 0, 0]; // MACHINEGUN, SHOTGUN, CANNON, PULSE
                 let selfDanger = 0, wallDist = 0;
                 let enemySmallerDist = 0, enemyBiggerDist = 0, enemyBodyDist = 0;
+                let nearestEnemyGunType = 0; // Gun type of nearest enemy head (0=none, 0.25-1.0 = gun types)
+                let nearestEnemyDist = Infinity;
 
                 for (let dist = 1; dist <= RAY_DIST; dist++) {
                     const checkX = headX + dx * dist;
@@ -2791,7 +2820,7 @@
                     // Other snakes
                     const allSnakes = [...allEnemies];
                     if (playerSnake && playerSnake.length > 0) {
-                        allSnakes.push({ segments: playerSnake, isPlayer: true });
+                        allSnakes.push({ segments: playerSnake, isPlayer: true, gunType: playerGunType });
                     }
 
                     for (const other of allSnakes) {
@@ -2800,11 +2829,19 @@
                         if (otherSegs === segments) continue;
 
                         const otherLength = otherSegs.length;
+                        // Get gun type of this enemy/player
+                        const otherGunType = other.gunType || (otherSegs[1]?.type) || null;
+                        const gunTypeVal = otherGunType?.name ? (GUN_TYPE_VALUE[otherGunType.name] || 0) : 0;
 
                         for (let s = 0; s < otherSegs.length; s++) {
                             const seg = otherSegs[s];
                             if (seg.x === checkX && seg.y === checkY) {
                                 if (s === 0) {
+                                    // Track nearest enemy head and its gun type
+                                    if (dist < nearestEnemyDist) {
+                                        nearestEnemyDist = dist;
+                                        nearestEnemyGunType = gunTypeVal;
+                                    }
                                     if (otherLength < myLength && enemySmallerDist === 0) {
                                         enemySmallerDist = 1 / dist;
                                     } else if (otherLength >= myLength && enemyBiggerDist === 0) {
@@ -2835,8 +2872,8 @@
                     }
                 }
 
-                // Store 10 features per direction
-                const base = i * 10;
+                // Store 11 features per direction
+                const base = i * 11;
                 input[base + 0] = healthPickupDist;
                 input[base + 1] = gunPickupDists[0]; // MACHINEGUN
                 input[base + 2] = gunPickupDists[1]; // SHOTGUN
@@ -2847,9 +2884,10 @@
                 input[base + 7] = enemySmallerDist;
                 input[base + 8] = enemyBiggerDist;
                 input[base + 9] = enemyBodyDist;
+                input[base + 10] = nearestEnemyGunType; // Gun type of nearest enemy (0=none, 0.25-1.0)
             }
 
-            // State inputs (indices 80-84)
+            // State inputs (indices 88-95)
             // Health ratio
             let totalHp = 0, totalMaxHp = 0;
             for (let s = 1; s < segments.length; s++) {
@@ -2858,12 +2896,12 @@
                     totalMaxHp += segments[s].maxHp || 100;
                 }
             }
-            input[80] = totalMaxHp > 0 ? totalHp / totalMaxHp : 1;
+            input[88] = totalMaxHp > 0 ? totalHp / totalMaxHp : 1;
 
             // Arena position (distance to edge, normalized)
             const distToEdge = Math.min(headX, headY, WORLD_COLS - 1 - headX, WORLD_ROWS - 1 - headY);
             const maxDist = Math.min(WORLD_COLS, WORLD_ROWS) / 2;
-            input[81] = Math.min(distToEdge / maxDist, 1);
+            input[89] = Math.min(distToEdge / maxDist, 1);
 
             // Threat density (nearby enemies)
             let threat = 0;
@@ -2876,10 +2914,10 @@
                     threat += sizeFactor / Math.max(dist, 1);
                 }
             }
-            input[82] = Math.min(threat / 3, 1);
+            input[90] = Math.min(threat / 3, 1);
 
             // Length normalized
-            input[83] = Math.min(myLength / 20, 1);
+            input[91] = Math.min(myLength / 20, 1);
 
             // Current gun type (what gun the first body segment has)
             // 0 = no gun (head only), 0.25 = MACHINEGUN, 0.5 = SHOTGUN, 0.75 = CANNON, 1.0 = PULSE
@@ -2891,7 +2929,24 @@
                 else if (gunName === 'CANNON') currentGunType = 0.75;
                 else if (gunName === 'PULSE') currentGunType = 1.0;
             }
-            input[84] = currentGunType;
+            input[92] = currentGunType;
+
+            // MVP status - is this AI currently MVP? (for learning to seek spotlight)
+            const isMVP = selfEnemy?.isMVP ? 1 : 0;
+            input[93] = isMVP;
+
+            // MVP time - how long has this AI been MVP total (normalized, max ~60 seconds)
+            const mvpTime = Math.min((selfEnemy?.mvpTime || 0) / 60000, 1);
+            input[94] = mvpTime;
+
+            // Distance to current MVP (for hunting the spotlight)
+            let mvpDist = 1; // 1 = no MVP or far away
+            if (currentMVP && currentMVP !== selfEnemy && currentMVP.segments?.length > 0) {
+                const mvpHead = currentMVP.segments[0];
+                const dist = Math.abs(mvpHead.x - headX) + Math.abs(mvpHead.y - headY);
+                mvpDist = Math.min(dist / 50, 1); // Normalize to 50 tiles
+            }
+            input[95] = mvpDist;
 
             return input;
         }
@@ -2939,7 +2994,10 @@
             
             const baseHp = 20 + wave * 5;
             const segments = [];
-            
+
+            // "All Same Gun" - enemies spawn with uniform gun type (MACHINEGUN to start)
+            const initialGunType = GUNS.MACHINEGUN;
+
             // Build snake body following a path (not just straight line)
             let curX = x, curY = y, curDir = startDir;
             for (let i = 0; i < length; i++) {
@@ -2947,7 +3005,7 @@
                     x: curX, y: curY,
                     hp: i === 0 ? Infinity : baseHp,
                     maxHp: i === 0 ? Infinity : baseHp,
-                    type: i === 0 ? GUNS.HEAD : GUNS[GUN_NAMES[Math.floor(Math.random() * GUN_NAMES.length)]],
+                    type: i === 0 ? GUNS.HEAD : initialGunType,
                     lastFired: 0
                 });
                 // Move backwards from head, occasionally turning
@@ -2967,12 +3025,13 @@
                 lastFired: 0, fireRate: 1200 - wave * 40,
                 score: 10 * length, personality,
                 targetPos: null, avoidPos: null, lastDecision: 0,
-                decisionInterval: 300 + Math.random() * 200
+                decisionInterval: 300 + Math.random() * 200,
+                gunType: initialGunType // "All Same Gun" - track current gun type
             });
-            // Set color based on team in team mode
+            // Set color based on team in team mode, otherwise gun color
             const newEnemy = enemies[enemies.length - 1];
             if (teamMode) newEnemy.color = newEnemy.team === "blue" ? "#0af" : "#f55";
-            else newEnemy.color = color;
+            else newEnemy.color = initialGunType.color; // Use gun color for "All Same Gun"
             
             // Generate AI name asynchronously
             generateTrainName().then(name => {
@@ -3056,7 +3115,14 @@
                                 continue;
                             }
                             if (head.x === px && head.y === py && !p.isHealth) {
-                                // Use previous tail position to avoid self-collision for smols
+                                // "All Same Gun" - convert ALL existing segments to new gun type
+                                for (let j = 1; j < e.segments.length; j++) {
+                                    e.segments[j].type = p.type;
+                                }
+                                e.gunType = p.type;
+                                e.color = p.type.color; // Update enemy color to match gun
+
+                                // Add new segment at previous tail position
                                 const tailPos = prevPositions[prevPositions.length - 1];
                                 e.segments.push({
                                     x: tailPos.x, y: tailPos.y,
@@ -3191,11 +3257,13 @@
             
             // Player starts small but tough - head is 5x tougher than body cars
             const HEAD_HP = 1500; // 5x body HP (300)
+            // "All Same Gun" - start with all MACHINEGUN
+            playerGunType = GUNS.MACHINEGUN;
             snake = [
                 { x: spawnX, y: spawnY, type: GUNS.HEAD, hp: HEAD_HP, maxHp: HEAD_HP, lastFired: 0 },
                 { x: spawnX - 1, y: spawnY, type: GUNS.MACHINEGUN, hp: 300, maxHp: 300, lastFired: 0 },
-                { x: spawnX - 2, y: spawnY, type: GUNS.SHOTGUN, hp: 300, maxHp: 300, lastFired: 0 },
-                { x: spawnX - 3, y: spawnY, type: GUNS.CANNON, hp: 300, maxHp: 300, lastFired: 0 }
+                { x: spawnX - 2, y: spawnY, type: GUNS.MACHINEGUN, hp: 300, maxHp: 300, lastFired: 0 },
+                { x: spawnX - 3, y: spawnY, type: GUNS.MACHINEGUN, hp: 300, maxHp: 300, lastFired: 0 }
             ];
             
             dir = DIR.RIGHT; nextDir = DIR.RIGHT;
@@ -3352,11 +3420,13 @@
 
             // Fresh start with new train - head is 5x tougher
             const HEAD_HP_RESPAWN = 1500;
+            // "All Same Gun" - respawn with all MACHINEGUN
+            playerGunType = GUNS.MACHINEGUN;
             snake = [
                 { x: spawnX, y: spawnY, type: GUNS.HEAD, hp: HEAD_HP_RESPAWN, maxHp: HEAD_HP_RESPAWN, lastFired: 0 },
                 { x: spawnX - 1, y: spawnY, type: GUNS.MACHINEGUN, hp: 300, maxHp: 300, lastFired: 0 },
-                { x: spawnX - 2, y: spawnY, type: GUNS.SHOTGUN, hp: 300, maxHp: 300, lastFired: 0 },
-                { x: spawnX - 3, y: spawnY, type: GUNS.CANNON, hp: 300, maxHp: 300, lastFired: 0 }
+                { x: spawnX - 2, y: spawnY, type: GUNS.MACHINEGUN, hp: 300, maxHp: 300, lastFired: 0 },
+                { x: spawnX - 3, y: spawnY, type: GUNS.MACHINEGUN, hp: 300, maxHp: 300, lastFired: 0 }
             ];
 
             dir = DIR.RIGHT; nextDir = DIR.RIGHT;
@@ -3415,11 +3485,13 @@
             playerDataRecorder.clear();
             strategyClassifier.reset();
 
+            // "All Same Gun" - start with all MACHINEGUN
+            playerGunType = GUNS.MACHINEGUN;
             snake = [
                 { x: spawnX, y: spawnY, type: GUNS.HEAD, hp: HEAD_HP_INIT, maxHp: HEAD_HP_INIT, lastFired: 0 },
                 { x: spawnX - 1, y: spawnY, type: GUNS.MACHINEGUN, hp: 300, maxHp: 300, lastFired: 0 },
-                { x: spawnX - 2, y: spawnY, type: GUNS.SHOTGUN, hp: 300, maxHp: 300, lastFired: 0 },
-                { x: spawnX - 3, y: spawnY, type: GUNS.CANNON, hp: 300, maxHp: 300, lastFired: 0 }
+                { x: spawnX - 2, y: spawnY, type: GUNS.MACHINEGUN, hp: 300, maxHp: 300, lastFired: 0 },
+                { x: spawnX - 3, y: spawnY, type: GUNS.MACHINEGUN, hp: 300, maxHp: 300, lastFired: 0 }
             ];
 
             dir = DIR.RIGHT; nextDir = DIR.RIGHT;
@@ -3489,18 +3561,21 @@
             
             const baseHp = 20 + wave * 5;
             const segments = [];
+
+            // "All Same Gun" - enemies spawn with uniform gun type (MACHINEGUN to start)
+            const initialGunType = GUNS.MACHINEGUN;
+
             for (let i = 0; i < trainLength; i++) {
-                let gunType = i === 0 ? GUNS.HEAD : GUNS[GUN_NAMES[Math.floor(Math.random() * GUN_NAMES.length)]];
                 const segX = (x - startDir.x * i + WORLD_COLS) % WORLD_COLS;
                 const segY = (y - startDir.y * i + WORLD_ROWS) % WORLD_ROWS;
                 segments.push({
                     x: segX, y: segY,
                     hp: i === 0 ? Infinity : baseHp,
                     maxHp: i === 0 ? Infinity : baseHp,
-                    type: gunType, lastFired: 0
+                    type: i === 0 ? GUNS.HEAD : initialGunType, lastFired: 0
                 });
             }
-            
+
             const enemyId = enemies.length;
             enemies.push({
                 // Assign team to balance (alternate)
@@ -3512,12 +3587,13 @@
                 score: 10 * trainLength, personality,
                 targetPos: null, avoidPos: null, lastDecision: 0,
                 decisionInterval: 300 + Math.random() * 200,
-                recentPoints: 0, lastPointTime: 0, isMVP: false
+                recentPoints: 0, lastPointTime: 0, isMVP: false,
+                gunType: initialGunType // "All Same Gun" - track current gun type
             });
-            // Set color based on team in team mode
+            // Set color based on team in team mode, otherwise gun color
             const newEnemy = enemies[enemies.length - 1];
             if (teamMode) newEnemy.color = newEnemy.team === "blue" ? "#0af" : "#f55";
-            else newEnemy.color = color;
+            else newEnemy.color = initialGunType.color; // Use gun color for "All Same Gun"
             
             // Generate AI name asynchronously
             generateTrainName().then(name => {
@@ -3663,13 +3739,22 @@
                             }
                         }
                     } else {
+                        // "All Same Gun" - convert ALL existing segments to new gun type
+                        for (let j = 1; j < snake.length; j++) {
+                            snake[j].type = p.type;
+                        }
+                        playerGunType = p.type;
+
+                        // Add new segment
                         const tailPos = prevPositions[prevPositions.length - 1];
                         snake.push({ x: tailPos.x, y: tailPos.y, type: p.type, hp: 200, maxHp: 200, lastFired: 0 });
                         haptic('double');
                         // sounds disabled
                         score += 50;
-                        for (let j = 0; j < 12; j++) {
-                            particles.push({ x: p.x, y: p.y, vx: (Math.random() - 0.5) * 6, vy: (Math.random() - 0.5) * 6, life: 30, color: p.type.color });
+
+                        // Extra particles for gun conversion effect
+                        for (let j = 0; j < 20; j++) {
+                            particles.push({ x: p.x, y: p.y, vx: (Math.random() - 0.5) * 8, vy: (Math.random() - 0.5) * 8, life: 35, color: p.type.color });
                         }
                     }
                     // Track pickup for strategy classification
@@ -3767,7 +3852,7 @@
                     
                     // NEURAL NETWORK AI + RULE ENGINE
                     if (e.personality.neural) {
-                        const vision = getVision(head.x, head.y, e.dir, e.segments, enemies.filter(oe => oe !== e), pickups, snake);
+                        const vision = getVision(head.x, head.y, e.dir, e.segments, enemies.filter(oe => oe !== e), pickups, snake, e);
 
                         // Extract gameState from vision for rule matching
                         // Vision: 8 directions × 6 values [food, self, wall, smaller_head, bigger_head, enemy_body]
@@ -4046,6 +4131,13 @@
                         const px = Math.floor(p.x / GRID), py = Math.floor(p.y / GRID);
                         if (head.x === px && head.y === py) {
                             if (!p.isHealth) {
+                                // "All Same Gun" - convert ALL existing segments to new gun type
+                                for (let j = 1; j < e.segments.length; j++) {
+                                    e.segments[j].type = p.type;
+                                }
+                                e.gunType = p.type;
+                                e.color = p.type.color; // Update enemy color to match gun
+
                                 // Use previous tail position (before move) to avoid self-collision for smols
                                 const tailPos = prevPositions[prevPositions.length - 1];
                                 e.segments.push({ x: tailPos.x, y: tailPos.y, hp: 20 + wave * 5, maxHp: 20 + wave * 5, type: p.type, lastFired: 0 });
@@ -4108,11 +4200,16 @@
                         
                         if (type.aoe) {
                             // AOE damages player (if not invincible) and other enemies
+                            // Damage decays with distance: max at center, ~10% at edge
+                            const calcAoeDamage = (dist) => {
+                                const falloff = 1 - (dist / type.range) ** 0.5; // sqrt falloff = steep near edge
+                                return type.damage * Math.max(0.1, falloff); // min 10% damage
+                            };
                             if (invincibleTimer <= 0) {
                                 for (const ps of snake) {
                                     const psx = ps.x * GRID + GRID/2, psy = ps.y * GRID + GRID/2;
                                     const dist = Math.sqrt((psx - sx)**2 + (psy - sy)**2);
-                                    if (dist < type.range) ps.hp -= type.damage;
+                                    if (dist < type.range) ps.hp -= calcAoeDamage(dist);
                                 }
                             }
                             for (const other of enemies) {
@@ -4120,7 +4217,7 @@
                                 for (const oseg of other.segments) {
                                     const osx = oseg.x * GRID + GRID/2, osy = oseg.y * GRID + GRID/2;
                                     const dist = Math.sqrt((osx - sx)**2 + (osy - sy)**2);
-                                    if (dist < type.range) oseg.hp -= type.damage;
+                                    if (dist < type.range) oseg.hp -= calcAoeDamage(dist);
                                 }
                             }
                             particles.push({ x: sx, y: sy, vx: 0, vy: 0, life: 15, color: type.color, isAoe: true, radius: 10 });
@@ -4453,13 +4550,19 @@
                 seg.lastFired = time;
                 const cx = seg.x * GRID + GRID/2, cy = seg.y * GRID + GRID/2;
                 if (type.aoe) {
+                    // Damage decays with distance: max at center, ~10% at edge
+                    const calcAoeDamage = (dist) => {
+                        const falloff = 1 - (dist / type.range) ** 0.5; // sqrt falloff = steep near edge
+                        return type.damage * Math.max(0.1, falloff); // min 10% damage
+                    };
                     for (const e of enemies) {
                         for (const seg of e.segments) {
                             const sx = seg.x * GRID + GRID/2, sy = seg.y * GRID + GRID/2;
                             const dist = Math.sqrt((sx - cx)**2 + (sy - cy)**2);
                             if (dist < type.range) {
-                                seg.hp -= type.damage;
-                                SpawnDirector.onCombat(type.damage, 0);
+                                const dmg = calcAoeDamage(dist);
+                                seg.hp -= dmg;
+                                SpawnDirector.onCombat(dmg, 0);
                             }
                         }
                     }
@@ -4773,9 +4876,12 @@
                     followLength = bestLength;
                 }
 
-                // Mark current MVP
+                // Mark current MVP and accumulate MVP time
                 if (currentMVP) {
                     currentMVP.isMVP = true;
+                    // Track accumulated MVP time (for NN to learn spotlight-seeking)
+                    if (!currentMVP.mvpTime) currentMVP.mvpTime = 0;
+                    currentMVP.mvpTime += 16.67; // ~60fps, add ~16.67ms per frame
                 }
 
                 // Gradually speed up camera lerp factor back to normal
@@ -4967,8 +5073,8 @@
                 ctx.shadowBlur = invincibleTimer > 0 ? 15 : 5;
 
                 if (i === 0) {
-                    // LOCOMOTIVE HEAD
-                    drawLocomotive(ctx, x, drawY, GRID, segDir, trainFrame);
+                    // LOCOMOTIVE HEAD - color matches gun type
+                    drawLocomotive(ctx, x, drawY, GRID, segDir, trainFrame, playerGunType?.color);
 
                     // Spawn smoke occasionally
                     if (trainFrame % 8 === 0) {
@@ -5078,10 +5184,10 @@
         };
 
         function drawEnemyLocomotive(ctx, x, y, size, direction, frame, color, isNeural) {
-            // CHUNKY SIMPLE ENEMY TRAIN - same style as player
-            const palette = isNeural ? ENEMY_PALETTES.neural :
-                           color === '#f55' ? ENEMY_PALETTES.hunter :
-                           color === '#ff0' ? ENEMY_PALETTES.alpha : ENEMY_PALETTES.normal;
+            // CHUNKY SIMPLE ENEMY TRAIN - "All Same Gun" uses gun color directly
+            const bodyColor = color || '#48bb78';
+            const lightColor = lightenColor(bodyColor, 25);
+            const darkColor = darkenColor(bodyColor, 20);
 
             ctx.save();
             ctx.translate(x, y);
@@ -5089,16 +5195,16 @@
 
             const s = size * 0.5;
 
-            // Main body - colored block
-            ctx.fillStyle = palette.body;
+            // Main body - colored block (gun color)
+            ctx.fillStyle = bodyColor;
             ctx.fillRect(-s, -s*0.7, s*1.8, s*1.4);
 
             // Cabin (taller back section)
-            ctx.fillStyle = palette.light;
+            ctx.fillStyle = lightColor;
             ctx.fillRect(-s*1.1, -s, s*0.5, s*2);
 
             // Smokestack
-            ctx.fillStyle = palette.dark;
+            ctx.fillStyle = darkColor;
             ctx.fillRect(s*0.2, -s*1.2, s*0.4, s*0.5);
 
             // Headlight - enemy = red/magenta
@@ -5106,11 +5212,11 @@
             ctx.fillRect(s*0.7, -s*0.2, s*0.3, s*0.4);
 
             // Front
-            ctx.fillStyle = palette.dark;
+            ctx.fillStyle = darkColor;
             ctx.fillRect(s*0.8, -s*0.5, s*0.3, s*1);
 
             // Thick outline
-            ctx.strokeStyle = palette.dark;
+            ctx.strokeStyle = darkColor;
             ctx.lineWidth = 2;
             ctx.strokeRect(-s*1.1, -s, s*2.2, s*2);
 
@@ -5134,11 +5240,9 @@
         }
 
         function drawEnemyBoxcar(ctx, x, y, size, direction, frame, color, hp, maxHp) {
-            // CHUNKY SIMPLE - matches player boxcar style
-            const isHunter = color === '#f55';
-            const isAlpha = color === '#ff0';
-            const palette = isHunter ? ENEMY_PALETTES.hunter :
-                           isAlpha ? ENEMY_PALETTES.alpha : ENEMY_PALETTES.normal;
+            // CHUNKY SIMPLE - "All Same Gun" uses gun color directly
+            const baseColor = color || '#48bb78';
+            const darkColor = darkenColor(baseColor, 20);
 
             ctx.save();
             ctx.translate(x, y);
@@ -5146,8 +5250,8 @@
 
             const s = size * 0.5;
 
-            // Damage flash
-            let bodyColor = palette.body;
+            // Damage flash - override body color when damaged
+            let bodyColor = baseColor;
             if (hp < maxHp * 0.25 && Math.sin(frame * 0.5) > 0) bodyColor = '#600';
             else if (hp < maxHp * 0.5 && Math.sin(frame * 0.3) > 0.5) bodyColor = '#880';
 
@@ -5156,7 +5260,7 @@
             ctx.fillRect(-s*0.8, -s*0.6, s*1.6, s*1.2);
 
             // Thick outline
-            ctx.strokeStyle = palette.dark;
+            ctx.strokeStyle = darkColor;
             ctx.lineWidth = 2;
             ctx.strokeRect(-s*0.8, -s*0.6, s*1.6, s*1.2);
 
