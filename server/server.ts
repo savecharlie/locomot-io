@@ -211,6 +211,15 @@ export default class LocomotServer implements Party.Server {
             }
           }
           break;
+
+        case 'request_arena':
+          // New player requesting arena state - broadcast to all others
+          this.room.broadcast(JSON.stringify({
+            type: 'arena_request',
+            fromId: sender.id
+          }), [sender.id]); // Exclude requester
+          console.log(`Arena request from ${sender.id} broadcast to others`);
+          break;
       }
 
       // Broadcast state to all players
