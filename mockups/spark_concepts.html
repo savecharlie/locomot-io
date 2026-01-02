@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Train Turn Spark Concepts</title>
+    <style>
+        body { background: #0a0610; color: #fff; font-family: monospace; padding: 20px; }
+        .concept { display: inline-block; margin: 20px; text-align: center; }
+        canvas { border: 1px solid #333; background: #0a0610; }
+        h2 { color: #ff0; font-size: 14px; }
+        p { color: #888; font-size: 12px; max-width: 200px; }
+    </style>
+</head>
+<body>
+    <h1>🚂 Train Turn Spark Concepts</h1>
+
+    <div class="concept">
+        <h2>A: Classic Wheel Sparks</h2>
+        <canvas id="conceptA" width="200" height="200"></canvas>
+        <p>Sparks fly from wheels during turn, trailing behind</p>
+    </div>
+
+    <div class="concept">
+        <h2>B: Rail Grind Sparks</h2>
+        <canvas id="conceptB" width="200" height="200"></canvas>
+        <p>Sparks along the rail/ground as train pivots</p>
+    </div>
+
+    <div class="concept">
+        <h2>C: Burst Sparks</h2>
+        <canvas id="conceptC" width="200" height="200"></canvas>
+        <p>Explosive burst on sharp turns</p>
+    </div>
+
+    <div class="concept">
+        <h2>D: Arc Trail</h2>
+        <canvas id="conceptD" width="200" height="200"></canvas>
+        <p>Curved spark trail following turn arc</p>
+    </div>
+
+<script>
+// Concept A: Classic Wheel Sparks
+const ctxA = document.getElementById('conceptA').getContext('2d');
+function drawConceptA(frame) {
+    ctxA.fillStyle = '#0a0610';
+    ctxA.fillRect(0, 0, 200, 200);
+
+    // Draw train head
+    ctxA.fillStyle = '#0f0';
+    ctxA.fillRect(90, 80, 20, 20);
+
+    // Turn indicator
+    ctxA.strokeStyle = '#0f044';
+    ctxA.lineWidth = 2;
+    ctxA.beginPath();
+    ctxA.arc(100, 90, 30, Math.PI, Math.PI * 1.5);
+    ctxA.stroke();
+
+    // Wheel sparks - small particles trailing from corners
+    const sparks = [];
+    for (let i = 0; i < 8; i++) {
+        sparks.push({
+            x: 90 + Math.random() * 5,
+            y: 100 + i * 3,
+            size: 2 + Math.random() * 2,
+            color: Math.random() > 0.5 ? '#ff0' : '#f80'
+        });
+    }
+
+    for (const s of sparks) {
+        ctxA.fillStyle = s.color;
+        ctxA.shadowColor = s.color;
+        ctxA.shadowBlur = 5;
+        ctxA.fillRect(s.x - s.size/2, s.y - s.size/2, s.size, s.size);
+    }
+    ctxA.shadowBlur = 0;
+
+    // Label
+    ctxA.fillStyle = '#888';
+    ctxA.font = '10px monospace';
+    ctxA.fillText('Sparks trail from wheel', 30, 180);
+}
+drawConceptA(0);
+
+// Concept B: Rail Grind Sparks
+const ctxB = document.getElementById('conceptB').getContext('2d');
+function drawConceptB() {
+    ctxB.fillStyle = '#0a0610';
+    ctxB.fillRect(0, 0, 200, 200);
+
+    // Draw train head
+    ctxB.fillStyle = '#f0f';
+    ctxB.fillRect(90, 80, 20, 20);
+
+    // Rail line
+    ctxB.strokeStyle = '#333';
+    ctxB.lineWidth = 3;
+    ctxB.beginPath();
+    ctxB.moveTo(50, 100);
+    ctxB.lineTo(100, 100);
+    ctxB.lineTo(100, 50);
+    ctxB.stroke();
+
+    // Ground sparks along turn
+    for (let i = 0; i < 12; i++) {
+        const angle = (Math.PI / 2) * (i / 12);
+        const x = 100 - Math.sin(angle) * 15;
+        const y = 100 - Math.cos(angle) * 15;
+
+        ctxB.fillStyle = i % 2 ? '#ff0' : '#fa0';
+        ctxB.shadowColor = '#ff0';
+        ctxB.shadowBlur = 4;
+        ctxB.beginPath();
+        ctxB.arc(x, y, 1.5, 0, Math.PI * 2);
+        ctxB.fill();
+    }
+    ctxB.shadowBlur = 0;
+
+    ctxB.fillStyle = '#888';
+    ctxB.font = '10px monospace';
+    ctxB.fillText('Sparks along turn arc', 35, 180);
+}
+drawConceptB();
+
+// Concept C: Burst Sparks
+const ctxC = document.getElementById('conceptC').getContext('2d');
+function drawConceptC() {
+    ctxC.fillStyle = '#0a0610';
+    ctxC.fillRect(0, 0, 200, 200);
+
+    // Draw train head
+    ctxC.fillStyle = '#0ff';
+    ctxC.fillRect(90, 80, 20, 20);
+
+    // Burst of sparks
+    for (let i = 0; i < 16; i++) {
+        const angle = (Math.PI * 2 / 16) * i + Math.PI * 0.75;
+        const dist = 15 + Math.random() * 20;
+        const x = 90 + Math.cos(angle) * dist;
+        const y = 100 + Math.sin(angle) * dist;
+
+        const colors = ['#ff0', '#f80', '#fa0', '#fff'];
+        ctxC.fillStyle = colors[i % 4];
+        ctxC.shadowColor = ctxC.fillStyle;
+        ctxC.shadowBlur = 6;
+
+        // Spark shape - small line
+        ctxC.save();
+        ctxC.translate(x, y);
+        ctxC.rotate(angle);
+        ctxC.fillRect(-4, -1, 8, 2);
+        ctxC.restore();
+    }
+    ctxC.shadowBlur = 0;
+
+    ctxC.fillStyle = '#888';
+    ctxC.font = '10px monospace';
+    ctxC.fillText('Burst on sharp turn', 45, 180);
+}
+drawConceptC();
+
+// Concept D: Arc Trail
+const ctxD = document.getElementById('conceptD').getContext('2d');
+function drawConceptD() {
+    ctxD.fillStyle = '#0a0610';
+    ctxD.fillRect(0, 0, 200, 200);
+
+    // Draw train head
+    ctxD.fillStyle = '#ff0';
+    ctxD.fillRect(90, 80, 20, 20);
+
+    // Arc trail of fading sparks
+    for (let i = 0; i < 20; i++) {
+        const t = i / 20;
+        const angle = Math.PI * 0.5 + t * Math.PI * 0.5;
+        const x = 100 + Math.cos(angle) * 25;
+        const y = 90 + Math.sin(angle) * 25;
+
+        const alpha = 1 - t;
+        ctxD.fillStyle = `rgba(255, ${180 + t * 75}, 0, ${alpha})`;
+        ctxD.shadowColor = '#ff0';
+        ctxD.shadowBlur = 3 * alpha;
+
+        const size = 3 * (1 - t * 0.5);
+        ctxD.fillRect(x - size/2, y - size/2, size, size);
+    }
+    ctxD.shadowBlur = 0;
+
+    ctxD.fillStyle = '#888';
+    ctxD.font = '10px monospace';
+    ctxD.fillText('Fading arc trail', 50, 180);
+}
+drawConceptD();
+</script>
+</body>
+</html>
