@@ -43,27 +43,31 @@
             top: 38px;
             left: 0;
             right: 0;
-            height: 28px;
+            min-height: 28px;
             display: flex;
-            align-items: center;
+            align-items: flex-start;
             justify-content: center;
             z-index: 15;
             pointer-events: none;
-            overflow: hidden;
+            padding: 0 5px;
         }
         .ticker-content {
             display: flex;
             align-items: center;
             gap: 8px;
-            padding: 4px 16px;
-            background: rgba(10, 6, 16, 0.85);
+            padding: 6px 12px;
+            background: rgba(10, 6, 16, 0.9);
             border-radius: 4px;
-            font-size: 12px;
+            font-size: 11px;
             opacity: 0;
             transform: translateY(-10px);
             transition: opacity 0.3s, transform 0.3s;
-            white-space: nowrap;
-            max-width: 90%;
+            max-width: 95%;
+            text-align: center;
+        }
+        @media (max-width: 768px) {
+            .ticker-content { font-size: 10px; padding: 5px 10px; max-width: 98%; }
+            .ticker-badge { font-size: 8px; padding: 2px 4px; }
         }
         .ticker-content.visible {
             opacity: 1;
@@ -85,7 +89,7 @@
             0%, 100% { opacity: 1; }
             50% { opacity: 0.7; }
         }
-        .ticker-message { color: #fff; text-shadow: 0 0 8px currentColor; }
+        .ticker-message { color: #fff; text-shadow: 0 0 8px currentColor; word-wrap: break-word; overflow-wrap: break-word; }
         .ticker-expand {
             position: absolute;
             top: 38px;
