@@ -567,7 +567,11 @@
                         // If there are other players, request arena sync from them
                         if (this.otherPlayers.size > 0) {
                             console.log('[MP] Other players exist, requesting arena sync');
+                            this.isHost = false; // We're joining, not hosting
                             this.send({ type: 'request_arena' });
+                        } else {
+                            console.log('[MP] We are first player - becoming HOST');
+                            this.isHost = true; // We're the host
                         }
                         break;
 
@@ -599,6 +603,13 @@
                         if (enemies.length > 0) {
                             console.log('[MP] Responding with arena sync');
                             this.sendArenaSync(data.fromId);
+                        }
+                        break;
+
+                    case 'enemy_state':
+                        // Continuous enemy state from host - update positions
+                        if (!this.isHost && data.enemies) {
+                            this.applyEnemyState(data.enemies);
                         }
                         break;
 
@@ -662,6 +673,9 @@
             // Arena sync - share our enemies with a new joiner
             arenaSynced: false,
             arenaReceived: false, // True if we received arena from another player
+            isHost: false, // True if we're the authoritative source for enemy state
+            lastStateBroadcast: 0,
+            STATE_BROADCAST_INTERVAL: 150, // ms between state broadcasts
 
             sendArenaSync(targetId) {
                 // Send simplified enemy data (positions only, they'll regenerate details)
@@ -742,6 +756,58 @@
 
                 this.arenaReceived = true;
                 this.arenaSynced = true;
+            },
+
+            // Host broadcasts enemy state to all clients
+            broadcastEnemyState() {
+                if (!this.isHost || !this.connected) return;
+
+                const now = Date.now();
+                if (now - this.lastStateBroadcast < this.STATE_BROADCAST_INTERVAL) return;
+                this.lastStateBroadcast = now;
+
+                // Compact enemy state - just positions and essential data
+                const enemyState = enemies.map(e => ({
+                    id: e.id,
+                    x: e.segments[0]?.x,
+                    y: e.segments[0]?.y,
+                    dir: { x: e.dir.x, y: e.dir.y },
+                    len: e.segments.length,
+                    segs: e.segments.map(s => ({ x: s.x, y: s.y }))
+                })).filter(e => e.x !== undefined);
+
+                this.send({ type: 'enemy_state', enemies: enemyState });
+            },
+
+            // Non-host applies enemy state from host
+            applyEnemyState(stateData) {
+                for (const s of stateData) {
+                    const enemy = enemies.find(e => e.id === s.id);
+                    if (enemy && enemy.segments.length > 0) {
+                        // Update direction
+                        enemy.dir = s.dir;
+                        enemy.nextDir = s.dir;
+
+                        // Update all segment positions
+                        for (let i = 0; i < Math.min(enemy.segments.length, s.segs.length); i++) {
+                            enemy.segments[i].x = s.segs[i].x;
+                            enemy.segments[i].y = s.segs[i].y;
+                        }
+
+                        // Handle length changes
+                        while (enemy.segments.length < s.len && s.segs[enemy.segments.length]) {
+                            const seg = s.segs[enemy.segments.length];
+                            enemy.segments.push({
+                                x: seg.x, y: seg.y,
+                                hp: 50, maxHp: 50,
+                                type: GUNS.MACHINEGUN, lastFired: 0
+                            });
+                        }
+                        while (enemy.segments.length > s.len) {
+                            enemy.segments.pop();
+                        }
+                    }
+                }
             },
 
             setUsername(name) {
@@ -4777,6 +4843,7 @@
                     }
                     updateEnemyProjectiles(dt); updateProjectiles(dt); fireGuns(time); updateParticles();
                     updateWaves(time, dt); updateCamera(); updateHUD(); updateLeaderboard();
+                    Multiplayer.broadcastEnemyState(); // Host syncs enemies to all clients
                     ruleEngine.update(); // Gödel layer tick
 
                     // Strategy classifier - learns player behavior and counters it
@@ -4805,6 +4872,7 @@
                     updateCamera();
                     updateLeaderboard();
                     updateWaves(time, dt); // Keep spawning during spectate!
+                    Multiplayer.broadcastEnemyState(); // Host syncs enemies
                 }
 
                 // CONTINUOUS ARENA: Keep arena alive during start screen
@@ -4814,6 +4882,7 @@
                     updateParticles();
                     updateLeaderboard();
                     updateWaves(time, dt); // Keep spawning on start screen!
+                    Multiplayer.broadcastEnemyState(); // Host syncs enemies
                 }
                 
                 ctx.save(); ctx.scale(cameraZoom, cameraZoom); ctx.translate(-cameraX, -cameraY);

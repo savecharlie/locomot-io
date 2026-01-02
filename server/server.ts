@@ -220,6 +220,14 @@ export default class LocomotServer implements Party.Server {
           }), [sender.id]); // Exclude requester
           console.log(`Arena request from ${sender.id} broadcast to others`);
           break;
+
+        case 'enemy_state':
+          // Host broadcasting enemy state - relay to all other clients
+          this.room.broadcast(JSON.stringify({
+            type: 'enemy_state',
+            enemies: data.enemies
+          }), [sender.id]); // Exclude sender
+          break;
       }
 
       // Broadcast state to all players
