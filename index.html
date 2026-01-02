@@ -3864,7 +3864,7 @@
             }
             
             // SpawnDirector handles adaptive spawning (L4D-style intensity pacing)
-            SpawnDirector.update(time);
+            SpawnDirector.update(Date.now());
             
             // Spawn pickups to keep the world interesting
             if (pickups.length < 120 && Math.random() < 0.05) {
