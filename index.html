@@ -2565,8 +2565,19 @@
                         head.x = (head.x + e.dir.x + WORLD_COLS) % WORLD_COLS;
                         head.y = (head.y + e.dir.y + WORLD_ROWS) % WORLD_ROWS;
                         for (let j = 1; j < e.segments.length; j++) {
+                            const oldX = e.segments[j].x;
+                            const oldY = e.segments[j].y;
                             e.segments[j].x = prevPositions[j - 1].x;
                             e.segments[j].y = prevPositions[j - 1].y;
+
+                            // Turn sparks for enemy trains
+                            const newDx = e.segments[j].x - oldX;
+                            const newDy = e.segments[j].y - oldY;
+                            const oldDir = e.segments[j].lastDir || { x: newDx, y: newDy };
+                            if ((oldDir.x !== newDx || oldDir.y !== newDy) && (oldDir.x !== 0 || oldDir.y !== 0)) {
+                                emitTurnSparks(oldX, oldY, oldDir, { x: newDx, y: newDy }, e.color);
+                            }
+                            e.segments[j].lastDir = { x: newDx, y: newDy };
                         }
                         
                         // Pickup collection
@@ -3082,8 +3093,23 @@
             snake[0].y = wrappedY;
             
             for (let i = 1; i < snake.length; i++) {
+                const oldX = snake[i].x;
+                const oldY = snake[i].y;
                 snake[i].x = prevPositions[i - 1].x;
                 snake[i].y = prevPositions[i - 1].y;
+
+                // Detect direction change for turn sparks
+                const newDx = snake[i].x - oldX;
+                const newDy = snake[i].y - oldY;
+                const oldDir = snake[i].lastDir || { x: newDx, y: newDy };
+
+                // If direction changed, emit sparks
+                if (oldDir.x !== newDx || oldDir.y !== newDy) {
+                    if (oldDir.x !== 0 || oldDir.y !== 0) { // Don't spark on first move
+                        emitTurnSparks(oldX, oldY, oldDir, { x: newDx, y: newDy }, snake[i].type?.color || '#0f0');
+                    }
+                }
+                snake[i].lastDir = { x: newDx, y: newDy };
             }
             
             const headPx = wrappedX * GRID + GRID / 2;
@@ -3905,6 +3931,41 @@
             
         }
         
+        // H6 8-bit Comet turn sparks - pixel head with fading tail
+        function emitTurnSparks(x, y, oldDir, newDir, color) {
+            // Calculate spark direction (opposite to turn direction)
+            const sparkAngle = Math.atan2(-oldDir.y - newDir.y, -oldDir.x - newDir.x);
+            const px = 3; // pixel size
+
+            // Emit 3-5 comet sparks in an arc
+            const numSparks = 3 + Math.floor(Math.random() * 3);
+            for (let i = 0; i < numSparks; i++) {
+                const angleOffset = (i / (numSparks - 1) - 0.5) * Math.PI * 0.5;
+                const angle = sparkAngle + angleOffset;
+                const speed = 1.5 + Math.random() * 1;
+
+                // Each spark is a "comet" with head and tail segments
+                const tailLen = 2 + Math.floor(Math.random() * 2);
+                for (let j = 0; j < tailLen; j++) {
+                    const delay = j * 0.3;
+                    const alpha = 1 - (j / tailLen) * 0.6;
+                    const size = j === 0 ? px + 1 : px - 1;
+
+                    particles.push({
+                        x: x * GRID + GRID / 2,
+                        y: y * GRID + GRID / 2,
+                        vx: Math.cos(angle) * speed * (1 - j * 0.2),
+                        vy: Math.sin(angle) * speed * (1 - j * 0.2),
+                        life: 12 + Math.floor(Math.random() * 8) - j * 2,
+                        color: j === 0 ? '#fff' : (j === 1 ? '#ff0' : '#f80'),
+                        isPixelSpark: true,
+                        size: size,
+                        alpha: alpha
+                    });
+                }
+            }
+        }
+
         function updateParticles() {
             for (let i = particles.length - 1; i >= 0; i--) {
                 const p = particles[i];
@@ -4627,6 +4688,16 @@
                 if (p.isAoe) {
                     const alpha = Math.floor((p.life / 15) * 200).toString(16).padStart(2, '0');
                     ctx.strokeStyle = p.color + alpha; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(p.x, p.y, p.radius, 0, Math.PI * 2); ctx.stroke();
+                } else if (p.isPixelSpark) {
+                    // H6 8-bit Comet pixel sparks
+                    const sz = p.size || 3;
+                    ctx.globalAlpha = (p.alpha || 1) * Math.min(1, p.life / 8);
+                    ctx.fillStyle = p.color;
+                    // Snap to pixel grid for retro look
+                    const px = Math.floor(p.x / sz) * sz;
+                    const py = Math.floor(p.y / sz) * sz;
+                    ctx.fillRect(px - sz/2, py - sz/2, sz, sz);
+                    ctx.globalAlpha = 1;
                 } else { ctx.globalAlpha = p.life / 30; ctx.fillStyle = p.color; ctx.fillRect(p.x - 2, p.y - 2, 4, 4); ctx.globalAlpha = 1; }
             }
         }

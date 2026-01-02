@@ -19,10 +19,10 @@
     {
       "name": "VERA",
       "firstSeen": "2026-01-01T17:12:51.672383",
-      "lastSeen": "2026-01-01T17:13:14.488616",
-      "sessions": 1,
-      "totalKills": 0,
-      "bestScore": 0
+      "lastSeen": "2026-01-01T18:57:14.457406",
+      "sessions": 3,
+      "totalKills": 1258,
+      "bestScore": 3770
     },
     {
       "name": "Train68",
@@ -249,10 +249,10 @@
       "name": "VERA",
       "id": "42fca4d2-e81c-4525-86bc-6f572590904e",
       "joined": "2026-01-01T17:12:51.672370",
-      "left": null,
-      "maxLength": 4,
-      "kills": 0,
-      "score": 1240
+      "left": "2026-01-01T18:56:38.490429",
+      "maxLength": 5,
+      "kills": 533,
+      "score": 780
     },
     {
       "name": "Ivy",
@@ -406,6 +406,24 @@
       "maxLength": 6,
       "kills": 129,
       "score": 780
+    },
+    {
+      "name": "VERA",
+      "id": "365b5702-2742-47bf-a6aa-2256148fc85e",
+      "joined": "2026-01-01T18:54:17.968799",
+      "left": "2026-01-01T18:55:51.908289",
+      "maxLength": 10,
+      "kills": 424,
+      "score": 690
+    },
+    {
+      "name": "VERA",
+      "id": "365b5702-2742-47bf-a6aa-2256148fc85e",
+      "joined": "2026-01-01T18:54:18.177712",
+      "left": "2026-01-01T18:54:54.587824",
+      "maxLength": 14,
+      "kills": 301,
+      "score": 3770
     }
   ]
 }
