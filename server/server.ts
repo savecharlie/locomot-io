@@ -323,6 +323,40 @@ export default class LocomotServer implements Party.Server {
           });
         }
 
+        if (data.type === 'player_training_data') {
+          // Store player behavior data for imitation learning
+          const playerData = data.data as { state: number[]; action: number }[];
+          const score = (data as any).score || 0;
+
+          // Only store high-quality data (score >= 10)
+          if (score >= 10 && Array.isArray(playerData) && playerData.length > 0) {
+            const key = `player_${Date.now()}_${score}`;
+            await this.room.storage.put(key, playerData);
+            console.log(`Player training data: ${playerData.length} frames, score ${score}`);
+          }
+
+          return new Response(JSON.stringify({ success: true, frames: playerData?.length || 0 }), {
+            headers: { ...headers, 'Content-Type': 'application/json' }
+          });
+        }
+
+        if (data.type === 'get_player_data') {
+          // Retrieve all stored player training data
+          const allData: { state: number[]; action: number }[] = [];
+          const keys = await this.room.storage.list({ prefix: 'player_' });
+
+          for (const [key, value] of keys) {
+            const frames = value as { state: number[]; action: number }[];
+            if (Array.isArray(frames)) {
+              allData.push(...frames);
+            }
+          }
+
+          return new Response(JSON.stringify(allData), {
+            headers: { ...headers, 'Content-Type': 'application/json' }
+          });
+        }
+
         return new Response(JSON.stringify({ error: 'Unknown type' }), {
           status: 400,
           headers: { ...headers, 'Content-Type': 'application/json' }

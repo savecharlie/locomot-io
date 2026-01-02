@@ -1901,6 +1901,43 @@
         let deathReason = ''; // Track what killed the player
         let deathDebugInfo = null; // Full debug info at death
 
+        // === PLAYER DATA RECORDER - Collect training data from top players ===
+        const playerDataRecorder = {
+            data: [],
+            minScore: 10, // Only record from players with score >= 10
+            maxFrames: 5000, // Max frames to store
+            uploadUrl: 'https://locomot-io.savecharlie.partykit.dev/party/collective',
+
+            record(vision, action) {
+                // Only record if player is doing well
+                if (score < this.minScore) return;
+                if (this.data.length >= this.maxFrames) return;
+
+                this.data.push({ state: Array.from(vision), action });
+            },
+
+            upload() {
+                if (this.data.length < 100) return; // Need enough data
+
+                fetch(this.uploadUrl, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        type: 'player_training_data',
+                        data: this.data,
+                        score: score,
+                        timestamp: Date.now()
+                    })
+                }).then(() => {
+                    console.log(`Uploaded ${this.data.length} training frames`);
+                }).catch(() => {});
+            },
+
+            clear() {
+                this.data = [];
+            }
+        };
+
         // === PATTERN TRACKER - Real-time player behavior learning ===
         const patternTracker = {
             leftTurns: 0,
@@ -2993,6 +3030,7 @@
             speedTimer = 0; magnetTimer = 0; // Reset power-up timers
             SpawnDirector.reset(); // Initialize spawn director
             patternTracker.reset(); // Reset pattern tracking for new game
+            playerDataRecorder.clear(); // Clear training data for new game
             strategyClassifier.reset(); // Reset strategy classifier
             reputationSystem.reset(); // Reset enemy reputations for new game
 
@@ -3202,6 +3240,8 @@
                         data: { rules: ruleEngine.rules, patterns: patternTracker.getStats(), deathInfo: deathDebugInfo, timestamp: Date.now() }
                     })
                 }).catch(() => {});
+                // Upload player training data if we collected enough
+                playerDataRecorder.upload();
             } catch(e) {}
 
             // Show game over screen
@@ -3294,6 +3334,7 @@
             speedTimer = 0; magnetTimer = 0;
             SpawnDirector.reset();
             patternTracker.reset();
+            playerDataRecorder.clear();
             strategyClassifier.reset();
 
             snake = [
@@ -3422,6 +3463,7 @@
             }
 
             // Consume from direction queue for responsive controls
+            const prevDir = dir;
             if (dirQueue.length > 0) {
                 const newDir = dirQueue.shift();
                 // Extra check to prevent 180 turns
@@ -3432,6 +3474,21 @@
             } else {
                 dir = nextDir;
             }
+
+            // Record training data: what vision the player saw and what action they took
+            if (snake.length >= 4) {
+                const vision = getVision(snake[0].x, snake[0].y, prevDir, snake, enemies, pickups, null);
+                // Determine action: 0=left, 1=straight, 2=right relative to prevDir
+                let action = 1; // default straight
+                if (dir !== prevDir) {
+                    const leftDir = turnLeft(prevDir);
+                    const rightDir = turnRight(prevDir);
+                    if (dir.x === leftDir.x && dir.y === leftDir.y) action = 0;
+                    else if (dir.x === rightDir.x && dir.y === rightDir.y) action = 2;
+                }
+                playerDataRecorder.record(vision, action);
+            }
+
             const head = snake[0];
             const newX = head.x + dir.x;
             const newY = head.y + dir.y;
