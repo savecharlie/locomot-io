@@ -4731,7 +4731,48 @@
                 ctx.stroke();
             }
         }
-        
+
+        // Draw queued direction indicators above snake head
+        function drawDirectionQueue() {
+            if (!snake[0]) return;
+            const head = snake[0];
+            const hx = head.x * GRID + GRID/2, hy = head.y * GRID + GRID/2;
+
+            // Show nextDir if different from current dir, plus queued directions
+            const dirsToShow = [];
+            if (nextDir !== dir) dirsToShow.push(nextDir);
+            for (const d of dirQueue) dirsToShow.push(d);
+
+            if (dirsToShow.length === 0) return;
+
+            // Draw small arrows above the head
+            ctx.save();
+            for (let i = 0; i < Math.min(dirsToShow.length, 3); i++) {
+                const d = dirsToShow[i];
+                const offsetY = -25 - (i * 12);
+                const alpha = 1 - (i * 0.25);
+
+                ctx.fillStyle = `rgba(0, 255, 100, ${alpha})`;
+                ctx.strokeStyle = `rgba(0, 255, 100, ${alpha})`;
+                ctx.lineWidth = 2;
+
+                // Draw arrow pointing in direction
+                ctx.save();
+                ctx.translate(hx, hy + offsetY);
+                ctx.rotate(Math.atan2(d.y, d.x));
+
+                // Arrow shape
+                ctx.beginPath();
+                ctx.moveTo(8, 0);
+                ctx.lineTo(-4, -5);
+                ctx.lineTo(-4, 5);
+                ctx.closePath();
+                ctx.fill();
+                ctx.restore();
+            }
+            ctx.restore();
+        }
+
         // Enemy train colors based on type
         const ENEMY_PALETTES = {
             normal: { body: '#4a5568', light: '#718096', dark: '#2d3748' },
@@ -5114,7 +5155,7 @@
                 
                 ctx.save(); ctx.scale(cameraZoom, cameraZoom); ctx.translate(-cameraX, -cameraY);
                 drawGrid(); drawPickups(time); drawEnemies(); Multiplayer.drawOtherPlayers(ctx);
-                if (gameState === 'playing') { drawSnake(); drawAimLine(); drawLeaderArrow(); }
+                if (gameState === 'playing') { drawSnake(); drawAimLine(); drawDirectionQueue(); drawLeaderArrow(); }
                 drawProjectiles(); drawParticles();
                 ctx.restore(); drawScanlines(); drawPatternFlash(ctx); devMode.draw(ctx);
             } catch (err) { console.error('Game loop error:', err); }
