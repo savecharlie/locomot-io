@@ -661,6 +661,7 @@
 
             // Arena sync - share our enemies with a new joiner
             arenaSynced: false,
+            arenaReceived: false, // True if we received arena from another player
 
             sendArenaSync(targetId) {
                 // Send simplified enemy data (positions only, they'll regenerate details)
@@ -683,7 +684,10 @@
 
             applyArenaSync(enemyData, pickupData) {
                 // Replace our enemies with synced ones
-                enemies = [];
+                console.log('[MP] BEFORE sync: enemies.length =', enemies.length);
+                const oldEnemies = enemies;
+                enemies = []; // Clear global enemies array
+
                 for (const e of enemyData) {
                     // Spawn enemy at synced position with synced length
                     const startDir = DIR.RIGHT;
@@ -722,7 +726,22 @@
                         id: enemies.length
                     });
                 }
-                console.log('[MP] Applied arena sync:', enemies.length, 'enemies');
+                console.log('[MP] AFTER sync: enemies.length =', enemies.length, 'first enemy:', enemies[0]?.name, 'at', enemies[0]?.segments[0]?.x, enemies[0]?.segments[0]?.y);
+
+                // Also sync pickups if provided
+                if (pickupData && pickupData.length > 0) {
+                    pickups = pickupData.map(p => ({
+                        x: p.x,
+                        y: p.y,
+                        type: GUNS.MACHINEGUN,
+                        isHealth: p.isHealth || false,
+                        bob: Math.random() * Math.PI * 2
+                    }));
+                    console.log('[MP] Synced', pickups.length, 'pickups');
+                }
+
+                this.arenaReceived = true;
+                this.arenaSynced = true;
             },
 
             setUsername(name) {
@@ -4911,9 +4930,14 @@
 
         document.getElementById('startFFA').addEventListener('click', () => {
             startGame(false);
-            // Only init if arena is empty (continuous arena)
-            if (enemies.length === 0) init();
-            else joinExistingArena();
+            // Only init if arena is empty AND we haven't received a sync
+            if (enemies.length === 0 && !Multiplayer.arenaReceived) {
+                console.log('[START] No enemies and no sync received, calling init()');
+                init();
+            } else {
+                console.log('[START] Joining existing arena with', enemies.length, 'enemies (synced:', Multiplayer.arenaReceived, ')');
+                joinExistingArena();
+            }
             gameState = 'playing';
             canvas.classList.add('playing');
             // Report join to server for player history
@@ -4922,9 +4946,14 @@
 
         document.getElementById('startTeams').addEventListener('click', () => {
             startGame(true);
-            // Only init if arena is empty (continuous arena)
-            if (enemies.length === 0) init();
-            else joinExistingArena();
+            // Only init if arena is empty AND we haven't received a sync
+            if (enemies.length === 0 && !Multiplayer.arenaReceived) {
+                console.log('[START] No enemies and no sync received, calling init()');
+                init();
+            } else {
+                console.log('[START] Joining existing arena with', enemies.length, 'enemies (synced:', Multiplayer.arenaReceived, ')');
+                joinExistingArena();
+            }
             gameState = 'playing';
             canvas.classList.add('playing');
             // Report join to server for player history
