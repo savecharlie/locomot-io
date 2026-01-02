@@ -268,8 +268,20 @@
                 </button>
             </div>
 
-            <!-- Ad Space -->
-            <div style="margin-top: 15px;">
+        </div>
+    </div>
+
+    <!-- Page Content Footer (AdSense-compliant placement) -->
+    <div id="pageFooter" style="background: linear-gradient(180deg, #0a0610, #12081a); padding: 20px; text-align: center; border-top: 1px solid #222;">
+        <div style="max-width: 600px; margin: 0 auto;">
+            <h3 style="font-family: 'Press Start 2P', monospace; font-size: 10px; color: #666; margin-bottom: 12px;">🎮 GAME TIPS</h3>
+            <div style="font-family: 'Press Start 2P', monospace; font-size: 7px; color: #555; line-height: 2; margin-bottom: 20px;">
+                <p>🚂 Build your train longer to increase firepower</p>
+                <p>🔫 Different guns have different strengths - shotgun for close range, cannon for damage</p>
+                <p>🧠 Our neural network AI learns from every player's gameplay</p>
+            </div>
+            <!-- Ad Space - On content page, not interstitial -->
+            <div style="margin: 15px auto; max-width: 320px;">
                 <ins class="adsbygoogle"
                      style="display:block; width:320px; height:100px;"
                      data-ad-client="ca-pub-7560120281604459"
@@ -745,6 +757,21 @@
                         break;
 
                     case 'kill':
+                        if (this.isHost) {
+                            let targetSegments = null;
+                            let droppedBy = null;
+                            if (data.targetId === this.playerId) {
+                                targetSegments = snake;
+                                droppedBy = 'player';
+                            } else {
+                                const target = this.otherPlayers.get(data.targetId);
+                                targetSegments = target?.segments || null;
+                                droppedBy = data.targetId;
+                            }
+                            if (targetSegments && targetSegments.length > 0) {
+                                dropPickupsFromSegments(targetSegments, droppedBy);
+                            }
+                        }
                         if (data.targetId === this.playerId) {
                             const killer = this.otherPlayers.get(data.fromId);
                             deathReason = `Killed by ${killer?.name || 'player'}`;
@@ -1961,6 +1988,19 @@
                 }
             }
         }
+
+        function dropPickupsFromSegments(segments, droppedBy = null) {
+            if (!segments || segments.length === 0) return;
+            for (const seg of segments) {
+                addPickup({
+                    x: seg.x * GRID + GRID / 2,
+                    y: seg.y * GRID + GRID / 2,
+                    type: GUNS[GUN_NAMES[Math.floor(Math.random() * GUN_NAMES.length)]],
+                    isHealth: false,
+                    bob: Math.random() * Math.PI * 2
+                }, droppedBy);
+            }
+        }
         let isLeader = false, trailBoostTimer = 0;
         let waveEnemies = 0, waveKills = 0, spawnTimer = 0, waveDelay = 0;
         let bestRank = 999, maxLength = 2;
@@ -2718,13 +2758,8 @@
                         if (!enemy.segments) continue;
                         for (const seg of enemy.segments) {
                             if (seg.x === simX && seg.y === simY) {
-                                // Collision - bad if they're bigger
-                                if (enemy.segments.length >= simSegments.length) {
-                                    alive = false;
-                                    score -= 80;
-                                } else {
-                                    score += 30; // Could eat them!
-                                }
+                                alive = false;
+                                score -= 90;
                                 break;
                             }
                         }
@@ -2738,18 +2773,8 @@
                         for (let i = 0; i < playerSnake.length; i++) {
                             const seg = playerSnake[i];
                             if (seg.x === simX && seg.y === simY) {
-                                if (i === 0) {
-                                    // Head collision - depends on size
-                                    if (playerSnake.length >= simSegments.length) {
-                                        alive = false;
-                                        score -= 90;
-                                    } else {
-                                        score += 50; // Kill player!
-                                    }
-                                } else {
-                                    alive = false;
-                                    score -= 70;
-                                }
+                                alive = false;
+                                score -= 95;
                                 break;
                             }
                         }
@@ -3683,6 +3708,34 @@
             const newY = head.y + dir.y;
             const wrappedX = (newX + WORLD_COLS) % WORLD_COLS;
             const wrappedY = (newY + WORLD_ROWS) % WORLD_ROWS;
+
+            if (teamMode) {
+                let blocked = false;
+                for (const e of enemies) {
+                    if (!e.segments || e.segments.length === 0) continue;
+                    if (e.team !== playerTeam) continue;
+                    for (const seg of e.segments) {
+                        if (seg.x === wrappedX && seg.y === wrappedY) {
+                            blocked = true;
+                            break;
+                        }
+                    }
+                    if (blocked) break;
+                }
+                if (!blocked && Multiplayer.connected) {
+                    for (const [, op] of Multiplayer.otherPlayers) {
+                        if (!op.segments || op.segments.length === 0) continue;
+                        for (const seg of op.segments) {
+                            if (seg.x === wrappedX && seg.y === wrappedY) {
+                                blocked = true;
+                                break;
+                            }
+                        }
+                        if (blocked) break;
+                    }
+                }
+                if (blocked) return false;
+            }
             
             for (let i = 1; i < snake.length; i++) {
                 if (snake[i].x === wrappedX && snake[i].y === wrappedY) {
@@ -3802,58 +3855,66 @@
             // Send position to multiplayer server (only when alive!)
             if (Multiplayer.connected && gameState === 'playing') {
                 Multiplayer.sendUpdate(snake[0].x, snake[0].y, snake, score);
-                
-                // PVP COLLISION DETECTION (disabled in team mode)
-                if (!teamMode) {
-                for (const [playerId, otherPlayer] of Multiplayer.otherPlayers) {
-                    if (!otherPlayer.segments || otherPlayer.segments.length === 0) continue;
-                    
-                    const otherHead = otherPlayer.segments[0];
-                    const myLen = snake.length;
-                    const theirLen = otherPlayer.segments.length;
-                    
-                    // Check head vs other player's body (with 1-tile tolerance for lag)
-                    for (let i = 0; i < otherPlayer.segments.length; i++) {
-                        const seg = otherPlayer.segments[i];
-                        const dx = Math.abs(wrappedX - seg.x);
-                        const dy = Math.abs(wrappedY - seg.y);
-                        
-                        // Exact collision or within 1 tile (lag compensation)
-                        if (dx <= 1 && dy <= 1 && dx + dy <= 1) {
-                            // Collision detected
-                            
-                            if (i === 0) {
-                                // Head-to-head collision!
-                                if (myLen > theirLen) {
-                                    // We win!
-                                    score += theirLen * 100;
-                                    haptic('heavy');
-                                    // sounds disabled
-                                    killFeed.add(playerName, otherPlayer.name);
-                                    HighlightRecorder.onKill(playerName, otherPlayer.name);
-                                    for (let j = 0; j < 20; j++) {
-                                        particles.push({ x: seg.x * GRID, y: seg.y * GRID, vx: (Math.random()-0.5)*8, vy: (Math.random()-0.5)*8, life: 40, color: otherPlayer.color });
+
+                // PVP COLLISION DETECTION
+                if (!teamMode && invincibleTimer <= 0) {
+                    const canSpawnPlayerDrops = Multiplayer.isHost;
+                    for (const [playerId, otherPlayer] of Multiplayer.otherPlayers) {
+                        if (!otherPlayer.segments || otherPlayer.segments.length === 0) continue;
+
+                        // Check head vs other player's body (with 1-tile tolerance for lag)
+                        for (let i = 0; i < otherPlayer.segments.length; i++) {
+                            const seg = otherPlayer.segments[i];
+                            const dx = Math.abs(wrappedX - seg.x);
+                            const dy = Math.abs(wrappedY - seg.y);
+
+                            // Exact collision or within 1 tile (lag compensation)
+                            if (dx <= 1 && dy <= 1 && dx + dy <= 1) {
+                                if (i === 0) {
+                                    // Head-to-head collision: both die
+                                    if (canSpawnPlayerDrops) {
+                                        dropPickupsFromSegments(snake, 'player');
+                                        dropPickupsFromSegments(otherPlayer.segments, playerId);
                                     }
                                     Multiplayer.send({ type: 'kill', targetId: playerId });
-                                } else if (myLen < theirLen) {
-                                    // We die!
-                                    deathReason = 'Killed by ' + otherPlayer.name + ' (head-on, ' + theirLen + ' vs ' + myLen + ')';
+                                    deathReason = 'Head-on collision with ' + otherPlayer.name;
                                     return true;
                                 }
-                                // Equal size = both survive
-                            } else {
-                                // Hit their body - we die!
+                                // Head into body: head dies
+                                if (canSpawnPlayerDrops) dropPickupsFromSegments(snake, 'player');
                                 deathReason = 'Ran into ' + otherPlayer.name + "'s body (seg " + i + ')';
                                 return true;
                             }
                         }
                     }
                 }
-                
-                } // end teamMode check
-                
             }
 
+            return false;
+        }
+
+        function isFriendlyOccupiedForEnemy(x, y, enemy) {
+            if (!teamMode) return false;
+            if (enemy.team === playerTeam) {
+                for (const ps of snake) {
+                    if (ps.x === x && ps.y === y) return true;
+                }
+                if (Multiplayer.connected) {
+                    for (const [, op] of Multiplayer.otherPlayers) {
+                        if (!op.segments || op.segments.length === 0) continue;
+                        for (const seg of op.segments) {
+                            if (seg.x === x && seg.y === y) return true;
+                        }
+                    }
+                }
+            }
+            for (const other of enemies) {
+                if (other === enemy || !other.segments || other.segments.length === 0) continue;
+                if (other.team !== enemy.team) continue;
+                for (const seg of other.segments) {
+                    if (seg.x === x && seg.y === y) return true;
+                }
+            }
             return false;
         }
 
@@ -4134,6 +4195,7 @@
                     for (let j = 1; j < e.segments.length; j++) {
                         if (e.segments[j].x === nextX && e.segments[j].y === nextY) { willCollide = true; break; }
                     }
+                    if (!willCollide && isFriendlyOccupiedForEnemy(nextX, nextY, e)) willCollide = true;
                     
                     if (willCollide) {
                         const dirs = [DIR.UP, DIR.DOWN, DIR.LEFT, DIR.RIGHT];
@@ -4145,6 +4207,7 @@
                             for (let j = 1; j < e.segments.length; j++) {
                                 if (e.segments[j].x === tryX && e.segments[j].y === tryY) { safe = false; break; }
                             }
+                            if (safe && isFriendlyOccupiedForEnemy(tryX, tryY, e)) safe = false;
                             if (safe) { newDir = tryDir; break; }
                         }
                     }
@@ -4223,7 +4286,7 @@
                         const seg = e.segments[si];
                         if (!seg.type) continue;
                         if (seg.lastFired === undefined) seg.lastFired = 0;
-                        const type = seg.type;
+                        const type = (si === 0 && e.segments.length > 1) ? (e.gunType || seg.type) : seg.type;
                         if (now - seg.lastFired < type.fireRate) continue;
                         seg.lastFired = now;
                         
@@ -4269,62 +4332,19 @@
                     }
                 }
                 
-                // Collisions - skip fatal ones during invincibility, grace period, or same team
-                if (teamMode && e.team === playerTeam) continue; // Same team, no collision
-                // Grace: for 500ms after shield drops, head collisions just push through
-                if (head.x === playerHead.x && head.y === playerHead.y) {
-                    // If player only has head (no body), any collision is instant death
-                    if (playerLen <= 1 && invincibleTimer <= 0) {
-                        deathReason = 'Head-only collision - no protection!';
-                        return true;
-                    }
-                    if (invincibleTimer > -2000) {
-                        // During invincibility or 2 second grace period, just pass through
-                        // But deal significant damage to the enemy for touching us
-                        if (e.segments.length > 1) e.segments[1].hp -= 50;
-                    } else if (myLen > playerLen + 6) {
-                        // Only instant death if enemy is MUCH bigger (7+ segments more)
-                        deathReason = `Head collision with MUCH bigger enemy (${myLen} vs ${playerLen} segments)`;
-                        console.log('DEATH: Enemy much bigger', { myLen, playerLen, invincibleTimer });
-                        return true;
-                    } else if (myLen > playerLen) {
-                        // Bigger but not by much - take heavy damage instead of instant death
-                        // Head takes damage if no body cars, otherwise body cars
-                        if (snake.length === 1) {
-                            snake[0].hp -= 50;
-                        } else {
-                            for (let si = 1; si < snake.length && si < 3; si++) {
-                                snake[si].hp -= 50;
-                            }
-                        }
-                        haptic('heavy');
-                    } else if (myLen < playerLen) {
-                        // Player killed this enemy - track for strategy classifier
-                        strategyClassifier.onKill(e.segments.length);
-                        strategyClassifier.onPlayerKilledEnemy(e.id);
-                        for (const seg of e.segments) {
-                            addPickup({ x: seg.x*GRID+GRID/2, y: seg.y*GRID+GRID/2, type: GUNS[GUN_NAMES[Math.floor(Math.random()*GUN_NAMES.length)]], isHealth: false, bob: Math.random()*Math.PI*2 });
-                            score += 15; waveKills++;
-                        }
+                const playerInvincible = invincibleTimer > 0;
+                const canSpawnPlayerDrops = (!Multiplayer.connected || Multiplayer.isHost);
+
+                // Player head-to-head collisions: both die
+                if (!playerInvincible && !(teamMode && e.team === playerTeam)) {
+                    if (head.x === playerHead.x && head.y === playerHead.y) {
+                        const eCount = e.segments.length;
+                        dropPickupsFromSegments(e.segments, e.id);
+                        waveKills += eCount;
+                        if (canSpawnPlayerDrops) dropPickupsFromSegments(snake, 'player');
                         e.segments = [];
-                        haptic('medium');
-                    } else {
-                        // Equal size - both take damage, neither dies instantly
-                        // Head takes damage if no body cars
-                        if (snake.length === 1) {
-                            snake[0].hp -= 30;
-                        } else {
-                            for (let si = 1; si < snake.length && si < 2; si++) {
-                                snake[si].hp -= 30;
-                            }
-                        }
-                        if (e.segments.length === 1) {
-                            e.segments[0].hp -= 30;
-                        } else {
-                            for (let si = 1; si < e.segments.length && si < 2; si++) {
-                                e.segments[si].hp -= 30;
-                            }
-                        }
+                        deathReason = 'Head-on collision with ' + (e.name || 'enemy');
+                        return true;
                     }
                 }
                 
@@ -4332,36 +4352,33 @@
                 for (const other of enemies) {
                     if (other === e || !other.segments || other.segments.length === 0) continue;
                     if (e.segments.length === 0) break;
+                    if (teamMode && other.team === e.team) continue;
                     const otherHead = other.segments[0];
                     if (head.x === otherHead.x && head.y === otherHead.y) {
-                        const otherLen = other.segments.length;
-                        if (myLen > otherLen) {
-                            for (const seg of other.segments) { addPickup({ x: seg.x*GRID+GRID/2, y: seg.y*GRID+GRID/2, type: GUNS[GUN_NAMES[Math.floor(Math.random()*GUN_NAMES.length)]], isHealth: false, bob: Math.random()*Math.PI*2 }); waveKills++; }
-                            ruleEngine.onOutcome(other.id, 'death');
-                            ruleEngine.analyzeDeathAndGenerateRule(other.id);
-                            ruleEngine.onOutcome(e.id, 'got_kill');
-                            e.recentPoints = (e.recentPoints || 0) + 50; // Big points for kill!
-                            e.lastPointTime = Date.now();
-                            if (e.isMVP) HighlightRecorder.onKill(e.name, other.name); // MVP kill!
-                            other.segments = [];
-                        } else if (myLen < otherLen) {
-                            for (const seg of e.segments) { addPickup({ x: seg.x*GRID+GRID/2, y: seg.y*GRID+GRID/2, type: GUNS[GUN_NAMES[Math.floor(Math.random()*GUN_NAMES.length)]], isHealth: false, bob: Math.random()*Math.PI*2 }); waveKills++; }
+                        const eCount = e.segments.length;
+                        const otherCount = other.segments.length;
+                        dropPickupsFromSegments(e.segments, e.id);
+                        dropPickupsFromSegments(other.segments, other.id);
+                        waveKills += eCount + otherCount;
+                        ruleEngine.onOutcome(e.id, 'death');
+                        ruleEngine.analyzeDeathAndGenerateRule(e.id);
+                        ruleEngine.onOutcome(other.id, 'death');
+                        ruleEngine.analyzeDeathAndGenerateRule(other.id);
+                        e.segments = [];
+                        other.segments = [];
+                        break;
+                    }
+
+                    for (let oi = 1; oi < other.segments.length; oi++) {
+                        const oseg = other.segments[oi];
+                        if (head.x === oseg.x && head.y === oseg.y) {
+                            const eCount = e.segments.length;
+                            dropPickupsFromSegments(e.segments, e.id);
+                            waveKills += eCount;
                             ruleEngine.onOutcome(e.id, 'death');
                             ruleEngine.analyzeDeathAndGenerateRule(e.id);
-                            ruleEngine.onOutcome(other.id, 'got_kill');
-                            other.recentPoints = (other.recentPoints || 0) + 50;
-                            other.lastPointTime = Date.now();
-                            if (other.isMVP) HighlightRecorder.onKill(other.name, e.name); // MVP kill!
                             e.segments = [];
-                        } else {
-                            for (const seg of e.segments) { addPickup({ x: seg.x*GRID+GRID/2, y: seg.y*GRID+GRID/2, type: GUNS[GUN_NAMES[Math.floor(Math.random()*GUN_NAMES.length)]], isHealth: false, bob: Math.random()*Math.PI*2 }); waveKills++; }
-                            for (const seg of other.segments) { addPickup({ x: seg.x*GRID+GRID/2, y: seg.y*GRID+GRID/2, type: GUNS[GUN_NAMES[Math.floor(Math.random()*GUN_NAMES.length)]], isHealth: false, bob: Math.random()*Math.PI*2 }); waveKills++; }
-                            ruleEngine.onOutcome(e.id, 'death');
-                            ruleEngine.analyzeDeathAndGenerateRule(e.id);
-                            ruleEngine.onOutcome(other.id, 'death');
-                            ruleEngine.analyzeDeathAndGenerateRule(other.id);
-                            e.segments = [];
-                            other.segments = [];
+                            break;
                         }
                     }
                 }
@@ -4378,33 +4395,42 @@
                 }
                 
                 // Body collisions with player - limit damage per frame globally
-                for (let si = 0; si < e.segments.length; si++) {
-                    const seg = e.segments[si];
-                    for (let j = 0; j < snake.length; j++) {
-                        const ps = snake[j];
-                        if (seg.x === ps.x && seg.y === ps.y) {
-                            if (si === 0 && j > 0) { seg.hp -= 50; haptic('medium'); }
-                            else if (si > 0 && j === 0) {
-                                seg.hp = 0; // Kill enemy body
-                                // If player has no body cars, head takes damage
-                                if (snake.length === 1 && invincibleTimer <= 0) {
-                                    const dmg = invincibleTimer > -2000 ? e.damage * 0.3 : e.damage;
-                                    snake[0].hp -= dmg;
-                                    haptic('heavy');
-                                }
-                            }
-                            else if (si > 0 && j > 0) { 
-                                seg.hp -= 30; 
-                                // Only damage each player segment once per frame total (not per enemy)
-                                // Reduced damage during grace period
-                                if (invincibleTimer <= 0 && !playerSegmentsDamagedThisFrame.has(j)) { 
-                                    const dmg = invincibleTimer > -2000 ? e.damage * 0.3 : e.damage;
-                                    ps.hp -= dmg; 
-                                    playerSegmentsDamagedThisFrame.add(j);
-                                    haptic('heavy'); 
+                if (!playerInvincible && !(teamMode && e.team === playerTeam)) {
+                    for (let si = 0; si < e.segments.length; si++) {
+                        const seg = e.segments[si];
+                        for (let j = 0; j < snake.length; j++) {
+                            const ps = snake[j];
+                            if (seg.x === ps.x && seg.y === ps.y) {
+                                if (si === 0 && j > 0) {
+                                    // Enemy head hit player body: enemy dies
+                                    const segCount = e.segments.length;
+                                    dropPickupsFromSegments(e.segments, e.id);
+                                    score += segCount * 15;
+                                    waveKills += segCount;
+                                    strategyClassifier.onKill(e.segments.length);
+                                    strategyClassifier.onPlayerKilledEnemy(e.id);
+                                    e.segments = [];
+                                    haptic('medium');
+                                    break;
+                                } else if (si > 0 && j === 0) {
+                                    // Player head hit enemy body: player dies
+                                    if (canSpawnPlayerDrops) dropPickupsFromSegments(snake, 'player');
+                                    deathReason = `Crashed into ${e.name || 'enemy'} body`;
+                                    return true;
+                                } else if (si > 0 && j > 0) {
+                                    seg.hp -= 30;
+                                    // Only damage each player segment once per frame total (not per enemy)
+                                    // Reduced damage during grace period
+                                    if (!playerSegmentsDamagedThisFrame.has(j)) {
+                                        const dmg = invincibleTimer > -2000 ? e.damage * 0.3 : e.damage;
+                                        ps.hp -= dmg;
+                                        playerSegmentsDamagedThisFrame.add(j);
+                                        haptic('heavy');
+                                    }
                                 }
                             }
                         }
+                        if (e.segments.length === 0) break;
                     }
                 }
                 
@@ -4580,7 +4606,8 @@
             if (!isAiming) return;
             let fired = false;
             for (let i = 0; i < snake.length; i++) {
-                const seg = snake[i], type = seg.type;
+                const seg = snake[i];
+                const type = (i === 0 && snake.length > 1) ? (playerGunType || seg.type) : seg.type;
                 if (time - seg.lastFired < type.fireRate) continue;
                 seg.lastFired = time;
                 const cx = seg.x * GRID + GRID/2, cy = seg.y * GRID + GRID/2;
