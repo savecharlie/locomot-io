@@ -803,59 +803,74 @@
             applyEnemyState(stateData) {
                 this._enemyStateCount++;
 
-                // Debug: log first call and periodically
-                if (!this._lastApplyLog || Date.now() - this._lastApplyLog > 2000) {
-                    this._lastApplyLog = Date.now();
-                    const s0 = stateData[0];
-                    const e0 = enemies[0];
-                    console.log(`[MP-APPLY] received=${stateData.length} local=${enemies.length} s0=${s0?.segs?.[0]?.x},${s0?.segs?.[0]?.y} e0=${e0?.segments?.[0]?.x},${e0?.segments?.[0]?.y}`);
+                // If counts don't match, rebuild entirely from state data
+                if (enemies.length !== stateData.length) {
+                    console.log(`[MP] Enemy count mismatch: local=${enemies.length} host=${stateData.length}, rebuilding`);
+                    this.rebuildEnemiesFromState(stateData);
+                    return;
                 }
 
-                // Match by array index, not ID (IDs diverge between host and client)
-
-                // First, update existing enemies
+                // Counts match - update positions in place
                 for (let i = 0; i < stateData.length; i++) {
                     const s = stateData[i];
                     const enemy = enemies[i];
-                    if (enemy && enemy.segments && enemy.segments.length > 0) {
-                        // Update direction
+                    if (enemy && enemy.segments && s.segs) {
                         enemy.dir = s.dir;
                         enemy.nextDir = s.dir;
 
-                        // Update all segment positions
-                        for (let j = 0; j < Math.min(enemy.segments.length, s.segs.length); j++) {
+                        // Rebuild segments to match exactly
+                        while (enemy.segments.length < s.segs.length) {
+                            enemy.segments.push({ x: 0, y: 0, hp: 50, maxHp: 50, type: GUNS.MACHINEGUN, lastFired: 0 });
+                        }
+                        while (enemy.segments.length > s.segs.length) {
+                            enemy.segments.pop();
+                        }
+
+                        // Update all positions
+                        for (let j = 0; j < s.segs.length; j++) {
                             enemy.segments[j].x = s.segs[j].x;
                             enemy.segments[j].y = s.segs[j].y;
                         }
-
-                        // Handle length changes
-                        while (enemy.segments.length < s.len && s.segs[enemy.segments.length]) {
-                            const seg = s.segs[enemy.segments.length];
-                            enemy.segments.push({
-                                x: seg.x, y: seg.y,
-                                hp: 50, maxHp: 50,
-                                type: GUNS.MACHINEGUN, lastFired: 0
-                            });
-                        }
-                        while (enemy.segments.length > s.len) {
-                            enemy.segments.pop();
-                        }
                     }
                 }
+            },
 
-                // If host has more enemies, request a full arena sync
-                if (stateData.length > enemies.length && !this.pendingArenaSync) {
-                    console.log('[MP] Host has more enemies, requesting arena sync');
-                    this.pendingArenaSync = true;
-                    this.send({ type: 'request_arena' });
-                    setTimeout(() => { this.pendingArenaSync = false; }, 5000);
-                }
-
-                // If we have way more enemies than host, trim ours
-                if (enemies.length > stateData.length + 5) {
-                    console.log('[MP] We have too many enemies, trimming to match host');
-                    enemies.length = stateData.length;
-                }
+            // Rebuild enemies array from host state
+            rebuildEnemiesFromState(stateData) {
+                enemies = stateData.map((s, idx) => {
+                    const segments = s.segs.map((seg, i) => ({
+                        x: seg.x,
+                        y: seg.y,
+                        hp: i === 0 ? Infinity : 50,
+                        maxHp: i === 0 ? Infinity : 50,
+                        type: i === 0 ? GUNS.HEAD : GUNS.MACHINEGUN,
+                        lastFired: 0
+                    }));
+                    return {
+                        team: idx % 2 === 0 ? 'blue' : 'red',
+                        name: 'Train',
+                        segments,
+                        dir: s.dir,
+                        nextDir: s.dir,
+                        baseSpeed: 8,
+                        damage: 15,
+                        moveTimer: 0,
+                        lastFired: 0,
+                        fireRate: 1000,
+                        score: 10 * segments.length,
+                        personality: { aggression: 0.5, greed: 0.5, caution: 0.5, neural: false },
+                        color: '#f0f',
+                        targetPos: null,
+                        avoidPos: null,
+                        lastDecision: 0,
+                        decisionInterval: 400,
+                        recentPoints: 0,
+                        lastPointTime: 0,
+                        isMVP: false,
+                        id: idx
+                    };
+                });
+                console.log(`[MP] Rebuilt ${enemies.length} enemies from host state`);
             },
 
             setUsername(name) {
