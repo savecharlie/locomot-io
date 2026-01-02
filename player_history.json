@@ -19,9 +19,9 @@
     {
       "name": "VERA",
       "firstSeen": "2026-01-01T17:12:51.672383",
-      "lastSeen": "2026-01-01T18:57:14.457406",
+      "lastSeen": "2026-01-01T18:57:31.450963",
       "sessions": 3,
-      "totalKills": 1258,
+      "totalKills": 2502,
       "bestScore": 3770
     },
     {
@@ -67,9 +67,9 @@
     {
       "name": "Compy",
       "firstSeen": "2026-01-01T18:47:24.281558",
-      "lastSeen": "2026-01-01T18:48:12.372998",
-      "sessions": 1,
-      "totalKills": 624,
+      "lastSeen": "2026-01-01T18:58:37.103482",
+      "sessions": 2,
+      "totalKills": 843,
       "bestScore": 1250
     }
   ],
@@ -424,6 +424,15 @@
       "maxLength": 14,
       "kills": 301,
       "score": 3770
+    },
+    {
+      "name": "Compy",
+      "id": "c29fbbed-afb1-4050-b99e-8ac03f0e2b3b",
+      "joined": "2026-01-01T18:58:10.575011",
+      "left": "2026-01-01T18:58:37.103465",
+      "maxLength": 6,
+      "kills": 219,
+      "score": 680
     }
   ]
 }
