@@ -686,12 +686,15 @@
                         ctx.strokeRect(seg.x * 12, seg.y * 12, 12, 12);
                     }
 
-                    // Name tag
+                    // Name tag with human emoji
                     const head = player.segments[0];
                     ctx.fillStyle = '#fff';
                     ctx.font = '8px "Press Start 2P"';
                     ctx.textAlign = 'center';
-                    ctx.fillText(player.name, head.x * 12 + 6, head.y * 12 - 5);
+                    ctx.shadowColor = '#000';
+                    ctx.shadowBlur = 3;
+                    ctx.fillText(`👤 ${player.name}`, head.x * 12 + 6, head.y * 12 - 5);
+                    ctx.shadowBlur = 0;
                 }
             },
 
@@ -4200,7 +4203,7 @@
             // Update smoke particles
             updateSmoke();
 
-            // Draw player name tag above head
+            // Draw player name tag above head with human emoji
             if (snake.length > 0 && Multiplayer.username) {
                 const head = snake[0];
                 ctx.save();
@@ -4209,7 +4212,7 @@
                 ctx.textAlign = 'center';
                 ctx.shadowColor = '#000';
                 ctx.shadowBlur = 3;
-                ctx.fillText(Multiplayer.username, head.x * GRID + GRID/2, head.y * GRID - 8);
+                ctx.fillText(`👤 ${Multiplayer.username}`, head.x * GRID + GRID/2, head.y * GRID - 8);
                 ctx.restore();
             }
         }
@@ -4408,14 +4411,19 @@
                     }
                 }
 
-                // Length indicator
-                if (e.segments.length >= 3) {
-                    const head = e.segments[0];
-                    ctx.fillStyle = '#fff';
-                    ctx.font = '8px monospace';
-                    ctx.textAlign = 'center';
-                    ctx.fillText(e.segments.length.toString(), head.x * GRID + GRID/2, head.y * GRID - 12);
-                }
+                // Name + length above head
+                const head = e.segments[0];
+                const hx = head.x * GRID + GRID/2;
+                const hy = head.y * GRID - 12;
+                ctx.save();
+                ctx.fillStyle = e.color || '#fff';
+                ctx.font = '6px "Press Start 2P"';
+                ctx.textAlign = 'center';
+                ctx.shadowColor = '#000';
+                ctx.shadowBlur = 3;
+                const displayName = `🤖 ${e.name || 'Train'}`;
+                ctx.fillText(displayName, hx, hy);
+                ctx.restore();
 
                 // Danger indicator - skull for enemies that killed player
                 const enemyRep = reputationSystem.enemies.get(e.id);
