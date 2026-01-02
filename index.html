@@ -3014,11 +3014,12 @@
                             const p = pickups[pi];
                             const px = Math.floor(p.x / GRID), py = Math.floor(p.y / GRID);
                             if (head.x === px && head.y === py && !p.isHealth) {
-                                const tail = e.segments[e.segments.length - 1];
-                                e.segments.push({ 
-                                    x: tail.x, y: tail.y, 
-                                    hp: 20 + wave * 5, maxHp: 20 + wave * 5, 
-                                    type: p.type, lastFired: 0 
+                                // Use previous tail position to avoid self-collision for smols
+                                const tailPos = prevPositions[prevPositions.length - 1];
+                                e.segments.push({
+                                    x: tailPos.x, y: tailPos.y,
+                                    hp: 20 + wave * 5, maxHp: 20 + wave * 5,
+                                    type: p.type, lastFired: 0
                                 });
                                 pickups.splice(pi, 1);
                                 // Track recent activity for MVP
@@ -3028,7 +3029,7 @@
                         }
                     }
                 }
-                
+
                 // Spawn new pickups occasionally
                 if (t % 60 === 0 && pickups.length < 20) {
                     const px = Math.floor(Math.random() * WORLD_COLS) * GRID + GRID/2;
@@ -3999,8 +4000,9 @@
                         const px = Math.floor(p.x / GRID), py = Math.floor(p.y / GRID);
                         if (head.x === px && head.y === py) {
                             if (!p.isHealth) {
-                                const tail = e.segments[e.segments.length - 1];
-                                e.segments.push({ x: tail.x, y: tail.y, hp: 20 + wave * 5, maxHp: 20 + wave * 5, type: p.type, lastFired: 0 });
+                                // Use previous tail position (before move) to avoid self-collision for smols
+                                const tailPos = prevPositions[prevPositions.length - 1];
+                                e.segments.push({ x: tailPos.x, y: tailPos.y, hp: 20 + wave * 5, maxHp: 20 + wave * 5, type: p.type, lastFired: 0 });
                             }
                             pickups.splice(pi, 1);
                             ruleEngine.onOutcome(e.id, 'ate_food'); // Credit rules for eating
