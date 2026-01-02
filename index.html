@@ -786,15 +786,16 @@
                 if (now - this.lastStateBroadcast < this.STATE_BROADCAST_INTERVAL) return;
                 this.lastStateBroadcast = now;
 
-                // Compact enemy state - just positions and essential data
+                // Send FULL enemy data so clients can render exactly what host sees
                 const enemyState = enemies.map(e => ({
-                    id: e.id,
-                    x: e.segments[0]?.x,
-                    y: e.segments[0]?.y,
+                    name: e.name,
+                    color: e.color,
+                    team: e.team,
+                    score: e.score,
                     dir: { x: e.dir.x, y: e.dir.y },
-                    len: e.segments.length,
-                    segs: e.segments.map(s => ({ x: s.x, y: s.y }))
-                })).filter(e => e.x !== undefined);
+                    segs: e.segments.map(s => ({ x: s.x, y: s.y, hp: s.hp, type: s.type?.name || 'MACHINEGUN' })),
+                    isMVP: e.isMVP
+                })).filter(e => e.segs.length > 0);
 
                 this.send({ type: 'enemy_state', enemies: enemyState });
             },
@@ -810,13 +811,19 @@
                     return;
                 }
 
-                // Counts match - update positions in place
+                // Counts match - update in place with FULL data
                 for (let i = 0; i < stateData.length; i++) {
                     const s = stateData[i];
                     const enemy = enemies[i];
-                    if (enemy && enemy.segments && s.segs) {
+                    if (enemy && s.segs) {
+                        // Sync all properties
+                        enemy.name = s.name || enemy.name;
+                        enemy.color = s.color || enemy.color;
+                        enemy.team = s.team || enemy.team;
+                        enemy.score = s.score || enemy.score;
                         enemy.dir = s.dir;
                         enemy.nextDir = s.dir;
+                        enemy.isMVP = s.isMVP || false;
 
                         // Rebuild segments to match exactly
                         while (enemy.segments.length < s.segs.length) {
@@ -826,29 +833,30 @@
                             enemy.segments.pop();
                         }
 
-                        // Update all positions
+                        // Update all segment data
                         for (let j = 0; j < s.segs.length; j++) {
                             enemy.segments[j].x = s.segs[j].x;
                             enemy.segments[j].y = s.segs[j].y;
+                            enemy.segments[j].hp = s.segs[j].hp || enemy.segments[j].hp;
                         }
                     }
                 }
             },
 
-            // Rebuild enemies array from host state
+            // Rebuild enemies array from host state - uses FULL enemy data from host
             rebuildEnemiesFromState(stateData) {
                 enemies = stateData.map((s, idx) => {
                     const segments = s.segs.map((seg, i) => ({
                         x: seg.x,
                         y: seg.y,
-                        hp: i === 0 ? Infinity : 50,
+                        hp: seg.hp || (i === 0 ? Infinity : 50),
                         maxHp: i === 0 ? Infinity : 50,
-                        type: i === 0 ? GUNS.HEAD : GUNS.MACHINEGUN,
+                        type: GUNS[seg.type] || (i === 0 ? GUNS.HEAD : GUNS.MACHINEGUN),
                         lastFired: 0
                     }));
                     return {
-                        team: idx % 2 === 0 ? 'blue' : 'red',
-                        name: 'Train',
+                        team: s.team || (idx % 2 === 0 ? 'blue' : 'red'),
+                        name: s.name || 'Train',
                         segments,
                         dir: s.dir,
                         nextDir: s.dir,
@@ -857,20 +865,19 @@
                         moveTimer: 0,
                         lastFired: 0,
                         fireRate: 1000,
-                        score: 10 * segments.length,
+                        score: s.score || 10 * segments.length,
                         personality: { aggression: 0.5, greed: 0.5, caution: 0.5, neural: false },
-                        color: '#f0f',
+                        color: s.color || '#f0f',
                         targetPos: null,
                         avoidPos: null,
                         lastDecision: 0,
                         decisionInterval: 400,
                         recentPoints: 0,
                         lastPointTime: 0,
-                        isMVP: false,
+                        isMVP: s.isMVP || false,
                         id: idx
                     };
                 });
-                console.log(`[MP] Rebuilt ${enemies.length} enemies from host state`);
             },
 
             setUsername(name) {
