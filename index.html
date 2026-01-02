@@ -1897,13 +1897,11 @@
             ctx.lineTo(-5*s, -4*s);
             ctx.stroke();
 
-            // WHEELS
-            const wheelOffset = (frame % 4) * (Math.PI / 2);
+            // WHEELS - chunky pixel squares
             for (let wy of [-3, 3]) {
                 ctx.fillStyle = TRAIN.dark_metal;
-                ctx.beginPath();
-                ctx.arc(0, wy*s, 2*s, 0, Math.PI * 2);
-                ctx.fill();
+                const wheelSize = 4*s;
+                ctx.fillRect(-wheelSize/2, wy*s - wheelSize/2, wheelSize, wheelSize);
             }
 
             ctx.restore();
@@ -5164,22 +5162,19 @@
             // Draw smoke behind everything
             drawSmoke(ctx);
 
-            // Invincibility shield effect
+            // Invincibility shield effect - chunky pixel squares
             if (invincibleTimer > 0) {
                 const head = snake[0];
                 const hx = head.x * GRID + GRID/2, hy = head.y * GRID + GRID/2;
-                const pulseSize = 25 + Math.sin(Date.now() / 100) * 5;
+                const pulseSize = Math.floor(50 + Math.sin(Date.now() / 100) * 10);
                 const alpha = 0.3 + Math.sin(Date.now() / 150) * 0.2;
                 ctx.strokeStyle = `rgba(100, 200, 255, ${alpha})`;
-                ctx.lineWidth = 3;
-                ctx.beginPath();
-                ctx.arc(hx, hy, pulseSize, 0, Math.PI * 2);
-                ctx.stroke();
+                ctx.lineWidth = 4;
+                ctx.strokeRect(Math.floor(hx - pulseSize/2), Math.floor(hy - pulseSize/2), pulseSize, pulseSize);
                 ctx.strokeStyle = `rgba(255, 255, 255, ${alpha * 0.5})`;
                 ctx.lineWidth = 2;
-                ctx.beginPath();
-                ctx.arc(hx, hy, pulseSize - 5, 0, Math.PI * 2);
-                ctx.stroke();
+                const innerSize = pulseSize - 10;
+                ctx.strokeRect(Math.floor(hx - innerSize/2), Math.floor(hy - innerSize/2), innerSize, innerSize);
             }
 
             // Get direction for each segment (use next segment or dir for head)
@@ -5347,13 +5342,11 @@
             ctx.lineWidth = 2;
             ctx.strokeRect(-s*1.1, -s, s*2.2, s*2);
 
-            // Neural glow ring
+            // Neural glow - chunky pixel square
             if (isNeural) {
                 ctx.strokeStyle = '#f0f';
                 ctx.lineWidth = 3;
-                ctx.beginPath();
-                ctx.arc(0, 0, s*1.3, 0, Math.PI * 2);
-                ctx.stroke();
+                ctx.strokeRect(-s*1.3, -s*1.3, s*2.6, s*2.6);
             }
 
             // Wheels
@@ -5521,8 +5514,17 @@
         }
         
         function drawProjectiles() {
-            for (const p of projectiles) { ctx.shadowColor = p.color; ctx.shadowBlur = 8; ctx.fillStyle = p.color; ctx.beginPath(); ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2); ctx.fill(); }
-            for (const p of enemyProjectiles) { ctx.shadowColor = p.color; ctx.shadowBlur = 10; ctx.fillStyle = p.color; ctx.beginPath(); ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2); ctx.fill(); }
+            // Chunky pixel bullets
+            for (const p of projectiles) {
+                ctx.shadowColor = p.color; ctx.shadowBlur = 8; ctx.fillStyle = p.color;
+                const s = p.size * 2;
+                ctx.fillRect(Math.floor(p.x - s/2), Math.floor(p.y - s/2), s, s);
+            }
+            for (const p of enemyProjectiles) {
+                ctx.shadowColor = p.color; ctx.shadowBlur = 10; ctx.fillStyle = p.color;
+                const s = p.size * 2;
+                ctx.fillRect(Math.floor(p.x - s/2), Math.floor(p.y - s/2), s, s);
+            }
             ctx.shadowBlur = 0;
         }
         
@@ -5538,23 +5540,19 @@
                 ctx.shadowColor = p.type.color; ctx.shadowBlur = glowBlur;
 
                 if (p.isPowerup) {
-                    // Power-ups: big pulsing icon with glow
+                    // Power-ups: chunky pixel box with glow
                     const pulse = 1 + Math.sin(time / 100) * 0.2;
-                    const radius = 14 * pulse;
-                    
-                    // Outer glow ring
+                    const size = Math.floor(28 * pulse);
+
+                    // Outer glow border
                     ctx.strokeStyle = p.type.color + '44';
                     ctx.lineWidth = 4;
-                    ctx.beginPath();
-                    ctx.arc(x, y, radius + 8, 0, Math.PI * 2);
-                    ctx.stroke();
-                    
-                    // Inner filled circle
+                    ctx.strokeRect(Math.floor(x - size/2 - 4), Math.floor(y - size/2 - 4), size + 8, size + 8);
+
+                    // Inner filled square
                     ctx.fillStyle = p.type.color;
-                    ctx.beginPath();
-                    ctx.arc(x, y, radius, 0, Math.PI * 2);
-                    ctx.fill();
-                    
+                    ctx.fillRect(Math.floor(x - size/2), Math.floor(y - size/2), size, size);
+
                     // Icon text
                     ctx.fillStyle = '#000';
                     ctx.font = '12px "Press Start 2P"';
@@ -5568,18 +5566,16 @@
                     ctx.fillRect(x - 6, y - 2, 12, 4);
                     ctx.globalAlpha = 1;
                 } else {
-                    // Gun pickups - dull if own recent drop
+                    // Gun pickups - chunky pixel squares
                     const strokeAlpha = isOwnRecentDrop ? '22' : '66';
                     ctx.globalAlpha = isOwnRecentDrop ? 0.3 : 1;
+                    const outerSize = Math.floor(16 + Math.sin(time / 200 + p.bob) * 4);
+                    const innerSize = 10;
                     ctx.strokeStyle = p.type.color + strokeAlpha;
                     ctx.lineWidth = 2;
-                    ctx.beginPath();
-                    ctx.arc(x, y, 8 + Math.sin(time / 200 + p.bob) * 2, 0, Math.PI * 2);
-                    ctx.stroke();
+                    ctx.strokeRect(Math.floor(x - outerSize/2), Math.floor(y - outerSize/2), outerSize, outerSize);
                     ctx.fillStyle = p.type.color;
-                    ctx.beginPath();
-                    ctx.arc(x, y, 5, 0, Math.PI * 2);
-                    ctx.fill();
+                    ctx.fillRect(Math.floor(x - innerSize/2), Math.floor(y - innerSize/2), innerSize, innerSize);
                     ctx.globalAlpha = 1;
                 }
                 ctx.shadowBlur = 0;
@@ -5589,8 +5585,11 @@
         function drawParticles() {
             for (const p of particles) {
                 if (p.isAoe) {
+                    // Chunky pixel AOE - expanding square
                     const alpha = Math.floor((p.life / 15) * 200).toString(16).padStart(2, '0');
-                    ctx.strokeStyle = p.color + alpha; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(p.x, p.y, p.radius, 0, Math.PI * 2); ctx.stroke();
+                    const size = p.radius * 2;
+                    ctx.strokeStyle = p.color + alpha; ctx.lineWidth = 4;
+                    ctx.strokeRect(Math.floor(p.x - size/2), Math.floor(p.y - size/2), size, size);
                 } else if (p.isPixelSpark) {
                     // H6 8-bit Comet pixel sparks
                     const sz = p.size || 3;
