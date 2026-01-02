@@ -208,6 +208,8 @@ export default class LocomotServer implements Party.Server {
       }));
     }
 
+    this.ensureHost();
+
     if (toRemove.length > 0) {
       console.log(`Cleaned up ${toRemove.length} stale player(s). Remaining: ${this.state.players.size}`);
     }
@@ -222,6 +224,13 @@ export default class LocomotServer implements Party.Server {
         hostId: newHostId
       }));
     }
+  }
+
+  ensureHost() {
+    if (this.state.hostId && this.state.players.has(this.state.hostId)) return;
+    const remainingIds = Array.from(this.state.players.keys()).sort();
+    const nextHost = remainingIds.length > 0 ? remainingIds[0] : null;
+    this.assignHost(nextHost);
   }
 
   generatePickups(count: number) {
@@ -278,9 +287,7 @@ export default class LocomotServer implements Party.Server {
     };
 
     this.state.players.set(conn.id, player);
-    if (!this.state.hostId) {
-      this.assignHost(conn.id);
-    }
+    this.ensureHost();
 
     // Extract geo info from Cloudflare headers
     const cf = (ctx.request as any).cf;
@@ -323,11 +330,7 @@ export default class LocomotServer implements Party.Server {
       playerId: conn.id
     }));
 
-    if (this.state.hostId === conn.id) {
-      const remainingIds = Array.from(this.state.players.keys()).sort();
-      const nextHost = remainingIds.length > 0 ? remainingIds[0] : null;
-      this.assignHost(nextHost);
-    }
+    this.ensureHost();
 
     console.log(`Player ${conn.id} left. Total: ${this.state.players.size}`);
   }
@@ -413,6 +416,7 @@ export default class LocomotServer implements Party.Server {
 
         case 'request_arena':
           // New player requesting arena state - broadcast to all others
+          this.ensureHost();
           this.room.broadcast(JSON.stringify({
             type: 'arena_request',
             fromId: sender.id
@@ -422,6 +426,7 @@ export default class LocomotServer implements Party.Server {
 
         case 'enemy_state':
           // Host broadcasting enemy state + pickups - relay to all other clients
+          player.lastUpdate = Date.now(); // Treat host state broadcast as heartbeat
           this.room.broadcast(JSON.stringify({
             type: 'enemy_state',
             enemies: data.enemies,
