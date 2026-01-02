@@ -576,8 +576,9 @@
                         this.otherPlayers.set(data.player.id, data.player);
                         this.playerLastSeen.set(data.player.id, Date.now());
                         this.showStatus(`${data.player.name} joined!`);
-                        // If we're playing/spectating, send them our arena state
-                        if (gameState === 'playing' || gameState === 'dead') {
+                        // Send arena state if we have enemies (any game state)
+                        if (enemies.length > 0) {
+                            console.log('[MP] Sending arena to new player');
                             this.sendArenaSync(data.player.id);
                         }
                         break;
@@ -594,8 +595,9 @@
 
                     case 'arena_request':
                         // Another player is requesting our arena state
-                        console.log('[MP] Arena request from', data.fromId);
+                        console.log('[MP] Arena request from', data.fromId, '- we have', enemies.length, 'enemies');
                         if (enemies.length > 0) {
+                            console.log('[MP] Responding with arena sync');
                             this.sendArenaSync(data.fromId);
                         }
                         break;
