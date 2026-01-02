@@ -724,6 +724,7 @@
                     case 'hit':
                         // We got hit by another player!
                         if (data.targetId === this.playerId) {
+                            if (invincibleTimer > 0) break;
                             // Damage a segment - head if no body cars, otherwise random body car
                             const segIdx = snake.length === 1 ? 0 : 1 + Math.floor(Math.random() * (snake.length - 1));
                             if (snake[segIdx]) {
@@ -794,7 +795,8 @@
                     x, y,
                     segments: segments.map(s => ({ x: s.x, y: s.y })),
                     score,
-                    color: playerGunType?.color || '#f80' // "All Same Gun" - sync gun color
+                    color: playerGunType?.color || '#f80', // "All Same Gun" - sync gun color
+                    invincibleUntil: invincibleTimer > 0 ? Date.now() + invincibleTimer : 0
                 });
             },
 
@@ -915,8 +917,8 @@
                         segments.push({
                             x: e.x - i,
                             y: e.y,
-                            hp: i === 0 ? Infinity : 50,
-                            maxHp: i === 0 ? Infinity : 50,
+                            hp: i === 0 ? HEAD_HP_STANDARD : 50,
+                            maxHp: i === 0 ? HEAD_HP_STANDARD : 50,
                             type: i === 0 ? GUNS.HEAD : GUNS.MACHINEGUN,
                             lastFired: 0
                         });
@@ -1054,8 +1056,8 @@
                             name: s.name || 'Train',
                             segments: s.segs.map((seg, i) => ({
                                 x: seg.x, y: seg.y,
-                                hp: seg.hp || (i === 0 ? Infinity : 50),
-                                maxHp: i === 0 ? Infinity : 50,
+                                hp: seg.hp || (i === 0 ? HEAD_HP_STANDARD : 50),
+                                maxHp: i === 0 ? HEAD_HP_STANDARD : 50,
                                 type: GUNS[seg.type] || (i === 0 ? GUNS.HEAD : GUNS.MACHINEGUN),
                                 lastFired: 0
                             })),
@@ -1990,6 +1992,7 @@
         let speedTimer = 0; // Speed boost duration
         let magnetTimer = 0; // Magnet pull duration
         const BASE_MOVE_INTERVAL = 80; // Normal move speed (ms)
+        const HEAD_HP_STANDARD = 1500; // 5x body HP (300)
         
         // Power-up types
         const POWERUPS = {
@@ -3045,8 +3048,8 @@
             for (let i = 0; i < length; i++) {
                 segments.push({
                     x: curX, y: curY,
-                    hp: i === 0 ? Infinity : baseHp,
-                    maxHp: i === 0 ? Infinity : baseHp,
+                    hp: i === 0 ? HEAD_HP_STANDARD : baseHp,
+                    maxHp: i === 0 ? HEAD_HP_STANDARD : baseHp,
                     type: i === 0 ? GUNS.HEAD : initialGunType,
                     lastFired: 0
                 });
@@ -3298,11 +3301,10 @@
             } while (true);
             
             // Player starts small but tough - head is 5x tougher than body cars
-            const HEAD_HP = 1500; // 5x body HP (300)
             // "All Same Gun" - start with all MACHINEGUN
             playerGunType = GUNS.MACHINEGUN;
             snake = [
-                { x: spawnX, y: spawnY, type: GUNS.HEAD, hp: HEAD_HP, maxHp: HEAD_HP, lastFired: 0 },
+                { x: spawnX, y: spawnY, type: GUNS.HEAD, hp: HEAD_HP_STANDARD, maxHp: HEAD_HP_STANDARD, lastFired: 0 },
                 { x: spawnX - 1, y: spawnY, type: GUNS.MACHINEGUN, hp: 300, maxHp: 300, lastFired: 0 },
                 { x: spawnX - 2, y: spawnY, type: GUNS.MACHINEGUN, hp: 300, maxHp: 300, lastFired: 0 },
                 { x: spawnX - 3, y: spawnY, type: GUNS.MACHINEGUN, hp: 300, maxHp: 300, lastFired: 0 }
@@ -3461,11 +3463,10 @@
             } while (true);
 
             // Fresh start with new train - head is 5x tougher
-            const HEAD_HP_RESPAWN = 1500;
             // "All Same Gun" - respawn with all MACHINEGUN
             playerGunType = GUNS.MACHINEGUN;
             snake = [
-                { x: spawnX, y: spawnY, type: GUNS.HEAD, hp: HEAD_HP_RESPAWN, maxHp: HEAD_HP_RESPAWN, lastFired: 0 },
+                { x: spawnX, y: spawnY, type: GUNS.HEAD, hp: HEAD_HP_STANDARD, maxHp: HEAD_HP_STANDARD, lastFired: 0 },
                 { x: spawnX - 1, y: spawnY, type: GUNS.MACHINEGUN, hp: 300, maxHp: 300, lastFired: 0 },
                 { x: spawnX - 2, y: spawnY, type: GUNS.MACHINEGUN, hp: 300, maxHp: 300, lastFired: 0 },
                 { x: spawnX - 3, y: spawnY, type: GUNS.MACHINEGUN, hp: 300, maxHp: 300, lastFired: 0 }
@@ -3517,7 +3518,6 @@
             } while (true);
 
             // Initial player snake - head is 5x tougher
-            const HEAD_HP_INIT = 1500;
             score = 0; wave = 3;
             maxLength = 4; bestRank = 999;
             invincibleTimer = 10000; // 10 seconds spawn protection
@@ -3530,7 +3530,7 @@
             // "All Same Gun" - start with all MACHINEGUN
             playerGunType = GUNS.MACHINEGUN;
             snake = [
-                { x: spawnX, y: spawnY, type: GUNS.HEAD, hp: HEAD_HP_INIT, maxHp: HEAD_HP_INIT, lastFired: 0 },
+                { x: spawnX, y: spawnY, type: GUNS.HEAD, hp: HEAD_HP_STANDARD, maxHp: HEAD_HP_STANDARD, lastFired: 0 },
                 { x: spawnX - 1, y: spawnY, type: GUNS.MACHINEGUN, hp: 300, maxHp: 300, lastFired: 0 },
                 { x: spawnX - 2, y: spawnY, type: GUNS.MACHINEGUN, hp: 300, maxHp: 300, lastFired: 0 },
                 { x: spawnX - 3, y: spawnY, type: GUNS.MACHINEGUN, hp: 300, maxHp: 300, lastFired: 0 }
@@ -3612,8 +3612,8 @@
                 const segY = (y - startDir.y * i + WORLD_ROWS) % WORLD_ROWS;
                 segments.push({
                     x: segX, y: segY,
-                    hp: i === 0 ? Infinity : baseHp,
-                    maxHp: i === 0 ? Infinity : baseHp,
+                    hp: i === 0 ? HEAD_HP_STANDARD : baseHp,
+                    maxHp: i === 0 ? HEAD_HP_STANDARD : baseHp,
                     type: i === 0 ? GUNS.HEAD : initialGunType, lastFired: 0
                 });
             }
@@ -3843,6 +3843,8 @@
                     const canSpawnPlayerDrops = Multiplayer.isHost;
                     for (const [playerId, otherPlayer] of Multiplayer.otherPlayers) {
                         if (!otherPlayer.segments || otherPlayer.segments.length === 0) continue;
+                        const otherInvincible = otherPlayer.invincibleUntil && Date.now() < otherPlayer.invincibleUntil;
+                        if (otherInvincible) continue;
 
                         // Check head vs other player's body (with 1-tile tolerance for lag)
                         for (let i = 0; i < otherPlayer.segments.length; i++) {
@@ -4286,7 +4288,9 @@
                                 return type.damage * Math.max(0.1, falloff); // min 10% damage
                             };
                             if (invincibleTimer <= 0) {
-                                for (const ps of snake) {
+                                for (let psi = 0; psi < snake.length; psi++) {
+                                    if (psi === 0 && snake.length > 1) continue;
+                                    const ps = snake[psi];
                                     const psx = ps.x * GRID + GRID/2, psy = ps.y * GRID + GRID/2;
                                     const dist = Math.sqrt((psx - sx)**2 + (psy - sy)**2);
                                     if (dist < type.range) ps.hp -= calcAoeDamage(dist);
@@ -4294,7 +4298,9 @@
                             }
                             for (const other of enemies) {
                                 if (other === e || !other.segments) continue;
-                                for (const oseg of other.segments) {
+                                for (let osi = 0; osi < other.segments.length; osi++) {
+                                    if (osi === 0 && other.segments.length > 1) continue;
+                                    const oseg = other.segments[osi];
                                     const osx = oseg.x * GRID + GRID/2, osy = oseg.y * GRID + GRID/2;
                                     const dist = Math.sqrt((osx - sx)**2 + (osy - sy)**2);
                                     if (dist < type.range) oseg.hp -= calcAoeDamage(dist);
@@ -4492,18 +4498,21 @@
                 p.x += p.vx * dt * 0.2; p.y += p.vy * dt * 0.2; p.life -= dt;
                 
                 // Check hit on player (skip if invincible, same team, or reduced damage during grace)
-                if (!(teamMode && p.owner && p.owner.team === playerTeam))
-                if (invincibleTimer <= 0) {
-                    for (const seg of snake) {
-                        const sx = seg.x * GRID + GRID/2, sy = seg.y * GRID + GRID/2;
-                        const dist = Math.sqrt((p.x - sx)**2 + (p.y - sy)**2);
-                        if (dist < p.size + GRID/2) {
-                            // Reduced damage during 2 second grace period
-                            const dmg = invincibleTimer > -2000 ? p.damage * 0.3 : p.damage;
-                            seg.hp -= dmg; p.life = 0; haptic('medium');
-                            SpawnDirector.onCombat(0, dmg); // Player took damage
-                            particles.push({ x: p.x, y: p.y, vx: 0, vy: 0, life: 10, color: '#f00' });
-                            break;
+                if (!(teamMode && p.owner && p.owner.team === playerTeam)) {
+                    if (invincibleTimer <= 0) {
+                        for (let si = 0; si < snake.length; si++) {
+                            if (si === 0 && snake.length > 1) continue;
+                            const seg = snake[si];
+                            const sx = seg.x * GRID + GRID/2, sy = seg.y * GRID + GRID/2;
+                            const dist = Math.sqrt((p.x - sx)**2 + (p.y - sy)**2);
+                            if (dist < p.size + GRID/2) {
+                                // Reduced damage during 2 second grace period
+                                const dmg = invincibleTimer > -2000 ? p.damage * 0.3 : p.damage;
+                                seg.hp -= dmg; p.life = 0; haptic('medium');
+                                SpawnDirector.onCombat(0, dmg); // Player took damage
+                                particles.push({ x: p.x, y: p.y, vx: 0, vy: 0, life: 10, color: '#f00' });
+                                break;
+                            }
                         }
                     }
                 }
@@ -4513,7 +4522,9 @@
                     for (const e of enemies) {
                         if (e === p.owner || !e.segments) continue;
                         if (teamMode && p.owner && e.team === p.owner.team) continue; // Same team
-                        for (const seg of e.segments) {
+                        for (let si = 0; si < e.segments.length; si++) {
+                            if (si === 0 && e.segments.length > 1) continue;
+                            const seg = e.segments[si];
                             const sx = seg.x * GRID + GRID/2, sy = seg.y * GRID + GRID/2;
                             const dist = Math.sqrt((p.x - sx)**2 + (p.y - sy)**2);
                             if (dist < p.size + GRID/2) {
@@ -4540,6 +4551,7 @@
                             segments: op.segments.map(s => ({ x: s.x, y: s.y, hp: 999, maxHp: 999 })),
                             color: op.color,
                             isPlayer: true,
+                            invincibleUntil: op.invincibleUntil || 0,
                             team: teamMode ? "blue" : null, // All human players on blue in team mode
                             playerId: playerId
                         });
@@ -4556,10 +4568,15 @@
                     // Skip same team in team mode
                     if (teamMode && e.team === playerTeam) continue;
                     if (!e.segments) continue;
-                    for (const seg of e.segments) {
+                    for (let si = 0; si < e.segments.length; si++) {
+                        if (si === 0 && e.segments.length > 1) continue;
+                        const seg = e.segments[si];
                         const sx = seg.x * GRID + GRID/2, sy = seg.y * GRID + GRID/2;
                         const dist = Math.sqrt((p.x - sx)**2 + (p.y - sy)**2);
                         if (dist < GRID/2 + p.size) {
+                            if (e.isPlayer && e.invincibleUntil && Date.now() < e.invincibleUntil) {
+                                continue;
+                            }
                             p.life = 0;
                             particles.push({ x: p.x, y: p.y, vx: (Math.random()-0.5)*2, vy: (Math.random()-0.5)*2, life: 10, color: e.color || '#fff' });
                             
@@ -4600,7 +4617,9 @@
                         return type.damage * Math.max(0.1, falloff); // min 10% damage
                     };
                     for (const e of enemies) {
-                        for (const seg of e.segments) {
+                        for (let si = 0; si < e.segments.length; si++) {
+                            if (si === 0 && e.segments.length > 1) continue;
+                            const seg = e.segments[si];
                             const sx = seg.x * GRID + GRID/2, sy = seg.y * GRID + GRID/2;
                             const dist = Math.sqrt((sx - cx)**2 + (sy - cy)**2);
                             if (dist < type.range) {

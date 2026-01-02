@@ -19,6 +19,7 @@ interface Player {
   segments: { x: number; y: number }[];
   color: string;
   score: number;
+  invincibleUntil: number;
   lastUpdate: number;
 }
 
@@ -283,6 +284,7 @@ export default class LocomotServer implements Party.Server {
       ],
       color,
       score: 0,
+      invincibleUntil: 0,
       lastUpdate: Date.now()
     };
 
@@ -355,6 +357,9 @@ export default class LocomotServer implements Party.Server {
           player.segments = data.segments;
           player.score = data.score;
           if (data.color) player.color = data.color; // "All Same Gun" - sync gun color
+          if (typeof data.invincibleUntil === 'number') {
+            player.invincibleUntil = data.invincibleUntil;
+          }
           player.lastUpdate = Date.now();
           break;
 
