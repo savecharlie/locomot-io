@@ -320,7 +320,7 @@
                     </a>
                 </div>
                 <button id="submitIdeaBtn" style="font-family: 'Press Start 2P'; font-size: 10px; padding: 12px 20px; background: linear-gradient(180deg, #f90, #d70); color: #fff; border: none; border-radius: 6px; margin-top: 12px; cursor: pointer; border: 1px solid #fa0;">
-                    💡 SUBMIT IDEA
+                    💡 SUGGESTION
                 </button>
             </div>
 
@@ -1817,15 +1817,15 @@
         }
         setTimeout(updateInviteLink, 100);
 
-        // === IDEA SUBMISSION ===
+        // === SUGGESTION SUBMISSION ===
         document.getElementById('submitIdeaBtn')?.addEventListener('click', () => {
-            const idea = prompt("Got an idea for LOCOMOT.IO? Share it!");
-            if (idea && idea.trim()) {
+            const suggestion = prompt("Got a suggestion for LOCOMOT.IO? Share it!");
+            if (suggestion && suggestion.trim()) {
                 fetch("https://formsubmit.co/ajax/savecharlie@gmail.com", {
                     method: "POST",
                     headers: { "Content-Type": "application/json", "Accept": "application/json" },
-                    body: JSON.stringify({ message: idea, _subject: "LOCOMOT.IO Idea" })
-                }).then(() => alert("Thanks! Idea sent 💡")).catch(() => alert("Failed to send - try again"));
+                    body: JSON.stringify({ message: suggestion, _subject: "LOCOMOT.IO Suggestion" })
+                }).then(() => alert("Thanks! Suggestion sent 💡")).catch(() => alert("Failed to send - try again"));
             }
         });
 
