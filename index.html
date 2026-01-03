@@ -430,32 +430,102 @@
         const neuralBrainTeam = new NeuralNetwork(BRAIN_TEAM);
 
         // Genome registry - stores player-trained behavioral brains
+        const GENOME_SERVER = 'https://locomot-io.savecharlie.partykit.dev/party/collective';
         const genomeRegistry = {
             brains: new Map(),  // genome_id -> NeuralNetwork
             loading: new Set(), // Currently loading genomes
+            manifest: null,     // Cached manifest
+            activeGenomes: [],  // List of active genome IDs
 
-            async loadGenome(genomeId, url) {
+            async fetchManifest() {
+                try {
+                    const response = await fetch(GENOME_SERVER, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ type: 'get_genome_manifest' })
+                    });
+                    this.manifest = await response.json();
+                    this.activeGenomes = this.manifest.genomes
+                        .filter(g => g.active && g.id !== 'ffa' && g.id !== 'team')
+                        .map(g => g.id);
+                    console.log('[GenomeRegistry] Manifest loaded:', this.manifest.genomes.length, 'genomes');
+                    return this.manifest;
+                } catch (e) {
+                    console.error('[GenomeRegistry] Failed to fetch manifest:', e);
+                    return null;
+                }
+            },
+
+            async loadGenome(genomeId, url = null) {
                 if (this.brains.has(genomeId) || this.loading.has(genomeId)) return;
                 this.loading.add(genomeId);
                 try {
-                    const response = await fetch(url);
-                    const data = await response.json();
-                    this.brains.set(genomeId, new NeuralNetwork(data));
-                    console.log(`[GenomeRegistry] Loaded genome: ${genomeId}`);
+                    let data;
+                    if (url) {
+                        // Load from local file
+                        const response = await fetch(url);
+                        data = await response.json();
+                    } else {
+                        // Load from server
+                        const response = await fetch(GENOME_SERVER, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ type: 'get_genome', id: genomeId })
+                        });
+                        data = await response.json();
+                    }
+                    if (data && data['net.0.weight']) {
+                        this.brains.set(genomeId, new NeuralNetwork(data));
+                        console.log('[GenomeRegistry] Loaded genome:', genomeId);
+                    }
                 } catch (e) {
-                    console.error(`[GenomeRegistry] Failed to load ${genomeId}:`, e);
+                    console.error('[GenomeRegistry] Failed to load', genomeId, ':', e);
                 } finally {
                     this.loading.delete(genomeId);
                 }
             },
 
+            async loadActiveGenomes() {
+                await this.fetchManifest();
+                // Load all active genomes
+                for (const genome of this.manifest?.genomes || []) {
+                    if (genome.active && genome.id !== 'ffa' && genome.id !== 'team') {
+                        this.loadGenome(genome.id);
+                    }
+                }
+            },
+
+            getRandomActiveGenome() {
+                // Return a random active genome ID, or null for default
+                const loaded = this.activeGenomes.filter(id => this.brains.has(id));
+                if (loaded.length === 0) return null;
+                return loaded[Math.floor(Math.random() * loaded.length)];
+            },
+
             getBrain(genomeId) {
                 return this.brains.get(genomeId);
+            },
+
+            async reportStats(genomeId, score, survival, won) {
+                try {
+                    await fetch(GENOME_SERVER, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            type: 'update_genome_stats',
+                            genome_id: genomeId,
+                            score, survival, won
+                        })
+                    });
+                } catch (e) {
+                    // Silent fail - stats are optional
+                }
             }
         };
 
-        // Load Ivy's behavioral brain
-        genomeRegistry.loadGenome('ivy', 'brain_ivy.json');
+        // Load IvyBot locally (faster) and also fetch manifest
+        genomeRegistry.loadGenome('ivy', 'brain_ivy.json').then(() => genomeRegistry.activeGenomes.push('ivy'));
+        genomeRegistry.loadActiveGenomes();
 
         // Get the appropriate brain based on current mode and genome
         function getNeuralBrain(genome = null) {
@@ -4420,10 +4490,15 @@
             if (teamMode) newEnemy.color = newEnemy.team === "blue" ? "#0af" : "#f55";
             else newEnemy.color = initialGunType.color; // Use gun color for "All Same Gun"
 
-            // Assign behavioral genome (20% chance for ivy genome)
-            if (genomeRegistry.brains.has('ivy') && Math.random() < 0.2) {
-                newEnemy.genome = 'ivy';
-                newEnemy.name = 'IvyBot';  // Visible indicator
+            // Assign behavioral genome (30% chance for pool genome)
+            if (Math.random() < 0.3) {
+                const genome = genomeRegistry.getRandomActiveGenome();
+                if (genome) {
+                    newEnemy.genome = genome;
+                    // Find name from manifest
+                    const gInfo = genomeRegistry.manifest?.genomes.find(g => g.id === genome);
+                    if (gInfo) newEnemy.name = gInfo.name;
+                }
             }
 
             // Queue for distance-priority naming (only host generates, syncs to clients)
@@ -4991,10 +5066,15 @@
             if (teamMode) newEnemy.color = newEnemy.team === "blue" ? "#0af" : "#f55";
             else newEnemy.color = initialGunType.color; // Use gun color for "All Same Gun"
             
-            // Assign behavioral genome (20% chance for ivy genome)
-            if (genomeRegistry.brains.has('ivy') && Math.random() < 0.2) {
-                newEnemy.genome = 'ivy';
-                newEnemy.name = 'IvyBot';  // Visible indicator
+            // Assign behavioral genome (30% chance for pool genome)
+            if (Math.random() < 0.3) {
+                const genome = genomeRegistry.getRandomActiveGenome();
+                if (genome) {
+                    newEnemy.genome = genome;
+                    // Find name from manifest
+                    const gInfo = genomeRegistry.manifest?.genomes.find(g => g.id === genome);
+                    if (gInfo) newEnemy.name = gInfo.name;
+                }
             }
 
             // Queue for distance-priority naming (only host generates, syncs to clients)

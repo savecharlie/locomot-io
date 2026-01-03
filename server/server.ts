@@ -952,6 +952,207 @@ export default class LocomotServer implements Party.Server {
           });
         }
 
+
+        // ==================== GENOME POOL SYSTEM ====================
+
+        if (data.type === 'get_genome_manifest') {
+          // Return manifest with all genome metadata
+          let manifest = await this.room.storage.get('genome_manifest') as any;
+
+          if (!manifest) {
+            // Initialize manifest with default genomes
+            manifest = {
+              genomes: [
+                {
+                  id: 'ffa',
+                  type: 'rl',
+                  name: 'DefaultFFA',
+                  source: 'embedded',
+                  created: new Date().toISOString(),
+                  performance: { games: 0, avg_score: 0, avg_survival: 0, win_rate: 0 },
+                  active: true
+                },
+                {
+                  id: 'team',
+                  type: 'rl',
+                  name: 'DefaultTeam',
+                  source: 'embedded',
+                  created: new Date().toISOString(),
+                  performance: { games: 0, avg_score: 0, avg_survival: 0, win_rate: 0 },
+                  active: true
+                }
+              ],
+              max_active: 15,
+              last_tournament: null,
+              version: 1
+            };
+            await this.room.storage.put('genome_manifest', manifest);
+          }
+
+          return new Response(JSON.stringify(manifest), {
+            headers: { ...headers, 'Content-Type': 'application/json' }
+          });
+        }
+
+        if (data.type === 'get_genome') {
+          // Return full genome weights by ID
+          const genomeId = (data as any).id;
+          if (!genomeId) {
+            return new Response(JSON.stringify({ error: 'Missing genome id' }), {
+              status: 400, headers: { ...headers, 'Content-Type': 'application/json' }
+            });
+          }
+
+          const genome = await this.room.storage.get(`genome_${genomeId}`);
+          if (!genome) {
+            return new Response(JSON.stringify({ error: 'Genome not found' }), {
+              status: 404, headers: { ...headers, 'Content-Type': 'application/json' }
+            });
+          }
+
+          return new Response(JSON.stringify(genome), {
+            headers: { ...headers, 'Content-Type': 'application/json' }
+          });
+        }
+
+        if (data.type === 'submit_genome') {
+          // Upload new genome for consideration
+          const submission = data as any;
+          if (!submission.id || !submission.weights || !submission.weights['net.0.weight']) {
+            return new Response(JSON.stringify({ error: 'Invalid genome submission' }), {
+              status: 400, headers: { ...headers, 'Content-Type': 'application/json' }
+            });
+          }
+
+          // Store the genome weights
+          await this.room.storage.put(`genome_${submission.id}`, submission.weights);
+
+          // Update manifest
+          let manifest = await this.room.storage.get('genome_manifest') as any;
+          if (!manifest) manifest = { genomes: [], max_active: 15, version: 1 };
+
+          // Check if genome already exists
+          const existing = manifest.genomes.findIndex((g: any) => g.id === submission.id);
+          const genomeEntry = {
+            id: submission.id,
+            type: submission.type || 'behavioral',
+            name: submission.name || submission.id,
+            source: submission.source || 'unknown',
+            created: new Date().toISOString(),
+            performance: { games: 0, avg_score: 0, avg_survival: 0, win_rate: 0 },
+            active: manifest.genomes.length < manifest.max_active
+          };
+
+          if (existing >= 0) {
+            manifest.genomes[existing] = { ...manifest.genomes[existing], ...genomeEntry };
+          } else {
+            manifest.genomes.push(genomeEntry);
+          }
+
+          manifest.version++;
+          await this.room.storage.put('genome_manifest', manifest);
+
+          console.log(`[GenomePool] Submitted genome: ${submission.id} (${submission.type || 'behavioral'})`);
+
+          return new Response(JSON.stringify({
+            success: true,
+            id: submission.id,
+            active: genomeEntry.active
+          }), {
+            headers: { ...headers, 'Content-Type': 'application/json' }
+          });
+        }
+
+        if (data.type === 'update_genome_stats') {
+          // Record game performance for a genome
+          const stats = data as any;
+          if (!stats.genome_id) {
+            return new Response(JSON.stringify({ error: 'Missing genome_id' }), {
+              status: 400, headers: { ...headers, 'Content-Type': 'application/json' }
+            });
+          }
+
+          let manifest = await this.room.storage.get('genome_manifest') as any;
+          if (!manifest) {
+            return new Response(JSON.stringify({ error: 'Manifest not found' }), {
+              status: 404, headers: { ...headers, 'Content-Type': 'application/json' }
+            });
+          }
+
+          const genome = manifest.genomes.find((g: any) => g.id === stats.genome_id);
+          if (!genome) {
+            return new Response(JSON.stringify({ error: 'Genome not found' }), {
+              status: 404, headers: { ...headers, 'Content-Type': 'application/json' }
+            });
+          }
+
+          // Update rolling averages
+          const p = genome.performance;
+          const n = p.games + 1;
+          p.avg_score = ((p.avg_score * p.games) + (stats.score || 0)) / n;
+          p.avg_survival = ((p.avg_survival * p.games) + (stats.survival || 0)) / n;
+          if (stats.won !== undefined) {
+            p.win_rate = ((p.win_rate * p.games) + (stats.won ? 1 : 0)) / n;
+          }
+          p.games = n;
+
+          await this.room.storage.put('genome_manifest', manifest);
+
+          return new Response(JSON.stringify({ success: true, performance: p }), {
+            headers: { ...headers, 'Content-Type': 'application/json' }
+          });
+        }
+
+        if (data.type === 'run_tournament') {
+          // Evaluate genomes and update rankings
+          let manifest = await this.room.storage.get('genome_manifest') as any;
+          if (!manifest) {
+            return new Response(JSON.stringify({ error: 'Manifest not found' }), {
+              status: 404, headers: { ...headers, 'Content-Type': 'application/json' }
+            });
+          }
+
+          // Calculate fitness scores
+          for (const genome of manifest.genomes) {
+            const p = genome.performance;
+            if (p.games < 5) {
+              genome.fitness = 0; // Not enough data
+            } else {
+              // Weighted fitness: score + survival + win_rate
+              genome.fitness = (
+                0.4 * (p.avg_score / 100) +  // Normalize score
+                0.3 * (p.avg_survival / 60) + // Normalize survival (60s = good)
+                0.3 * p.win_rate
+              );
+            }
+          }
+
+          // Sort by fitness
+          manifest.genomes.sort((a: any, b: any) => (b.fitness || 0) - (a.fitness || 0));
+
+          // Mark top N as active, rest as inactive
+          manifest.genomes.forEach((g: any, i: number) => {
+            g.active = i < manifest.max_active;
+            g.rank = i + 1;
+          });
+
+          manifest.last_tournament = new Date().toISOString();
+          await this.room.storage.put('genome_manifest', manifest);
+
+          console.log(`[GenomePool] Tournament complete. Top genome: ${manifest.genomes[0]?.id}`);
+
+          return new Response(JSON.stringify({
+            success: true,
+            rankings: manifest.genomes.map((g: any) => ({
+              id: g.id,
+              fitness: g.fitness,
+              rank: g.rank,
+              active: g.active
+            }))
+          }), {
+            headers: { ...headers, 'Content-Type': 'application/json' }
+          });
+        }
         return new Response(JSON.stringify({ error: 'Unknown type' }), {
           status: 400,
           headers: { ...headers, 'Content-Type': 'application/json' }
