@@ -676,6 +676,50 @@ export default class LocomotServer implements Party.Server {
           });
         }
 
+        if (data.type === 'run_summary') {
+          // Store run summary for engagement-aware training
+          const run = data as {
+            runId: string;
+            playerId: string;
+            mode: string;
+            startTime: number;
+            durationMs: number;
+            finalScore: number;
+            finalLength: number;
+            peakLength: number;
+            peakScore: number;
+            turns: number;
+            pickups: number;
+            kills: number;
+            intensity: number;
+            focusLostCount: number;
+            deathReason: string;
+            engaged: number;
+            events: unknown[];
+          };
+
+          const key = `run_${run.startTime}_${run.runId.slice(0, 8)}`;
+          await this.room.storage.put(key, {
+            ...run,
+            events: run.events?.slice(0, 100) // Cap stored events
+          });
+
+          // Update player return tracking
+          const playerKey = `player_returns_${run.playerId}`;
+          const playerReturns = await this.room.storage.get(playerKey) as number[] || [];
+          playerReturns.push(run.startTime);
+          // Keep last 30 days of return data
+          const thirtyDaysAgo = Date.now() - 30 * 24 * 60 * 60 * 1000;
+          const recentReturns = playerReturns.filter(t => t > thirtyDaysAgo);
+          await this.room.storage.put(playerKey, recentReturns);
+
+          console.log(`Run stored: ${run.mode} ${run.durationMs}ms engaged:${run.engaged} player:${run.playerId.slice(0, 8)}`);
+
+          return new Response(JSON.stringify({ success: true, runId: run.runId }), {
+            headers: { ...headers, 'Content-Type': 'application/json' }
+          });
+        }
+
         if (data.type === 'get_player_data') {
           // Retrieve all stored player training data
           const allData: { state: number[]; action: number }[] = [];
@@ -689,6 +733,67 @@ export default class LocomotServer implements Party.Server {
           }
 
           return new Response(JSON.stringify(allData), {
+            headers: { ...headers, 'Content-Type': 'application/json' }
+          });
+        }
+
+        if (data.type === 'get_runs') {
+          // Retrieve run summaries for training
+          const opts = data as { days?: number; mode?: string; engagedOnly?: boolean };
+          const days = opts.days || 7;
+          const cutoff = Date.now() - days * 24 * 60 * 60 * 1000;
+
+          const runs: unknown[] = [];
+          const keys = await this.room.storage.list({ prefix: 'run_' });
+
+          for (const [key, value] of keys) {
+            const run = value as { startTime: number; mode: string; engaged: number };
+            if (run.startTime < cutoff) continue;
+            if (opts.mode && run.mode !== opts.mode) continue;
+            if (opts.engagedOnly && run.engaged !== 1) continue;
+            runs.push(value);
+          }
+
+          // Sort by startTime descending
+          runs.sort((a: any, b: any) => b.startTime - a.startTime);
+
+          return new Response(JSON.stringify({
+            count: runs.length,
+            runs: runs.slice(0, 1000) // Cap at 1000 runs
+          }), {
+            headers: { ...headers, 'Content-Type': 'application/json' }
+          });
+        }
+
+        if (data.type === 'get_run_stats') {
+          // Get aggregate stats for dashboard
+          const keys = await this.room.storage.list({ prefix: 'run_' });
+          let total = 0, engaged = 0, ffaCount = 0, teamCount = 0;
+          let totalDuration = 0, totalIntensity = 0;
+          const last24h = Date.now() - 24 * 60 * 60 * 1000;
+          let last24hCount = 0;
+
+          for (const [key, value] of keys) {
+            const run = value as { startTime: number; mode: string; engaged: number; durationMs: number; intensity: number };
+            total++;
+            if (run.engaged === 1) engaged++;
+            if (run.mode === 'ffa') ffaCount++;
+            if (run.mode === 'team') teamCount++;
+            totalDuration += run.durationMs || 0;
+            totalIntensity += run.intensity || 0;
+            if (run.startTime > last24h) last24hCount++;
+          }
+
+          return new Response(JSON.stringify({
+            totalRuns: total,
+            engagedRuns: engaged,
+            engagementRate: total > 0 ? Math.round(engaged / total * 100) : 0,
+            ffaRuns: ffaCount,
+            teamRuns: teamCount,
+            avgDurationMs: total > 0 ? Math.round(totalDuration / total) : 0,
+            avgIntensity: total > 0 ? Math.round(totalIntensity / total * 10) / 10 : 0,
+            last24h: last24hCount
+          }), {
             headers: { ...headers, 'Content-Type': 'application/json' }
           });
         }
