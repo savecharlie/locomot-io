@@ -690,6 +690,43 @@ export default class LocomotServer implements Party.Server {
           });
         }
 
+        if (data.type === 'behavioral_session') {
+          // Store behavioral cloning session data
+          const session = (data as any).session;
+          if (session && session.frames && session.frames.length > 10) {
+            const key = `behavior_${Date.now()}_${session.id?.slice(0,8) || 'anon'}`;
+            await this.room.storage.put(key, session);
+            console.log(`Behavioral session: ${session.frames.length} frames, quality: ${session.quality?.toFixed(2) || '?'}`);
+            return new Response(JSON.stringify({ success: true, key, frames: session.frames.length }), {
+              headers: { ...headers, 'Content-Type': 'application/json' }
+            });
+          }
+          return new Response(JSON.stringify({ success: false, reason: 'insufficient data' }), {
+            headers: { ...headers, 'Content-Type': 'application/json' }
+          });
+        }
+
+        if (data.type === 'list_behavioral') {
+          // List stored behavioral sessions
+          const keys = await this.room.storage.list({ prefix: 'behavior_' });
+          const sessions = [];
+          for (const [key, value] of keys) {
+            const s = value as any;
+            sessions.push({
+              key,
+              id: s.id,
+              playerId: s.playerId,
+              mode: s.mode,
+              frames: s.frames?.length || 0,
+              quality: s.quality,
+              timestamp: s.timestamp
+            });
+          }
+          return new Response(JSON.stringify({ count: sessions.length, sessions }), {
+            headers: { ...headers, 'Content-Type': 'application/json' }
+          });
+        }
+
         if (data.type === 'run_summary') {
           // Store run summary for engagement-aware training
           const run = data as {
