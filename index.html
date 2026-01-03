@@ -4537,11 +4537,6 @@
                     const bHead = b.segments[0];
                     if (!aHead || !bHead) continue;
 
-                    // Debug: ALERT when players are close
-                    const checkDist = Math.abs(aHead.x - bHead.x) + Math.abs(aHead.y - bHead.y);
-                    if (checkDist < 3) {
-                        alert('PVP CLOSE! ' + a.name + ' vs ' + b.name + ' dist=' + checkDist);
-                    }
                     const aLen = a.segments.length;
                     const bLen = b.segments.length;
                     const aIsLoneHead = aLen === 1;
@@ -4575,16 +4570,14 @@
                     }
 
                     if (headHitsBody(aHead, b.segments)) {
-                        if (aIsLoneHead) {
-                            applyKill(a, b, `Ran into ${b.name}'s body`);
-                        }
+                        // Any head hitting body = death (not just lone heads)
+                        applyKill(a, b, `Ran into ${b.name}'s body`);
                         continue;
                     }
 
                     if (headHitsBody(bHead, a.segments)) {
-                        if (bIsLoneHead) {
-                            applyKill(b, a, `Ran into ${a.name}'s body`);
-                        }
+                        // Any head hitting body = death (not just lone heads)
+                        applyKill(b, a, `Ran into ${a.name}'s body`);
                     }
                 }
             }
