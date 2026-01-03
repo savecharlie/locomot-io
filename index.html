@@ -532,6 +532,7 @@
                     this.loading.delete(genomeId);
                 }
             },
+            async loadActiveGenomes() {
                 await this.fetchManifest();
                 // Load all active genomes
                 for (const genome of this.manifest?.genomes || []) {
