@@ -1235,11 +1235,6 @@
             drawOtherPlayers(ctx) {
                 for (const player of this.otherPlayers.values()) {
                     if (!player.segments || player.segments.length === 0) continue;
-                    // Debug: log team info once per player
-                    if (!player._teamLogged && teamMode) {
-                        console.log('[TEAM] Player:', player.name, 'team:', player.team, 'myTeam:', playerTeam, 'isTeammate:', player.team === playerTeam);
-                        player._teamLogged = true;
-                    }
 
                     // Draw segments
                     for (let i = player.segments.length - 1; i >= 0; i--) {
@@ -6050,7 +6045,14 @@
                 ctx.fillStyle = '#0f0';
                 ctx.font = '8px "Press Start 2P"';
                 ctx.textAlign = 'center';
-                ctx.fillText(`👤 ${Multiplayer.username}`, head.x * GRID + GRID/2, head.y * GRID - 8);
+                // Show team in team mode
+                if (teamMode) {
+                    const teammateCount = [...Multiplayer.otherPlayers.values()].filter(p => p.team === playerTeam).length;
+                    const teamLabel = playerTeam === 'blue' ? '🔵' : '🔴';
+                    ctx.fillText(`${teamLabel} ${Multiplayer.username} (+${teammateCount})`, head.x * GRID + GRID/2, head.y * GRID - 8);
+                } else {
+                    ctx.fillText(`👤 ${Multiplayer.username}`, head.x * GRID + GRID/2, head.y * GRID - 8);
+                }
             }
         }
         
