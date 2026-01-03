@@ -727,6 +727,82 @@ export default class LocomotServer implements Party.Server {
           });
         }
 
+        if (data.type === 'get_behavioral_data') {
+          // Get full behavioral session data for training
+          const opts = data as { minQuality?: number; since?: number; limit?: number };
+          const minQuality = opts.minQuality || 0;
+          const since = opts.since || 0;
+          const limit = opts.limit || 100;
+
+          const keys = await this.room.storage.list({ prefix: 'behavior_' });
+          const sessions = [];
+          let totalFrames = 0;
+
+          for (const [key, value] of keys) {
+            const s = value as any;
+            // Filter by quality and timestamp
+            if ((s.quality || 0) < minQuality) continue;
+            if ((s.timestamp || 0) < since) continue;
+
+            sessions.push({
+              key,
+              id: s.id,
+              playerId: s.playerId,
+              mode: s.mode,
+              quality: s.quality,
+              timestamp: s.timestamp,
+              frames: s.frames || []  // Include full frame data
+            });
+            totalFrames += s.frames?.length || 0;
+
+            if (sessions.length >= limit) break;
+          }
+
+          return new Response(JSON.stringify({
+            count: sessions.length,
+            totalFrames,
+            sessions
+          }), {
+            headers: { ...headers, 'Content-Type': 'application/json' }
+          });
+        }
+
+        if (data.type === 'get_new_behavioral') {
+          // Get sessions newer than a timestamp (for continuous training)
+          const opts = data as { since: number; limit?: number };
+          const since = opts.since || 0;
+          const limit = opts.limit || 50;
+
+          const keys = await this.room.storage.list({ prefix: 'behavior_' });
+          const sessions = [];
+
+          for (const [key, value] of keys) {
+            const s = value as any;
+            const ts = s.timestamp || 0;
+            if (ts > since) {
+              sessions.push({
+                key,
+                id: s.id,
+                playerId: s.playerId,
+                mode: s.mode,
+                quality: s.quality,
+                timestamp: ts,
+                frames: s.frames || []
+              });
+            }
+          }
+
+          // Sort by timestamp ascending (oldest first for replay buffer)
+          sessions.sort((a, b) => a.timestamp - b.timestamp);
+
+          return new Response(JSON.stringify({
+            count: sessions.length,
+            sessions: sessions.slice(0, limit)
+          }), {
+            headers: { ...headers, 'Content-Type': 'application/json' }
+          });
+        }
+
         if (data.type === 'run_summary') {
           // Store run summary for engagement-aware training
           const run = data as {

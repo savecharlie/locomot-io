@@ -428,8 +428,42 @@
         
         const neuralBrainFfa = new NeuralNetwork(BRAIN_FFA);
         const neuralBrainTeam = new NeuralNetwork(BRAIN_TEAM);
-        // Get the appropriate brain based on current mode
-        function getNeuralBrain() {
+
+        // Genome registry - stores player-trained behavioral brains
+        const genomeRegistry = {
+            brains: new Map(),  // genome_id -> NeuralNetwork
+            loading: new Set(), // Currently loading genomes
+
+            async loadGenome(genomeId, url) {
+                if (this.brains.has(genomeId) || this.loading.has(genomeId)) return;
+                this.loading.add(genomeId);
+                try {
+                    const response = await fetch(url);
+                    const data = await response.json();
+                    this.brains.set(genomeId, new NeuralNetwork(data));
+                    console.log(`[GenomeRegistry] Loaded genome: ${genomeId}`);
+                } catch (e) {
+                    console.error(`[GenomeRegistry] Failed to load ${genomeId}:`, e);
+                } finally {
+                    this.loading.delete(genomeId);
+                }
+            },
+
+            getBrain(genomeId) {
+                return this.brains.get(genomeId);
+            }
+        };
+
+        // Load Ivy's behavioral brain
+        genomeRegistry.loadGenome('ivy', 'brain_ivy.json');
+
+        // Get the appropriate brain based on current mode and genome
+        function getNeuralBrain(genome = null) {
+            // If genome specified and loaded, use it
+            if (genome && genomeRegistry.brains.has(genome)) {
+                return genomeRegistry.getBrain(genome);
+            }
+            // Default to mode-appropriate brain
             return teamMode ? neuralBrainTeam : neuralBrainFfa;
         }
 
@@ -4378,12 +4412,19 @@
                 score: 10 * length, personality,
                 targetPos: null, avoidPos: null, lastDecision: 0,
                 decisionInterval: 300 + Math.random() * 200,
-                gunType: initialGunType // "All Same Gun" - track current gun type
+                gunType: initialGunType, // "All Same Gun" - track current gun type
+                genome: null  // Behavioral genome (null = default brain)
             });
             // Set color based on team in team mode, otherwise gun color
             const newEnemy = enemies[enemies.length - 1];
             if (teamMode) newEnemy.color = newEnemy.team === "blue" ? "#0af" : "#f55";
             else newEnemy.color = initialGunType.color; // Use gun color for "All Same Gun"
+
+            // Assign behavioral genome (20% chance for ivy genome)
+            if (genomeRegistry.brains.has('ivy') && Math.random() < 0.2) {
+                newEnemy.genome = 'ivy';
+                newEnemy.name = 'IvyBot';  // Visible indicator
+            }
 
             // Queue for distance-priority naming (only host generates, syncs to clients)
             if (!Multiplayer.connected || Multiplayer.isHost) {
@@ -4942,13 +4983,20 @@
                 targetPos: null, avoidPos: null, lastDecision: 0,
                 decisionInterval: 300 + Math.random() * 200,
                 recentPoints: 0, lastPointTime: 0, isMVP: false,
-                gunType: initialGunType // "All Same Gun" - track current gun type
+                gunType: initialGunType, // "All Same Gun" - track current gun type
+                genome: null  // Behavioral genome (null = default brain)
             });
             // Set color based on team in team mode, otherwise gun color
             const newEnemy = enemies[enemies.length - 1];
             if (teamMode) newEnemy.color = newEnemy.team === "blue" ? "#0af" : "#f55";
             else newEnemy.color = initialGunType.color; // Use gun color for "All Same Gun"
             
+            // Assign behavioral genome (20% chance for ivy genome)
+            if (genomeRegistry.brains.has('ivy') && Math.random() < 0.2) {
+                newEnemy.genome = 'ivy';
+                newEnemy.name = 'IvyBot';  // Visible indicator
+            }
+
             // Queue for distance-priority naming (only host generates, syncs to clients)
             if (!Multiplayer.connected || Multiplayer.isHost) {
                 queueForNaming(newEnemy);
@@ -5554,7 +5602,7 @@
                         };
 
                         // Get raw neural output
-                        let output = getNeuralBrain().forward(vision);
+                        let output = getNeuralBrain(e.genome).forward(vision);
 
                         // Apply rules (Gödel layer)
                         output = ruleEngine.applyRules(output, gameState, e.id);
