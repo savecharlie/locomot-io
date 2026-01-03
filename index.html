@@ -2977,7 +2977,7 @@
                     id: crypto.randomUUID(),
                     playerId: localStorage.getItem('locomot_player_id') || 'anon',
                     timestamp: Date.now(),
-                    mode: teamMode ? 'team' : 'ffa',
+                    mode: timedMode ? 'timed' : (teamMode ? 'team' : 'ffa'),
                     frames: [],
                     // Genome tracking
                     totalFrames: 0,
@@ -7769,8 +7769,9 @@
                 const targetRuns = 50;
                 const remaining = Math.max(0, targetRuns - count);
                 const progressEl = document.getElementById('trainingProgress');
+                const recorderStatus = DataRecorder.enabled ? 'ON' : 'OFF';
                 if (remaining > 0) {
-                    progressEl.innerHTML = `<span style="color:#5ff">${count}/${targetRuns}</span> runs collected<br><span style="color:#ff0">${remaining} more quality runs to improve AI!</span>`;
+                    progressEl.innerHTML = `<span style="color:#5ff">${count}/${targetRuns}</span> runs collected (recorder: ${recorderStatus})<br><span style="color:#ff0">${remaining} more quality runs to improve AI!</span>`;
                 } else {
                     progressEl.innerHTML = `<span style="color:#0f0">✓ ${count} runs collected - AI is learning from you!</span>`;
                 }
