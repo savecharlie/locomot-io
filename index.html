@@ -3242,7 +3242,6 @@
                     fetch('https://locomot-io.savecharlie.partykit.dev/party/collective', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
-                        keepalive: true,
                         body: payload
                     }).then(r => r.json())
                       .then(data => console.log('[RECORDER] Upload response:', data))
