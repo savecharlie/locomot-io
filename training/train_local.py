@@ -39,17 +39,17 @@ except ImportError:
 console = Console()
 
 # ========== CONFIG ==========
-EPISODES = 2000
-NEW_INPUT_SIZE = 96
-HIDDEN1_SIZE = 128
-HIDDEN2_SIZE = 64
+EPISODES = 10000  # Lots of training for new larger network
+NEW_INPUT_SIZE = 133  # 8 rays × 15 features + 13 state
+HIDDEN1_SIZE = 192  # Larger hidden layers for more inputs
+HIDDEN2_SIZE = 96
 OUTPUT_SIZE = 3
-BATCH_SIZE = 64
-LEARNING_RATE = 0.001
+BATCH_SIZE = 128  # Larger batch for stability
+LEARNING_RATE = 0.0005  # Lower LR for longer training
 GAMMA = 0.99
-EPSILON_START = 0.5
-EPSILON_MIN = 0.05
-EPSILON_DECAY = 0.995
+EPSILON_START = 0.6  # More exploration at start
+EPSILON_MIN = 0.02  # Lower final epsilon
+EPSILON_DECAY = 0.9995  # Very slow decay for 10k episodes
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
@@ -84,8 +84,11 @@ class LocomotEnv:
     DIRECTIONS = [(0, -1), (1, 0), (0, 1), (-1, 0)]  # UP, RIGHT, DOWN, LEFT
     RAY_OFFSETS = [(0, -1), (1, -1), (1, 0), (1, 1), (0, 1), (-1, 1), (-1, 0), (-1, -1)]
 
-    def __init__(self, num_agents=4):
+    def __init__(self, num_agents=4, team_mode=None):
         self.num_agents = num_agents
+        self.projectiles = []  # Simulated bullets
+        # If team_mode is None, randomly choose per episode (50/50)
+        self.team_mode = team_mode if team_mode is not None else random.choice([True, False])
         self.reset()
 
     def reset(self):
@@ -94,6 +97,7 @@ class LocomotEnv:
         self.gun_pickups = {}
         self.segment_map = {}
         self.step_count = 0
+        self.projectiles = []
 
         for i in range(self.num_agents):
             x = random.randint(8, self.WORLD_COLS - 8)
@@ -109,7 +113,10 @@ class LocomotEnv:
 
             self.agents.append({
                 'segments': segments, 'direction': direction, 'alive': True,
-                'score': 0, 'prev_tail_pos': None, 'current_gun': 0
+                'score': 0, 'prev_tail_pos': None, 'current_gun': 0,
+                'team': i % 2,  # Alternate teams for team mode simulation
+                'last_turn_time': 0, 'last_turns': [0, 0],  # Momentum tracking
+                'invincible_until': 0, 'base_speed': 8
             })
             for seg_idx, seg in enumerate(segments):
                 self.segment_map[(seg['x'], seg['y'])] = (i, seg_idx)
@@ -131,8 +138,12 @@ class LocomotEnv:
         current_dir = agent['direction']
         my_length = len(agent['segments'])
         my_segments = set((s['x'], s['y']) for s in agent['segments'][1:])
+        my_team = agent['team']
 
         vision = np.zeros(NEW_INPUT_SIZE, dtype=np.float32)
+
+        # Create projectile position set for fast lookup
+        projectile_positions = set((int(p['x']), int(p['y'])) for p in self.projectiles)
 
         for ray_idx in range(8):
             rotated_idx = (ray_idx + current_dir * 2) % 8
@@ -141,31 +152,68 @@ class LocomotEnv:
             health_dist = self_danger = wall_dist = 0.0
             enemy_smaller = enemy_bigger = enemy_body = nearest_enemy_gun = 0.0
             gun_dists = [0.0, 0.0, 0.0, 0.0]
+            # New features
+            projectile_danger = ally_head = ally_body = 0.0
+            local_crowding = 0
 
             for dist in range(1, 16):
                 cx, cy = head_x + dx * dist, head_y + dy * dist
                 if cx < 0 or cx >= self.WORLD_COLS or cy < 0 or cy >= self.WORLD_ROWS:
                     if wall_dist == 0: wall_dist = 1.0 / dist
                     break
-                if self_danger == 0 and (cx, cy) in my_segments: self_danger = 1.0 / dist
-                if health_dist == 0 and (cx, cy) in self.health_pickups: health_dist = 1.0 / dist
+
+                # Self collision
+                if self_danger == 0 and (cx, cy) in my_segments:
+                    self_danger = 1.0 / dist
+                    local_crowding += 1
+
+                # Projectile danger
+                if projectile_danger == 0 and (cx, cy) in projectile_positions:
+                    projectile_danger = 1.0 / dist
+
+                # Health pickups
+                if health_dist == 0 and (cx, cy) in self.health_pickups:
+                    health_dist = 1.0 / dist
+
+                # Gun pickups
                 pos = (cx, cy)
                 if pos in self.gun_pickups and gun_dists[self.gun_pickups[pos]] == 0:
                     gun_dists[self.gun_pickups[pos]] = 1.0 / dist
+
+                # Other agents
                 if pos in self.segment_map:
                     other_idx, seg_idx = self.segment_map[pos]
                     if other_idx != agent_idx and self.agents[other_idx]['alive']:
                         other = self.agents[other_idx]
-                        if seg_idx == 0:
-                            if len(other['segments']) < my_length and enemy_smaller == 0: enemy_smaller = 1.0 / dist
-                            elif enemy_bigger == 0: enemy_bigger = 1.0 / dist
-                        elif enemy_body == 0: enemy_body = 1.0 / dist
+                        is_ally = other['team'] == my_team
+                        local_crowding += 1
 
-            base = ray_idx * 11
+                        if is_ally:
+                            # Ally detection
+                            if seg_idx == 0 and ally_head == 0:
+                                ally_head = 1.0 / dist
+                            elif seg_idx > 0 and ally_body == 0:
+                                ally_body = 1.0 / dist
+                        else:
+                            # Enemy detection
+                            if seg_idx == 0:
+                                if len(other['segments']) < my_length and enemy_smaller == 0:
+                                    enemy_smaller = 1.0 / dist
+                                elif enemy_bigger == 0:
+                                    enemy_bigger = 1.0 / dist
+                            elif enemy_body == 0:
+                                enemy_body = 1.0 / dist
+
+            # Normalize crowding
+            local_crowding = min(local_crowding / 15, 1.0)
+
+            # Store 15 features per direction
+            base = ray_idx * 15
             vision[base:base+5] = [health_dist] + gun_dists
             vision[base+5:base+11] = [self_danger, wall_dist, enemy_smaller, enemy_bigger, enemy_body, nearest_enemy_gun]
+            vision[base+11:base+15] = [projectile_danger, ally_head, ally_body, local_crowding]
 
-        # State inputs
+        # State inputs (indices 120-132)
         total_hp = sum(s['hp'] for s in agent['segments'][1:] if s['hp'] != float('inf'))
         total_max = sum(s['maxHp'] for s in agent['segments'][1:] if s['maxHp'] != float('inf'))
         health_ratio = total_hp / total_max if total_max > 0 else 1.0
@@ -173,18 +221,77 @@ class LocomotEnv:
         dist_to_edge = min(head_x, head_y, self.WORLD_COLS - 1 - head_x, self.WORLD_ROWS - 1 - head_y)
         arena_pos = min(dist_to_edge / (min(self.WORLD_COLS, self.WORLD_ROWS) / 2), 1.0)
 
-        vision[88:96] = [health_ratio, arena_pos, 0.3, min(my_length/20, 1), 0.25, 0, 0, 1]
+        # Threat density
+        threat = 0.0
+        for i, other in enumerate(self.agents):
+            if i == agent_idx or not other['alive']: continue
+            oh = other['segments'][0]
+            dist = abs(oh['x'] - head_x) + abs(oh['y'] - head_y)
+            if dist < 15:
+                size_factor = 2.0 if len(other['segments']) > my_length else 0.5
+                threat += size_factor / max(dist, 1)
+        threat = min(threat / 3, 1.0)
+
+        # Momentum features
+        time_since_turn = min((self.step_count - agent['last_turn_time']) / 20, 1.0)
+        last_turn_1 = (agent['last_turns'][0] + 1) / 2  # -1,0,1 -> 0,0.5,1
+        last_turn_2 = (agent['last_turns'][1] + 1) / 2
+
+        # Invincibility (normalized to ~30 steps max)
+        invincibility = max(0, agent['invincible_until'] - self.step_count) / 30
+
+        # Relative speed (all agents have same base speed in training, so ~0.5)
+        relative_speed = 0.5
+
+        vision[120:133] = [
+            health_ratio, arena_pos, threat, min(my_length/20, 1), 0.25,  # 120-124: health, arena, threat, length, gun
+            0, 0, 1,  # 125-127: is_mvp, mvp_time, mvp_dist
+            time_since_turn, last_turn_1, last_turn_2, invincibility, relative_speed  # 128-132: new features
+        ]
         return vision
 
     def step(self, actions):
         self.step_count += 1
         rewards = np.zeros(self.num_agents, dtype=np.float32)
 
-        # Apply turns
+        # Apply turns and track momentum
         for i, agent in enumerate(self.agents):
             if not agent['alive']: continue
-            if actions[i] == 0: agent['direction'] = (agent['direction'] - 1) % 4
-            elif actions[i] == 2: agent['direction'] = (agent['direction'] + 1) % 4
+            old_dir = agent['direction']
+            if actions[i] == 0:
+                agent['direction'] = (agent['direction'] - 1) % 4
+                turn_dir = -1
+            elif actions[i] == 2:
+                agent['direction'] = (agent['direction'] + 1) % 4
+                turn_dir = 1
+            else:
+                turn_dir = 0
+
+            # Track turns for momentum context
+            if turn_dir != 0:
+                agent['last_turn_time'] = self.step_count
+                agent['last_turns'][1] = agent['last_turns'][0]
+                agent['last_turns'][0] = turn_dir
+
+        # Simulate some projectiles (random spawn for training variety)
+        if random.random() < 0.1 and len(self.projectiles) < 20:
+            # Spawn a projectile from a random alive agent
+            alive_agents = [a for a in self.agents if a['alive'] and len(a['segments']) > 1]
+            if alive_agents:
+                shooter = random.choice(alive_agents)
+                head = shooter['segments'][0]
+                dx, dy = self.DIRECTIONS[shooter['direction']]
+                self.projectiles.append({'x': head['x'] + dx*2, 'y': head['y'] + dy*2, 'vx': dx, 'vy': dy, 'life': 10})
+
+        # Move projectiles
+        new_projectiles = []
+        for p in self.projectiles:
+            p['x'] += p['vx']
+            p['y'] += p['vy']
+            p['life'] -= 1
+            if p['life'] > 0 and 0 <= p['x'] < self.WORLD_COLS and 0 <= p['y'] < self.WORLD_ROWS:
+                new_projectiles.append(p)
+        self.projectiles = new_projectiles
 
         # Move
         for i, agent in enumerate(self.agents):
@@ -225,25 +332,39 @@ class LocomotEnv:
             for j, other in enumerate(self.agents):
                 if i == j or not other['alive']: continue
                 oh = other['segments'][0]
+                is_teammate = self.team_mode and agent['team'] == other['team']
+
                 if hx == oh['x'] and hy == oh['y']:
-                    if len(agent['segments']) > len(other['segments']):
-                        other['alive'] = False
-                        rewards[j] -= 5.0
-                        rewards[i] += 3.0
-                    elif len(agent['segments']) < len(other['segments']):
-                        agent['alive'] = False
-                        rewards[i] -= 5.0
-                        rewards[j] += 3.0
+                    if is_teammate:
+                        # Teammates collide but don't hurt - both bounce back (blocked)
+                        # Just a small penalty for bumping into teammate
+                        rewards[i] -= 0.1
+                        rewards[j] -= 0.1
                     else:
-                        agent['alive'] = other['alive'] = False
-                        rewards[i] = rewards[j] = -3.0
+                        # Opponents - normal FFA rules
+                        if len(agent['segments']) > len(other['segments']):
+                            other['alive'] = False
+                            rewards[j] -= 5.0
+                            rewards[i] += 3.0
+                        elif len(agent['segments']) < len(other['segments']):
+                            agent['alive'] = False
+                            rewards[i] -= 5.0
+                            rewards[j] += 3.0
+                        else:
+                            agent['alive'] = other['alive'] = False
+                            rewards[i] = rewards[j] = -3.0
                     break
 
                 other_body = set((s['x'], s['y']) for s in other['segments'][1:])
                 if (hx, hy) in other_body:
-                    agent['alive'] = False
-                    rewards[i] -= 5.0
-                    rewards[j] += 2.0
+                    if is_teammate:
+                        # Teammates block but don't kill
+                        rewards[i] -= 0.1
+                    else:
+                        # Opponent body collision - death
+                        agent['alive'] = False
+                        rewards[i] -= 5.0
+                        rewards[j] += 2.0
                     break
 
         # Pickups
@@ -276,11 +397,26 @@ class LocomotEnv:
         observations = [self.get_vision(i) for i in range(self.num_agents)]
         dones = [not a['alive'] for a in self.agents]
         alive = sum(1 for a in self.agents if a['alive'])
-        game_over = alive <= 1 or self.step_count >= 500
 
-        if game_over and alive == 1:
-            for i, a in enumerate(self.agents):
-                if a['alive']: rewards[i] += 5.0
+        if self.team_mode:
+            # Team mode: game ends when one team is eliminated
+            team0_alive = sum(1 for a in self.agents if a['alive'] and a['team'] == 0)
+            team1_alive = sum(1 for a in self.agents if a['alive'] and a['team'] == 1)
+            game_over = team0_alive == 0 or team1_alive == 0 or self.step_count >= 500
+
+            if game_over and (team0_alive == 0 or team1_alive == 0):
+                winning_team = 0 if team0_alive > 0 else 1
+                for i, a in enumerate(self.agents):
+                    if a['team'] == winning_team:
+                        rewards[i] += 5.0  # Winning team bonus
+                    else:
+                        rewards[i] -= 2.0  # Losing team penalty
+        else:
+            # FFA mode: last one standing wins
+            game_over = alive <= 1 or self.step_count >= 500
+            if game_over and alive == 1:
+                for i, a in enumerate(self.agents):
+                    if a['alive']: rewards[i] += 5.0
 
         return observations, rewards.tolist(), dones, game_over
 
@@ -345,7 +481,8 @@ class Trainer:
         return opponents
 
     def play_episode(self):
-        env = LocomotEnv(num_agents=4)
+        # Randomly choose FFA or Team mode (50/50)
+        env = LocomotEnv(num_agents=4, team_mode=None)
         obs = env.reset()
         opponents = self.get_opponents()
         total_reward = 0
@@ -368,10 +505,22 @@ class Trainer:
             if done: break
 
         self.total_games += 1
-        if env.agents[0]['alive']:
+
+        # Determine win based on mode
+        if env.team_mode:
+            # Team mode: agent 0 is on team 0, wins if team 0 survives
+            my_team = env.agents[0]['team']
+            team_alive = sum(1 for a in env.agents if a['alive'] and a['team'] == my_team)
+            enemy_alive = sum(1 for a in env.agents if a['alive'] and a['team'] != my_team)
+            won = team_alive > 0 and enemy_alive == 0
+        else:
+            # FFA: win if last one standing
+            won = env.agents[0]['alive']
+
+        if won:
             self.wins += 1
 
-        return total_reward, env.agents[0]['alive'], len(env.agents[0]['segments'])
+        return total_reward, won, len(env.agents[0]['segments']), env.team_mode
 
     def train_step(self):
         if len(self.memory) < BATCH_SIZE:
@@ -405,7 +554,8 @@ class Trainer:
     def train(self, episodes=EPISODES):
         console.print(Panel.fit(
             "[bold cyan]LOCOMOT.IO Neural Network Training[/bold cyan]\n"
-            f"[dim]Device: {device} | Episodes: {episodes}[/dim]",
+            f"[dim]Device: {device} | Episodes: {episodes}[/dim]\n"
+            "[dim]Training on: FFA (50%) + Team Mode (50%)[/dim]",
             border_style="cyan"
         ))
 
@@ -425,7 +575,7 @@ class Trainer:
             task = progress.add_task("[cyan]Training...", total=episodes)
 
             for ep in range(episodes):
-                reward, won, length = self.play_episode()
+                reward, won, length, was_team_mode = self.play_episode()
                 recent_rewards.append(reward)
 
                 for _ in range(2):
@@ -471,14 +621,11 @@ class Trainer:
 
 # ========== MAIN ==========
 if __name__ == '__main__':
-    # Find existing brain
-    brain_path = None
-    for f in sorted(os.listdir('.'), key=lambda x: os.path.getmtime(x) if os.path.isfile(x) else 0, reverse=True):
-        if 'brain' in f.lower() and f.endswith('.json'):
-            brain_path = f
-            break
+    # Fresh start with new 133-input architecture - don't load old 96-input brains
+    console.print("[yellow]Starting fresh training with 133-input network[/yellow]")
+    console.print("[dim]Old 96-input brains are incompatible[/dim]\n")
 
-    trainer = Trainer(brain_path=brain_path)
+    trainer = Trainer(brain_path=None)  # Fresh start
     output_file = trainer.train(EPISODES)
 
     console.print(f"\n[bold green]Done![/bold green] New brain: [cyan]{output_file}[/cyan]")
