@@ -2331,6 +2331,111 @@
             }
         };
 
+        // === RUN TRACKER - Engagement metrics per run ===
+        const RunTracker = {
+            currentRun: null,
+            uploadUrl: 'https://locomot-io.savecharlie.partykit.dev/party/collective',
+
+            startRun(mode, username) {
+                this.currentRun = {
+                    runId: crypto.randomUUID(),
+                    playerId: username || localStorage.getItem('locomot_player_id') || this.getOrCreatePlayerId(),
+                    mode: mode || (teamMode ? 'team' : 'ffa'),
+                    startTime: Date.now(),
+                    perfStart: performance.now(),
+                    events: [],
+                    turns: 0,
+                    pickups: 0,
+                    kills: 0,
+                    focusLostCount: 0,
+                    peakLength: 0,
+                    peakScore: 0
+                };
+                console.log('[RUN] Started:', this.currentRun.runId);
+            },
+
+            getOrCreatePlayerId() {
+                let id = localStorage.getItem('locomot_player_id');
+                if (!id) {
+                    id = 'p_' + crypto.randomUUID().slice(0, 8);
+                    localStorage.setItem('locomot_player_id', id);
+                }
+                return id;
+            },
+
+            trackEvent(type, data = {}) {
+                if (!this.currentRun) return;
+                const t = Math.round(performance.now() - this.currentRun.perfStart);
+                this.currentRun.events.push({ t, type, ...data });
+
+                // Update counters
+                if (type === 'turn') this.currentRun.turns++;
+                if (type === 'pickup') this.currentRun.pickups++;
+                if (type === 'kill') this.currentRun.kills++;
+                if (type === 'blur') this.currentRun.focusLostCount++;
+            },
+
+            updatePeaks(length, score) {
+                if (!this.currentRun) return;
+                if (length > this.currentRun.peakLength) this.currentRun.peakLength = length;
+                if (score > this.currentRun.peakScore) this.currentRun.peakScore = score;
+            },
+
+            endRun(deathReason, finalScore, finalLength) {
+                if (!this.currentRun) return;
+
+                const durationMs = Math.round(performance.now() - this.currentRun.perfStart);
+                const durationS = durationMs / 1000;
+                const intensity = durationS > 0 ? ((this.currentRun.turns + this.currentRun.pickups + this.currentRun.kills) / durationS * 60) : 0;
+
+                // Engagement heuristic: >3 min OR good intensity OR came back
+                const engaged = durationMs > 180000 || intensity > 30 || this.currentRun.peakLength > 15;
+
+                const summary = {
+                    type: 'run_summary',
+                    runId: this.currentRun.runId,
+                    playerId: this.currentRun.playerId,
+                    mode: this.currentRun.mode,
+                    startTime: this.currentRun.startTime,
+                    durationMs,
+                    finalScore,
+                    finalLength,
+                    peakLength: this.currentRun.peakLength,
+                    peakScore: this.currentRun.peakScore,
+                    turns: this.currentRun.turns,
+                    pickups: this.currentRun.pickups,
+                    kills: this.currentRun.kills,
+                    intensity: Math.round(intensity * 10) / 10,
+                    focusLostCount: this.currentRun.focusLostCount,
+                    deathReason,
+                    engaged: engaged ? 1 : 0,
+                    events: this.currentRun.events.slice(-200) // cap payload
+                };
+
+                console.log('[RUN] Ended:', summary.runId, 'duration:', durationS.toFixed(1) + 's', 'engaged:', engaged);
+
+                // Send via beacon (survives page close)
+                if (navigator.sendBeacon) {
+                    navigator.sendBeacon(this.uploadUrl, JSON.stringify(summary));
+                } else {
+                    fetch(this.uploadUrl, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        keepalive: true,
+                        body: JSON.stringify(summary)
+                    }).catch(() => {});
+                }
+
+                this.currentRun = null;
+            }
+        };
+
+        // Track focus changes for engagement
+        document.addEventListener('visibilitychange', () => {
+            if (document.hidden) RunTracker.trackEvent('blur');
+            else RunTracker.trackEvent('focus');
+        });
+
         // === PATTERN TRACKER - Real-time player behavior learning ===
         const patternTracker = {
             leftTurns: 0,
@@ -3810,6 +3915,9 @@
                 playerDataRecorder.upload();
             } catch(e) {}
 
+            // End run tracking
+            RunTracker.endRun(deathReason, score, snake.length);
+
             // Show game over screen
             gameState = 'dead';
             canvas.classList.remove('playing');
@@ -3875,6 +3983,7 @@
 
             gameState = 'playing';
             canvas.classList.add('playing');
+            RunTracker.startRun(teamMode ? 'team' : 'ffa', Multiplayer.username);
 
             const el = document.getElementById('waveAnnounce');
             el.textContent = '🛡️ RESPAWNING...';
@@ -4246,6 +4355,7 @@
                     }
                     // Track pickup for strategy classification
                     strategyClassifier.onPickup(p.isHealth);
+                    RunTracker.trackEvent('pickup', { type: p.isHealth ? 'health' : 'gun' });
                     Multiplayer.sendPickupCollected(p);
                     pickups.splice(i, 1);
                 }
@@ -4999,6 +5109,7 @@
                             const eCount = e.segments.length;
                             dropPickupsFromSegments(e.segments, e.id);
                             waveKills += eCount;
+                            RunTracker.trackEvent('kill', { size: eCount });
                             e.segments = [];
                             if (playerIsLoneHead) {
                                 // Both lone heads = both die
@@ -6525,6 +6636,7 @@
                         }
                     }
                     updateWaves(time, dt); updateCamera(); updateHUD(); updateLeaderboard(); Ticker.update(gameState);
+                    RunTracker.updatePeaks(snake.length, score);
                     Multiplayer.broadcastEnemyState(); // Host syncs enemies to all clients
                     Multiplayer.debugStatus(); // Debug logging
                     ruleEngine.update(); // Gödel layer tick
@@ -6606,6 +6718,7 @@
                 }
             }
             patternTracker.recordTurn(dir, newDir, nearestThreat);
+            RunTracker.trackEvent('turn');
 
             // Buffer up to 3 turns for fast input
             if (dirQueue.length < 3) {
@@ -6770,6 +6883,7 @@
             }
             gameState = 'playing';
             canvas.classList.add('playing');
+            RunTracker.startRun('ffa', Multiplayer.username);
             // Report join to server for player history
             devMode.reportJoin(Multiplayer.username || 'Anonymous', Multiplayer.playerId);
             // Welcome dispatch
@@ -6804,6 +6918,7 @@
             }
             gameState = 'playing';
             canvas.classList.add('playing');
+            RunTracker.startRun('team', Multiplayer.username);
             // Report join to server for player history
             devMode.reportJoin(Multiplayer.username || 'Anonymous', Multiplayer.playerId);
             // Welcome dispatch
