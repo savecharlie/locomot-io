@@ -1967,6 +1967,8 @@
         
         let teamMode = false; // Set by mode selection at start
         let playerTeam = 'blue'; // Player's team (blue or red)
+        let lastTeamScoreUpdate = 0; // Throttle team score display updates
+        let cachedTeamLead = ''; // Cached display string
         let score = 0, wave = 1, lastTime = 0, moveTimer = 0, MOVE_INTERVAL = 70; // Faster!
         let aimAngle = 0, isAiming = false;
         let mouseX = 0, mouseY = 0, isMouseAiming = false;
@@ -6275,16 +6277,22 @@
                 }
             }
 
-            // Update leaderboard title based on mode
+            // Update leaderboard title based on mode (throttled to reduce flicker)
             const titleEl = document.getElementById('leaderboardTitle');
             if (teamMode) {
-                if (blueTotal > redTotal) {
-                    titleEl.innerHTML = `<span style="color:#0af">BLUE</span> LEADS ${blueTotal}-${redTotal}`;
-                } else if (redTotal > blueTotal) {
-                    titleEl.innerHTML = `<span style="color:#f55">RED</span> LEADS ${redTotal}-${blueTotal}`;
-                } else {
-                    titleEl.innerHTML = `TIED ${blueTotal}-${redTotal}`;
+                const now = Date.now();
+                if (now - lastTeamScoreUpdate > 500) {  // Update every 500ms max
+                    lastTeamScoreUpdate = now;
+                    const diff = Math.abs(blueTotal - redTotal);
+                    if (blueTotal > redTotal) {
+                        cachedTeamLead = `<span style="color:#0af">BLUE</span> LEADS BY ${diff}`;
+                    } else if (redTotal > blueTotal) {
+                        cachedTeamLead = `<span style="color:#f55">RED</span> LEADS BY ${diff}`;
+                    } else {
+                        cachedTeamLead = `TIED`;
+                    }
                 }
+                titleEl.innerHTML = cachedTeamLead || 'TIED';
             } else {
                 titleEl.textContent = '🏆 LEADERBOARD';
             }
