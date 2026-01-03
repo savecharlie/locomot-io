@@ -2102,7 +2102,7 @@
 
         // === TIMED MODE ===
         let timedMode = false;
-        let timedModeTimer = 0;
+        let timedModeStartTime = 0;
         const timedModeDuration = 120000; // 2 minutes
         let timedModeScore = 0;
         let timedModeBests = JSON.parse(localStorage.getItem('locomotio_timed_bests') || '[]');
@@ -7511,13 +7511,13 @@
 
                 // Timed mode countdown
                 if (timedMode && gameState === 'playing') {
-                    timedModeTimer -= dt;
-                    if (timedModeTimer <= 0) {
-                        timedModeTimer = 0;
+                    const elapsed = performance.now() - timedModeStartTime;
+                    const remaining = timedModeDuration - elapsed;
+                    if (remaining <= 0) {
                         endTimedMode();
                     } else {
                         // Draw timer
-                        const secs = Math.ceil(timedModeTimer / 1000);
+                        const secs = Math.ceil(remaining / 1000);
                         const mins = Math.floor(secs / 60);
                         const s = secs % 60;
                         ctx.fillStyle = secs <= 10 ? '#f44' : (secs <= 30 ? '#f80' : '#fff');
@@ -7700,7 +7700,7 @@
         // === TIMED MODE FUNCTIONS ===
         function startTimedMode() {
             timedMode = true;
-            timedModeTimer = timedModeDuration;
+            timedModeStartTime = performance.now();
             timedModeScore = 0;
             teamMode = false;
             isSpectating = false;
