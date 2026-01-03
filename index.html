@@ -155,8 +155,6 @@
         .mode-btn:active { transform: translateY(0); }
         .mode-btn.ffa { background: linear-gradient(135deg, #600 0%, #c00 100%); color: #fff; box-shadow: 0 4px 20px #f004; }
         .mode-btn.teams { background: linear-gradient(135deg, #006 0%, #00c 100%); color: #fff; box-shadow: 0 4px 20px #00f4; }
-        .mode-btn.debug { background: linear-gradient(135deg, #333 0%, #111 100%); color: #888; box-shadow: 0 4px 20px #0004; font-size: 9px; }
-        .mode-btn.debug:hover { color: #0f0; }
         .game-links { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; margin-top: 10px; }
         .game-link {
             font-family: 'Press Start 2P';
@@ -242,7 +240,6 @@
                 <div class="mode-buttons">
                     <button class="mode-btn ffa" id="startFFA">⚔️ FREE FOR ALL</button>
                     <button class="mode-btn teams" id="startTeams">👥 TEAM BATTLE</button>
-                    <button class="mode-btn debug" id="startDebug">🔧 DEBUG</button>
                 </div>
             </div>
             <div style="margin-top: 20px; padding-top: 16px; border-top: 1px solid #222;">
@@ -1969,8 +1966,6 @@
         }
         
         let teamMode = false; // Set by mode selection at start
-        let debugMode = false; // Debug/sandbox mode with cheats
-        let godMode = false; // Invincibility in debug mode
         let playerTeam = 'blue'; // Player's team (blue or red)
         let score = 0, wave = 1, lastTime = 0, moveTimer = 0, MOVE_INTERVAL = 70; // Faster!
         let aimAngle = 0, isAiming = false;
@@ -5307,7 +5302,7 @@
                                 const falloff = 1 - (dist / type.range) ** 0.5; // sqrt falloff = steep near edge
                                 return type.damage * Math.max(0.1, falloff); // min 10% damage
                             };
-                            if (invincibleTimer <= 0 && !godMode) {
+                            if (invincibleTimer <= 0) {
                                 for (let psi = 0; psi < snake.length; psi++) {
                                     if (psi === 0 && snake.length > 1) continue;
                                     const ps = snake[psi];
@@ -5511,8 +5506,8 @@
                                 } else if (si > 0 && j > 0) {
                                     seg.hp -= 30;
                                     // Only damage each player segment once per frame total (not per enemy)
-                                    // Reduced damage during grace period, skip if god mode
-                                    if (!playerSegmentsDamagedThisFrame.has(j) && !godMode) {
+                                    // Reduced damage during grace period
+                                    if (!playerSegmentsDamagedThisFrame.has(j)) {
                                         const dmg = invincibleTimer > -2000 ? e.damage * 0.3 : e.damage;
                                         ps.hp -= dmg;
                                         playerSegmentsDamagedThisFrame.add(j);
@@ -5691,9 +5686,9 @@
                 }
                 p.x += p.vx * dt * 0.2; p.y += p.vy * dt * 0.2; p.life -= dt;
                 
-                // Check hit on player (skip if invincible, god mode, same team, or reduced damage during grace)
+                // Check hit on player (skip if invincible, same team, or reduced damage during grace)
                 if (!(teamMode && p.owner && p.owner.team === playerTeam)) {
-                    if (invincibleTimer <= 0 && !godMode) {
+                    if (invincibleTimer <= 0) {
                         for (let si = 0; si < snake.length; si++) {
                             if (si === 0 && snake.length > 1) continue;
                             const seg = snake[si];
@@ -6018,53 +6013,7 @@
             ctx.fillText(leader.name + ' (' + leader.len + ')', ax, ay + 20);
             ctx.restore();
         }
-
-        // Red arrow pointing to Leader Grave when active
-        function drawGraveArrow() {
-            if (!LeaderGrave.active || !snake[0]) return;
-
-            const px = snake[0].x * GRID + GRID/2;
-            const py = snake[0].y * GRID + GRID/2;
-            const dist = Math.sqrt((LeaderGrave.px - px)**2 + (LeaderGrave.py - py)**2);
-            if (dist < 150) return;  // Close enough, don't show
-
-            const angle = Math.atan2(LeaderGrave.py - py, LeaderGrave.px - px);
-            const ax = px + Math.cos(angle) * 100;
-            const ay = py + Math.sin(angle) * 100;
-
-            ctx.save();
-            ctx.translate(ax, ay);
-            ctx.rotate(angle);
-
-            const pulse = 0.7 + Math.sin(Date.now() / 200) * 0.3;
-            ctx.globalAlpha = pulse;
-
-            // Red arrow
-            ctx.fillStyle = '#f44';
-            ctx.beginPath();
-            ctx.moveTo(12, 0);
-            ctx.lineTo(-6, -8);
-            ctx.lineTo(-6, 8);
-            ctx.closePath();
-            ctx.fill();
-
-            // Tombstone emoji
-            ctx.font = '10px "Press Start 2P"';
-            ctx.textAlign = 'center';
-            ctx.fillText('🪦', -15, 4);
-
-            ctx.restore();
-
-            // Label below arrow
-            ctx.save();
-            ctx.fillStyle = '#f44';
-            ctx.font = '5px "Press Start 2P"';
-            ctx.textAlign = 'center';
-            ctx.globalAlpha = pulse;
-            ctx.fillText('GRAVE', ax, ay + 15);
-            ctx.restore();
-        }
-
+        
         function updateWaves(time, dt) {
             if (waveDelay > 0) { waveDelay -= dt; return; }
             
@@ -6831,7 +6780,7 @@
                         respawn();
                     }
                     // CLIENT: Check collisions with synced enemy positions
-                    if (Multiplayer.connected && !Multiplayer.isHost && snake.length > 0 && invincibleTimer <= 0 && !godMode) {
+                    if (Multiplayer.connected && !Multiplayer.isHost && snake.length > 0 && invincibleTimer <= 0) {
                         const playerHead = snake[0];
                         let clientDied = false;
                         for (const e of enemies) {
@@ -7000,7 +6949,7 @@
                 
                 ctx.save(); ctx.scale(cameraZoom, cameraZoom); ctx.translate(-cameraX, -cameraY);
                 drawGrid(); drawPickups(time); renderLeaderGrave(ctx); drawEnemies(); Multiplayer.drawOtherPlayers(ctx);
-                if (gameState === 'playing') { drawSnake(); drawDirectionQueue(); drawLeaderArrow(); drawGraveArrow(); }
+                if (gameState === 'playing') { drawSnake(); drawDirectionQueue(); drawLeaderArrow(); }
                 drawProjectiles(); drawParticles();
                 ctx.restore(); drawScanlines(); drawPatternFlash(ctx); devMode.draw(ctx);
             } catch (err) { console.error('Game loop error:', err); }
@@ -7237,95 +7186,6 @@
             Ticker.dispatch(`${playerName} has joined the rails`, 4);
             Ticker.lastRank = null;
             Ticker.personalBest = 0;
-        });
-
-        // Debug mode - sandbox with cheats and CLI control
-        document.getElementById('startDebug').addEventListener('click', () => {
-            startGame(false);
-            debugMode = true;
-            godMode = false;
-
-            // Small debug arena with few enemies
-            enemies = [];
-            pickups = [];
-            particles = [];
-            projectiles = [];
-
-            // Spawn only 10 AI enemies
-            for (let i = 0; i < 10; i++) {
-                const ex = Math.floor(Math.random() * 80) + 10;
-                const ey = Math.floor(Math.random() * 80) + 10;
-                const size = Math.floor(Math.random() * 8) + 3;
-                const e = createEnemy(ex, ey, size > 5 ? 'alpha' : 'medium');
-                e.personality = { ...e.personality, neural: true };
-                enemies.push(e);
-            }
-
-            // Spawn player in center
-            snake = [{ x: 50, y: 50, hp: 1500, type: GUNS.MACHINEGUN }];
-            for (let i = 1; i < 4; i++) {
-                snake.push({ x: 50 - i, y: 50, hp: 300, type: GUNS.MACHINEGUN });
-            }
-            dir = DIR.RIGHT;
-            score = 0;
-            invincibleTimer = 5000;
-
-            // Expose debug API
-            window.debug = {
-                grow: (n = 1) => {
-                    for (let i = 0; i < n; i++) {
-                        snake.push({ ...snake[snake.length-1], hp: 300, type: snake[0].type });
-                    }
-                    Ticker.status(`Added ${n} segments`, 2);
-                },
-                kill: () => { deathReason = 'Debug suicide'; respawn(); },
-                god: () => { godMode = !godMode; Ticker.status(godMode ? 'GOD MODE ON' : 'GOD MODE OFF', 2); },
-                spawnEnemy: (size = 5) => {
-                    const x = snake[0].x + Math.floor(Math.random() * 20) - 10;
-                    const y = snake[0].y + Math.floor(Math.random() * 20) - 10;
-                    const e = createEnemy(x, y, size > 8 ? 'alpha' : 'medium');
-                    e.personality = { ...e.personality, neural: true };
-                    enemies.push(e);
-                    Ticker.status(`Spawned enemy (${size})`, 2);
-                },
-                spawnPowerup: (type) => {
-                    const types = Object.values(POWERUPS);
-                    const powerup = type ? POWERUPS[type.toUpperCase()] : types[Math.floor(Math.random() * types.length)];
-                    addPickup({
-                        x: snake[0].x * GRID + GRID/2,
-                        y: snake[0].y * GRID + GRID/2,
-                        type: powerup,
-                        isPowerup: true,
-                        bob: 0
-                    });
-                    Ticker.status(`Spawned ${powerup.name}`, 2);
-                },
-                grave: (name = 'Test') => {
-                    LeaderGrave.active = true;
-                    LeaderGrave.x = snake[0].x + 10;
-                    LeaderGrave.y = snake[0].y;
-                    LeaderGrave.px = LeaderGrave.x * GRID + GRID/2;
-                    LeaderGrave.py = LeaderGrave.y * GRID + GRID/2;
-                    LeaderGrave.leaderName = name;
-                    LeaderGrave.leaderLength = 20;
-                    LeaderGrave.createdAt = Date.now();
-                    LeaderGrave.lastSpawn = Date.now();
-                    LeaderGrave.totalSpawned = 0;
-                    Ticker.status(`Created grave for ${name}`, 2);
-                },
-                killAll: () => { enemies = []; Ticker.status('Killed all enemies', 2); },
-                clear: () => { pickups = []; Ticker.status('Cleared pickups', 2); },
-                help: () => {
-                    console.log('Debug commands: grow(n), kill(), god(), spawnEnemy(size), spawnPowerup(type), grave(name), killAll(), clear()');
-                    console.log('Keyboard: K=grow, ;=god, O=suicide, \\=cycle gun, P=powerup, E=enemy, G=grave');
-                    Ticker.status('See console for help', 3);
-                }
-            };
-            console.log('[DEBUG] Debug mode enabled. Use window.debug.help() for commands');
-
-            gameState = 'playing';
-            canvas.classList.add('playing');
-            Ticker.dispatch('DEBUG MODE - Press H for help', 5);
         });
 
         document.getElementById('usernameInputDeath').addEventListener('change', (e) => {
@@ -7640,57 +7500,6 @@
                     if (e.code === 'ArrowLeft' || e.code === 'KeyA') { devMode.prevPlayer(); e.preventDefault(); return; }
                     if (e.code === 'ArrowRight' || e.code === 'KeyD') { devMode.nextPlayer(); e.preventDefault(); return; }
                     if (e.code === 'Escape') { devMode.spectating = false; e.preventDefault(); return; }
-                }
-            }
-
-            // Debug mode keyboard cheats
-            if (debugMode && gameState === 'playing') {
-                if (e.code === 'Semicolon') {
-                    godMode = !godMode;
-                    Ticker.status(godMode ? 'GOD MODE ON' : 'GOD MODE OFF', 2);
-                    e.preventDefault();
-                    return;
-                }
-                if (e.code === 'KeyO') {
-                    deathReason = 'Debug suicide';
-                    respawn();
-                    e.preventDefault();
-                    return;
-                }
-                if (e.code === 'KeyK') {
-                    snake.push({ ...snake[snake.length-1], hp: 300, type: snake[0].type });
-                    e.preventDefault();
-                    return;
-                }
-                if (e.code === 'Backslash') {
-                    const gunNames = Object.keys(GUNS);
-                    const currentIdx = gunNames.findIndex(g => GUNS[g] === snake[0].type);
-                    const nextIdx = (currentIdx + 1) % gunNames.length;
-                    const newGun = GUNS[gunNames[nextIdx]];
-                    for (const seg of snake) seg.type = newGun;
-                    Ticker.status(`Gun: ${gunNames[nextIdx]}`, 2);
-                    e.preventDefault();
-                    return;
-                }
-                if (e.code === 'KeyP' && window.debug) {
-                    window.debug.spawnPowerup();
-                    e.preventDefault();
-                    return;
-                }
-                if (e.code === 'KeyE' && window.debug) {
-                    window.debug.spawnEnemy(Math.floor(Math.random() * 10) + 3);
-                    e.preventDefault();
-                    return;
-                }
-                if (e.code === 'KeyG' && window.debug) {
-                    window.debug.grave('Debug');
-                    e.preventDefault();
-                    return;
-                }
-                if (e.code === 'KeyH') {
-                    Ticker.dispatch('K=grow ;=god O=die \\=gun P=powerup E=enemy G=grave', 5);
-                    e.preventDefault();
-                    return;
                 }
             }
 
