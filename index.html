@@ -841,6 +841,7 @@
                         break;
 
                     case 'enemy_hit':
+                        console.log('[MP] Received enemy_hit:', data.name, 'isHost:', this.isHost);
                         if (this.isHost) applyEnemyHit(data);
                         break;
 
@@ -5126,8 +5127,11 @@
                                 // sounds disabled
                                 Multiplayer.send({ type: 'hit', targetId: e.playerId, damage: p.damage });
                             } else {
-                                // Hit enemy AI
+                                // Hit enemy AI - always apply damage locally
+                                seg.hp -= p.damage;
+                                // If client, also notify host
                                 if (Multiplayer.connected && !Multiplayer.isHost) {
+                                    console.log('[CLIENT] Hit', e.name, '- sending to host');
                                     Multiplayer.send({
                                         type: 'enemy_hit',
                                         name: e.name,
@@ -5137,10 +5141,8 @@
                                         damage: p.damage
                                     });
                                 } else {
-                                    seg.hp -= p.damage;
-                                    SpawnDirector.onCombat(p.damage, 0); // Player dealt damage
+                                    SpawnDirector.onCombat(p.damage, 0);
                                 }
-                                // sounds disabled
                             }
                             break outer;
                         }
