@@ -6285,31 +6285,29 @@
                 } else {
                     ctx.globalAlpha = isOwnRecentDrop ? 0.3 : 1;
                     const c = p.type.color;
-                    // Outer glow ring (lightest)
-                    ctx.fillStyle = c + '44';
-                    ctx.fillRect(x, y - 4, 1, 1);
-                    ctx.fillRect(x, y + 4, 1, 1);
-                    ctx.fillRect(x - 4, y, 1, 1);
-                    ctx.fillRect(x + 4, y, 1, 1);
-                    // Mid glow ring
-                    ctx.fillStyle = c + '88';
-                    ctx.fillRect(x - 1, y - 3, 3, 1);
-                    ctx.fillRect(x - 1, y + 3, 3, 1);
-                    ctx.fillRect(x - 3, y - 1, 1, 3);
-                    ctx.fillRect(x + 3, y - 1, 1, 3);
-                    // Inner glow ring
-                    ctx.fillStyle = c + 'cc';
-                    ctx.fillRect(x - 1, y - 2, 3, 1);
-                    ctx.fillRect(x - 1, y + 2, 3, 1);
-                    ctx.fillRect(x - 2, y - 1, 1, 3);
-                    ctx.fillRect(x + 2, y - 1, 1, 3);
-                    // Core diamond (solid)
+                    // Outer tips (faintest)
+                    ctx.fillStyle = c + '1e';
+                    ctx.fillRect(x, y - 3, 1, 1);
+                    ctx.fillRect(x, y + 3, 1, 1);
+                    ctx.fillRect(x - 3, y, 1, 1);
+                    ctx.fillRect(x + 3, y, 1, 1);
+                    // Mid glow
+                    ctx.fillStyle = c + '46';
+                    ctx.fillRect(x + 1, y - 2, 1, 1); ctx.fillRect(x - 1, y - 2, 1, 1);
+                    ctx.fillRect(x + 2, y - 1, 1, 1); ctx.fillRect(x - 2, y - 1, 1, 1);
+                    ctx.fillRect(x + 1, y + 2, 1, 1); ctx.fillRect(x - 1, y + 2, 1, 1);
+                    ctx.fillRect(x + 2, y + 1, 1, 1); ctx.fillRect(x - 2, y + 1, 1, 1);
+                    // Inner glow
+                    ctx.fillStyle = c + '8c';
+                    ctx.fillRect(x, y - 2, 1, 1); ctx.fillRect(x, y + 2, 1, 1);
+                    ctx.fillRect(x - 2, y, 1, 1); ctx.fillRect(x + 2, y, 1, 1);
+                    ctx.fillRect(x + 1, y - 1, 1, 1); ctx.fillRect(x - 1, y - 1, 1, 1);
+                    ctx.fillRect(x + 1, y + 1, 1, 1); ctx.fillRect(x - 1, y + 1, 1, 1);
+                    // Core diamond
                     ctx.fillStyle = c;
-                    ctx.fillRect(x - 1, y - 1, 3, 3);
-                    ctx.fillRect(x, y - 2, 1, 1);
-                    ctx.fillRect(x, y + 2, 1, 1);
-                    ctx.fillRect(x - 2, y, 1, 1);
-                    ctx.fillRect(x + 2, y, 1, 1);
+                    ctx.fillRect(x, y, 1, 1);
+                    ctx.fillRect(x, y - 1, 1, 1); ctx.fillRect(x, y + 1, 1, 1);
+                    ctx.fillRect(x - 1, y, 1, 1); ctx.fillRect(x + 1, y, 1, 1);
                     ctx.globalAlpha = 1;
                 }
             }
