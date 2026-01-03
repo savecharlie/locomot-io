@@ -4895,6 +4895,7 @@
                         let playerKilled = false;
 
                         if (head.x === opHead.x && head.y === opHead.y) {
+                            console.log('[KILL] Head-on collision! Enemy', e.name, 'at', head.x, head.y, 'vs client at', opHead.x, opHead.y);
                             const eCount = e.segments.length;
                             dropPickupsFromSegments(e.segments, e.id);
                             waveKills += eCount;
@@ -5053,6 +5054,7 @@
                             const sx = seg.x * GRID + GRID/2, sy = seg.y * GRID + GRID/2;
                             const dist = Math.sqrt((p.x - sx)**2 + (p.y - sy)**2);
                             if (dist < p.size + GRID/2) {
+                                console.log('[HIT] Enemy projectile hit client', pid, 'at', sx, sy, 'dist:', dist);
                                 sendProxyHit(pid, p.damage);
                                 p.life = 0;
                                 particles.push({ x: p.x, y: p.y, vx: 0, vy: 0, life: 10, color: '#f00' });
