@@ -78,6 +78,12 @@ class LocomotNetwork(nn.Module):
             return q_values.argmax(dim=1).item()
 
 # ========== ENVIRONMENT ==========
+# Powerup types: 0=SPEED, 1=SHIELD, 2=MAGNET
+POWERUP_SPEED = 0
+POWERUP_SHIELD = 1
+POWERUP_MAGNET = 2
+POWERUP_DURATION = 30  # steps (~0.5 sec per step = 15 sec)
+
 class LocomotEnv:
     WORLD_COLS = 50
     WORLD_ROWS = 40
@@ -94,12 +100,15 @@ class LocomotEnv:
 
     def reset(self):
         self.agents = []
-        self.health_pickups = set()
-        self.gun_pickups = {}
+        self.gun_pickups = {}  # pos -> gun_type (0-3)
+        self.powerup_pickups = {}  # pos -> powerup_type (0-2)
         self.segment_map = {}
         self.step_count = 0
         self.projectiles = []
         self.teammate_deaths = []  # Clear death tracker
+
+        # Leader Grave state
+        self.leader_grave = None  # {'x': x, 'y': y, 'spawned': 0, 'last_spawn': 0}
 
         for i in range(self.num_agents):
             x = random.randint(8, self.WORLD_COLS - 8)
@@ -118,15 +127,14 @@ class LocomotEnv:
                 'score': 0, 'prev_tail_pos': None, 'current_gun': 0,
                 'team': i % 2,  # Alternate teams for team mode simulation
                 'last_turn_time': 0, 'last_turns': [0, 0],  # Momentum tracking
-                'invincible_until': 0, 'base_speed': 8
+                'invincible_until': 0, 'base_speed': 8,
+                # Powerup timers
+                'speed_until': 0, 'shield_until': 0, 'magnet_until': 0
             })
             for seg_idx, seg in enumerate(segments):
                 self.segment_map[(seg['x'], seg['y'])] = (i, seg_idx)
 
-        for _ in range(15):
-            self.gun_pickups[(random.randint(0, self.WORLD_COLS-1), random.randint(0, self.WORLD_ROWS-1))] = random.randint(0, 3)
-        for _ in range(5):
-            self.health_pickups.add((random.randint(0, self.WORLD_COLS-1), random.randint(0, self.WORLD_ROWS-1)))
+        # No initial pickups - guns only come from kills!
 
         return [self.get_vision(i) for i in range(self.num_agents)]
 
@@ -151,7 +159,7 @@ class LocomotEnv:
             rotated_idx = (ray_idx + current_dir * 2) % 8
             dx, dy = self.RAY_OFFSETS[rotated_idx]
 
-            health_dist = self_danger = wall_dist = 0.0
+            pickup_dist = self_danger = wall_dist = 0.0
             enemy_smaller = enemy_bigger = enemy_body = nearest_enemy_gun = 0.0
             gun_dists = [0.0, 0.0, 0.0, 0.0]
             # New features
@@ -173,14 +181,21 @@ class LocomotEnv:
                 if projectile_danger == 0 and (cx, cy) in projectile_positions:
                     projectile_danger = 1.0 / dist
 
-                # Health pickups
-                if health_dist == 0 and (cx, cy) in self.health_pickups:
-                    health_dist = 1.0 / dist
-
-                # Gun pickups
+                # Pickups (guns and powerups)
                 pos = (cx, cy)
-                if pos in self.gun_pickups and gun_dists[self.gun_pickups[pos]] == 0:
-                    gun_dists[self.gun_pickups[pos]] = 1.0 / dist
+                if pos in self.gun_pickups:
+                    if pickup_dist == 0:
+                        pickup_dist = 1.0 / dist  # Any pickup distance
+                    if gun_dists[self.gun_pickups[pos]] == 0:
+                        gun_dists[self.gun_pickups[pos]] = 1.0 / dist
+                # Powerups also count as pickups (high value!)
+                if pos in self.powerup_pickups:
+                    if pickup_dist == 0:
+                        pickup_dist = 1.0 / dist
+                # Leader Grave location (go there for powerups!)
+                if self.leader_grave and pos == (self.leader_grave['x'], self.leader_grave['y']):
+                    if pickup_dist == 0:
+                        pickup_dist = 0.8 / dist  # Slightly lower priority than actual pickups
 
                 # Other agents
                 if pos in self.segment_map:
@@ -211,7 +226,7 @@ class LocomotEnv:
 
             # Store 15 features per direction
             base = ray_idx * 15
-            vision[base:base+5] = [health_dist] + gun_dists
+            vision[base:base+5] = [pickup_dist] + gun_dists
             vision[base+5:base+11] = [self_danger, wall_dist, enemy_smaller, enemy_bigger, enemy_body, nearest_enemy_gun]
             vision[base+11:base+15] = [projectile_danger, ally_head, ally_body, local_crowding]
 
@@ -317,8 +332,9 @@ class LocomotEnv:
             if not agent['alive']: continue
             head = agent['segments'][0]
             hx, hy = head['x'], head['y']
+            has_shield = agent['shield_until'] > self.step_count
 
-            # Wall
+            # Wall (shield doesn't protect from walls)
             if hx < 0 or hx >= self.WORLD_COLS or hy < 0 or hy >= self.WORLD_ROWS:
                 agent['alive'] = False
                 rewards[i] -= 5.0
@@ -327,14 +343,16 @@ class LocomotEnv:
                     self.teammate_deaths.append({'team': agent['team'], 'x': hx, 'y': hy, 'idx': i})
                 continue
 
-            # Self
+            # Self collision (shield protects!)
             my_body = set((s['x'], s['y']) for s in agent['segments'][1:])
             if (hx, hy) in my_body:
-                agent['alive'] = False
-                rewards[i] -= 5.0
-                # Record death for teammate penalty
-                if self.team_mode:
-                    self.teammate_deaths.append({'team': agent['team'], 'x': hx, 'y': hy, 'idx': i})
+                if has_shield:
+                    rewards[i] -= 0.5  # Small penalty for wasting shield
+                else:
+                    agent['alive'] = False
+                    rewards[i] -= 5.0
+                    if self.team_mode:
+                        self.teammate_deaths.append({'team': agent['team'], 'x': hx, 'y': hy, 'idx': i})
                 continue
 
             # Other agents
@@ -342,62 +360,102 @@ class LocomotEnv:
                 if i == j or not other['alive']: continue
                 oh = other['segments'][0]
                 is_teammate = self.team_mode and agent['team'] == other['team']
+                other_has_shield = other['shield_until'] > self.step_count
 
                 if hx == oh['x'] and hy == oh['y']:
                     if is_teammate:
-                        # Teammates collide but don't hurt - both bounce back (blocked)
-                        # Just a small penalty for bumping into teammate
+                        # Teammates collide but don't hurt
                         rewards[i] -= 0.1
                         rewards[j] -= 0.1
                     else:
-                        # Opponents - normal FFA rules
+                        # Opponents - check shields
                         if len(agent['segments']) > len(other['segments']):
-                            other['alive'] = False
-                            rewards[j] -= 5.0
-                            rewards[i] += 3.0
-                            if self.team_mode:
-                                self.teammate_deaths.append({'team': other['team'], 'x': oh['x'], 'y': oh['y'], 'idx': j})
+                            # Agent wins - unless other has shield
+                            if not other_has_shield:
+                                other['alive'] = False
+                                rewards[j] -= 5.0
+                                rewards[i] += 3.0
+                                if self.team_mode:
+                                    self.teammate_deaths.append({'team': other['team'], 'x': oh['x'], 'y': oh['y'], 'idx': j})
                         elif len(agent['segments']) < len(other['segments']):
-                            agent['alive'] = False
-                            rewards[i] -= 5.0
-                            rewards[j] += 3.0
-                            if self.team_mode:
-                                self.teammate_deaths.append({'team': agent['team'], 'x': hx, 'y': hy, 'idx': i})
+                            # Agent loses - unless has shield
+                            if not has_shield:
+                                agent['alive'] = False
+                                rewards[i] -= 5.0
+                                rewards[j] += 3.0
+                                if self.team_mode:
+                                    self.teammate_deaths.append({'team': agent['team'], 'x': hx, 'y': hy, 'idx': i})
                         else:
-                            agent['alive'] = other['alive'] = False
-                            rewards[i] = rewards[j] = -3.0
-                            if self.team_mode:
-                                self.teammate_deaths.append({'team': agent['team'], 'x': hx, 'y': hy, 'idx': i})
-                                self.teammate_deaths.append({'team': other['team'], 'x': oh['x'], 'y': oh['y'], 'idx': j})
+                            # Tie - both die unless shielded
+                            if not has_shield:
+                                agent['alive'] = False
+                                rewards[i] -= 3.0
+                                if self.team_mode:
+                                    self.teammate_deaths.append({'team': agent['team'], 'x': hx, 'y': hy, 'idx': i})
+                            if not other_has_shield:
+                                other['alive'] = False
+                                rewards[j] -= 3.0
+                                if self.team_mode:
+                                    self.teammate_deaths.append({'team': other['team'], 'x': oh['x'], 'y': oh['y'], 'idx': j})
                     break
 
                 other_body = set((s['x'], s['y']) for s in other['segments'][1:])
                 if (hx, hy) in other_body:
                     if is_teammate:
-                        # Teammates block but don't kill
                         rewards[i] -= 0.1
                     else:
-                        # Opponent body collision - death
-                        agent['alive'] = False
-                        rewards[i] -= 5.0
-                        rewards[j] += 2.0
-                        if self.team_mode:
-                            self.teammate_deaths.append({'team': agent['team'], 'x': hx, 'y': hy, 'idx': i})
+                        # Body collision - shield protects
+                        if not has_shield:
+                            agent['alive'] = False
+                            rewards[i] -= 5.0
+                            rewards[j] += 2.0
+                            if self.team_mode:
+                                self.teammate_deaths.append({'team': agent['team'], 'x': hx, 'y': hy, 'idx': i})
                     break
 
-        # Pickups
+        # Drop guns when agents die + check for Leader Grave
+        for i, agent in enumerate(self.agents):
+            if not agent['alive'] and len(agent['segments']) > 0:
+                dying_length = len(agent['segments'])
+                head = agent['segments'][0]
+                drop_pos = (head['x'], head['y'])
+
+                # Check if this was the leader (longest snake)
+                max_alive_length = max((len(a['segments']) for a in self.agents if a['alive']), default=0)
+                if dying_length > max_alive_length and self.leader_grave is None:
+                    # Create Leader Grave!
+                    self.leader_grave = {
+                        'x': head['x'], 'y': head['y'],
+                        'spawned': 0, 'last_spawn': self.step_count
+                    }
+
+                # Drop a gun at death position
+                if 0 <= drop_pos[0] < self.WORLD_COLS and 0 <= drop_pos[1] < self.WORLD_ROWS:
+                    if drop_pos not in self.gun_pickups:
+                        self.gun_pickups[drop_pos] = random.randint(0, 3)
+                # Clear segments to prevent multiple drops
+                agent['segments'] = []
+
+        # Leader Grave spawns powerups over time
+        if self.leader_grave and self.leader_grave['spawned'] < 5:
+            if self.step_count - self.leader_grave['last_spawn'] >= 15:  # Every 15 steps
+                # Spawn powerup in ring around grave
+                angle = (self.leader_grave['spawned'] / 5) * 2 * 3.14159
+                dist = 2 + self.leader_grave['spawned']
+                px = int(self.leader_grave['x'] + dist * np.cos(angle))
+                py = int(self.leader_grave['y'] + dist * np.sin(angle))
+                px = max(0, min(self.WORLD_COLS - 1, px))
+                py = max(0, min(self.WORLD_ROWS - 1, py))
+                if (px, py) not in self.powerup_pickups:
+                    self.powerup_pickups[(px, py)] = random.randint(0, 2)
+                self.leader_grave['spawned'] += 1
+                self.leader_grave['last_spawn'] = self.step_count
+
+        # Gun pickups (only spawn from kills, collected here)
         for i, agent in enumerate(self.agents):
             if not agent['alive']: continue
             head = agent['segments'][0]
             pos = (head['x'], head['y'])
-
-            if pos in self.health_pickups:
-                self.health_pickups.remove(pos)
-                for seg in agent['segments'][1:]:
-                    if seg['hp'] != float('inf'):
-                        seg['hp'] = min(seg['hp'] + 30, seg['maxHp'])
-                rewards[i] += 0.5
-                self.health_pickups.add((random.randint(0, self.WORLD_COLS-1), random.randint(0, self.WORLD_ROWS-1)))
 
             if pos in self.gun_pickups:
                 gun_type = self.gun_pickups[pos]
@@ -410,7 +468,19 @@ class LocomotEnv:
                 self.segment_map[prev_tail] = (i, len(agent['segments']) - 1)
                 agent['score'] += 1
                 rewards[i] += 1.0
-                self.gun_pickups[(random.randint(0, self.WORLD_COLS-1), random.randint(0, self.WORLD_ROWS-1))] = random.randint(0, 3)
+                # NO respawn - guns only drop from kills!
+
+            # Powerup collection
+            if pos in self.powerup_pickups:
+                powerup_type = self.powerup_pickups[pos]
+                del self.powerup_pickups[pos]
+                if powerup_type == POWERUP_SPEED:
+                    agent['speed_until'] = self.step_count + POWERUP_DURATION
+                elif powerup_type == POWERUP_SHIELD:
+                    agent['shield_until'] = self.step_count + POWERUP_DURATION
+                elif powerup_type == POWERUP_MAGNET:
+                    agent['magnet_until'] = self.step_count + POWERUP_DURATION
+                rewards[i] += 1.5  # Powerups are valuable!
 
         observations = [self.get_vision(i) for i in range(self.num_agents)]
         dones = [not a['alive'] for a in self.agents]
@@ -658,6 +728,10 @@ class Trainer:
 
                 progress.update(task, advance=1,
                     description=f"[cyan]R:{avg_r:+.1f} Win:{win_rate:.0%} ε:{self.epsilon:.2f}")
+
+                # Write progress to file for watcher
+                with open('/tmp/training_progress.txt', 'w') as f:
+                    f.write(f"{mode_name},{ep},{episodes},{avg_r:.1f},{win_rate:.2f},{self.epsilon:.3f}\n")
 
                 if ep % 500 == 0 and ep > 0:
                     self.save_brain(f'brain_{mode_name.lower()}_checkpoint_{ep}.json')

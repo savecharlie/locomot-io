@@ -1930,12 +1930,12 @@
         // Qwen AI name generator - generates realistic player names
         const FALLBACK_NAMES = ['xX_Pro_Xx', 'NoobMaster', 'ShadowKing', 'DarkWolf', 'IceQueen', 'BlazeFury', 'NightOwl', 'StormRider', 'Ninja99', 'ProSniper', 'GhostRider', 'DeathBlade'];
         const generatedNames = new Set();
-        
+
         async function generateTrainName() {
             // Try Cloudflare tunnel first, then localhost
             const endpoints = [
-                'https://ollama.locomot.io/api/generate',
-                'http://localhost:11434/api/generate'
+                'https://ollama.locomot.io/api/chat',
+                'http://localhost:11434/api/chat'
             ];
             for (const endpoint of endpoints) {
             try {
@@ -1943,22 +1943,21 @@
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
-                        model: 'qwen2.5:0.5b',
-                        prompt: 'Gaming usernames: xXShadowXx, NightWolf99, BlazeMaster, IceKing2000,',
+                        model: 'qwen2.5:3b',
+                        messages: [
+                            { role: 'system', content: 'You generate gaming usernames. Output ONLY the username, nothing else.' },
+                            { role: 'user', content: 'Generate a gaming username' }
+                        ],
                         stream: false,
-                        options: { num_predict: 10, temperature: 1.2 }
+                        options: { num_predict: 15, temperature: 1.3 }
                     }),
-                    signal: AbortSignal.timeout(5000)
+                    signal: AbortSignal.timeout(8000)
                 });
                 const data = await res.json();
-                const matches = data.response.match(/[A-Za-z][A-Za-z0-9_]{2,11}/g);
-                if (matches) {
-                    for (const name of matches) {
-                        if (!generatedNames.has(name) && name.length >= 3) {
-                            generatedNames.add(name);
-                            return name;
-                        }
-                    }
+                const name = data.message?.content?.trim();
+                if (name && name.length >= 3 && name.length <= 15 && !generatedNames.has(name)) {
+                    generatedNames.add(name);
+                    return name;
                 }
             } catch (e) { continue; }
             }
