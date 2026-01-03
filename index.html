@@ -1927,70 +1927,142 @@
         const MVP_SWITCH_THRESHOLD = 1.5; // New MVP must be 50% more interesting to switch
         let cameraLerpFactor = 0.1; // Dynamic lerp factor for smooth panning
         
-        // Qwen AI name generator - generates creative player names
-        const FALLBACK_NAMES = ['Phantom', 'Eclipse', 'Vortex', 'Nebula', 'Havoc', 'Cipher', 'Spectre', 'Zenith', 'Onyx', 'Crimson', 'Raven', 'Tempest', 'Nova', 'Flux', 'Ember', 'Wraith', 'Axiom', 'Pulse', 'Drift', 'Chaos'];
+        // Qwen AI name generator - batch generation with prefetch queue
+        const FALLBACK_NAMES = ['Phantom', 'Eclipse', 'Vortex', 'Nebula', 'Havoc', 'Cipher', 'Spectre', 'Zenith', 'Onyx', 'Crimson', 'Raven', 'Tempest', 'Nova', 'Flux', 'Ember', 'Wraith', 'Axiom', 'Pulse', 'Drift', 'Chaos', 'Vesper', 'Nyx', 'Aether', 'Solace', 'Revenant', 'Oblivion', 'Seraph', 'Dusk', 'Fury', 'Blight'];
         const generatedNames = new Set();
-        const usedPrefixes = new Set();
+        const nameQueue = [];
         let fallbackIndex = 0;
+        let fetchingBatch = false;
+
+        // Check if name is too similar to existing ones
+        function isNameUnique(name) {
+            if (!name || name.length < 4 || name.length > 12) return false;
+            if (generatedNames.has(name)) return false;
+            const prefix = name.slice(0, 4).toLowerCase();
+            for (const existing of generatedNames) {
+                if (existing.slice(0, 4).toLowerCase() === prefix) return false;
+            }
+            return true;
+        }
+
+        // Fetch batch of 15 names in one request
+        async function fetchNameBatch() {
+            if (fetchingBatch) return;
+            fetchingBatch = true;
+            try {
+                const res = await fetch('http://localhost:11434/api/chat', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        model: 'qwen2.5:3b',
+                        messages: [
+                            { role: 'system', content: 'Generate 15 unique creative gamer names. Single words, 4-10 letters, no numbers. Mythology, nature, emotion, abstract themes. Output as comma-separated list only.' },
+                            { role: 'user', content: 'Names:' }
+                        ],
+                        stream: false,
+                        options: { num_predict: 120, temperature: 1.4 }
+                    }),
+                    signal: AbortSignal.timeout(10000)
+                });
+                const text = (await res.json()).message?.content || '';
+                const names = text.split(/[,\n]+/).map(n => {
+                    n = n.replace(/[^a-zA-Z]/g, '').slice(0, 12);
+                    return n.length >= 4 ? n.charAt(0).toUpperCase() + n.slice(1).toLowerCase() : null;
+                }).filter(n => n && isNameUnique(n));
+                nameQueue.push(...names);
+            } catch (e) { console.log('Name batch fetch failed:', e); }
+            fetchingBatch = false;
+        }
 
         async function generateTrainName() {
-            const endpoint = 'http://localhost:11434/api/chat';
+            // Refill queue if low
+            if (nameQueue.length < 5 && !fetchingBatch) {
+                fetchNameBatch(); // Don't await - let it run in background
+            }
 
-            // Build exclusion hints
-            const recentNames = Array.from(generatedNames).slice(-15);
-            const prefixList = Array.from(usedPrefixes).slice(-10).join(', ');
-            const excludeClause = recentNames.length > 0
-                ? `\nAvoid starting with: ${prefixList}\nAlready used: ${recentNames.join(', ')}`
-                : '';
-
-            for (let attempt = 0; attempt < 3; attempt++) {
-                try {
-                    const res = await fetch(endpoint, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({
-                            model: 'qwen2.5:3b',
-                            messages: [
-                                { role: 'system', content: `Invent ONE unique gamer alias.
-Rules:
-- Single word, 4-10 letters
-- NO numbers, NO symbols
-- Creative: myth, nature, abstract, emotion
-- Examples: Phantom, Vesper, Havoc, Crimson, Nyx, Solace, Aether, Wraith${excludeClause}
-Output ONLY the word.` },
-                                { role: 'user', content: 'New unique name:' }
-                            ],
-                            stream: false,
-                            options: { num_predict: 8, temperature: 1.4 }
-                        }),
-                        signal: AbortSignal.timeout(5000)
-                    });
-                    const data = await res.json();
-                    let name = data.message?.content?.trim().split(/\s/)[0];
-                    if (name) {
-                        name = name.replace(/[^a-zA-Z]/g, '').slice(0, 10);
-                        name = name.charAt(0).toUpperCase() + name.slice(1).toLowerCase();
+            // Try queue first
+            while (nameQueue.length > 0) {
+                const name = nameQueue.shift();
+                if (isNameUnique(name)) {
+                    generatedNames.add(name);
+                    if (generatedNames.size > 80) {
+                        generatedNames.delete(generatedNames.values().next().value);
                     }
-                    // Check: unique, good length, and prefix not too similar
-                    const prefix = name?.slice(0, 4).toLowerCase();
-                    if (name && name.length >= 4 && name.length <= 10
-                        && !generatedNames.has(name) && !usedPrefixes.has(prefix)) {
+                    return name;
+                }
+            }
+
+            // Wait for batch if queue empty
+            if (fetchingBatch) {
+                await new Promise(r => setTimeout(r, 500));
+                if (nameQueue.length > 0) {
+                    const name = nameQueue.shift();
+                    if (isNameUnique(name)) {
                         generatedNames.add(name);
-                        usedPrefixes.add(prefix);
-                        // Keep prefix set from growing too large
-                        if (usedPrefixes.size > 30) {
-                            const oldest = usedPrefixes.values().next().value;
-                            usedPrefixes.delete(oldest);
-                        }
                         return name;
                     }
-                } catch (e) { continue; }
+                }
             }
+
             // Fallback: cycle through cool names
-            const name = FALLBACK_NAMES[fallbackIndex % FALLBACK_NAMES.length];
-            fallbackIndex++;
-            return name;
+            for (let i = 0; i < FALLBACK_NAMES.length; i++) {
+                const name = FALLBACK_NAMES[(fallbackIndex + i) % FALLBACK_NAMES.length];
+                if (isNameUnique(name)) {
+                    fallbackIndex = (fallbackIndex + i + 1) % FALLBACK_NAMES.length;
+                    generatedNames.add(name);
+                    return name;
+                }
+            }
+            return FALLBACK_NAMES[fallbackIndex++ % FALLBACK_NAMES.length];
         }
+
+        // Prefetch first batch on load
+        fetchNameBatch();
+
+        // Distance-priority naming queue
+        const namingQueue = [];
+        let namingInProgress = false;
+
+        function queueForNaming(enemy) {
+            if (enemy && !enemy._namingQueued) {
+                enemy._namingQueued = true;
+                namingQueue.push(enemy);
+            }
+        }
+
+        async function processNamingQueue() {
+            if (namingInProgress || namingQueue.length === 0) return;
+            if (!snake[0]) return; // No player yet
+            namingInProgress = true;
+
+            // Sort by distance to player (closest first)
+            const px = snake[0].x, py = snake[0].y;
+            namingQueue.sort((a, b) => {
+                const aDist = a.segments?.[0] ? Math.abs(a.segments[0].x - px) + Math.abs(a.segments[0].y - py) : 9999;
+                const bDist = b.segments?.[0] ? Math.abs(b.segments[0].x - px) + Math.abs(b.segments[0].y - py) : 9999;
+                return aDist - bDist;
+            });
+
+            // Name the closest one
+            const enemy = namingQueue.shift();
+            if (enemy && enemy.segments?.length > 0 && enemy.name === '...') {
+                const name = await generateTrainName();
+                if (enemy.segments.length > 0) {
+                    enemy.name = name;
+                    if (reputationSystem) reputationSystem.initEnemy(enemy.id, name);
+                }
+            }
+            enemy._namingQueued = false;
+            namingInProgress = false;
+
+            // Process next immediately if queue not empty
+            if (namingQueue.length > 0) {
+                setTimeout(processNamingQueue, 50);
+            }
+        }
+
+        // Run naming processor periodically
+        setInterval(processNamingQueue, 200);
         
         let teamMode = false; // Set by mode selection at start
         let playerTeam = 'blue'; // Player's team (blue or red)
@@ -3827,11 +3899,9 @@ Output ONLY the word.` },
             if (teamMode) newEnemy.color = newEnemy.team === "blue" ? "#0af" : "#f55";
             else newEnemy.color = initialGunType.color; // Use gun color for "All Same Gun"
 
-            // Generate AI name asynchronously (only host generates, syncs to clients)
+            // Queue for distance-priority naming (only host generates, syncs to clients)
             if (!Multiplayer.connected || Multiplayer.isHost) {
-                generateTrainName().then(name => {
-                    if (newEnemy.segments.length > 0) newEnemy.name = name;
-                });
+                queueForNaming(newEnemy);
             }
 
         }
@@ -4385,15 +4455,9 @@ Output ONLY the word.` },
             if (teamMode) newEnemy.color = newEnemy.team === "blue" ? "#0af" : "#f55";
             else newEnemy.color = initialGunType.color; // Use gun color for "All Same Gun"
             
-            // Generate AI name asynchronously (only host generates, syncs to clients)
+            // Queue for distance-priority naming (only host generates, syncs to clients)
             if (!Multiplayer.connected || Multiplayer.isHost) {
-                generateTrainName().then(name => {
-                    if (newEnemy.segments.length > 0) {
-                        newEnemy.name = name;
-                        // Update reputation with real name
-                        reputationSystem.initEnemy(newEnemy.id, name);
-                    }
-                });
+                queueForNaming(newEnemy);
             }
 
             // Initialize reputation for this enemy
