@@ -2334,9 +2334,23 @@
         // === RUN TRACKER - Engagement metrics per run ===
         const RunTracker = {
             currentRun: null,
+            lastRunEnd: 0,
+            pausedRun: null, // Store run data during instant respawns
             uploadUrl: 'https://locomot-io.savecharlie.partykit.dev/party/collective',
 
             startRun(mode, username) {
+                const now = performance.now();
+
+                // If we just ended a run within 3s, this is an instant respawn - continue that run
+                if (this.pausedRun && (now - this.lastRunEnd) < 3000) {
+                    console.log('[RUN] Continuing after instant respawn');
+                    this.currentRun = this.pausedRun;
+                    this.currentRun.events.push({ t: Math.round(now - this.currentRun.perfStart), type: 'instant_respawn' });
+                    this.pausedRun = null;
+                    return;
+                }
+
+                this.pausedRun = null;
                 this.currentRun = {
                     runId: crypto.randomUUID(),
                     playerId: username || localStorage.getItem('locomot_player_id') || this.getOrCreatePlayerId(),
@@ -2384,35 +2398,52 @@
             endRun(deathReason, finalScore, finalLength) {
                 if (!this.currentRun) return;
 
-                const durationMs = Math.round(performance.now() - this.currentRun.perfStart);
+                // Pause the run - might be continued if instant respawn
+                this.pausedRun = this.currentRun;
+                this.lastRunEnd = performance.now();
+                this.currentRun = null;
+
+                // Schedule actual upload after delay (gives time for instant respawn to cancel)
+                const runToUpload = this.pausedRun;
+                setTimeout(() => {
+                    // If run was continued, don't upload
+                    if (this.pausedRun !== runToUpload) return;
+
+                    this.pausedRun = null;
+                    this.uploadRun(runToUpload, deathReason, finalScore, finalLength);
+                }, 3500); // Wait 3.5s to see if instant respawn
+            },
+
+            uploadRun(run, deathReason, finalScore, finalLength) {
+                const durationMs = Math.round(performance.now() - run.perfStart);
                 const durationS = durationMs / 1000;
-                const intensity = durationS > 0 ? ((this.currentRun.turns + this.currentRun.pickups + this.currentRun.kills) / durationS * 60) : 0;
+                const intensity = durationS > 0 ? ((run.turns + run.pickups + run.kills) / durationS * 60) : 0;
 
                 // Engagement heuristic: >3 min OR good intensity OR came back
-                const engaged = durationMs > 180000 || intensity > 30 || this.currentRun.peakLength > 15;
+                const engaged = durationMs > 180000 || intensity > 30 || run.peakLength > 15;
 
                 const summary = {
                     type: 'run_summary',
-                    runId: this.currentRun.runId,
-                    playerId: this.currentRun.playerId,
-                    mode: this.currentRun.mode,
-                    startTime: this.currentRun.startTime,
+                    runId: run.runId,
+                    playerId: run.playerId,
+                    mode: run.mode,
+                    startTime: run.startTime,
                     durationMs,
                     finalScore,
                     finalLength,
-                    peakLength: this.currentRun.peakLength,
-                    peakScore: this.currentRun.peakScore,
-                    turns: this.currentRun.turns,
-                    pickups: this.currentRun.pickups,
-                    kills: this.currentRun.kills,
+                    peakLength: run.peakLength,
+                    peakScore: run.peakScore,
+                    turns: run.turns,
+                    pickups: run.pickups,
+                    kills: run.kills,
                     intensity: Math.round(intensity * 10) / 10,
-                    focusLostCount: this.currentRun.focusLostCount,
+                    focusLostCount: run.focusLostCount,
                     deathReason,
                     engaged: engaged ? 1 : 0,
-                    events: this.currentRun.events.slice(-200) // cap payload
+                    events: run.events.slice(-200) // cap payload
                 };
 
-                console.log('[RUN] Ended:', summary.runId, 'duration:', durationS.toFixed(1) + 's', 'engaged:', engaged);
+                console.log('[RUN] Uploaded:', summary.runId, 'duration:', durationS.toFixed(1) + 's', 'engaged:', engaged);
 
                 // Send via beacon (survives page close)
                 if (navigator.sendBeacon) {
@@ -2425,8 +2456,6 @@
                         body: JSON.stringify(summary)
                     }).catch(() => {});
                 }
-
-                this.currentRun = null;
             }
         };
 
