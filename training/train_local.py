@@ -480,9 +480,8 @@ class Trainer:
             opponents.append(opp)
         return opponents
 
-    def play_episode(self):
-        # Randomly choose FFA or Team mode (50/50)
-        env = LocomotEnv(num_agents=4, team_mode=None)
+    def play_episode(self, team_mode=False):
+        env = LocomotEnv(num_agents=4, team_mode=team_mode)
         obs = env.reset()
         opponents = self.get_opponents()
         total_reward = 0
@@ -507,20 +506,18 @@ class Trainer:
         self.total_games += 1
 
         # Determine win based on mode
-        if env.team_mode:
-            # Team mode: agent 0 is on team 0, wins if team 0 survives
+        if team_mode:
             my_team = env.agents[0]['team']
             team_alive = sum(1 for a in env.agents if a['alive'] and a['team'] == my_team)
             enemy_alive = sum(1 for a in env.agents if a['alive'] and a['team'] != my_team)
             won = team_alive > 0 and enemy_alive == 0
         else:
-            # FFA: win if last one standing
             won = env.agents[0]['alive']
 
         if won:
             self.wins += 1
 
-        return total_reward, won, len(env.agents[0]['segments']), env.team_mode
+        return total_reward, won, len(env.agents[0]['segments'])
 
     def train_step(self):
         if len(self.memory) < BATCH_SIZE:
@@ -551,11 +548,10 @@ class Trainer:
         for tp, cp in zip(self.target.parameters(), self.model.parameters()):
             tp.data.copy_(tau * cp.data + (1 - tau) * tp.data)
 
-    def train(self, episodes=EPISODES):
+    def train(self, episodes=EPISODES, team_mode=False, mode_name="FFA"):
         console.print(Panel.fit(
-            "[bold cyan]LOCOMOT.IO Neural Network Training[/bold cyan]\n"
-            f"[dim]Device: {device} | Episodes: {episodes}[/dim]\n"
-            "[dim]Training on: FFA (50%) + Team Mode (50%)[/dim]",
+            f"[bold cyan]LOCOMOT.IO Neural Network Training - {mode_name}[/bold cyan]\n"
+            f"[dim]Device: {device} | Episodes: {episodes}[/dim]",
             border_style="cyan"
         ))
 
@@ -572,10 +568,10 @@ class Trainer:
             console=console,
         ) as progress:
 
-            task = progress.add_task("[cyan]Training...", total=episodes)
+            task = progress.add_task(f"[cyan]{mode_name}...", total=episodes)
 
             for ep in range(episodes):
-                reward, won, length, was_team_mode = self.play_episode()
+                reward, won, length = self.play_episode(team_mode=team_mode)
                 recent_rewards.append(reward)
 
                 for _ in range(2):
@@ -596,21 +592,22 @@ class Trainer:
                     description=f"[cyan]R:{avg_r:+.1f} Win:{win_rate:.0%} ε:{self.epsilon:.2f}")
 
                 if ep % 500 == 0 and ep > 0:
-                    self.save_brain(f'brain_checkpoint_{ep}.json')
+                    self.save_brain(f'brain_{mode_name.lower()}_checkpoint_{ep}.json')
                     self.wins = 0
                     self.total_games = 0
 
         elapsed = time.time() - start_time
 
-        # Save final brain
+        # Save final brain with mode in filename
         timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-        filename = f'brain_{timestamp}.json'
+        filename = f'brain_{mode_name.lower()}_{timestamp}.json'
         self.save_brain(filename)
 
         # Results table
-        table = Table(title="Training Complete!", border_style="green")
+        table = Table(title=f"{mode_name} Training Complete!", border_style="green")
         table.add_column("Metric", style="cyan")
         table.add_column("Value", style="green")
+        table.add_row("Mode", mode_name)
         table.add_row("Time", f"{elapsed:.1f}s")
         table.add_row("Speed", f"{episodes/elapsed:.1f} ep/s")
         table.add_row("Final ε", f"{self.epsilon:.3f}")
@@ -621,12 +618,28 @@ class Trainer:
 
 # ========== MAIN ==========
 if __name__ == '__main__':
-    # Fresh start with new 133-input architecture - don't load old 96-input brains
-    console.print("[yellow]Starting fresh training with 133-input network[/yellow]")
-    console.print("[dim]Old 96-input brains are incompatible[/dim]\n")
+    import argparse
+    parser = argparse.ArgumentParser(description='Train LOCOMOT.IO neural networks')
+    parser.add_argument('--mode', choices=['ffa', 'team', 'both'], default='both',
+                        help='Training mode: ffa, team, or both (default: both)')
+    parser.add_argument('--episodes', type=int, default=EPISODES,
+                        help=f'Episodes per mode (default: {EPISODES})')
+    args = parser.parse_args()
 
-    trainer = Trainer(brain_path=None)  # Fresh start
-    output_file = trainer.train(EPISODES)
+    console.print("[yellow]LOCOMOT.IO Neural Network Training[/yellow]")
+    console.print("[dim]133-input architecture[/dim]\n")
 
-    console.print(f"\n[bold green]Done![/bold green] New brain: [cyan]{output_file}[/cyan]")
-    console.print("[dim]Copy to index.html to deploy[/dim]")
+    if args.mode in ['ffa', 'both']:
+        console.print("[bold blue]Training FFA Brain...[/bold blue]\n")
+        ffa_trainer = Trainer(brain_path=None)
+        ffa_file = ffa_trainer.train(args.episodes, team_mode=False, mode_name="FFA")
+        console.print(f"[green]FFA brain saved:[/green] {ffa_file}\n")
+
+    if args.mode in ['team', 'both']:
+        console.print("[bold red]Training Team Brain...[/bold red]\n")
+        team_trainer = Trainer(brain_path=None)
+        team_file = team_trainer.train(args.episodes, team_mode=True, mode_name="Team")
+        console.print(f"[green]Team brain saved:[/green] {team_file}\n")
+
+    console.print("[bold green]Done![/bold green]")
+    console.print("[dim]Copy brain files to index.html to deploy[/dim]")
