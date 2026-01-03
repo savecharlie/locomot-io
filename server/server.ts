@@ -1071,6 +1071,8 @@ export default class LocomotServer implements Party.Server {
             name: reg.name || reg.genome_id,
             source: reg.source || 'unknown',
             keys: reg.keys,  // Store which keys this genome has
+            parents: reg.parents || [],  // Parent genome IDs for bred genomes
+            generation: reg.generation || 0,  // Generation number (0 = original player)
             created: new Date().toISOString(),
             performance: { games: 0, avg_score: 0, avg_survival: 0, win_rate: 0 },
             active: manifest.genomes.length < manifest.max_active
