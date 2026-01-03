@@ -7716,7 +7716,9 @@
             gameState = 'playing';
             canvas.classList.add('playing');
             RunTracker.startRun('timed', Multiplayer.username);
+            console.log('[TIMED] Starting recorder, enabled:', DataRecorder.enabled);
             DataRecorder.startSession();
+            console.log('[TIMED] Session started, session exists:', !!DataRecorder.session);
             devMode.reportJoin(Multiplayer.username || 'Anonymous', Multiplayer.playerId);
             Ticker.dispatch(`⏱️ 2 MINUTES`, 3);
         }
@@ -7736,6 +7738,7 @@
             localStorage.setItem('locomotio_timed_bests', JSON.stringify(timedModeBests));
 
             // End recording
+            console.log('[TIMED] Ending session, frames:', DataRecorder.session?.frames?.length || 0);
             DataRecorder.endSession(timedModeScore);
             RunTracker.endRun('Time up!', timedModeScore, snake.length);
 
