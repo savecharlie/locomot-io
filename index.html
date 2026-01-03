@@ -4148,41 +4148,24 @@
 
         function applyEnemyHit(data) {
             if (!data || !enemies.length) return;
-            const tx = data.x;
-            const ty = data.y;
             const damage = data.damage || 0;
-            if (typeof tx !== 'number' || typeof ty !== 'number' || damage <= 0) {
-                console.log('[ENEMY_HIT] Invalid data:', data);
-                return;
-            }
+            if (damage <= 0) return;
 
-            const candidates = enemies.filter(e => {
-                if (!e.segments || e.segments.length === 0) return false;
-                if (data.name && e.name !== data.name) return false;
-                if (data.team && e.team !== data.team) return false;
-                return true;
-            });
-            const search = candidates.length ? candidates : enemies;
-            console.log('[ENEMY_HIT] Looking for', data.name, 'at', tx, ty, '- candidates:', candidates.length);
+            // Find enemy by name+team (trust the client hit something)
+            const enemy = enemies.find(e =>
+                e.segments && e.segments.length > 0 &&
+                e.name === data.name && e.team === data.team
+            );
 
-            let best = null;
-            let bestDist = Infinity;
-            for (const e of search) {
-                if (!e.segments) continue;
-                for (const seg of e.segments) {
-                    const dist = Math.abs(seg.x - tx) + Math.abs(seg.y - ty);
-                    if (dist < bestDist) {
-                        bestDist = dist;
-                        best = seg;
-                    }
-                }
-            }
-            console.log('[ENEMY_HIT] Best dist:', bestDist, 'threshold: 2');
-            if (best && bestDist <= 5) {  // Increased threshold from 2 to 5
-                console.log('[ENEMY_HIT] Applying', damage, 'damage!');
-                best.hp -= damage;
-            } else {
-                console.log('[ENEMY_HIT] MISS - enemy moved too far');
+            if (enemy && enemy.segments.length > 1) {
+                // Damage a random body segment (not head)
+                const segIdx = 1 + Math.floor(Math.random() * (enemy.segments.length - 1));
+                enemy.segments[segIdx].hp -= damage;
+                console.log('[ENEMY_HIT]', damage, 'damage to', enemy.name);
+            } else if (enemy && enemy.segments.length === 1) {
+                // Only head - damage it
+                enemy.segments[0].hp -= damage;
+                console.log('[ENEMY_HIT]', damage, 'damage to', enemy.name, '(head)');
             }
         }
 
