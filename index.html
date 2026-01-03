@@ -1927,41 +1927,69 @@
         const MVP_SWITCH_THRESHOLD = 1.5; // New MVP must be 50% more interesting to switch
         let cameraLerpFactor = 0.1; // Dynamic lerp factor for smooth panning
         
-        // Qwen AI name generator - generates realistic player names
-        const FALLBACK_NAMES = ['xX_Pro_Xx', 'NoobMaster', 'ShadowKing', 'DarkWolf', 'IceQueen', 'BlazeFury', 'NightOwl', 'StormRider', 'Ninja99', 'ProSniper', 'GhostRider', 'DeathBlade'];
+        // Qwen AI name generator - generates creative player names
+        const FALLBACK_NAMES = ['Phantom', 'Eclipse', 'Vortex', 'Nebula', 'Havoc', 'Cipher', 'Spectre', 'Zenith', 'Onyx', 'Crimson', 'Raven', 'Tempest', 'Nova', 'Flux', 'Ember', 'Wraith', 'Axiom', 'Pulse', 'Drift', 'Chaos'];
         const generatedNames = new Set();
+        const usedPrefixes = new Set();
+        let fallbackIndex = 0;
 
         async function generateTrainName() {
-            // Try Cloudflare tunnel first, then localhost
-            const endpoints = [
-                'https://ollama.locomot.io/api/chat',
-                'http://localhost:11434/api/chat'
-            ];
-            for (const endpoint of endpoints) {
-            try {
-                const res = await fetch(endpoint, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        model: 'qwen2.5:3b',
-                        messages: [
-                            { role: 'system', content: 'You generate gaming usernames. Output ONLY the username, nothing else.' },
-                            { role: 'user', content: 'Generate a gaming username' }
-                        ],
-                        stream: false,
-                        options: { num_predict: 15, temperature: 1.3 }
-                    }),
-                    signal: AbortSignal.timeout(8000)
-                });
-                const data = await res.json();
-                const name = data.message?.content?.trim();
-                if (name && name.length >= 3 && name.length <= 15 && !generatedNames.has(name)) {
-                    generatedNames.add(name);
-                    return name;
-                }
-            } catch (e) { continue; }
+            const endpoint = 'http://localhost:11434/api/chat';
+
+            // Build exclusion hints
+            const recentNames = Array.from(generatedNames).slice(-15);
+            const prefixList = Array.from(usedPrefixes).slice(-10).join(', ');
+            const excludeClause = recentNames.length > 0
+                ? `\nAvoid starting with: ${prefixList}\nAlready used: ${recentNames.join(', ')}`
+                : '';
+
+            for (let attempt = 0; attempt < 3; attempt++) {
+                try {
+                    const res = await fetch(endpoint, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            model: 'qwen2.5:3b',
+                            messages: [
+                                { role: 'system', content: `Invent ONE unique gamer alias.
+Rules:
+- Single word, 4-10 letters
+- NO numbers, NO symbols
+- Creative: myth, nature, abstract, emotion
+- Examples: Phantom, Vesper, Havoc, Crimson, Nyx, Solace, Aether, Wraith${excludeClause}
+Output ONLY the word.` },
+                                { role: 'user', content: 'New unique name:' }
+                            ],
+                            stream: false,
+                            options: { num_predict: 8, temperature: 1.4 }
+                        }),
+                        signal: AbortSignal.timeout(5000)
+                    });
+                    const data = await res.json();
+                    let name = data.message?.content?.trim().split(/\s/)[0];
+                    if (name) {
+                        name = name.replace(/[^a-zA-Z]/g, '').slice(0, 10);
+                        name = name.charAt(0).toUpperCase() + name.slice(1).toLowerCase();
+                    }
+                    // Check: unique, good length, and prefix not too similar
+                    const prefix = name?.slice(0, 4).toLowerCase();
+                    if (name && name.length >= 4 && name.length <= 10
+                        && !generatedNames.has(name) && !usedPrefixes.has(prefix)) {
+                        generatedNames.add(name);
+                        usedPrefixes.add(prefix);
+                        // Keep prefix set from growing too large
+                        if (usedPrefixes.size > 30) {
+                            const oldest = usedPrefixes.values().next().value;
+                            usedPrefixes.delete(oldest);
+                        }
+                        return name;
+                    }
+                } catch (e) { continue; }
             }
-            return FALLBACK_NAMES[Math.floor(Math.random() * FALLBACK_NAMES.length)] + Math.floor(Math.random() * 999);
+            // Fallback: cycle through cool names
+            const name = FALLBACK_NAMES[fallbackIndex % FALLBACK_NAMES.length];
+            fallbackIndex++;
+            return name;
         }
         
         let teamMode = false; // Set by mode selection at start
