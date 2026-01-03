@@ -4575,14 +4575,15 @@
                         continue;
                     }
 
-                    if (headHitsBody(aHead, b.segments)) {
-                        // Any head hitting body = death (not just lone heads)
+                    const aHitsB = headHitsBody(aHead, b.segments);
+                    if (aHitsB) {
+                        alert('KILL: ' + a.name + ' hit ' + b.name + ' body');
                         applyKill(a, b, `Ran into ${b.name}'s body`);
                         continue;
                     }
 
                     if (headHitsBody(bHead, a.segments)) {
-                        // Any head hitting body = death (not just lone heads)
+                        alert('KILL: ' + b.name + ' hit ' + a.name + ' body');
                         applyKill(b, a, `Ran into ${a.name}'s body`);
                     }
                 }
