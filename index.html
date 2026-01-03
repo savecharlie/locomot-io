@@ -1235,11 +1235,6 @@
             drawOtherPlayers(ctx) {
                 for (const player of this.otherPlayers.values()) {
                     if (!player.segments || player.segments.length === 0) continue;
-                    // Debug team mode
-                    if (teamMode && !this._teamDebugLogged) {
-                        console.log('[TEAM DEBUG] teamMode:', teamMode, 'playerTeam:', playerTeam, 'otherPlayer:', player.name, 'team:', player.team);
-                        this._teamDebugLogged = true;
-                    }
 
                     // Draw segments
                     for (let i = player.segments.length - 1; i >= 0; i--) {
@@ -6195,15 +6190,17 @@
                 }
 
                 // Draw from back to front
+                // Team mode: AI enemies are always red (opponent)
+                const enemyColor = teamMode ? '#f55' : e.color;
                 for (let i = e.segments.length - 1; i >= 0; i--) {
                     const seg = e.segments[i];
                     const x = seg.x * GRID + GRID/2, y = seg.y * GRID + GRID/2;
                     const segDir = getEnemySegDir(i);
 
                     if (i === 0) {
-                        drawEnemyLocomotive(ctx, x, y, GRID, segDir, trainFrame, e.color, e.personality.neural);
+                        drawEnemyLocomotive(ctx, x, y, GRID, segDir, trainFrame, enemyColor, e.personality.neural);
                     } else {
-                        drawEnemyBoxcar(ctx, x, y, GRID, segDir, trainFrame, e.color, seg.hp, seg.maxHp);
+                        drawEnemyBoxcar(ctx, x, y, GRID, segDir, trainFrame, enemyColor, seg.hp, seg.maxHp);
                     }
 
                     // Health bar
@@ -6222,7 +6219,7 @@
                 const hx = head.x * GRID + GRID/2;
                 const hy = head.y * GRID - 12;
                 ctx.save();
-                ctx.fillStyle = e.color || '#fff';
+                ctx.fillStyle = enemyColor || '#fff';
                 ctx.font = '6px "Press Start 2P"';
                 ctx.textAlign = 'center';
                 ctx.fillText(`🤖 ${e.name || 'Train'}`, hx, hy);
