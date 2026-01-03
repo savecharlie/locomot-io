@@ -89,6 +89,7 @@ class LocomotEnv:
         self.projectiles = []  # Simulated bullets
         # If team_mode is None, randomly choose per episode (50/50)
         self.team_mode = team_mode if team_mode is not None else random.choice([True, False])
+        self.teammate_deaths = []  # Track teammate deaths for penalty distribution
         self.reset()
 
     def reset(self):
@@ -98,6 +99,7 @@ class LocomotEnv:
         self.segment_map = {}
         self.step_count = 0
         self.projectiles = []
+        self.teammate_deaths = []  # Clear death tracker
 
         for i in range(self.num_agents):
             x = random.randint(8, self.WORLD_COLS - 8)
@@ -253,6 +255,7 @@ class LocomotEnv:
     def step(self, actions):
         self.step_count += 1
         rewards = np.zeros(self.num_agents, dtype=np.float32)
+        self.teammate_deaths = []  # Track deaths this step for proximity penalty
 
         # Apply turns and track momentum
         for i, agent in enumerate(self.agents):
@@ -319,6 +322,9 @@ class LocomotEnv:
             if hx < 0 or hx >= self.WORLD_COLS or hy < 0 or hy >= self.WORLD_ROWS:
                 agent['alive'] = False
                 rewards[i] -= 5.0
+                # Record death for teammate penalty
+                if self.team_mode:
+                    self.teammate_deaths.append({'team': agent['team'], 'x': hx, 'y': hy, 'idx': i})
                 continue
 
             # Self
@@ -326,6 +332,9 @@ class LocomotEnv:
             if (hx, hy) in my_body:
                 agent['alive'] = False
                 rewards[i] -= 5.0
+                # Record death for teammate penalty
+                if self.team_mode:
+                    self.teammate_deaths.append({'team': agent['team'], 'x': hx, 'y': hy, 'idx': i})
                 continue
 
             # Other agents
@@ -346,13 +355,20 @@ class LocomotEnv:
                             other['alive'] = False
                             rewards[j] -= 5.0
                             rewards[i] += 3.0
+                            if self.team_mode:
+                                self.teammate_deaths.append({'team': other['team'], 'x': oh['x'], 'y': oh['y'], 'idx': j})
                         elif len(agent['segments']) < len(other['segments']):
                             agent['alive'] = False
                             rewards[i] -= 5.0
                             rewards[j] += 3.0
+                            if self.team_mode:
+                                self.teammate_deaths.append({'team': agent['team'], 'x': hx, 'y': hy, 'idx': i})
                         else:
                             agent['alive'] = other['alive'] = False
                             rewards[i] = rewards[j] = -3.0
+                            if self.team_mode:
+                                self.teammate_deaths.append({'team': agent['team'], 'x': hx, 'y': hy, 'idx': i})
+                                self.teammate_deaths.append({'team': other['team'], 'x': oh['x'], 'y': oh['y'], 'idx': j})
                     break
 
                 other_body = set((s['x'], s['y']) for s in other['segments'][1:])
@@ -365,6 +381,8 @@ class LocomotEnv:
                         agent['alive'] = False
                         rewards[i] -= 5.0
                         rewards[j] += 2.0
+                        if self.team_mode:
+                            self.teammate_deaths.append({'team': agent['team'], 'x': hx, 'y': hy, 'idx': i})
                     break
 
         # Pickups
@@ -399,18 +417,67 @@ class LocomotEnv:
         alive = sum(1 for a in self.agents if a['alive'])
 
         if self.team_mode:
-            # Team mode: game ends when one team is eliminated
+            # Calculate team segment counts
+            team0_segments = sum(len(a['segments']) for a in self.agents if a['alive'] and a['team'] == 0)
+            team1_segments = sum(len(a['segments']) for a in self.agents if a['alive'] and a['team'] == 1)
             team0_alive = sum(1 for a in self.agents if a['alive'] and a['team'] == 0)
             team1_alive = sum(1 for a in self.agents if a['alive'] and a['team'] == 1)
+
+            # Team segment advantage reward (continuous signal)
+            for i, agent in enumerate(self.agents):
+                if not agent['alive']:
+                    continue
+                my_team_segs = team0_segments if agent['team'] == 0 else team1_segments
+                enemy_team_segs = team1_segments if agent['team'] == 0 else team0_segments
+                # Small per-step reward for team segment advantage
+                seg_advantage = (my_team_segs - enemy_team_segs) / 20.0  # Normalized
+                rewards[i] += seg_advantage * 0.05
+
+            # Apply teammate death penalties (proximity-based)
+            for death in self.teammate_deaths:
+                death_x, death_y = death['x'], death['y']
+                death_team = death['team']
+                dead_idx = death['idx']
+
+                # Penalize surviving teammates based on proximity
+                for i, agent in enumerate(self.agents):
+                    if not agent['alive'] or i == dead_idx:
+                        continue
+                    if agent['team'] != death_team:
+                        continue  # Only penalize same team
+
+                    # Calculate distance to death
+                    head = agent['segments'][0]
+                    dist = abs(head['x'] - death_x) + abs(head['y'] - death_y)
+
+                    # Proximity-based penalty: closer = worse (could have helped)
+                    # Max penalty -3.0 if right next to them, scales down with distance
+                    if dist < 15:
+                        proximity_penalty = 3.0 * (1.0 - dist / 15.0)
+                        rewards[i] -= proximity_penalty
+
+            # Team mode: game ends when one team is eliminated
             game_over = team0_alive == 0 or team1_alive == 0 or self.step_count >= 500
 
-            if game_over and (team0_alive == 0 or team1_alive == 0):
-                winning_team = 0 if team0_alive > 0 else 1
-                for i, a in enumerate(self.agents):
-                    if a['team'] == winning_team:
-                        rewards[i] += 5.0  # Winning team bonus
-                    else:
-                        rewards[i] -= 2.0  # Losing team penalty
+            if game_over:
+                if team0_alive == 0 or team1_alive == 0:
+                    # One team eliminated - clear winner
+                    winning_team = 0 if team0_alive > 0 else 1
+                    for i, a in enumerate(self.agents):
+                        if a['team'] == winning_team:
+                            rewards[i] += 5.0  # Winning team bonus
+                        else:
+                            rewards[i] -= 2.0  # Losing team penalty
+                else:
+                    # Timeout - winner is team with more total segments
+                    winning_team = 0 if team0_segments > team1_segments else (1 if team1_segments > team0_segments else -1)
+                    if winning_team >= 0:
+                        for i, a in enumerate(self.agents):
+                            if a['alive']:
+                                if a['team'] == winning_team:
+                                    rewards[i] += 3.0  # Segment advantage win
+                                else:
+                                    rewards[i] -= 1.0  # Segment disadvantage loss
         else:
             # FFA mode: last one standing wins
             game_over = alive <= 1 or self.step_count >= 500
@@ -508,9 +575,10 @@ class Trainer:
         # Determine win based on mode
         if team_mode:
             my_team = env.agents[0]['team']
-            team_alive = sum(1 for a in env.agents if a['alive'] and a['team'] == my_team)
-            enemy_alive = sum(1 for a in env.agents if a['alive'] and a['team'] != my_team)
-            won = team_alive > 0 and enemy_alive == 0
+            my_team_segs = sum(len(a['segments']) for a in env.agents if a['alive'] and a['team'] == my_team)
+            enemy_segs = sum(len(a['segments']) for a in env.agents if a['alive'] and a['team'] != my_team)
+            # Win = team has more segments (or enemy eliminated)
+            won = my_team_segs > enemy_segs
         else:
             won = env.agents[0]['alive']
 

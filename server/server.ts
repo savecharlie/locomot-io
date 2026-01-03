@@ -369,6 +369,7 @@ export default class LocomotServer implements Party.Server {
           player.y = data.y;
           player.segments = data.segments;
           player.score = data.score;
+          if (data.direction !== undefined) player.direction = data.direction; // For AFK detection
           if (data.color) player.color = data.color; // "All Same Gun" - sync gun color
           if (typeof data.invincibleUntil === 'number') {
             player.invincibleUntil = data.invincibleUntil;
@@ -436,6 +437,19 @@ export default class LocomotServer implements Party.Server {
             x: data.x,
             y: data.y
           }));
+          break;
+
+        case 'kick_afk':
+          // Host is kicking an AFK player - broadcast removal to all clients
+          if (sender.id === this.state.hostId) {
+            console.log(`[SERVER] Host kicking AFK player: ${data.playerId}`);
+            this.state.players.delete(data.playerId);
+            this.room.broadcast(JSON.stringify({
+              type: 'player_left',
+              playerId: data.playerId,
+              reason: 'AFK'
+            }));
+          }
           break;
 
         case 'arena_sync':
