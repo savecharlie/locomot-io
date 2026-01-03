@@ -799,7 +799,11 @@
 
                     case 'state':
                         // Update all other players
-                        for (const p of data.players) {
+                        // DEBUG: Show player count PERMANENTLY in HUD
+                        if (data.players?.length > 1) {
+                            document.title = 'PVP:' + data.players.length;
+                        }
+                        for (const p of data.players || []) {
                             if (p.id === this.playerId) {
                                 if (p.team) playerTeam = p.team;
                                 continue;
@@ -844,9 +848,15 @@
                             }
                         }
                         if (data.targetId === this.playerId) {
-                            const killer = this.otherPlayers.get(data.fromId);
-                            deathReason = `Killed by ${killer?.name || 'player'}`;
+                            // Handle both player kills and enemy kills
+                            if (data.fromId === 'enemy') {
+                                deathReason = 'Collision with enemy';
+                            } else {
+                                const killer = this.otherPlayers.get(data.fromId);
+                                deathReason = `Killed by ${killer?.name || 'player'}`;
+                            }
                             if (gameState === 'playing') {
+                                haptic('death');
                                 respawn();
                             }
                         } else if (this.otherPlayers.has(data.targetId)) {
@@ -4361,9 +4371,9 @@
                         }
                     }
                 }
-                if (best && bestDist <= 2) {
+                if (best && bestDist <= 5) {
                     best.hp -= damage;
-                    debugLog('[HIT] ' + damage + ' dmg by coords (' + tx + ',' + ty + ')');
+                    debugLog('[HIT] ' + damage + ' dmg by coords (' + tx + ',' + ty + ') dist=' + bestDist);
                     return;
                 }
             }
@@ -4424,12 +4434,22 @@
             return true;
         }
 
+        // DEBUG: Track PvP status globally
+        let pvpDebugCounter = 0;
+
         function hostResolvePlayerCollisions() {
             if (!Multiplayer.connected || !Multiplayer.isHost) return false;
 
             const now = Date.now();
             const players = [];
             const hostInvUntil = invincibleTimer > 0 ? now + invincibleTimer : 0;
+
+            // DEBUG: Show other player count on HUD
+            pvpDebugCounter++;
+            if (pvpDebugCounter % 60 === 0) { // Every ~1 second
+                const el = document.querySelector('.leaderboard h3');
+                if (el) el.textContent = 'PVP:' + Multiplayer.otherPlayers.size;
+            }
 
             if (gameState === 'playing' && snake.length > 0) {
                 players.push({
@@ -4443,7 +4463,9 @@
             }
 
             for (const [id, op] of Multiplayer.otherPlayers) {
-                if (!op.segments || op.segments.length === 0) continue;
+                if (!op.segments || op.segments.length === 0) {
+                    continue;
+                }
                 players.push({
                     id,
                     name: op.name || 'player',
@@ -4469,7 +4491,9 @@
 
             const headHitsBody = (head, segments) => {
                 for (let i = 1; i < segments.length; i++) {
-                    if (segments[i].x === head.x && segments[i].y === head.y) return true;
+                    // Tolerance for network latency
+                    const dist = Math.abs(segments[i].x - head.x) + Math.abs(segments[i].y - head.y);
+                    if (dist <= 1) return true;
                 }
                 return false;
             };
@@ -4501,12 +4525,21 @@
                     const aHead = a.segments[0];
                     const bHead = b.segments[0];
                     if (!aHead || !bHead) continue;
+
+                    // Debug: ALERT when players are close
+                    const checkDist = Math.abs(aHead.x - bHead.x) + Math.abs(aHead.y - bHead.y);
+                    if (checkDist < 3) {
+                        alert('PVP CLOSE! ' + a.name + ' vs ' + b.name + ' dist=' + checkDist);
+                    }
                     const aLen = a.segments.length;
                     const bLen = b.segments.length;
                     const aIsLoneHead = aLen === 1;
                     const bIsLoneHead = bLen === 1;
 
-                    if (aHead.x === bHead.x && aHead.y === bHead.y) {
+                    // Check head collision with tolerance for network latency
+                    const headDist = Math.abs(aHead.x - bHead.x) + Math.abs(aHead.y - bHead.y);
+                    if (headDist <= 1) {  // Same tile OR adjacent (tolerance for latency)
+                        debugLog('[PVP] COLLISION! ' + a.name + ' vs ' + b.name);
                         // Size-based collision rules:
                         // - Lone head dies to anything
                         // - Equal size = both die
@@ -6507,6 +6540,9 @@
                             respawn();
                         }
                     }
+                    // DEBUG: Show host status permanently
+                    const hostDbg = document.querySelector('.leaderboard h3');
+                    if (hostDbg) hostDbg.textContent = Multiplayer.isHost ? 'HOST' : 'CLIENT';
                     // Only host runs enemy AI - non-hosts get enemy positions from host
                     const gameOver = (Multiplayer.connected && Multiplayer.isHost) ? updateEnemies(dt) : false;
                     if (gameOver) {
@@ -6546,23 +6582,17 @@
                                     });
                                     haptic('medium');
                                     if (playerIsLoneHead) {
-                                        // Both lone heads = both die
-                                        deathReason = 'Head-on collision with ' + (e.name || 'enemy');
-                                        haptic('death');
-                                        respawn();
+                                        // Both lone heads = both die - wait for host kill confirmation
+                                        debugLog('[COLLISION] Both lone heads - waiting for host kill');
                                         clientDied = true;
                                     }
                                 } else if (playerIsLoneHead) {
-                                    // Player is lone head, dies to non-lone enemy
-                                    deathReason = 'Head-on collision with ' + (e.name || 'enemy');
-                                    debugLog('[COLLISION] I am lone head, crushed by ' + e.name);
-                                    haptic('death');
-                                    respawn();
+                                    // Player is lone head, dies to non-lone enemy - wait for host kill confirmation
+                                    debugLog('[COLLISION] I am lone head, crushed by ' + e.name + ' - waiting for host kill');
                                     clientDied = true;
                                 } else if (playerLen === enemyLen) {
-                                    // Equal size = both die
-                                    deathReason = 'Head-on collision with ' + (e.name || 'enemy');
-                                    debugLog('[COLLISION] Equal size head-on with ' + e.name);
+                                    // Equal size = both die - send enemy kill, wait for host kill confirmation
+                                    debugLog('[COLLISION] Equal size head-on with ' + e.name + ' - waiting for host kill');
                                     Multiplayer.send({
                                         type: 'enemy_hit',
                                         stableId: e.stableId,
@@ -6571,21 +6601,17 @@
                                         x: head.x,
                                         y: head.y
                                     });
-                                    haptic('death');
-                                    respawn();
                                     clientDied = true;
                                 }
                                 // Size difference (neither lone head) = bounce, both survive
                                 if (clientDied) break;
                             }
-                            // Player head hits enemy body - player dies
+                            // Player head hits enemy body - player dies (lone head only)
                             for (let i = 1; i < e.segments.length; i++) {
                                 if (e.segments[i].x === playerHead.x && e.segments[i].y === playerHead.y) {
                                     if (snake.length === 1) {
-                                        deathReason = 'Ran into ' + (e.name || 'enemy') + ' body';
-                                        debugLog('[COLLISION] Body hit: ' + e.name);
-                                        haptic('death');
-                                        respawn();
+                                        // Wait for host kill confirmation
+                                        debugLog('[COLLISION] Body hit: ' + e.name + ' - waiting for host kill');
                                         clientDied = true;
                                     }
                                     break;

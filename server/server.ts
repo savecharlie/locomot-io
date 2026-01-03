@@ -440,16 +440,14 @@ export default class LocomotServer implements Party.Server {
 
         case 'arena_sync':
           // Forward arena sync to the target player (for syncing AI enemies)
-          for (const [id, conn] of this.room.getConnections()) {
-            if (id === data.targetId) {
-              conn.send(JSON.stringify({
-                type: 'arena_sync',
-                enemies: data.enemies,
-                pickups: data.pickups
-              }));
-              console.log(`Arena sync forwarded from ${sender.id} to ${data.targetId}`);
-              break;
-            }
+          const targetConn = [...this.room.getConnections()].find(c => c.id === data.targetId);
+          if (targetConn) {
+            targetConn.send(JSON.stringify({
+              type: 'arena_sync',
+              enemies: data.enemies,
+              pickups: data.pickups
+            }));
+            console.log(`Arena sync forwarded from ${sender.id} to ${data.targetId}`);
           }
           break;
 
@@ -465,12 +463,22 @@ export default class LocomotServer implements Party.Server {
 
         case 'enemy_hit':
         case 'enemy_aoe':
-          if (!this.state.hostId || sender.id === this.state.hostId) break;
-          for (const [id, conn] of this.room.getConnections()) {
-            if (id === this.state.hostId) {
-              conn.send(JSON.stringify(data));
-              break;
-            }
+          console.log(`[SERVER] ${data.type} from ${sender.id}, hostId=${this.state.hostId}`);
+          if (!this.state.hostId) {
+            console.log('[SERVER] No host - dropping');
+            break;
+          }
+          if (sender.id === this.state.hostId) {
+            console.log('[SERVER] Sender is host - dropping');
+            break;
+          }
+          // Relay to host
+          const hostConn = [...this.room.getConnections()].find(c => c.id === this.state.hostId);
+          if (hostConn) {
+            console.log('[SERVER] Relaying to host');
+            hostConn.send(JSON.stringify(data));
+          } else {
+            console.log('[SERVER] Host connection not found!');
           }
           break;
 
@@ -486,6 +494,10 @@ export default class LocomotServer implements Party.Server {
       }
 
       // Broadcast state to all players
+      const playerCount = this.state.players.size;
+      if (playerCount > 1) {
+        console.log('[SERVER] Broadcasting state to', playerCount, 'players');
+      }
       this.room.broadcast(JSON.stringify({
         type: 'state',
         players: Array.from(this.state.players.values()),
