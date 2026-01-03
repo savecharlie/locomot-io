@@ -5127,11 +5127,10 @@
                                 // sounds disabled
                                 Multiplayer.send({ type: 'hit', targetId: e.playerId, damage: p.damage });
                             } else {
-                                // Hit enemy AI - always apply damage locally
-                                seg.hp -= p.damage;
-                                // If client, also notify host
+                                // Hit enemy AI
                                 if (Multiplayer.connected && !Multiplayer.isHost) {
-                                    console.log('[CLIENT] Hit', e.name, '- sending to host');
+                                    // Client: send to host, don't apply locally
+                                    console.log('[CLIENT] Hit', e.name, e.team, '- sending to host');
                                     Multiplayer.send({
                                         type: 'enemy_hit',
                                         name: e.name,
@@ -5141,6 +5140,8 @@
                                         damage: p.damage
                                     });
                                 } else {
+                                    // Host or solo: apply damage directly
+                                    seg.hp -= p.damage;
                                     SpawnDirector.onCombat(p.damage, 0);
                                 }
                             }
