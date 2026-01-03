@@ -216,7 +216,7 @@
     <div class="game-container">
         <canvas id="gameCanvas"></canvas>
         <div class="touch-indicator">MOBILE: SWIPE TO TURN • HOLD+DRAG TO AIM | DESKTOP: WASD/ARROWS • MOUSE TO AIM</div>
-        <div class="leaderboard" id="leaderboard"><h3>🏆 LEADERBOARD</h3><div id="leaderboardEntries"></div></div>
+        <div class="leaderboard" id="leaderboard"><h3 id="leaderboardTitle">🏆 LEADERBOARD</h3><div id="leaderboardEntries"></div></div>
         <div class="wave-announce" id="waveAnnounce">WAVE 1</div>
         <div class="kill-feed" id="killFeed"></div>
         <div class="invite-link">INVITE: <span id="inviteLink" onclick="copyInvite()">loading...</span></div>
@@ -6222,10 +6222,15 @@
         function updateLeaderboard() {
             const entries = [];
             const showPlayerEntry = gameState === 'playing' && !isSpectating && !devMode.spectating;
+            let blueTotal = 0, redTotal = 0;
 
             // Only add player to leaderboard if alive
             if (showPlayerEntry) {
                 entries.push({ name: playerName || 'YOU', length: snake.length, isPlayer: true, isHuman: true, team: playerTeam });
+                if (teamMode) {
+                    if (playerTeam === 'blue') blueTotal += snake.length;
+                    else redTotal += snake.length;
+                }
             }
 
             // Add other multiplayer players
@@ -6242,6 +6247,10 @@
                             team: op.team,
                             isMVP: op.isMVP && gameState === 'dead'
                         });
+                        if (teamMode && op.team) {
+                            if (op.team === 'blue') blueTotal += op.segments.length;
+                            else redTotal += op.segments.length;
+                        }
                     }
                 }
             }
@@ -6259,8 +6268,27 @@
                         isNeural: e.personality.neural,
                         isMVP: e.isMVP && gameState === 'dead'
                     });
+                    if (teamMode && e.team) {
+                        if (e.team === 'blue') blueTotal += e.segments.length;
+                        else redTotal += e.segments.length;
+                    }
                 }
             }
+
+            // Update leaderboard title based on mode
+            const titleEl = document.getElementById('leaderboardTitle');
+            if (teamMode) {
+                if (blueTotal > redTotal) {
+                    titleEl.innerHTML = `<span style="color:#0af">BLUE</span> LEADS ${blueTotal}-${redTotal}`;
+                } else if (redTotal > blueTotal) {
+                    titleEl.innerHTML = `<span style="color:#f55">RED</span> LEADS ${redTotal}-${blueTotal}`;
+                } else {
+                    titleEl.innerHTML = `TIED ${blueTotal}-${redTotal}`;
+                }
+            } else {
+                titleEl.textContent = '🏆 LEADERBOARD';
+            }
+
             entries.sort((a, b) => b.length - a.length);
             const top = entries.slice(0, 12);
             document.getElementById('leaderboardEntries').innerHTML = top.map((e, i) => {
