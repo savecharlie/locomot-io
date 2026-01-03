@@ -1256,10 +1256,7 @@
                     ctx.fillStyle = '#fff';
                     ctx.font = '8px "Press Start 2P"';
                     ctx.textAlign = 'center';
-                    ctx.shadowColor = '#000';
-                    ctx.shadowBlur = 3;
                     ctx.fillText(`👤 ${player.name}`, head.x * 12 + 6, head.y * 12 - 5);
-                    ctx.shadowBlur = 0;
                 }
             },
 
@@ -5965,18 +5962,21 @@
         }
         
         function drawGrid() {
-            ctx.strokeStyle = '#150d20'; ctx.lineWidth = 1;
             const startX = Math.floor(cameraX / GRID) * GRID, startY = Math.floor(cameraY / GRID) * GRID;
             const endX = Math.min(WORLD_WIDTH, cameraX + canvas.width/cameraZoom + GRID);
             const endY = Math.min(WORLD_HEIGHT, cameraY + canvas.height/cameraZoom + GRID);
-            for (let x = startX; x <= endX; x += GRID) { ctx.beginPath(); ctx.moveTo(x, startY); ctx.lineTo(x, endY); ctx.stroke(); }
-            for (let y = startY; y <= endY; y += GRID) { ctx.beginPath(); ctx.moveTo(startX, y); ctx.lineTo(endX, y); ctx.stroke(); }
+            // Batch all lines into single path
+            ctx.strokeStyle = '#150d20'; ctx.lineWidth = 1;
+            ctx.beginPath();
+            for (let x = startX; x <= endX; x += GRID) { ctx.moveTo(x, startY); ctx.lineTo(x, endY); }
+            for (let y = startY; y <= endY; y += GRID) { ctx.moveTo(startX, y); ctx.lineTo(endX, y); }
+            ctx.stroke();
             ctx.strokeStyle = '#402040'; ctx.lineWidth = 3; ctx.strokeRect(0, 0, WORLD_WIDTH, WORLD_HEIGHT);
         }
         
         function drawSnake() {
             // Update train frame for wheel animation
-            for(let i=1;i<tronTrail.length;i++){const t0=tronTrail[i-1],t1=tronTrail[i];if(Math.abs(t1.x-t0.x)>2||Math.abs(t1.y-t0.y)>2)continue;ctx.strokeStyle="rgba(255,215,0,"+(i/tronTrail.length)*0.7+")";ctx.lineWidth=2+(i/tronTrail.length)*3;ctx.shadowColor="#ff0";ctx.shadowBlur=8;ctx.beginPath();ctx.moveTo(t0.x*GRID+GRID/2,t0.y*GRID+GRID/2);ctx.lineTo(t1.x*GRID+GRID/2,t1.y*GRID+GRID/2);ctx.stroke();}ctx.shadowBlur=0;
+            for(let i=1;i<tronTrail.length;i++){const t0=tronTrail[i-1],t1=tronTrail[i];if(Math.abs(t1.x-t0.x)>2||Math.abs(t1.y-t0.y)>2)continue;ctx.strokeStyle="rgba(255,215,0,"+(i/tronTrail.length)*0.7+")";ctx.lineWidth=2+(i/tronTrail.length)*3;ctx.beginPath();ctx.moveTo(t0.x*GRID+GRID/2,t0.y*GRID+GRID/2);ctx.lineTo(t1.x*GRID+GRID/2,t1.y*GRID+GRID/2);ctx.stroke();}
             trainFrame++;
 
             // Draw smoke behind everything
@@ -6026,27 +6026,12 @@
                 const x = interpX * GRID + GRID/2, y = interpY * GRID + GRID/2;
                 const segDir = getSegDir(i);
 
-                // Slight bounce based on frame
-                const bounce = Math.sin(trainFrame * 0.3 + i * 0.5) * 1;
-                const drawY = y + bounce;
-
-                ctx.shadowColor = invincibleTimer > 0 ? '#5ff' : '#000';
-                ctx.shadowBlur = invincibleTimer > 0 ? 15 : 5;
-
                 if (i === 0) {
-                    // LOCOMOTIVE HEAD - color matches gun type
-                    drawLocomotive(ctx, x, drawY, GRID, segDir, trainFrame, playerGunType?.color);
-
-                    // Spawn smoke occasionally
-                    if (trainFrame % 8 === 0) {
-                        spawnSmoke(x, drawY, segDir);
-                    }
+                    drawLocomotive(ctx, x, y, GRID, segDir, trainFrame, playerGunType?.color);
+                    if (trainFrame % 8 === 0) spawnSmoke(x, y, segDir);
                 } else {
-                    // BOXCARS (gun cars)
-                    drawBoxcar(ctx, x, drawY, GRID, segDir, seg.type, trainFrame, seg.hp, seg.maxHp);
+                    drawBoxcar(ctx, x, y, GRID, segDir, seg.type, trainFrame, seg.hp, seg.maxHp);
                 }
-
-                ctx.shadowBlur = 0;
 
                 // Health bar for damaged cars
                 if (i > 0 && seg.hp !== undefined && seg.maxHp > 0 && seg.hp < seg.maxHp) {
@@ -6062,17 +6047,13 @@
             // Update smoke particles
             updateSmoke();
 
-            // Draw player name tag above head with human emoji
+            // Draw player name tag above head
             if (snake.length > 0 && Multiplayer.username) {
                 const head = snake[0];
-                ctx.save();
                 ctx.fillStyle = '#0f0';
                 ctx.font = '8px "Press Start 2P"';
                 ctx.textAlign = 'center';
-                ctx.shadowColor = '#000';
-                ctx.shadowBlur = 3;
                 ctx.fillText(`👤 ${Multiplayer.username}`, head.x * GRID + GRID/2, head.y * GRID - 8);
-                ctx.restore();
             }
         }
         
@@ -6248,22 +6229,11 @@
                     const x = seg.x * GRID + GRID/2, y = seg.y * GRID + GRID/2;
                     const segDir = getEnemySegDir(i);
 
-                    // Slight bounce
-                    const bounce = Math.sin(trainFrame * 0.3 + i * 0.5) * 1;
-                    const drawY = y + bounce;
-
-                    ctx.shadowColor = e.color;
-                    ctx.shadowBlur = 5;
-
                     if (i === 0) {
-                        // LOCOMOTIVE
-                        drawEnemyLocomotive(ctx, x, drawY, GRID, segDir, trainFrame, e.color, e.personality.neural);
+                        drawEnemyLocomotive(ctx, x, y, GRID, segDir, trainFrame, e.color, e.personality.neural);
                     } else {
-                        // BOXCAR
-                        drawEnemyBoxcar(ctx, x, drawY, GRID, segDir, trainFrame, e.color, seg.hp, seg.maxHp);
+                        drawEnemyBoxcar(ctx, x, y, GRID, segDir, trainFrame, e.color, seg.hp, seg.maxHp);
                     }
-
-                    ctx.shadowBlur = 0;
 
                     // Health bar
                     if (i > 0 && seg.hp !== undefined && seg.maxHp > 0 && seg.hp < seg.maxHp) {
@@ -6284,96 +6254,62 @@
                 ctx.fillStyle = e.color || '#fff';
                 ctx.font = '6px "Press Start 2P"';
                 ctx.textAlign = 'center';
-                ctx.shadowColor = '#000';
-                ctx.shadowBlur = 3;
-                const displayName = `🤖 ${e.name || 'Train'}`;
-                ctx.fillText(displayName, hx, hy);
+                ctx.fillText(`🤖 ${e.name || 'Train'}`, hx, hy);
                 ctx.restore();
 
                 // Danger indicator - skull for enemies that killed player
                 const enemyRep = reputationSystem.enemies.get(e.id);
                 if (enemyRep && enemyRep.isDangerous) {
                     const head = e.segments[0];
-                    const hx = head.x * GRID + GRID/2 + 12;
-                    const hy = head.y * GRID - 8;
                     ctx.font = '10px monospace';
                     ctx.fillStyle = '#f55';
-                    ctx.shadowColor = '#f00';
-                    ctx.shadowBlur = 8;
-                    ctx.fillText('☠', hx, hy);
-                    ctx.shadowBlur = 0;
+                    ctx.fillText('☠', head.x * GRID + GRID/2 + 12, head.y * GRID - 8);
                 }
 
-                // Pack leader indicator - star for most successful enemy
+                // Pack leader indicator
                 if (enemyRep && enemyRep.isPackLeader) {
                     const head = e.segments[0];
-                    const hx = head.x * GRID + GRID/2 - 12;
-                    const hy = head.y * GRID - 8;
                     ctx.font = '10px monospace';
                     ctx.fillStyle = '#ff0';
-                    ctx.shadowColor = '#ff0';
-                    ctx.shadowBlur = 8;
-                    ctx.fillText('★', hx, hy);
-                    ctx.shadowBlur = 0;
+                    ctx.fillText('★', head.x * GRID + GRID/2 - 12, head.y * GRID - 8);
                 }
 
-                // MVP indicator - crown for the most interesting player
+                // MVP indicator
                 if (e.isMVP && gameState === 'dead') {
                     const head = e.segments[0];
-                    const hx = head.x * GRID + GRID/2;
-                    const hy = head.y * GRID - 20;
                     ctx.fillStyle = '#ff0';
-                    ctx.shadowColor = '#ff0';
-                    ctx.shadowBlur = 10;
                     ctx.font = 'bold 12px monospace';
                     ctx.textAlign = 'center';
-                    ctx.fillText('★ MVP ★', hx, hy);
-                    ctx.shadowBlur = 0;
+                    ctx.fillText('★ MVP ★', head.x * GRID + GRID/2, head.y * GRID - 20);
                 }
             }
         }
         
         function drawProjectiles() {
-            // Chunky pixel bullets
             for (const p of projectiles) {
-                ctx.shadowColor = p.color; ctx.shadowBlur = 8; ctx.fillStyle = p.color;
+                ctx.fillStyle = p.color;
                 const s = p.size * 2;
                 ctx.fillRect(Math.floor(p.x - s/2), Math.floor(p.y - s/2), s, s);
             }
             for (const p of enemyProjectiles) {
-                ctx.shadowColor = p.color; ctx.shadowBlur = 10; ctx.fillStyle = p.color;
+                ctx.fillStyle = p.color;
                 const s = p.size * 2;
                 ctx.fillRect(Math.floor(p.x - s/2), Math.floor(p.y - s/2), s, s);
             }
-            ctx.shadowBlur = 0;
         }
         
         function drawPickups(time) {
             for (const p of pickups) {
-                const x = p.x, y = p.y + Math.sin(time / 150 + p.bob) * 3;
-
-                // Check if this is player's own recent drop (dull appearance)
+                const x = p.x, y = p.y;
                 const isOwnRecentDrop = p.droppedBy === 'player' && p.droppedAt && Date.now() - p.droppedAt < PICKUP_COOLOFF_MS;
-                const colorAlpha = isOwnRecentDrop ? '44' : 'ff'; // Dull if own recent drop
-                const glowBlur = isOwnRecentDrop ? 3 : 15;
-
-                ctx.shadowColor = p.type.color; ctx.shadowBlur = glowBlur;
 
                 if (p.isPowerup) {
-                    // Power-ups: chunky pixel box with glow
-                    const pulse = 1 + Math.sin(time / 100) * 0.2;
-                    const size = Math.floor(28 * pulse);
-
-                    // Outer glow border
+                    const size = 28;
                     ctx.strokeStyle = p.type.color + '44';
                     ctx.lineWidth = 4;
                     ctx.strokeRect(Math.floor(x - size/2 - 4), Math.floor(y - size/2 - 4), size + 8, size + 8);
-
-                    // Inner filled square
                     ctx.fillStyle = p.type.color;
                     ctx.fillRect(Math.floor(x - size/2), Math.floor(y - size/2), size, size);
-
-                    // Icon text
                     ctx.fillStyle = '#000';
                     ctx.font = '12px "Press Start 2P"';
                     ctx.textAlign = 'center';
@@ -6386,19 +6322,14 @@
                     ctx.fillRect(x - 6, y - 2, 12, 4);
                     ctx.globalAlpha = 1;
                 } else {
-                    // Gun pickups - chunky pixel squares
-                    const strokeAlpha = isOwnRecentDrop ? '22' : '66';
                     ctx.globalAlpha = isOwnRecentDrop ? 0.3 : 1;
-                    const outerSize = Math.floor(16 + Math.sin(time / 200 + p.bob) * 4);
-                    const innerSize = 10;
-                    ctx.strokeStyle = p.type.color + strokeAlpha;
+                    ctx.strokeStyle = p.type.color + (isOwnRecentDrop ? '22' : '66');
                     ctx.lineWidth = 2;
-                    ctx.strokeRect(Math.floor(x - outerSize/2), Math.floor(y - outerSize/2), outerSize, outerSize);
+                    ctx.strokeRect(Math.floor(x - 8), Math.floor(y - 8), 16, 16);
                     ctx.fillStyle = p.type.color;
-                    ctx.fillRect(Math.floor(x - innerSize/2), Math.floor(y - innerSize/2), innerSize, innerSize);
+                    ctx.fillRect(Math.floor(x - 5), Math.floor(y - 5), 10, 10);
                     ctx.globalAlpha = 1;
                 }
-                ctx.shadowBlur = 0;
             }
         }
         
