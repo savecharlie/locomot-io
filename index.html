@@ -3234,16 +3234,19 @@
 
                 // Upload to server for collective training
                 if (this.enabled) {
+                    const payload = JSON.stringify({
+                        type: 'behavioral_session',
+                        session: compactSession
+                    });
+                    console.log('[RECORDER] Uploading', compactSession.frames.length, 'frames, payload size:', payload.length);
                     fetch('https://locomot-io.savecharlie.partykit.dev/party/collective', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         keepalive: true,
-                        body: JSON.stringify({
-                            type: 'behavioral_session',
-                            session: compactSession
-                        })
-                    }).then(() => console.log('[RECORDER] Uploaded to server'))
-                      .catch(() => console.log('[RECORDER] Upload failed (offline?)'));
+                        body: payload
+                    }).then(r => r.json())
+                      .then(data => console.log('[RECORDER] Upload response:', data))
+                      .catch(e => console.log('[RECORDER] Upload failed:', e.message || e));
                 }
             },
 
