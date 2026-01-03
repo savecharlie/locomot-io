@@ -1241,7 +1241,8 @@
                         const seg = player.segments[i];
                         const isHead = i === 0;
 
-                        const baseColor = teamMode ? this.getTeamColor(player.team) : player.color;
+                        // Team mode: teammate=blue, opponent=red
+                        const baseColor = teamMode ? (player.team === playerTeam ? '#0af' : '#f55') : player.color;
                         ctx.fillStyle = isHead ? baseColor : this.dimColor(baseColor);
                         ctx.fillRect(seg.x * 12, seg.y * 12, 12, 12);
 
@@ -2008,10 +2009,10 @@
         // Security: HTML escape to prevent XSS
         const esc = s => String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
         const GUNS = {
-            HEAD: { color: '#0f0', fireRate: 200, damage: 12, range: 200 },
-            MACHINEGUN: { color: '#f80', fireRate: 80, damage: 5, range: 180 },
-            SHOTGUN: { color: '#f55', fireRate: 350, damage: 8, range: 150, spread: 0.4, pellets: 5 },
-            CANNON: { color: '#5af', fireRate: 600, damage: 35, range: 250, size: 8 },
+            HEAD: { color: '#0f0', fireRate: 200, damage: 12, range: 200, size: 2 },
+            MACHINEGUN: { color: '#f80', fireRate: 80, damage: 5, range: 180, size: 2 },
+            SHOTGUN: { color: '#f55', fireRate: 350, damage: 8, range: 150, spread: 0.4, pellets: 5, size: 2 },
+            CANNON: { color: '#5af', fireRate: 600, damage: 35, range: 250, size: 6 },
             PULSE: { color: '#f0f', fireRate: 500, damage: 15, range: 80, aoe: true }
         };
         const GUN_NAMES = ['MACHINEGUN', 'SHOTGUN', 'CANNON', 'PULSE'];
@@ -2088,20 +2089,20 @@
             ctx.restore();
         }
 
-        function drawBoxcar(ctx, x, y, size, direction, gunType, frame, hp, maxHp) {
+        function drawBoxcar(ctx, x, y, size, direction, gunType, frame, hp, maxHp, teamColor = null) {
             ctx.save();
             ctx.translate(x, y);
             ctx.rotate(Math.atan2(direction.y, direction.x));
 
             const s = size * 0.5;
 
-            // Determine car color based on gun type
-            let carColor = TRAIN.rust;
-            if (gunType) {
-                if (gunType.color === '#f80') carColor = '#f80';      // Machinegun - orange
-                else if (gunType.color === '#f55') carColor = '#e44'; // Shotgun - red
-                else if (gunType.color === '#5af') carColor = '#5af'; // Cannon - blue
-                else if (gunType.color === '#f0f') carColor = '#f0f'; // Pulse - purple
+            // Team color overrides gun color
+            let carColor = teamColor || TRAIN.rust;
+            if (!teamColor && gunType) {
+                if (gunType.color === '#f80') carColor = '#f80';
+                else if (gunType.color === '#f55') carColor = '#e44';
+                else if (gunType.color === '#5af') carColor = '#5af';
+                else if (gunType.color === '#f0f') carColor = '#f0f';
             }
 
             // Damage flash
@@ -5485,16 +5486,20 @@
                             }
                         }
                     }
-                    particles.push({ x: cx, y: cy, vx: 0, vy: 0, life: 15, color: type.color, isAoe: true, radius: 10 });
+                    // Team color for projectiles - player always blue
+                    const bulletColor = teamMode ? '#0af' : type.color;
+                    particles.push({ x: cx, y: cy, vx: 0, vy: 0, life: 15, color: bulletColor, isAoe: true, radius: 10 });
                 } else if (type.spread) {
+                    const bulletColor = teamMode ? '#0af' : type.color;
                     for (let p = 0; p < type.pellets; p++) {
                         const spread = (Math.random() - 0.5) * type.spread * 2;
                         const angle = aimAngle + spread;
-                        projectiles.push({ x: cx, y: cy, vx: Math.cos(angle)*6, vy: Math.sin(angle)*6, damage: type.damage, size: 3, color: type.color, life: 120 });
+                        projectiles.push({ x: cx, y: cy, vx: Math.cos(angle)*6, vy: Math.sin(angle)*6, damage: type.damage, size: type.size || 2, color: bulletColor, life: 120 });
                     }
                 } else {
-                    const size = type.size || 4;
-                    projectiles.push({ x: cx, y: cy, vx: Math.cos(aimAngle)*7, vy: Math.sin(aimAngle)*7, damage: type.damage, size, color: type.color, life: 150 });
+                    const bulletColor = teamMode ? '#0af' : type.color;
+                    const size = type.size || 2;
+                    projectiles.push({ x: cx, y: cy, vx: Math.cos(aimAngle)*7, vy: Math.sin(aimAngle)*7, damage: type.damage, size, color: bulletColor, life: 150 });
                 }
                 fired = true;
             }
@@ -6009,11 +6014,13 @@
                 const x = interpX * GRID + GRID/2, y = interpY * GRID + GRID/2;
                 const segDir = getSegDir(i);
 
+                // Team mode: player always blue (friendly), otherwise gun color
+                const trainColor = teamMode ? '#0af' : playerGunType?.color;
                 if (i === 0) {
-                    drawLocomotive(ctx, x, y, GRID, segDir, trainFrame, playerGunType?.color);
+                    drawLocomotive(ctx, x, y, GRID, segDir, trainFrame, trainColor);
                     if (trainFrame % 8 === 0) spawnSmoke(x, y, segDir);
                 } else {
-                    drawBoxcar(ctx, x, y, GRID, segDir, seg.type, trainFrame, seg.hp, seg.maxHp);
+                    drawBoxcar(ctx, x, y, GRID, segDir, seg.type, trainFrame, seg.hp, seg.maxHp, trainColor);
                 }
 
                 // Health bar for damaged cars
