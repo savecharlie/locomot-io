@@ -6091,7 +6091,6 @@
 
         function drawEnemyLocomotive(ctx, x, y, size, direction, frame, color, isNeural) {
             const bodyColor = color || '#48bb78';
-            const darkColor = darkenColor(bodyColor, 20);
 
             ctx.save();
             ctx.translate(x, y);
@@ -6107,20 +6106,13 @@
             ctx.fillStyle = isNeural ? '#f0f' : '#f44';
             ctx.fillRect(s*0.5, -s*0.2, s*0.25, s*0.4);
 
-            // Thick outline
-            ctx.strokeStyle = darkColor;
+            // Thick black outline (matches player)
+            ctx.strokeStyle = TRAIN.black;
             ctx.lineWidth = 2;
             ctx.strokeRect(-s*0.8, -s*0.6, s*1.6, s*1.2);
 
-            // Neural glow
-            if (isNeural) {
-                ctx.strokeStyle = '#f0f';
-                ctx.lineWidth = 3;
-                ctx.strokeRect(-s*1.0, -s*0.8, s*2.0, s*1.6);
-            }
-
             // Wheels
-            ctx.fillStyle = '#111';
+            ctx.fillStyle = TRAIN.black;
             ctx.fillRect(-s*0.6, s*0.4, s*0.3, s*0.25);
             ctx.fillRect(s*0.3, s*0.4, s*0.3, s*0.25);
             ctx.fillRect(-s*0.6, -s*0.65, s*0.3, s*0.25);
@@ -6130,9 +6122,7 @@
         }
 
         function drawEnemyBoxcar(ctx, x, y, size, direction, frame, color, hp, maxHp) {
-            // CHUNKY SIMPLE - "All Same Gun" uses gun color directly
             const baseColor = color || '#48bb78';
-            const darkColor = darkenColor(baseColor, 20);
 
             ctx.save();
             ctx.translate(x, y);
@@ -6140,7 +6130,7 @@
 
             const s = size * 0.5;
 
-            // Damage flash - override body color when damaged
+            // Damage flash
             let bodyColor = baseColor;
             if (hp < maxHp * 0.25 && Math.sin(frame * 0.5) > 0) bodyColor = '#600';
             else if (hp < maxHp * 0.5 && Math.sin(frame * 0.3) > 0.5) bodyColor = '#880';
@@ -6149,13 +6139,13 @@
             ctx.fillStyle = bodyColor;
             ctx.fillRect(-s*0.8, -s*0.6, s*1.6, s*1.2);
 
-            // Thick outline
-            ctx.strokeStyle = darkColor;
+            // Thick black outline (matches player)
+            ctx.strokeStyle = TRAIN.black;
             ctx.lineWidth = 2;
             ctx.strokeRect(-s*0.8, -s*0.6, s*1.6, s*1.2);
 
             // Wheels
-            ctx.fillStyle = '#111';
+            ctx.fillStyle = TRAIN.black;
             ctx.fillRect(-s*0.6, s*0.4, s*0.3, s*0.25);
             ctx.fillRect(s*0.3, s*0.4, s*0.3, s*0.25);
             ctx.fillRect(-s*0.6, -s*0.65, s*0.3, s*0.25);
