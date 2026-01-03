@@ -3799,13 +3799,15 @@
             if (teamMode) newEnemy.color = newEnemy.team === "blue" ? "#0af" : "#f55";
             else newEnemy.color = initialGunType.color; // Use gun color for "All Same Gun"
 
-            // Generate AI name asynchronously
-            generateTrainName().then(name => {
-                if (newEnemy.segments.length > 0) newEnemy.name = name;
-            });
-            
+            // Generate AI name asynchronously (only host generates, syncs to clients)
+            if (!Multiplayer.connected || Multiplayer.isHost) {
+                generateTrainName().then(name => {
+                    if (newEnemy.segments.length > 0) newEnemy.name = name;
+                });
+            }
+
         }
-        
+
         function simulateWorld(ticks) {
             // Run the world simulation for a while before player joins
             for (let t = 0; t < ticks; t++) {
@@ -4355,14 +4357,16 @@
             if (teamMode) newEnemy.color = newEnemy.team === "blue" ? "#0af" : "#f55";
             else newEnemy.color = initialGunType.color; // Use gun color for "All Same Gun"
             
-            // Generate AI name asynchronously
-            generateTrainName().then(name => {
-                if (newEnemy.segments.length > 0) {
-                    newEnemy.name = name;
-                    // Update reputation with real name
-                    reputationSystem.initEnemy(newEnemy.id, name);
-                }
-            });
+            // Generate AI name asynchronously (only host generates, syncs to clients)
+            if (!Multiplayer.connected || Multiplayer.isHost) {
+                generateTrainName().then(name => {
+                    if (newEnemy.segments.length > 0) {
+                        newEnemy.name = name;
+                        // Update reputation with real name
+                        reputationSystem.initEnemy(newEnemy.id, name);
+                    }
+                });
+            }
 
             // Initialize reputation for this enemy
             newEnemy.id = enemyId;
