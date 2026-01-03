@@ -6273,14 +6273,14 @@
                 const isOwnRecentDrop = p.droppedBy === 'player' && p.droppedAt && Date.now() - p.droppedAt < PICKUP_COOLOFF_MS;
 
                 if (p.isPowerup) {
-                    const size = 28;
+                    const size = 16;
                     ctx.strokeStyle = p.type.color + '44';
-                    ctx.lineWidth = 4;
-                    ctx.strokeRect(Math.floor(x - size/2 - 4), Math.floor(y - size/2 - 4), size + 8, size + 8);
+                    ctx.lineWidth = 2;
+                    ctx.strokeRect(Math.floor(x - size/2 - 2), Math.floor(y - size/2 - 2), size + 4, size + 4);
                     ctx.fillStyle = p.type.color;
                     ctx.fillRect(Math.floor(x - size/2), Math.floor(y - size/2), size, size);
                     ctx.fillStyle = '#000';
-                    ctx.font = '12px "Press Start 2P"';
+                    ctx.font = '8px "Press Start 2P"';
                     ctx.textAlign = 'center';
                     ctx.textBaseline = 'middle';
                     ctx.fillText(p.type.icon, x, y);
