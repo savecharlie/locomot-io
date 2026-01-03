@@ -4109,11 +4109,10 @@
             const wrappedY = (newY + WORLD_ROWS) % WORLD_ROWS;
 
             if (teamMode) {
+                // In team mode, everyone blocks movement (teammates don't hurt, just block)
                 let blocked = false;
                 for (const e of enemies) {
                     if (!e.segments || e.segments.length === 0) continue;
-                    // Skip teammates (can pass through), check opponents/AI
-                    if (e.team === playerTeam) continue;
                     for (const seg of e.segments) {
                         if (seg.x === wrappedX && seg.y === wrappedY) {
                             blocked = true;
@@ -4125,8 +4124,6 @@
                 if (!blocked && Multiplayer.connected) {
                     for (const [, op] of Multiplayer.otherPlayers) {
                         if (!op.segments || op.segments.length === 0) continue;
-                        // Skip teammates (can pass through), check opponents
-                        if ((op.team || 'blue') === playerTeam) continue;
                         for (const seg of op.segments) {
                             if (seg.x === wrappedX && seg.y === wrappedY) {
                                 blocked = true;
