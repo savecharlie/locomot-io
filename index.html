@@ -8340,9 +8340,14 @@
                 const store = tx.objectStore('sessions');
                 await new Promise(r => { store.clear().onsuccess = r; });
                 console.log('%c[RECORDER] All sessions cleared', 'color: #f0f');
+            },
+            sync: async () => {
+                console.log('%c[RECORDER] Syncing pending sessions...', 'color: #ff0');
+                await DataRecorder.uploadPending();
+                console.log('%c[RECORDER] Sync complete', 'color: #0f0');
             }
         };
-        console.log('[RECORDER] Console API ready. Use: recorder.toggle(), recorder.status(), recorder.export(), recorder.clear()');
+        console.log('[RECORDER] Console API ready. Use: recorder.toggle(), recorder.status(), recorder.export(), recorder.clear(), recorder.sync()');
 
         // Periodic activity heartbeat (every 30 seconds)
         setInterval(() => {
