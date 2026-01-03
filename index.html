@@ -1629,7 +1629,7 @@
 
                     if (response.ok) {
                         console.log('🎬 UPLOADED:', type, score + 'pts');
-                        this.showNotification(`🎬 CLIP UPLOADED! ${type.replace('_',' ').toUpperCase()} (${score}pts)`);
+                        // Clip uploaded silently
                     } else {
                         console.log('🎬 Upload failed:', response.status);
                     }
@@ -2058,49 +2058,32 @@
         let smokePuffs = [];
 
         function drawLocomotive(ctx, x, y, size, direction, frame, gunColor = null) {
-            // CHUNKY BLOCKY DESIGN - reads at any distance
-            // gunColor: if provided, use this color instead of default red (for "All Same Gun")
             ctx.save();
             ctx.translate(x, y);
             ctx.rotate(Math.atan2(direction.y, direction.x));
 
             const s = size * 0.5;
-
-            // Main body color - use gun color or default red
             const bodyColor = gunColor || TRAIN.red;
-            const lightColor = gunColor ? lightenColor(gunColor, 30) : TRAIN.red_light;
 
-            // Main body - colored block
+            // Main body - same size as boxcar
             ctx.fillStyle = bodyColor;
-            ctx.fillRect(-s, -s*0.7, s*1.8, s*1.4);
-
-            // Cabin (taller back section)
-            ctx.fillStyle = lightColor;
-            ctx.fillRect(-s*1.1, -s, s*0.5, s*2);
-
-            // Smokestack - obvious block on top
-            ctx.fillStyle = TRAIN.dark_metal;
-            ctx.fillRect(s*0.2, -s*1.2, s*0.4, s*0.5);
+            ctx.fillRect(-s*0.8, -s*0.6, s*1.6, s*1.2);
 
             // Headlight - bright yellow/gold
             ctx.fillStyle = (frame % 16 < 8) ? '#fff' : TRAIN.gold_light;
-            ctx.fillRect(s*0.7, -s*0.2, s*0.3, s*0.4);
+            ctx.fillRect(s*0.5, -s*0.2, s*0.25, s*0.4);
 
-            // Cow catcher - front wedge
-            ctx.fillStyle = TRAIN.dark_metal;
-            ctx.fillRect(s*0.8, -s*0.5, s*0.3, s*1);
-
-            // Thick black outline for readability
+            // Thick black outline
             ctx.strokeStyle = TRAIN.black;
             ctx.lineWidth = 2;
-            ctx.strokeRect(-s*1.1, -s, s*2.2, s*2);
+            ctx.strokeRect(-s*0.8, -s*0.6, s*1.6, s*1.2);
 
-            // Wheels - simple black rectangles at edges
+            // Wheels
             ctx.fillStyle = TRAIN.black;
-            ctx.fillRect(-s*0.8, s*0.5, s*0.4, s*0.3);
-            ctx.fillRect(s*0.2, s*0.5, s*0.4, s*0.3);
-            ctx.fillRect(-s*0.8, -s*0.8, s*0.4, s*0.3);
-            ctx.fillRect(s*0.2, -s*0.8, s*0.4, s*0.3);
+            ctx.fillRect(-s*0.6, s*0.4, s*0.3, s*0.25);
+            ctx.fillRect(s*0.3, s*0.4, s*0.3, s*0.25);
+            ctx.fillRect(-s*0.6, -s*0.65, s*0.3, s*0.25);
+            ctx.fillRect(s*0.3, -s*0.65, s*0.3, s*0.25);
 
             ctx.restore();
         }
@@ -6107,9 +6090,7 @@
         };
 
         function drawEnemyLocomotive(ctx, x, y, size, direction, frame, color, isNeural) {
-            // CHUNKY SIMPLE ENEMY TRAIN - "All Same Gun" uses gun color directly
             const bodyColor = color || '#48bb78';
-            const lightColor = lightenColor(bodyColor, 25);
             const darkColor = darkenColor(bodyColor, 20);
 
             ctx.save();
@@ -6118,44 +6099,32 @@
 
             const s = size * 0.5;
 
-            // Main body - colored block (gun color)
+            // Main body - same size as boxcar
             ctx.fillStyle = bodyColor;
-            ctx.fillRect(-s, -s*0.7, s*1.8, s*1.4);
-
-            // Cabin (taller back section)
-            ctx.fillStyle = lightColor;
-            ctx.fillRect(-s*1.1, -s, s*0.5, s*2);
-
-            // Smokestack
-            ctx.fillStyle = darkColor;
-            ctx.fillRect(s*0.2, -s*1.2, s*0.4, s*0.5);
+            ctx.fillRect(-s*0.8, -s*0.6, s*1.6, s*1.2);
 
             // Headlight - enemy = red/magenta
             ctx.fillStyle = isNeural ? '#f0f' : '#f44';
-            ctx.fillRect(s*0.7, -s*0.2, s*0.3, s*0.4);
-
-            // Front
-            ctx.fillStyle = darkColor;
-            ctx.fillRect(s*0.8, -s*0.5, s*0.3, s*1);
+            ctx.fillRect(s*0.5, -s*0.2, s*0.25, s*0.4);
 
             // Thick outline
             ctx.strokeStyle = darkColor;
             ctx.lineWidth = 2;
-            ctx.strokeRect(-s*1.1, -s, s*2.2, s*2);
+            ctx.strokeRect(-s*0.8, -s*0.6, s*1.6, s*1.2);
 
-            // Neural glow - chunky pixel square
+            // Neural glow
             if (isNeural) {
                 ctx.strokeStyle = '#f0f';
                 ctx.lineWidth = 3;
-                ctx.strokeRect(-s*1.3, -s*1.3, s*2.6, s*2.6);
+                ctx.strokeRect(-s*1.0, -s*0.8, s*2.0, s*1.6);
             }
 
             // Wheels
             ctx.fillStyle = '#111';
-            ctx.fillRect(-s*0.8, s*0.5, s*0.4, s*0.3);
-            ctx.fillRect(s*0.2, s*0.5, s*0.4, s*0.3);
-            ctx.fillRect(-s*0.8, -s*0.8, s*0.4, s*0.3);
-            ctx.fillRect(s*0.2, -s*0.8, s*0.4, s*0.3);
+            ctx.fillRect(-s*0.6, s*0.4, s*0.3, s*0.25);
+            ctx.fillRect(s*0.3, s*0.4, s*0.3, s*0.25);
+            ctx.fillRect(-s*0.6, -s*0.65, s*0.3, s*0.25);
+            ctx.fillRect(s*0.3, -s*0.65, s*0.3, s*0.25);
 
             ctx.restore();
         }
@@ -6577,7 +6546,7 @@
                 
                 ctx.save(); ctx.scale(cameraZoom, cameraZoom); ctx.translate(-cameraX, -cameraY);
                 drawGrid(); drawPickups(time); drawEnemies(); Multiplayer.drawOtherPlayers(ctx);
-                if (gameState === 'playing') { drawSnake(); drawAimLine(); drawDirectionQueue(); drawLeaderArrow(); }
+                if (gameState === 'playing') { drawSnake(); drawDirectionQueue(); drawLeaderArrow(); }
                 drawProjectiles(); drawParticles();
                 ctx.restore(); drawScanlines(); drawPatternFlash(ctx); devMode.draw(ctx);
             } catch (err) { console.error('Game loop error:', err); }
