@@ -4325,21 +4325,50 @@
             }
 
             // Find enemy by stableId (not name - names change async!)
-            const enemy = enemies.find(e =>
-                e.segments && e.segments.length > 0 &&
-                e.stableId === data.stableId
-            );
-
-            if (enemy && enemy.segments.length > 1) {
-                const segIdx = 1 + Math.floor(Math.random() * (enemy.segments.length - 1));
-                enemy.segments[segIdx].hp -= damage;
-                debugLog('[HIT] ' + damage + ' dmg to ' + enemy.name + ' (id:' + enemy.stableId + ')');
-            } else if (enemy && enemy.segments.length === 1) {
-                enemy.segments[0].hp -= damage;
-                debugLog('[HIT] ' + damage + ' dmg to ' + enemy.name);
-            } else {
-                debugLog('[HIT] NOT FOUND: id=' + data.stableId + ' (' + data.name + ')');
+            let enemy = null;
+            if (data.stableId) {
+                enemy = enemies.find(e =>
+                    e.segments && e.segments.length > 0 &&
+                    e.stableId === data.stableId
+                );
             }
+
+            if (enemy) {
+                if (enemy.segments.length > 1) {
+                    const segIdx = 1 + Math.floor(Math.random() * (enemy.segments.length - 1));
+                    enemy.segments[segIdx].hp -= damage;
+                    debugLog('[HIT] ' + damage + ' dmg to ' + enemy.name + ' (id:' + enemy.stableId + ')');
+                } else {
+                    enemy.segments[0].hp -= damage;
+                    debugLog('[HIT] ' + damage + ' dmg to ' + enemy.name);
+                }
+                return;
+            }
+
+            // Fallback: apply by nearest segment if coords provided (mixed client versions)
+            const tx = data.x;
+            const ty = data.y;
+            if (typeof tx === 'number' && typeof ty === 'number') {
+                let best = null;
+                let bestDist = Infinity;
+                for (const e of enemies) {
+                    if (!e.segments || e.segments.length === 0) continue;
+                    for (const seg of e.segments) {
+                        const dist = Math.abs(seg.x - tx) + Math.abs(seg.y - ty);
+                        if (dist < bestDist) {
+                            bestDist = dist;
+                            best = seg;
+                        }
+                    }
+                }
+                if (best && bestDist <= 2) {
+                    best.hp -= damage;
+                    debugLog('[HIT] ' + damage + ' dmg by coords (' + tx + ',' + ty + ')');
+                    return;
+                }
+            }
+
+            debugLog('[HIT] NOT FOUND: id=' + data.stableId + ' (' + data.name + ')');
         }
 
         function applyEnemyAoe(data) {
@@ -5456,7 +5485,9 @@
                                         type: 'enemy_hit',
                                         stableId: e.stableId, // Use stable ID (names change async!)
                                         name: e.name, // For debug display
-                                        damage: p.damage
+                                        damage: p.damage,
+                                        x: seg.x,
+                                        y: seg.y
                                     });
                                 } else {
                                     // Host or solo: apply damage directly
@@ -6509,7 +6540,9 @@
                                         type: 'enemy_hit',
                                         stableId: e.stableId,
                                         name: e.name,
-                                        damage: 9999
+                                        damage: 9999,
+                                        x: head.x,
+                                        y: head.y
                                     });
                                     haptic('medium');
                                     if (playerIsLoneHead) {
@@ -6534,7 +6567,9 @@
                                         type: 'enemy_hit',
                                         stableId: e.stableId,
                                         name: e.name,
-                                        damage: 9999
+                                        damage: 9999,
+                                        x: head.x,
+                                        y: head.y
                                     });
                                     haptic('death');
                                     respawn();
@@ -6565,7 +6600,9 @@
                                         type: 'enemy_hit',
                                         stableId: e.stableId,
                                         name: e.name,
-                                        damage: 9999  // Instakill - enemy head hit our body
+                                        damage: 9999,  // Instakill - enemy head hit our body
+                                        x: head.x,
+                                        y: head.y
                                     });
                                     haptic('medium');
                                     break;
