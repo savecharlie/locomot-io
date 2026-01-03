@@ -4434,25 +4434,13 @@
             return true;
         }
 
-        // DEBUG: Track PvP status globally
-        let pvpDebugCounter = 0;
-
         function hostResolvePlayerCollisions() {
             if (!Multiplayer.connected || !Multiplayer.isHost) return false;
 
             const now = Date.now();
             const players = [];
 
-            // DEBUG: Show in title that function is running
-            document.title = 'PVP:' + Multiplayer.otherPlayers.size + ' t=' + Math.floor(now/1000) % 100;
             const hostInvUntil = invincibleTimer > 0 ? now + invincibleTimer : 0;
-
-            // DEBUG: Show other player count on HUD
-            pvpDebugCounter++;
-            if (pvpDebugCounter % 60 === 0) { // Every ~1 second
-                const el = document.querySelector('.leaderboard h3');
-                if (el) el.textContent = 'PVP:' + Multiplayer.otherPlayers.size;
-            }
 
             if (gameState === 'playing' && snake.length > 0) {
                 players.push({
@@ -4482,19 +4470,6 @@
             const killed = new Set();
             let hostDied = false;
 
-            // DEBUG: Show collision info
-            if (players.length >= 2) {
-                const a = players[0], b = players[1];
-                const aHead = a.segments[0], bHead = b.segments[0];
-                const headDist = Math.abs(aHead.x - bHead.x) + Math.abs(aHead.y - bHead.y);
-                // Check closest body distance
-                let minBodyDist = 999;
-                for (let i = 1; i < b.segments.length; i++) {
-                    const d = Math.abs(b.segments[i].x - aHead.x) + Math.abs(b.segments[i].y - aHead.y);
-                    if (d < minBodyDist) minBodyDist = d;
-                }
-                document.title = 'h=' + headDist + ' b=' + minBodyDist + ' L=' + a.segments.length + '/' + b.segments.length;
-            }
 
             const canKill = (targetId) => {
                 const last = Multiplayer.recentKillAt.get(targetId) || 0;
@@ -4575,15 +4550,12 @@
                         continue;
                     }
 
-                    const aHitsB = headHitsBody(aHead, b.segments);
-                    if (aHitsB) {
-                        alert('KILL: ' + a.name + ' hit ' + b.name + ' body');
+                    if (headHitsBody(aHead, b.segments)) {
                         applyKill(a, b, `Ran into ${b.name}'s body`);
                         continue;
                     }
 
                     if (headHitsBody(bHead, a.segments)) {
-                        alert('KILL: ' + b.name + ' hit ' + a.name + ' body');
                         applyKill(b, a, `Ran into ${a.name}'s body`);
                     }
                 }
