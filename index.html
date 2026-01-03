@@ -953,7 +953,14 @@
                 if (el) {
                     const role = this.isHost ? 'HOST' : 'CLIENT';
                     const name = e0?.name || 'none';
-                    el.textContent = `${role} | updates=${this._enemyStateCount} | e0=${name}`;
+                    const opCount = this.otherPlayers.size;
+                    let opInfo = '';
+                    for (const [pid, op] of this.otherPlayers) {
+                        const segs = op.segments?.length || 0;
+                        const pos = op.segments?.[0] ? `${op.segments[0].x},${op.segments[0].y}` : 'none';
+                        opInfo += ` | p:${segs}@${pos}`;
+                    }
+                    el.textContent = `${role} | e=${this._enemyStateCount} | e0=${name}${opInfo}`;
                 }
             },
 
@@ -4876,7 +4883,10 @@
                 // Body collisions with other players (host authoritative)
                 if (Multiplayer.connected && Multiplayer.isHost) {
                     for (const [pid, op] of Multiplayer.otherPlayers) {
-                        if (!op.segments || op.segments.length === 0) continue;
+                        if (!op.segments || op.segments.length === 0) {
+                            console.log('[COLLISION] Skipping player', pid, '- no segments');
+                            continue;
+                        }
                         if (teamMode && e.team === (op.team || 'blue')) continue;
                         if (op.invincibleUntil && nowMs < op.invincibleUntil) continue;
 
