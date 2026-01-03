@@ -7710,23 +7710,15 @@
             document.getElementById('startScreen').classList.add('hidden');
             HighlightRecorder.init();
 
-            // Denser arena - more action
-            SpawnDirector.TARGET_POPULATION = 25;
-
-            // Initialize game
+            // Same as FFA, just timed
             init();
-
-            // Start with some length boost
-            for (let i = 0; i < 5; i++) {
-                snake.push({ x: snake[snake.length-1].x, y: snake[snake.length-1].y, hp: 100, maxHp: 100, gun: null });
-            }
 
             gameState = 'playing';
             canvas.classList.add('playing');
             RunTracker.startRun('timed', Multiplayer.username);
             DataRecorder.startSession();
             devMode.reportJoin(Multiplayer.username || 'Anonymous', Multiplayer.playerId);
-            Ticker.dispatch(`⏱️ TIMED MODE - 2 MINUTES!`, 4);
+            Ticker.dispatch(`⏱️ 2 MINUTES`, 3);
         }
 
         function endTimedMode() {
@@ -7756,9 +7748,6 @@
             timedMode = false;
             gameState = 'dead';
             canvas.classList.remove('playing');
-
-            // Reset spawn director
-            SpawnDirector.TARGET_POPULATION = 80;
         }
 
         function showTimedModeResults(finalScore) {
