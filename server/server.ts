@@ -1015,6 +1015,205 @@ export default class LocomotServer implements Party.Server {
           });
         }
 
+
+
+        if (data.type === 'store_genome_part') {
+          // Store a single weight array for a genome
+          const part = data as any;
+          if (!part.genome_id || !part.key || !part.data) {
+            return new Response(JSON.stringify({ error: 'Invalid part' }), {
+              status: 400, headers: { ...headers, 'Content-Type': 'application/json' }
+            });
+          }
+
+          // Store the part directly
+          const partKey = `genome_part_${part.genome_id}_${part.key.replace(/\./g, '_')}`;
+          await this.room.storage.put(partKey, part.data);
+
+          console.log(`[GenomePool] Stored part ${part.key} for ${part.genome_id}`);
+
+          return new Response(JSON.stringify({
+            success: true,
+            key: part.key
+          }), {
+            headers: { ...headers, 'Content-Type': 'application/json' }
+          });
+        }
+
+        if (data.type === 'register_genome') {
+          // Register a genome in the manifest (parts already stored)
+          const reg = data as any;
+          if (!reg.genome_id || !reg.keys) {
+            return new Response(JSON.stringify({ error: 'Invalid registration' }), {
+              status: 400, headers: { ...headers, 'Content-Type': 'application/json' }
+            });
+          }
+
+          // Verify all parts exist
+          for (const key of reg.keys) {
+            const partKey = `genome_part_${reg.genome_id}_${key.replace(/\./g, '_')}`;
+            const exists = await this.room.storage.get(partKey);
+            if (!exists) {
+              return new Response(JSON.stringify({ error: `Missing part: ${key}` }), {
+                status: 400, headers: { ...headers, 'Content-Type': 'application/json' }
+              });
+            }
+          }
+
+          // Update manifest
+          let manifest = await this.room.storage.get('genome_manifest') as any;
+          if (!manifest) manifest = { genomes: [], max_active: 15, version: 1 };
+
+          const existing = manifest.genomes.findIndex((g: any) => g.id === reg.genome_id);
+          const genomeEntry = {
+            id: reg.genome_id,
+            type: reg.genome_type || 'behavioral',
+            name: reg.name || reg.genome_id,
+            source: reg.source || 'unknown',
+            keys: reg.keys,  // Store which keys this genome has
+            created: new Date().toISOString(),
+            performance: { games: 0, avg_score: 0, avg_survival: 0, win_rate: 0 },
+            active: manifest.genomes.length < manifest.max_active
+          };
+
+          if (existing >= 0) {
+            manifest.genomes[existing] = { ...manifest.genomes[existing], ...genomeEntry };
+          } else {
+            manifest.genomes.push(genomeEntry);
+          }
+
+          manifest.version++;
+          await this.room.storage.put('genome_manifest', manifest);
+
+          console.log(`[GenomePool] Registered genome: ${reg.genome_id}`);
+
+          return new Response(JSON.stringify({
+            success: true,
+            id: reg.genome_id,
+            active: genomeEntry.active
+          }), {
+            headers: { ...headers, 'Content-Type': 'application/json' }
+          });
+        }
+
+        if (data.type === 'get_genome_part') {
+          // Get a single part of a genome
+          const req = data as any;
+          if (!req.genome_id || !req.key) {
+            return new Response(JSON.stringify({ error: 'Missing genome_id or key' }), {
+              status: 400, headers: { ...headers, 'Content-Type': 'application/json' }
+            });
+          }
+
+          const partKey = `genome_part_${req.genome_id}_${req.key.replace(/\./g, '_')}`;
+          const part = await this.room.storage.get(partKey);
+
+          if (!part) {
+            return new Response(JSON.stringify({ error: 'Part not found' }), {
+              status: 404, headers: { ...headers, 'Content-Type': 'application/json' }
+            });
+          }
+
+          return new Response(JSON.stringify({ data: part }), {
+            headers: { ...headers, 'Content-Type': 'application/json' }
+          });
+        }
+        if (data.type === 'submit_genome_chunk') {
+          // Upload a chunk of genome weights
+          const chunk = data as any;
+          if (!chunk.genome_id || !chunk.chunk_index === undefined || !chunk.key || !chunk.data) {
+            return new Response(JSON.stringify({ error: 'Invalid chunk' }), {
+              status: 400, headers: { ...headers, 'Content-Type': 'application/json' }
+            });
+          }
+
+          // Store chunk
+          const chunkKey = `genome_chunk_${chunk.genome_id}_${chunk.key}_${chunk.chunk_index}`;
+          await this.room.storage.put(chunkKey, {
+            data: chunk.data,
+            total_chunks: chunk.total_chunks
+          });
+
+          console.log(`[GenomePool] Chunk ${chunk.chunk_index + 1}/${chunk.total_chunks} for ${chunk.genome_id}.${chunk.key}`);
+
+          return new Response(JSON.stringify({
+            success: true,
+            chunk_index: chunk.chunk_index
+          }), {
+            headers: { ...headers, 'Content-Type': 'application/json' }
+          });
+        }
+
+        if (data.type === 'finalize_genome') {
+          // Assemble chunks into complete genome
+          const finalize = data as any;
+          if (!finalize.genome_id || !finalize.keys) {
+            return new Response(JSON.stringify({ error: 'Invalid finalize request' }), {
+              status: 400, headers: { ...headers, 'Content-Type': 'application/json' }
+            });
+          }
+
+          const weights: any = {};
+
+          // Reassemble each weight key
+          for (const keyInfo of finalize.keys) {
+            const { key, total_chunks } = keyInfo;
+            const chunks: any[] = [];
+
+            for (let i = 0; i < total_chunks; i++) {
+              const chunkKey = `genome_chunk_${finalize.genome_id}_${key}_${i}`;
+              const chunk = await this.room.storage.get(chunkKey) as any;
+              if (!chunk) {
+                return new Response(JSON.stringify({ error: `Missing chunk ${i} for ${key}` }), {
+                  status: 400, headers: { ...headers, 'Content-Type': 'application/json' }
+                });
+              }
+              chunks.push(chunk.data);
+              // Clean up chunk
+              await this.room.storage.delete(chunkKey);
+            }
+
+            // Flatten chunks back into array
+            weights[key] = chunks.flat();
+          }
+
+          // Store assembled genome
+          await this.room.storage.put(`genome_${finalize.genome_id}`, weights);
+
+          // Update manifest
+          let manifest = await this.room.storage.get('genome_manifest') as any;
+          if (!manifest) manifest = { genomes: [], max_active: 15, version: 1 };
+
+          const existing = manifest.genomes.findIndex((g: any) => g.id === finalize.genome_id);
+          const genomeEntry = {
+            id: finalize.genome_id,
+            type: finalize.genome_type || 'behavioral',
+            name: finalize.name || finalize.genome_id,
+            source: finalize.source || 'unknown',
+            created: new Date().toISOString(),
+            performance: { games: 0, avg_score: 0, avg_survival: 0, win_rate: 0 },
+            active: manifest.genomes.length < manifest.max_active
+          };
+
+          if (existing >= 0) {
+            manifest.genomes[existing] = { ...manifest.genomes[existing], ...genomeEntry };
+          } else {
+            manifest.genomes.push(genomeEntry);
+          }
+
+          manifest.version++;
+          await this.room.storage.put('genome_manifest', manifest);
+
+          console.log(`[GenomePool] Finalized genome: ${finalize.genome_id}`);
+
+          return new Response(JSON.stringify({
+            success: true,
+            id: finalize.genome_id,
+            active: genomeEntry.active
+          }), {
+            headers: { ...headers, 'Content-Type': 'application/json' }
+          });
+        }
         if (data.type === 'submit_genome') {
           // Upload new genome for consideration
           const submission = data as any;

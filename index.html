@@ -466,13 +466,61 @@
                         const response = await fetch(url);
                         data = await response.json();
                     } else {
-                        // Load from server
-                        const response = await fetch(GENOME_SERVER, {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ type: 'get_genome', id: genomeId })
-                        });
-                        data = await response.json();
+                        // Load from server parts
+                        const genomeInfo = this.manifest?.genomes.find(g => g.id === genomeId);
+                        if (!genomeInfo || !genomeInfo.keys) {
+                            console.error('[GenomeRegistry] No keys info for', genomeId);
+                            return;
+                        }
+
+                        data = {};
+                        const baseKeys = new Set();
+
+                        // Group keys by base key (handle chunks)
+                        for (const key of genomeInfo.keys) {
+                            if (key.includes('_chunk') || key.includes('_meta')) {
+                                baseKeys.add(key.split('_chunk')[0].split('_meta')[0]);
+                            } else {
+                                baseKeys.add(key);
+                            }
+                        }
+
+                        // Fetch each base key
+                        for (const baseKey of baseKeys) {
+                            // Check if this key has chunks
+                            const metaKey = `${baseKey}_meta`;
+                            if (genomeInfo.keys.includes(metaKey)) {
+                                // Fetch meta
+                                const metaResp = await fetch(GENOME_SERVER, {
+                                    method: 'POST',
+                                    headers: { 'Content-Type': 'application/json' },
+                                    body: JSON.stringify({ type: 'get_genome_part', genome_id: genomeId, key: metaKey })
+                                });
+                                const meta = (await metaResp.json()).data;
+
+                                // Fetch all chunks
+                                const rows = [];
+                                for (let i = 0; i < meta.chunks; i++) {
+                                    const chunkResp = await fetch(GENOME_SERVER, {
+                                        method: 'POST',
+                                        headers: { 'Content-Type': 'application/json' },
+                                        body: JSON.stringify({ type: 'get_genome_part', genome_id: genomeId, key: `${baseKey}_chunk${i}` })
+                                    });
+                                    const chunk = (await chunkResp.json()).data;
+                                    rows.push(...chunk);
+                                }
+                                data[baseKey] = rows;
+                                console.log(`[GenomeRegistry] Assembled ${baseKey}: ${rows.length} rows from ${meta.chunks} chunks`);
+                            } else {
+                                // Direct fetch
+                                const partResp = await fetch(GENOME_SERVER, {
+                                    method: 'POST',
+                                    headers: { 'Content-Type': 'application/json' },
+                                    body: JSON.stringify({ type: 'get_genome_part', genome_id: genomeId, key: baseKey })
+                                });
+                                data[baseKey] = (await partResp.json()).data;
+                            }
+                        }
                     }
                     if (data && data['net.0.weight']) {
                         this.brains.set(genomeId, new NeuralNetwork(data));
@@ -484,8 +532,6 @@
                     this.loading.delete(genomeId);
                 }
             },
-
-            async loadActiveGenomes() {
                 await this.fetchManifest();
                 // Load all active genomes
                 for (const genome of this.manifest?.genomes || []) {
@@ -524,7 +570,7 @@
         };
 
         // Load IvyBot locally (faster) and also fetch manifest
-        genomeRegistry.loadGenome('ivy', 'brain_ivy.json').then(() => genomeRegistry.activeGenomes.push('ivy'));
+        // IvyBot now loaded from server via loadActiveGenomes()
         genomeRegistry.loadActiveGenomes();
 
         // Get the appropriate brain based on current mode and genome
