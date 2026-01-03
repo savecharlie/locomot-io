@@ -871,6 +871,13 @@
             send(data) {
                 if (this.socket && this.connected) {
                     this.socket.send(JSON.stringify(data));
+                    if (data.type === 'enemy_hit') {
+                        debugLog('[SEND] enemy_hit sent OK');
+                    }
+                } else {
+                    if (data.type === 'enemy_hit') {
+                        debugLog('[SEND] FAILED - not connected!');
+                    }
                 }
             },
 
