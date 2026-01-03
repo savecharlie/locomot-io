@@ -964,7 +964,8 @@
                     y: e.segments[0]?.y || 0,
                     len: e.segments.length,
                     color: e.color,
-                    name: e.name
+                    name: e.name,
+                    team: e.team  // CRITICAL: must include team for matching
                 })).filter(e => e.len > 0);
 
                 console.log('[MP] Sending arena sync to', targetId, 'with', enemyData.length, 'enemies');
@@ -997,7 +998,7 @@
                         });
                     }
                     enemies.push({
-                        team: enemies.length % 2 === 0 ? 'blue' : 'red',
+                        team: e.team || (enemies.length % 2 === 0 ? 'blue' : 'red'),
                         name: e.name || 'Train',
                         segments,
                         dir: startDir,
