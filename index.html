@@ -6284,8 +6284,32 @@
                     ctx.globalAlpha = 1;
                 } else {
                     ctx.globalAlpha = isOwnRecentDrop ? 0.3 : 1;
-                    ctx.fillStyle = p.type.color;
-                    ctx.fillRect(Math.floor(x - 3), Math.floor(y - 3), 6, 6);
+                    const c = p.type.color;
+                    // Outer glow ring (lightest)
+                    ctx.fillStyle = c + '44';
+                    ctx.fillRect(x, y - 4, 1, 1);
+                    ctx.fillRect(x, y + 4, 1, 1);
+                    ctx.fillRect(x - 4, y, 1, 1);
+                    ctx.fillRect(x + 4, y, 1, 1);
+                    // Mid glow ring
+                    ctx.fillStyle = c + '88';
+                    ctx.fillRect(x - 1, y - 3, 3, 1);
+                    ctx.fillRect(x - 1, y + 3, 3, 1);
+                    ctx.fillRect(x - 3, y - 1, 1, 3);
+                    ctx.fillRect(x + 3, y - 1, 1, 3);
+                    // Inner glow ring
+                    ctx.fillStyle = c + 'cc';
+                    ctx.fillRect(x - 1, y - 2, 3, 1);
+                    ctx.fillRect(x - 1, y + 2, 3, 1);
+                    ctx.fillRect(x - 2, y - 1, 1, 3);
+                    ctx.fillRect(x + 2, y - 1, 1, 3);
+                    // Core diamond (solid)
+                    ctx.fillStyle = c;
+                    ctx.fillRect(x - 1, y - 1, 3, 3);
+                    ctx.fillRect(x, y - 2, 1, 1);
+                    ctx.fillRect(x, y + 2, 1, 1);
+                    ctx.fillRect(x - 2, y, 1, 1);
+                    ctx.fillRect(x + 2, y, 1, 1);
                     ctx.globalAlpha = 1;
                 }
             }
