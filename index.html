@@ -3220,7 +3220,8 @@
                         t: f.t,
                         s: f.s, // Float array
                         a: f.a
-                    }))
+                    })),
+                    uploaded: false // Track upload status
                 };
 
                 // Save to IndexedDB
@@ -3232,31 +3233,76 @@
                     request.onerror = () => reject(request.error);
                 });
 
-                // Upload to server for collective training (chunked to stay under 100KB limit)
+                // Upload to server
                 if (this.enabled) {
-                    const CHUNK_SIZE = 80; // ~55KB per chunk
-                    const chunks = [];
-                    for (let i = 0; i < compactSession.frames.length; i += CHUNK_SIZE) {
-                        chunks.push(compactSession.frames.slice(i, i + CHUNK_SIZE));
-                    }
-                    console.log('[RECORDER] Uploading', compactSession.frames.length, 'frames in', chunks.length, 'chunks');
+                    this.uploadSession(compactSession);
+                }
+            },
 
-                    chunks.forEach((frameChunk, idx) => {
-                        const chunkSession = {
-                            ...compactSession,
-                            id: `${compactSession.id}_chunk${idx}`,
-                            frames: frameChunk,
-                            chunkIndex: idx,
-                            totalChunks: chunks.length
-                        };
-                        fetch('https://locomot-io.savecharlie.partykit.dev/party/collective', {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ type: 'behavioral_session', session: chunkSession })
-                        }).then(r => r.json())
-                          .then(data => console.log(`[RECORDER] Chunk ${idx+1}/${chunks.length}:`, data.success ? 'OK' : data))
-                          .catch(e => console.log(`[RECORDER] Chunk ${idx+1} failed:`, e.message));
-                    });
+            // Upload a session in chunks, mark as uploaded on success
+            async uploadSession(session) {
+                const CHUNK_SIZE = 80;
+                const chunks = [];
+                for (let i = 0; i < session.frames.length; i += CHUNK_SIZE) {
+                    chunks.push(session.frames.slice(i, i + CHUNK_SIZE));
+                }
+                console.log('[RECORDER] Uploading', session.frames.length, 'frames in', chunks.length, 'chunks');
+
+                let successCount = 0;
+                const uploads = chunks.map((frameChunk, idx) => {
+                    const chunkSession = {
+                        ...session,
+                        id: `${session.id}_chunk${idx}`,
+                        frames: frameChunk,
+                        chunkIndex: idx,
+                        totalChunks: chunks.length
+                    };
+                    return fetch('https://locomot-io.savecharlie.partykit.dev/party/collective', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ type: 'behavioral_session', session: chunkSession })
+                    }).then(r => r.json())
+                      .then(data => {
+                          if (data.success) successCount++;
+                          console.log(`[RECORDER] Chunk ${idx+1}/${chunks.length}:`, data.success ? 'OK' : data);
+                      })
+                      .catch(e => console.log(`[RECORDER] Chunk ${idx+1} failed:`, e.message));
+                });
+
+                await Promise.allSettled(uploads);
+
+                // Mark as uploaded if all chunks succeeded
+                if (successCount === chunks.length) {
+                    await this.markUploaded(session.id);
+                    console.log('[RECORDER] Session marked as uploaded');
+                }
+            },
+
+            // Mark a session as uploaded in IndexedDB
+            async markUploaded(sessionId) {
+                if (!this.db) return;
+                const tx = this.db.transaction('sessions', 'readwrite');
+                const store = tx.objectStore('sessions');
+                const request = store.get(sessionId);
+                request.onsuccess = () => {
+                    const session = request.result;
+                    if (session) {
+                        session.uploaded = true;
+                        store.put(session);
+                    }
+                };
+            },
+
+            // Upload any sessions that haven't been uploaded yet
+            async uploadPending() {
+                if (!this.db || !this.enabled) return;
+                const sessions = await this.exportSessions(0);
+                const pending = sessions.filter(s => !s.uploaded && s.frames && s.frames.length > 10);
+                if (pending.length === 0) return;
+
+                console.log(`[RECORDER] Uploading ${pending.length} pending sessions...`);
+                for (const session of pending) {
+                    await this.uploadSession(session);
                 }
             },
 
@@ -3327,6 +3373,8 @@
                 console.log(`[RECORDER] Initialized. ${count} sessions stored. Recording: ${this.enabled ? 'ON' : 'OFF'} (opt-out model)`);
                 // Sync checkboxes after DOM loads
                 setTimeout(() => this.syncCheckboxes(), 100);
+                // Upload any pending sessions after a short delay
+                setTimeout(() => this.uploadPending(), 2000);
             }
         };
 
