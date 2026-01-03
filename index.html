@@ -2345,7 +2345,22 @@
         const BASE_MOVE_INTERVAL = 80; // Normal move speed (ms)
         const HEAD_HP_STANDARD = 1500; // 5x body HP (300)
         let isSpectating = false;
-        
+
+        // Leader Grave - memorial for the fallen leader that spawns powerups
+        const LeaderGrave = {
+            active: false,
+            x: 0, y: 0,           // Grid position
+            px: 0, py: 0,         // Pixel position
+            leaderName: '',
+            leaderLength: 0,
+            createdAt: 0,
+            lifetime: 30000,       // 30 seconds
+            lastSpawn: 0,
+            spawnInterval: 5000,   // Spawn powerup every 5 seconds
+            totalSpawned: 0,
+            maxSpawns: 5           // 5 powerups total
+        };
+
         // Power-up types
         const POWERUPS = {
             SPEED: { name: 'SPEED', color: '#0ff', icon: '🚀', duration: 10000 },
@@ -2354,6 +2369,142 @@
         };
         let deathReason = ''; // Track what killed the player
         let deathDebugInfo = null; // Full debug info at death
+
+        // Check if dying entity was the leader and create grave if so
+        function checkAndCreateLeaderGrave(entityName, segments) {
+            if (!segments || segments.length === 0) return;
+
+            const entityLen = segments.length;
+
+            // Find current max length (excluding this dying entity)
+            let maxLen = snake.length;
+            for (const e of enemies) {
+                if (e.segments && e.segments !== segments && e.segments.length > maxLen) {
+                    maxLen = e.segments.length;
+                }
+            }
+            if (Multiplayer.connected) {
+                for (const [, p] of Multiplayer.otherPlayers) {
+                    if (p.segments && p.segments !== segments && p.segments.length > maxLen) {
+                        maxLen = p.segments.length;
+                    }
+                }
+            }
+
+            // Was this entity the leader? (>= because ties count)
+            if (entityLen >= maxLen) {
+                // Create the grave!
+                LeaderGrave.active = true;
+                LeaderGrave.x = segments[0].x;
+                LeaderGrave.y = segments[0].y;
+                LeaderGrave.px = segments[0].x * GRID + GRID/2;
+                LeaderGrave.py = segments[0].y * GRID + GRID/2;
+                LeaderGrave.leaderName = entityName;
+                LeaderGrave.leaderLength = entityLen;
+                LeaderGrave.createdAt = Date.now();
+                LeaderGrave.lastSpawn = Date.now();
+                LeaderGrave.totalSpawned = 0;
+                console.log('[GRAVE] Leader grave created for', entityName, 'length:', entityLen);
+            }
+        }
+
+        // Update Leader Grave - spawn powerups over time
+        function updateLeaderGrave() {
+            if (!LeaderGrave.active) return;
+
+            const now = Date.now();
+            const age = now - LeaderGrave.createdAt;
+
+            // Check if grave expired
+            if (age >= LeaderGrave.lifetime) {
+                LeaderGrave.active = false;
+                console.log('[GRAVE] Leader grave expired');
+                return;
+            }
+
+            // Only host spawns pickups in multiplayer to avoid duplicates
+            if (Multiplayer.connected && !Multiplayer.isHost) return;
+
+            // Spawn powerup if interval passed and not at max
+            if (LeaderGrave.totalSpawned < LeaderGrave.maxSpawns) {
+                const timeSinceSpawn = now - LeaderGrave.lastSpawn;
+                if (timeSinceSpawn >= LeaderGrave.spawnInterval) {
+                    // Spawn random powerup near grave
+                    const powerupTypes = Object.values(POWERUPS);
+                    const powerup = powerupTypes[Math.floor(Math.random() * powerupTypes.length)];
+
+                    // Spawn with offset so they don't stack (ring pattern)
+                    const angle = (LeaderGrave.totalSpawned / LeaderGrave.maxSpawns) * Math.PI * 2;
+                    const dist = 25 + Math.random() * 20;
+                    const spawnX = LeaderGrave.px + Math.cos(angle) * dist;
+                    const spawnY = LeaderGrave.py + Math.sin(angle) * dist;
+
+                    addPickup({
+                        x: spawnX,
+                        y: spawnY,
+                        type: powerup,
+                        isPowerup: true,
+                        bob: Math.random() * Math.PI * 2
+                    });
+
+                    LeaderGrave.lastSpawn = now;
+                    LeaderGrave.totalSpawned++;
+                    console.log('[GRAVE] Spawned powerup', LeaderGrave.totalSpawned, 'of', LeaderGrave.maxSpawns);
+                }
+            }
+        }
+
+        // Render Leader Grave
+        function renderLeaderGrave(ctx) {
+            if (!LeaderGrave.active) return;
+
+            const now = Date.now();
+            const age = now - LeaderGrave.createdAt;
+
+            // Fade out in last 5 seconds
+            let alpha = 1;
+            if (age > LeaderGrave.lifetime - 5000) {
+                alpha = (LeaderGrave.lifetime - age) / 5000;
+            }
+
+            ctx.save();
+            ctx.globalAlpha = alpha;
+
+            // Pulsing glow effect
+            const pulse = 0.7 + Math.sin(now / 300) * 0.3;
+
+            // Draw glow circle behind grave
+            const gradient = ctx.createRadialGradient(
+                LeaderGrave.px, LeaderGrave.py, 0,
+                LeaderGrave.px, LeaderGrave.py, 40
+            );
+            gradient.addColorStop(0, `rgba(150, 100, 200, ${0.4 * pulse})`);
+            gradient.addColorStop(1, 'rgba(150, 100, 200, 0)');
+            ctx.fillStyle = gradient;
+            ctx.beginPath();
+            ctx.arc(LeaderGrave.px, LeaderGrave.py, 40, 0, Math.PI * 2);
+            ctx.fill();
+
+            // Draw tombstone emoji
+            ctx.font = '20px "Press Start 2P"';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText('🪦', LeaderGrave.px, LeaderGrave.py);
+
+            // Draw name above
+            ctx.font = '7px "Press Start 2P"';
+            ctx.fillStyle = '#fff';
+            ctx.shadowColor = '#000';
+            ctx.shadowBlur = 3;
+            ctx.fillText('RIP ' + LeaderGrave.leaderName, LeaderGrave.px, LeaderGrave.py - 22);
+
+            // Draw length below
+            ctx.font = '5px "Press Start 2P"';
+            ctx.fillStyle = '#aaa';
+            ctx.fillText('(' + LeaderGrave.leaderLength + ' cars)', LeaderGrave.px, LeaderGrave.py + 18);
+
+            ctx.restore();
+        }
 
         // === PLAYER DATA RECORDER - Collect training data from top players ===
         const playerDataRecorder = {
@@ -5201,12 +5352,14 @@
                         if (enemyIsLoneHead) {
                             // Lone head enemy dies instantly
                             const eCount = e.segments.length;
+                            checkAndCreateLeaderGrave(e.name || 'Train', e.segments);
                             dropPickupsFromSegments(e.segments, e.id);
                             waveKills += eCount;
                             RunTracker.trackEvent('kill', { size: eCount });
                             e.segments = [];
                             if (playerIsLoneHead) {
                                 // Both lone heads = both die
+                                checkAndCreateLeaderGrave(playerName, snake);
                                 if (canSpawnPlayerDrops) dropPickupsFromSegments(snake, 'player');
                                 deathReason = 'Head-on collision with ' + (e.name || 'enemy');
                                 return true;
@@ -5214,14 +5367,17 @@
                             // Player survives, enemy dies
                         } else if (playerIsLoneHead) {
                             // Player is lone head, enemy is not = player dies
+                            checkAndCreateLeaderGrave(playerName, snake);
                             if (canSpawnPlayerDrops) dropPickupsFromSegments(snake, 'player');
                             deathReason = 'Head-on collision with ' + (e.name || 'enemy');
                             return true;
                         } else if (playerLen === enemyLen) {
                             // Equal size = both die
                             const eCount = e.segments.length;
+                            checkAndCreateLeaderGrave(e.name || 'Train', e.segments);
                             dropPickupsFromSegments(e.segments, e.id);
                             waveKills += eCount;
+                            checkAndCreateLeaderGrave(playerName, snake);
                             if (canSpawnPlayerDrops) dropPickupsFromSegments(snake, 'player');
                             e.segments = [];
                             deathReason = 'Head-on collision with ' + (e.name || 'enemy');
@@ -5248,6 +5404,8 @@
 
                         if (eIsLoneHead && otherIsLoneHead) {
                             // Both lone heads = both die
+                            checkAndCreateLeaderGrave(e.name || 'Train', e.segments);
+                            checkAndCreateLeaderGrave(other.name || 'Train', other.segments);
                             dropPickupsFromSegments(e.segments, e.id);
                             dropPickupsFromSegments(other.segments, other.id);
                             waveKills += 2;
@@ -5257,18 +5415,22 @@
                             other.segments = [];
                         } else if (eIsLoneHead) {
                             // e is lone head, dies to other
+                            checkAndCreateLeaderGrave(e.name || 'Train', e.segments);
                             dropPickupsFromSegments(e.segments, e.id);
                             waveKills += 1;
                             ruleEngine.onOutcome(e.id, 'death');
                             e.segments = [];
                         } else if (otherIsLoneHead) {
                             // other is lone head, dies to e
+                            checkAndCreateLeaderGrave(other.name || 'Train', other.segments);
                             dropPickupsFromSegments(other.segments, other.id);
                             waveKills += 1;
                             ruleEngine.onOutcome(other.id, 'death');
                             other.segments = [];
                         } else if (eLen === otherLen) {
                             // Equal size = both die
+                            checkAndCreateLeaderGrave(e.name || 'Train', e.segments);
+                            checkAndCreateLeaderGrave(other.name || 'Train', other.segments);
                             dropPickupsFromSegments(e.segments, e.id);
                             dropPickupsFromSegments(other.segments, other.id);
                             waveKills += eLen + otherLen;
@@ -5287,6 +5449,7 @@
                         const oseg = other.segments[oi];
                         if (head.x === oseg.x && head.y === oseg.y) {
                             const eCount = e.segments.length;
+                            checkAndCreateLeaderGrave(e.name || 'Train', e.segments);
                             dropPickupsFromSegments(e.segments, e.id);
                             waveKills += eCount;
                             ruleEngine.onOutcome(e.id, 'death');
@@ -5320,6 +5483,7 @@
                                     const segCount = e.segments.length;
                                     const victimName = e.name || 'Train';
                                     const wasNeural = e.personality?.neural;
+                                    checkAndCreateLeaderGrave(victimName, e.segments);
                                     dropPickupsFromSegments(e.segments, e.id);
                                     score += segCount * 15;
                                     waveKills += segCount;
@@ -5334,6 +5498,7 @@
                                 } else if (si > 0 && j === 0) {
                                     // Player head hit enemy body: player dies
                                     if (snake.length === 1) {
+                                        checkAndCreateLeaderGrave(playerName, snake);
                                         if (canSpawnPlayerDrops) dropPickupsFromSegments(snake, 'player');
                                         deathReason = `Crashed into ${e.name || 'enemy'} body`;
                                         return true;
@@ -6731,7 +6896,7 @@
                             }
                         }
                     }
-                    updateWaves(time, dt); updateCamera(); updateHUD(); updateLeaderboard(); Ticker.update(gameState);
+                    updateWaves(time, dt); updateLeaderGrave(); updateCamera(); updateHUD(); updateLeaderboard(); Ticker.update(gameState);
                     RunTracker.updatePeaks(snake.length, score);
                     Multiplayer.broadcastEnemyState(); // Host syncs enemies to all clients
                     Multiplayer.debugStatus(); // Debug logging
@@ -6783,7 +6948,7 @@
                 }
                 
                 ctx.save(); ctx.scale(cameraZoom, cameraZoom); ctx.translate(-cameraX, -cameraY);
-                drawGrid(); drawPickups(time); drawEnemies(); Multiplayer.drawOtherPlayers(ctx);
+                drawGrid(); drawPickups(time); renderLeaderGrave(ctx); drawEnemies(); Multiplayer.drawOtherPlayers(ctx);
                 if (gameState === 'playing') { drawSnake(); drawDirectionQueue(); drawLeaderArrow(); }
                 drawProjectiles(); drawParticles();
                 ctx.restore(); drawScanlines(); drawPatternFlash(ctx); devMode.draw(ctx);
