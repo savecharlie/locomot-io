@@ -83,23 +83,6 @@
             pointer-events: auto;
             cursor: pointer;
         }
-        /* Debug log overlay */
-        .debug-log {
-            position: fixed;
-            bottom: 70px;
-            left: 5px;
-            width: 180px;
-            max-height: 80px;
-            overflow-y: auto;
-            background: rgba(0,0,0,0.9);
-            color: #0f0;
-            font-size: 9px;
-            padding: 4px;
-            border-radius: 4px;
-            z-index: 999999;
-            font-family: monospace;
-        }
-
         .game-container { flex: 1; position: relative; overflow: hidden; }
         #gameCanvas { display: block; width: 100%; height: 100%; cursor: crosshair; }
         #gameCanvas.playing { cursor: none; }
@@ -215,7 +198,6 @@
     <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-7560120281604459" crossorigin="anonymous"></script>
 </head>
 <body>
-    <!-- Debug overlay - remove after fixing multiplayer -->
     <div class="hud">
         <div class="hud-item len-color"><span>◈</span><span id="snakeLen">2</span></div>
         <div class="hud-item wave-color"><span>◆</span><span>RANK <span id="waveNum">#?</span></span></div>
@@ -230,7 +212,6 @@
         </div>
     </div>
     <div class="ticker-expand" id="tickerExpand"></div>
-    <div class="debug-log" id="debugLog"></div>
 
     <div class="game-container">
         <canvas id="gameCanvas"></canvas>
@@ -798,10 +779,6 @@
 
                     case 'state':
                         // Update all other players
-                        // DEBUG: Show player count PERMANENTLY in HUD
-                        if (data.players?.length > 1) {
-                            document.title = 'PVP:' + data.players.length;
-                        }
                         for (const p of data.players || []) {
                             if (p.id === this.playerId) {
                                 if (p.team) playerTeam = p.team;
@@ -1869,21 +1846,8 @@
         resize();
         window.addEventListener('resize', resize);
 
-        // Debug logging - shows on screen
-        const debugLog = (msg) => {
-            const el = document.getElementById('debugLog');
-            if (el) {
-                const line = document.createElement('div');
-                line.textContent = msg;
-                el.appendChild(line);
-                el.scrollTop = el.scrollHeight;
-                // Keep only last 20 lines
-                while (el.children.length > 20) el.removeChild(el.firstChild);
-            }
-            console.log(msg);
-        };
-        // Show debug log is working
-        debugLog('DEBUG LOG ACTIVE');
+        // Debug logging - disabled
+        const debugLog = (msg) => {};
 
         const GRID = 12;
         const WORLD_COLS = 300;
@@ -6506,9 +6470,6 @@
                             respawn();
                         }
                     }
-                    // DEBUG: Show host status permanently
-                    const hostDbg = document.querySelector('.leaderboard h3');
-                    if (hostDbg) hostDbg.textContent = Multiplayer.isHost ? 'HOST' : 'CLIENT';
                     // Only host runs enemy AI - non-hosts get enemy positions from host
                     const gameOver = (Multiplayer.connected && Multiplayer.isHost) ? updateEnemies(dt) : false;
                     if (gameOver) {
