@@ -7060,6 +7060,25 @@
             }
         };
 
+        // Track held direction keys for multi-key support
+        const heldDirKeys = new Map(); // code -> DIR
+
+        function codeToDir(code) {
+            if (code === 'ArrowUp' || code === 'KeyW') return DIR.UP;
+            if (code === 'ArrowDown' || code === 'KeyS') return DIR.DOWN;
+            if (code === 'ArrowLeft' || code === 'KeyA') return DIR.LEFT;
+            if (code === 'ArrowRight' || code === 'KeyD') return DIR.RIGHT;
+            return null;
+        }
+
+        function applyDir(newDir) {
+            if (!newDir) return;
+            if (!(dir.x === -newDir.x && dir.y === -newDir.y)) {
+                if (dirQueue.length > 0) dirQueue[0] = newDir;
+                else dirQueue.push(newDir);
+            }
+        }
+
         document.addEventListener('keydown', e => {
             // Dev mode controls (always active if dev=1)
             if (devMode.active) {
@@ -7075,30 +7094,33 @@
                 }
             }
 
-            if (gameState !== 'playing') return;
-            // Queue direction changes for responsive controls
-            let newDir = null;
-            if (e.code === 'ArrowUp' || e.code === 'KeyW') newDir = DIR.UP;
-            else if (e.code === 'ArrowDown' || e.code === 'KeyS') newDir = DIR.DOWN;
-            else if (e.code === 'ArrowLeft' || e.code === 'KeyA') newDir = DIR.LEFT;
-            else if (e.code === 'ArrowRight' || e.code === 'KeyD') newDir = DIR.RIGHT;
+            if (gameState !== 'playing') {
+                if (e.code === 'Escape') return;
+                return;
+            }
 
+            const newDir = codeToDir(e.code);
             if (newDir) {
-                // Prevent 180 degree turns (check against current direction, not queued)
-                if (!(dir.x === -newDir.x && dir.y === -newDir.y)) {
-                    // Replace any queued move (or add if empty)
-                    if (dirQueue.length > 0) {
-                        dirQueue[0] = newDir;
-                    } else {
-                        dirQueue.push(newDir);
-                    }
-                }
+                heldDirKeys.set(e.code, newDir);
+                applyDir(newDir);
             }
             else if (e.code === 'Escape') {
-                // Quit to menu - can't pause an online train game!
                 gameState = 'start';
                 canvas.classList.remove('playing');
                 document.getElementById('startScreen').classList.remove('hidden');
+            }
+        });
+
+        document.addEventListener('keyup', e => {
+            if (gameState !== 'playing') return;
+            const releasedDir = codeToDir(e.code);
+            if (releasedDir) {
+                heldDirKeys.delete(e.code);
+                // If other keys still held, switch to most recent one
+                if (heldDirKeys.size > 0) {
+                    const lastHeld = [...heldDirKeys.values()].pop();
+                    applyDir(lastHeld);
+                }
             }
         });
         
