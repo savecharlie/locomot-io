@@ -4482,6 +4482,14 @@
             const killed = new Set();
             let hostDied = false;
 
+            // DEBUG: Show players array size and positions
+            if (players.length >= 2) {
+                const p0 = players[0].segments[0];
+                const p1 = players[1].segments[0];
+                const dist = Math.abs(p0.x - p1.x) + Math.abs(p0.y - p1.y);
+                document.title = 'P:' + players.length + ' d=' + dist;
+            }
+
             const canKill = (targetId) => {
                 const last = Multiplayer.recentKillAt.get(targetId) || 0;
                 return now - last >= Multiplayer.KILL_COOLDOWN_MS;
