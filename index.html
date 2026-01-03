@@ -4482,12 +4482,18 @@
             const killed = new Set();
             let hostDied = false;
 
-            // DEBUG: Show players array size and positions
+            // DEBUG: Show collision info
             if (players.length >= 2) {
-                const p0 = players[0].segments[0];
-                const p1 = players[1].segments[0];
-                const dist = Math.abs(p0.x - p1.x) + Math.abs(p0.y - p1.y);
-                document.title = 'P:' + players.length + ' d=' + dist;
+                const a = players[0], b = players[1];
+                const aHead = a.segments[0], bHead = b.segments[0];
+                const headDist = Math.abs(aHead.x - bHead.x) + Math.abs(aHead.y - bHead.y);
+                // Check closest body distance
+                let minBodyDist = 999;
+                for (let i = 1; i < b.segments.length; i++) {
+                    const d = Math.abs(b.segments[i].x - aHead.x) + Math.abs(b.segments[i].y - aHead.y);
+                    if (d < minBodyDist) minBodyDist = d;
+                }
+                document.title = 'h=' + headDist + ' b=' + minBodyDist + ' L=' + a.segments.length + '/' + b.segments.length;
             }
 
             const canKill = (targetId) => {
