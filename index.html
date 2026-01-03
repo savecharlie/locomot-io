@@ -83,6 +83,23 @@
             pointer-events: auto;
             cursor: pointer;
         }
+        /* Debug log overlay */
+        .debug-log {
+            position: fixed;
+            bottom: 60px;
+            left: 10px;
+            max-width: 300px;
+            max-height: 150px;
+            overflow-y: auto;
+            background: rgba(0,0,0,0.8);
+            color: #0f0;
+            font-size: 9px;
+            padding: 5px;
+            border-radius: 4px;
+            z-index: 9999;
+            font-family: monospace;
+            pointer-events: none;
+        }
 
         .game-container { flex: 1; position: relative; overflow: hidden; }
         #gameCanvas { display: block; width: 100%; height: 100%; cursor: crosshair; }
@@ -215,6 +232,7 @@
         </div>
     </div>
     <div class="ticker-expand" id="tickerExpand"></div>
+    <div class="debug-log" id="debugLog"></div>
 
     <div class="game-container">
         <canvas id="gameCanvas"></canvas>
@@ -841,7 +859,7 @@
                         break;
 
                     case 'enemy_hit':
-                        console.log('[MP] Received enemy_hit:', data.name, 'isHost:', this.isHost);
+                        debugLog('[HOST] Got enemy_hit: ' + data.name);
                         if (this.isHost) applyEnemyHit(data);
                         break;
 
@@ -1837,7 +1855,21 @@
         }
         resize();
         window.addEventListener('resize', resize);
-        
+
+        // Debug logging - shows on screen
+        const debugLog = (msg) => {
+            const el = document.getElementById('debugLog');
+            if (el) {
+                const line = document.createElement('div');
+                line.textContent = msg;
+                el.appendChild(line);
+                el.scrollTop = el.scrollHeight;
+                // Keep only last 20 lines
+                while (el.children.length > 20) el.removeChild(el.firstChild);
+            }
+            console.log(msg);
+        };
+
         const GRID = 12;
         const WORLD_COLS = 300;
         const WORLD_ROWS = 200;
@@ -4148,9 +4180,15 @@
         }
 
         function applyEnemyHit(data) {
-            if (!data || !enemies.length) return;
+            if (!data || !enemies.length) {
+                debugLog('[HIT] No data or enemies');
+                return;
+            }
             const damage = data.damage || 0;
-            if (damage <= 0) return;
+            if (damage <= 0) {
+                debugLog('[HIT] No damage');
+                return;
+            }
 
             // Find enemy by name+team (trust the client hit something)
             const enemy = enemies.find(e =>
@@ -4159,14 +4197,14 @@
             );
 
             if (enemy && enemy.segments.length > 1) {
-                // Damage a random body segment (not head)
                 const segIdx = 1 + Math.floor(Math.random() * (enemy.segments.length - 1));
                 enemy.segments[segIdx].hp -= damage;
-                console.log('[ENEMY_HIT]', damage, 'damage to', enemy.name);
+                debugLog('[HIT] ' + damage + ' dmg to ' + enemy.name);
             } else if (enemy && enemy.segments.length === 1) {
-                // Only head - damage it
                 enemy.segments[0].hp -= damage;
-                console.log('[ENEMY_HIT]', damage, 'damage to', enemy.name, '(head)');
+                debugLog('[HIT] ' + damage + ' dmg to ' + enemy.name);
+            } else {
+                debugLog('[HIT] NOT FOUND: ' + data.name + '_' + data.team);
             }
         }
 
@@ -5130,7 +5168,7 @@
                                 // Hit enemy AI
                                 if (Multiplayer.connected && !Multiplayer.isHost) {
                                     // Client: send to host, don't apply locally
-                                    console.log('[CLIENT] Hit', e.name, e.team, '- sending to host');
+                                    debugLog('[CLIENT] Hit ' + e.name + ' - sending');
                                     Multiplayer.send({
                                         type: 'enemy_hit',
                                         name: e.name,
