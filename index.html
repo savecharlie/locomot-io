@@ -4442,6 +4442,9 @@
 
             const now = Date.now();
             const players = [];
+
+            // DEBUG: Show in title that function is running
+            document.title = 'PVP:' + Multiplayer.otherPlayers.size + ' t=' + Math.floor(now/1000) % 100;
             const hostInvUntil = invincibleTimer > 0 ? now + invincibleTimer : 0;
 
             // DEBUG: Show other player count on HUD
