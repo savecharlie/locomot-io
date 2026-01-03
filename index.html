@@ -6580,11 +6580,11 @@
             }
             patternTracker.recordTurn(dir, newDir, nearestThreat);
 
-            // Queue the move (replaces any existing queued move)
-            if (dirQueue.length > 0) {
-                dirQueue[0] = newDir;
-            } else {
+            // Buffer up to 3 turns for fast input
+            if (dirQueue.length < 3) {
                 dirQueue.push(newDir);
+            } else {
+                dirQueue[2] = newDir;
             }
             nextDir = newDir;
             // Aim always follows movement direction
@@ -7073,9 +7073,15 @@
 
         function applyDir(newDir) {
             if (!newDir) return;
-            if (!(dir.x === -newDir.x && dir.y === -newDir.y)) {
-                if (dirQueue.length > 0) dirQueue[0] = newDir;
-                else dirQueue.push(newDir);
+            // Check against current dir AND last queued dir to prevent 180s
+            const lastDir = dirQueue.length > 0 ? dirQueue[dirQueue.length - 1] : dir;
+            if (!(lastDir.x === -newDir.x && lastDir.y === -newDir.y)) {
+                // Allow buffering up to 3 turns for fast input
+                if (dirQueue.length < 3) {
+                    dirQueue.push(newDir);
+                } else {
+                    dirQueue[2] = newDir; // Replace oldest buffered
+                }
             }
         }
 
