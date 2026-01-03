@@ -2903,6 +2903,350 @@
         let patternFlashTimer = 0, patternFlashType = '';
         function showPatternFlash(type) { patternFlashType = type; patternFlashTimer = 90; }
 
+        // === DATA RECORDER - Behavioral cloning data collection ===
+        const DataRecorder = {
+            enabled: false,
+            session: null,
+            frameCounter: 0,
+            recordInterval: 4, // Record every 4 frames (~15 FPS)
+            lastAction: 1, // 0=left, 1=straight, 2=right
+            lastDir: null,
+            genomeFeatures: null,
+            dbName: 'locomotio_behavior',
+            dbVersion: 1,
+            db: null,
+
+            // Initialize IndexedDB
+            async initDB() {
+                return new Promise((resolve, reject) => {
+                    const request = indexedDB.open(this.dbName, this.dbVersion);
+                    request.onerror = () => reject(request.error);
+                    request.onsuccess = () => {
+                        this.db = request.result;
+                        resolve(this.db);
+                    };
+                    request.onupgradeneeded = (e) => {
+                        const db = e.target.result;
+                        if (!db.objectStoreNames.contains('sessions')) {
+                            const store = db.createObjectStore('sessions', { keyPath: 'id' });
+                            store.createIndex('quality', 'quality', { unique: false });
+                            store.createIndex('timestamp', 'timestamp', { unique: false });
+                        }
+                    };
+                });
+            },
+
+            // Start a new recording session
+            startSession() {
+                if (!this.enabled) return;
+                this.session = {
+                    id: crypto.randomUUID(),
+                    playerId: localStorage.getItem('locomot_player_id') || 'anon',
+                    timestamp: Date.now(),
+                    mode: teamMode ? 'team' : 'ffa',
+                    frames: [],
+                    // Genome tracking
+                    totalFrames: 0,
+                    turnCount: 0,
+                    shotsCount: 0,
+                    killCount: 0,
+                    damageDealt: 0,
+                    damageTaken: 0,
+                    distanceToEnemies: [],
+                    distanceToPowerups: [],
+                    reactionTimes: [],
+                    lastThreatTime: 0,
+                    retreatCount: 0,
+                    chaseCount: 0,
+                    peakLength: 0,
+                    survivalTime: 0,
+                    // Quality metrics
+                    startTime: performance.now(),
+                    finalScore: 0
+                };
+                this.frameCounter = 0;
+                this.lastDir = dir;
+                this.lastAction = 1;
+                this.genomeFeatures = null;
+                console.log('[RECORDER] Session started:', this.session.id.slice(0,8));
+            },
+
+            // Record a frame of data
+            recordFrame() {
+                if (!this.enabled || !this.session || !snake || snake.length === 0) return;
+
+                this.frameCounter++;
+                this.session.totalFrames++;
+
+                // Only record every N frames
+                if (this.frameCounter % this.recordInterval !== 0) return;
+
+                // Get player's vision (same as AI sees)
+                const head = snake[0];
+                const playerSpeedMult = 1 / (1 + (snake.length - 1) * 0.05);
+                const playerSpeed = 8 * playerSpeedMult;
+
+                const state = getVision(
+                    head.x, head.y, dir, snake,
+                    enemies, pickups, [], null,
+                    {
+                        projectiles: projectiles,
+                        enemyProjectiles: enemyProjectiles,
+                        teamMode: teamMode,
+                        playerTeam: playerTeam,
+                        myTeam: playerTeam,
+                        invincibleTimer: invincibleTimer,
+                        mySpeed: playerSpeed
+                    }
+                );
+
+                // Track enemy distance for genome
+                let nearestEnemyDist = Infinity;
+                for (const e of enemies) {
+                    if (e.segments && e.segments.length > 0) {
+                        const d = Math.abs(e.segments[0].x - head.x) + Math.abs(e.segments[0].y - head.y);
+                        if (d < nearestEnemyDist) nearestEnemyDist = d;
+                    }
+                }
+                if (nearestEnemyDist < Infinity) {
+                    this.session.distanceToEnemies.push(nearestEnemyDist);
+                }
+
+                // Record frame (compact format)
+                this.session.frames.push({
+                    t: Math.round(performance.now() - this.session.startTime),
+                    s: Array.from(state.slice(0, 133)), // State vector
+                    a: this.lastAction // Action taken
+                });
+
+                // Update peak length
+                if (snake.length > this.session.peakLength) {
+                    this.session.peakLength = snake.length;
+                }
+            },
+
+            // Record a turn action
+            recordTurn(oldDir, newDir) {
+                if (!this.enabled || !this.session) return;
+
+                // Convert absolute direction to relative action
+                const action = this.getRelativeAction(oldDir, newDir);
+                this.lastAction = action;
+                this.session.turnCount++;
+
+                // Track reaction time (time since last threat detected)
+                if (this.session.lastThreatTime > 0) {
+                    const reactionTime = performance.now() - this.session.lastThreatTime;
+                    if (reactionTime < 2000) { // Only count if within 2s
+                        this.session.reactionTimes.push(reactionTime);
+                    }
+                }
+            },
+
+            // Get relative action from absolute directions
+            getRelativeAction(oldDir, newDir) {
+                if (oldDir === newDir) return 1; // Straight
+                // Check if left turn
+                if ((oldDir === DIR.UP && newDir === DIR.LEFT) ||
+                    (oldDir === DIR.LEFT && newDir === DIR.DOWN) ||
+                    (oldDir === DIR.DOWN && newDir === DIR.RIGHT) ||
+                    (oldDir === DIR.RIGHT && newDir === DIR.UP)) {
+                    return 0; // Left
+                }
+                return 2; // Right
+            },
+
+            // Record a kill
+            recordKill(damage) {
+                if (!this.enabled || !this.session) return;
+                this.session.killCount++;
+                this.session.damageDealt += damage || 1;
+            },
+
+            // Record taking damage
+            recordDamage(amount) {
+                if (!this.enabled || !this.session) return;
+                this.session.damageTaken += amount || 1;
+            },
+
+            // Record threat detected (for reaction time)
+            recordThreat() {
+                if (!this.enabled || !this.session) return;
+                this.session.lastThreatTime = performance.now();
+            },
+
+            // Record chase/retreat behavior
+            recordMovement(towardsEnemy) {
+                if (!this.enabled || !this.session) return;
+                if (towardsEnemy) this.session.chaseCount++;
+                else this.session.retreatCount++;
+            },
+
+            // End session and compute genome
+            async endSession(finalScore) {
+                if (!this.session || this.session.frames.length < 10) {
+                    console.log('[RECORDER] Session too short, discarding');
+                    this.session = null;
+                    return;
+                }
+
+                this.session.survivalTime = performance.now() - this.session.startTime;
+                this.session.finalScore = finalScore || 0;
+
+                // Compute genome features
+                const genome = this.computeGenome();
+                this.session.genome = genome;
+
+                // Compute quality score
+                this.session.quality = this.computeQuality();
+
+                // Save to IndexedDB
+                await this.saveSession();
+
+                console.log('[RECORDER] Session saved:', {
+                    id: this.session.id.slice(0,8),
+                    frames: this.session.frames.length,
+                    quality: this.session.quality.toFixed(2),
+                    genome: Object.entries(genome).map(([k,v]) => `${k}:${v.toFixed(2)}`).join(' ')
+                });
+
+                this.session = null;
+            },
+
+            // Compute genome features from session data
+            computeGenome() {
+                const s = this.session;
+                const genome = {};
+
+                // AGGRESSION: How close do they get to enemies?
+                const avgEnemyDist = s.distanceToEnemies.length > 0
+                    ? s.distanceToEnemies.reduce((a,b) => a+b, 0) / s.distanceToEnemies.length
+                    : 50;
+                genome.aggression = Math.max(0, Math.min(1, 1 - avgEnemyDist / 50));
+
+                // TURN RATE: How often do they change direction?
+                const turnRate = s.turnCount / Math.max(1, s.totalFrames / 60);
+                genome.turnRate = Math.min(1, turnRate / 2);
+
+                // REACTION TIME: Average time to react to threats
+                const avgReaction = s.reactionTimes.length > 0
+                    ? s.reactionTimes.reduce((a,b) => a+b, 0) / s.reactionTimes.length
+                    : 500;
+                genome.reactionSpeed = Math.max(0, Math.min(1, 1 - avgReaction / 1000));
+
+                // CHASE vs RETREAT: Tendency to chase vs flee
+                const chaseTotal = s.chaseCount + s.retreatCount;
+                genome.chaseTendency = chaseTotal > 0 ? s.chaseCount / chaseTotal : 0.5;
+
+                // DAMAGE RATIO: Dealt vs taken
+                const totalDamage = s.damageDealt + s.damageTaken;
+                genome.damageRatio = totalDamage > 0 ? s.damageDealt / totalDamage : 0.5;
+
+                // SURVIVAL: How long did they last relative to peak size?
+                genome.survival = Math.min(1, s.survivalTime / 60000); // Normalized to 1 min
+
+                // SIZE ACHIEVEMENT: Peak length achieved
+                genome.sizeAchievement = Math.min(1, s.peakLength / 30);
+
+                // KILL RATE: Kills per minute
+                const minsPlayed = s.survivalTime / 60000;
+                genome.killRate = Math.min(1, (s.killCount / Math.max(0.5, minsPlayed)) / 10);
+
+                return genome;
+            },
+
+            // Compute quality score for weighted training
+            computeQuality() {
+                const s = this.session;
+                // Quality = weighted combination of performance metrics
+                const scoreWeight = Math.min(1, s.finalScore / 500) * 0.4;
+                const survivalWeight = Math.min(1, s.survivalTime / 120000) * 0.3;
+                const killWeight = Math.min(1, s.killCount / 10) * 0.2;
+                const sizeWeight = Math.min(1, s.peakLength / 20) * 0.1;
+                return scoreWeight + survivalWeight + killWeight + sizeWeight;
+            },
+
+            // Save session to IndexedDB
+            async saveSession() {
+                if (!this.db) await this.initDB();
+
+                // Compress frames for storage (just the essential data)
+                const compactSession = {
+                    id: this.session.id,
+                    playerId: this.session.playerId,
+                    timestamp: this.session.timestamp,
+                    mode: this.session.mode,
+                    genome: this.session.genome,
+                    quality: this.session.quality,
+                    survivalTime: this.session.survivalTime,
+                    finalScore: this.session.finalScore,
+                    frameCount: this.session.frames.length,
+                    // Store frames as compact arrays
+                    frames: this.session.frames.map(f => ({
+                        t: f.t,
+                        s: f.s, // Float array
+                        a: f.a
+                    }))
+                };
+
+                return new Promise((resolve, reject) => {
+                    const tx = this.db.transaction('sessions', 'readwrite');
+                    const store = tx.objectStore('sessions');
+                    const request = store.put(compactSession);
+                    request.onsuccess = () => resolve();
+                    request.onerror = () => reject(request.error);
+                });
+            },
+
+            // Export all sessions for training
+            async exportSessions(minQuality = 0) {
+                if (!this.db) await this.initDB();
+
+                return new Promise((resolve, reject) => {
+                    const tx = this.db.transaction('sessions', 'readonly');
+                    const store = tx.objectStore('sessions');
+                    const request = store.getAll();
+                    request.onsuccess = () => {
+                        const sessions = request.result.filter(s => s.quality >= minQuality);
+                        console.log(`[RECORDER] Exporting ${sessions.length} sessions (min quality: ${minQuality})`);
+                        resolve(sessions);
+                    };
+                    request.onerror = () => reject(request.error);
+                });
+            },
+
+            // Get session count
+            async getSessionCount() {
+                if (!this.db) await this.initDB();
+                return new Promise((resolve) => {
+                    const tx = this.db.transaction('sessions', 'readonly');
+                    const store = tx.objectStore('sessions');
+                    const request = store.count();
+                    request.onsuccess = () => resolve(request.result);
+                    request.onerror = () => resolve(0);
+                });
+            },
+
+            // Enable/disable recording
+            toggle() {
+                this.enabled = !this.enabled;
+                localStorage.setItem('locomotio_recorder', this.enabled ? '1' : '0');
+                console.log('[RECORDER]', this.enabled ? 'ENABLED' : 'DISABLED');
+                return this.enabled;
+            },
+
+            // Initialize from localStorage
+            async init() {
+                this.enabled = localStorage.getItem('locomotio_recorder') === '1';
+                await this.initDB();
+                const count = await this.getSessionCount();
+                console.log(`[RECORDER] Initialized. ${count} sessions stored. Recording: ${this.enabled ? 'ON' : 'OFF'}`);
+            }
+        };
+
+        // Initialize recorder on load
+        DataRecorder.init();
+
         // === STRATEGY CLASSIFIER - Makes player strategy backfire ===
         const strategyClassifier = {
             // Raw metrics
@@ -4184,6 +4528,7 @@
             // Show death screen with learning stats
             patternTracker.save();
             ruleEngine.save();
+            DataRecorder.endSession(score); // End behavioral cloning session
 
             // Report leave to server for player history
             devMode.reportLeave(
@@ -5453,6 +5798,7 @@
                             dropPickupsFromSegments(e.segments, e.id);
                             waveKills += eCount;
                             RunTracker.trackEvent('kill', { size: eCount });
+                            DataRecorder.recordKill(eCount); // Behavioral cloning
                             e.segments = [];
                             if (playerIsLoneHead) {
                                 // Both lone heads = both die
@@ -7018,6 +7364,7 @@
                     }
                     updateWaves(time, dt); updateLeaderGrave(); updateCamera(); updateHUD(); updateLeaderboard(); Ticker.update(gameState);
                     RunTracker.updatePeaks(snake.length, score);
+                    DataRecorder.recordFrame(); // Behavioral cloning data capture
                     Multiplayer.broadcastEnemyState(); // Host syncs enemies to all clients
                     Multiplayer.debugStatus(); // Debug logging
                     ruleEngine.update(); // Gödel layer tick
@@ -7032,6 +7379,7 @@
                             }
                         }
                         strategyClassifier.update({ x: snake[0].x, y: snake[0].y }, nearestDist);
+                        if (nearestDist < 8) DataRecorder.recordThreat(); // Record threat for reaction time
 
                         // Reclassify every ~2 seconds (120 frames at 60fps)
                         if (strategyClassifier.totalTicks % 120 === 0 && strategyClassifier.totalTicks > 60) {
@@ -7099,6 +7447,7 @@
                 }
             }
             patternTracker.recordTurn(dir, newDir, nearestThreat);
+            DataRecorder.recordTurn(dir, newDir); // Behavioral cloning
             RunTracker.trackEvent('turn');
 
             // Buffer up to 3 turns for fast input
@@ -7265,6 +7614,7 @@
             gameState = 'playing';
             canvas.classList.add('playing');
             RunTracker.startRun('ffa', Multiplayer.username);
+            DataRecorder.startSession(); // Start behavioral cloning recording
             // Report join to server for player history
             devMode.reportJoin(Multiplayer.username || 'Anonymous', Multiplayer.playerId);
             // Welcome dispatch
@@ -7300,6 +7650,7 @@
             gameState = 'playing';
             canvas.classList.add('playing');
             RunTracker.startRun('team', Multiplayer.username);
+            DataRecorder.startSession(); // Start behavioral cloning recording
             // Report join to server for player history
             devMode.reportJoin(Multiplayer.username || 'Anonymous', Multiplayer.playerId);
             // Welcome dispatch
@@ -7687,6 +8038,41 @@
         devMode.fetchHistory(); // Fetch recent player history
         bootstrapArena();
         requestAnimationFrame(gameLoop);
+
+        // === CONSOLE API for DataRecorder ===
+        window.recorder = {
+            toggle: () => {
+                const state = DataRecorder.toggle();
+                console.log('%c[RECORDER] ' + (state ? 'ENABLED' : 'DISABLED'), 'color: ' + (state ? '#0f0' : '#f00'));
+                return state;
+            },
+            status: async () => {
+                const count = await DataRecorder.getSessionCount();
+                console.log('%c[RECORDER] Status: ' + (DataRecorder.enabled ? 'ON' : 'OFF') + ', Sessions: ' + count, 'color: #ff0');
+                return { enabled: DataRecorder.enabled, sessions: count };
+            },
+            export: async (minQuality = 0) => {
+                const sessions = await DataRecorder.exportSessions(minQuality);
+                console.log('%c[RECORDER] Exporting ' + sessions.length + ' sessions', 'color: #0ff');
+                // Create download
+                const blob = new Blob([JSON.stringify(sessions, null, 2)], { type: 'application/json' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = 'locomotio_behavior_data_' + Date.now() + '.json';
+                a.click();
+                URL.revokeObjectURL(url);
+                return sessions;
+            },
+            clear: async () => {
+                if (!DataRecorder.db) await DataRecorder.initDB();
+                const tx = DataRecorder.db.transaction('sessions', 'readwrite');
+                const store = tx.objectStore('sessions');
+                await new Promise(r => { store.clear().onsuccess = r; });
+                console.log('%c[RECORDER] All sessions cleared', 'color: #f0f');
+            }
+        };
+        console.log('[RECORDER] Console API ready. Use: recorder.toggle(), recorder.status(), recorder.export(), recorder.clear()');
 
         // Periodic activity heartbeat (every 30 seconds)
         setInterval(() => {
