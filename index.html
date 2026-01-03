@@ -6284,7 +6284,9 @@
                     ctx.globalAlpha = 1;
                 } else {
                     ctx.globalAlpha = isOwnRecentDrop ? 0.3 : 1;
-                    const c = p.type.color;
+                    // Expand 3-char hex to 6-char for alpha
+                    let c = p.type.color;
+                    if (c.length === 4) c = '#' + c[1] + c[1] + c[2] + c[2] + c[3] + c[3];
                     // Outer tips (faintest)
                     ctx.fillStyle = c + '1e';
                     ctx.fillRect(x, y - 3, 1, 1);
