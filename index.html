@@ -4103,7 +4103,8 @@
                 let blocked = false;
                 for (const e of enemies) {
                     if (!e.segments || e.segments.length === 0) continue;
-                    if (e.team !== playerTeam) continue;
+                    // Skip teammates (can pass through), check opponents/AI
+                    if (e.team === playerTeam) continue;
                     for (const seg of e.segments) {
                         if (seg.x === wrappedX && seg.y === wrappedY) {
                             blocked = true;
@@ -4115,7 +4116,8 @@
                 if (!blocked && Multiplayer.connected) {
                     for (const [, op] of Multiplayer.otherPlayers) {
                         if (!op.segments || op.segments.length === 0) continue;
-                        if ((op.team || 'blue') !== playerTeam) continue;
+                        // Skip teammates (can pass through), check opponents
+                        if ((op.team || 'blue') === playerTeam) continue;
                         for (const seg of op.segments) {
                             if (seg.x === wrappedX && seg.y === wrappedY) {
                                 blocked = true;
