@@ -3763,8 +3763,8 @@
                         isHealth: false, bob: Math.random() * Math.PI * 2
                     });
                 }
-                // Spawn power-ups rarely
-                if (t % 300 === 0 && pickups.filter(p => p.isPowerup).length < 3) {
+                // Spawn power-ups more frequently (guns only come from kills now)
+                if (t % 150 === 0 && pickups.filter(p => p.isPowerup).length < 6) {
                     const px = Math.floor(Math.random() * WORLD_COLS) * GRID + GRID/2;
                     const py = Math.floor(Math.random() * WORLD_ROWS) * GRID + GRID/2;
                     const powerupTypes = Object.values(POWERUPS);
@@ -3797,31 +3797,7 @@
                 (!Multiplayer.connected && !Multiplayer.socket);
 
             if (canInitArena) {
-                // Scatter pickups around the world first
-                for (let i = 0; i < 200; i++) {
-                    const px = Math.floor(Math.random() * WORLD_COLS) * GRID + GRID/2;
-                    const py = Math.floor(Math.random() * WORLD_ROWS) * GRID + GRID/2;
-                    addPickup({
-                        x: px, y: py,
-                        type: GUNS[GUN_NAMES[Math.floor(Math.random() * GUN_NAMES.length)]],
-                        isHealth: Math.random() < 0.15,
-                        healAmount: 40,
-                        bob: Math.random() * Math.PI * 2
-                    });
-                }
-                
-                // Spawn initial power-ups
-                const powerupTypes = Object.values(POWERUPS);
-                for (let i = 0; i < 5; i++) {
-                    const px = Math.floor(Math.random() * WORLD_COLS) * GRID + GRID/2;
-                    const py = Math.floor(Math.random() * WORLD_ROWS) * GRID + GRID/2;
-                    addPickup({
-                        x: px, y: py,
-                        type: powerupTypes[Math.floor(Math.random() * powerupTypes.length)],
-                        isPowerup: true,
-                        bob: Math.random() * Math.PI * 2
-                    });
-                }
+                // No initial pickups - kill or be killed! Guns only come from kills.
                 
                 // Spawn established enemies across the map
                 // Alpha predators (big snakes, 12-25 segments) - fewer of them
@@ -4882,37 +4858,60 @@
                             }
                         }
 
-                        // PICKUP BEELINE: If safe, aggressively pursue nearest pickup
+                        // PICKUP BEELINE: Cluster-aware + powerup priority
                         if (safeDirections > 0 && pickups.length > 0) {
-                            // Find nearest pickup
-                            let nearestPickup = null;
-                            let nearestDist = Infinity;
+                            // Score each direction by pickup VALUE (clusters + powerups)
+                            const dirScores = [0, 0, 0]; // left, straight, right
+                            const dirPickups = [0, 0, 0]; // count per direction
+                            
                             for (const p of pickups) {
                                 const px = Math.floor(p.x / GRID);
                                 const py = Math.floor(p.y / GRID);
                                 const dist = Math.abs(head.x - px) + Math.abs(head.y - py);
-                                if (dist < nearestDist) {
-                                    nearestDist = dist;
-                                    nearestPickup = { x: px, y: py };
+                                if (dist > 30) continue; // Too far
+                                
+                                const dx = px - head.x;
+                                const dy = py - head.y;
+                                
+                                // Determine which direction this pickup is in
+                                let dirIdx = -1;
+                                if (e.dir === DIR.UP) {
+                                    if (dy < 0 && Math.abs(dx) <= Math.abs(dy)) dirIdx = 1; // ahead
+                                    else if (dx < 0) dirIdx = 0; // left
+                                    else if (dx > 0) dirIdx = 2; // right
+                                } else if (e.dir === DIR.DOWN) {
+                                    if (dy > 0 && Math.abs(dx) <= Math.abs(dy)) dirIdx = 1;
+                                    else if (dx > 0) dirIdx = 0;
+                                    else if (dx < 0) dirIdx = 2;
+                                } else if (e.dir === DIR.LEFT) {
+                                    if (dx < 0 && Math.abs(dy) <= Math.abs(dx)) dirIdx = 1;
+                                    else if (dy > 0) dirIdx = 0;
+                                    else if (dy < 0) dirIdx = 2;
+                                } else { // RIGHT
+                                    if (dx > 0 && Math.abs(dy) <= Math.abs(dx)) dirIdx = 1;
+                                    else if (dy < 0) dirIdx = 0;
+                                    else if (dy > 0) dirIdx = 2;
+                                }
+                                
+                                if (dirIdx >= 0) {
+                                    dirPickups[dirIdx]++;
+                                    // Base value: closer = better
+                                    let value = 10 / Math.max(dist, 1);
+                                    // Powerups are 3x more valuable
+                                    if (p.isPowerup) value *= 3;
+                                    dirScores[dirIdx] += value;
                                 }
                             }
-
-                            if (nearestPickup && nearestDist < 30) {
-                                // Calculate direction to pickup relative to heading
-                                const dx = nearestPickup.x - head.x;
-                                const dy = nearestPickup.y - head.y;
-
-                                let pickupAhead = false, pickupLeft = false, pickupRight = false;
-                                if (e.dir === DIR.UP) { pickupAhead = dy < 0; pickupLeft = dx < 0; pickupRight = dx > 0; }
-                                else if (e.dir === DIR.DOWN) { pickupAhead = dy > 0; pickupLeft = dx > 0; pickupRight = dx < 0; }
-                                else if (e.dir === DIR.LEFT) { pickupAhead = dx < 0; pickupLeft = dy > 0; pickupRight = dy < 0; }
-                                else { pickupAhead = dx > 0; pickupLeft = dy < 0; pickupRight = dy > 0; }
-
-                                // Strong bias toward pickup if that direction is safe
-                                const pickupBias = 5 + (10 / Math.max(nearestDist, 1)); // Stronger when closer
-                                if (pickupAhead && lookaheadScores[1] >= -50) output[1] += pickupBias;
-                                if (pickupLeft && lookaheadScores[0] >= -50) output[0] += pickupBias;
-                                if (pickupRight && lookaheadScores[2] >= -50) output[2] += pickupBias;
+                            
+                            // Apply cluster bonuses: more pickups = multiplicative bonus
+                            for (let i = 0; i < 3; i++) {
+                                if (dirPickups[i] > 1) {
+                                    dirScores[i] *= (1 + dirPickups[i] * 0.3); // +30% per extra pickup
+                                }
+                                // Apply to output if direction is safe
+                                if (lookaheadScores[i] >= -50) {
+                                    output[i] += dirScores[i];
+                                }
                             }
                         }
 
@@ -5888,14 +5887,14 @@
             const canSpawnPickups = (Multiplayer.connected && Multiplayer.isHost) ||
                 (!Multiplayer.connected && !Multiplayer.socket);
             
-            // Spawn pickups to keep the world interesting
+            // Spawn pickups to keep the world interesting (health only - guns come from kills)
             if (canSpawnPickups && pickups.length < 120 && Math.random() < 0.05) {
                 const px = Math.floor(Math.random() * WORLD_COLS) * GRID + GRID/2;
                 const py = Math.floor(Math.random() * WORLD_ROWS) * GRID + GRID/2;
                 addPickup({
                     x: px, y: py,
-                    type: GUNS[GUN_NAMES[Math.floor(Math.random() * GUN_NAMES.length)]],
-                    isHealth: Math.random() < 0.1,
+                    type: null,
+                    isHealth: true,  // Only health spawns naturally - guns come from kills!
                     healAmount: 40,
                     bob: Math.random() * Math.PI * 2
                 });
@@ -6478,6 +6477,7 @@
         }
         
         function drawProjectiles() {
+            ctx.globalAlpha = 0.5; // Translucent bullets
             for (const p of projectiles) {
                 ctx.fillStyle = p.color;
                 const s = p.size * 2;
@@ -6488,6 +6488,7 @@
                 const s = p.size * 2;
                 ctx.fillRect(Math.floor(p.x - s/2), Math.floor(p.y - s/2), s, s);
             }
+            ctx.globalAlpha = 1;
         }
         
         function drawPickups(time) {
@@ -7423,6 +7424,7 @@
             if (Multiplayer.selfLastTurn === 0) Multiplayer.selfLastTurn = Date.now();
             
             const timeSinceTurn = Date.now() - Multiplayer.selfLastTurn;
+            console.log('[AFK] Time since turn:', Math.floor(timeSinceTurn/1000), 's');
             
             // Warning at 45 seconds
             if (timeSinceTurn > Multiplayer.AFK_WARNING && !Multiplayer.selfAfkWarned) {
