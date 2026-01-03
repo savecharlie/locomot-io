@@ -216,7 +216,6 @@
 </head>
 <body>
     <!-- Debug overlay - remove after fixing multiplayer -->
-    <div id="mp-debug" style="position:fixed;top:5px;left:5px;background:rgba(0,0,0,0.8);color:#0f0;font-family:monospace;font-size:12px;padding:5px 10px;z-index:9999;pointer-events:none;"></div>
     <div class="hud">
         <div class="hud-item len-color"><span>◈</span><span id="snakeLen">2</span></div>
         <div class="hud-item wave-color"><span>◆</span><span>RANK <span id="waveNum">#?</span></span></div>
@@ -991,23 +990,7 @@
             // Debug: update overlay every 500ms
             _enemyStateCount: 0,
             debugStatus() {
-                const now = Date.now();
-                if (now - this.lastDebugLog < 500) return;
-                this.lastDebugLog = now;
-                const e0 = enemies[0];
-                const el = document.getElementById('mp-debug');
-                if (el) {
-                    const role = this.isHost ? 'HOST' : 'CLIENT';
-                    const name = e0?.name || 'none';
-                    const opCount = this.otherPlayers.size;
-                    let opInfo = '';
-                    for (const [pid, op] of this.otherPlayers) {
-                        const segs = op.segments?.length || 0;
-                        const pos = op.segments?.[0] ? `${op.segments[0].x},${op.segments[0].y}` : 'none';
-                        opInfo += ` | p:${segs}@${pos}`;
-                    }
-                    el.textContent = `${role} | e=${this._enemyStateCount} | e0=${name}${opInfo}`;
-                }
+                // Debug removed - multiplayer working
             },
 
             sendArenaSync(targetId) {
