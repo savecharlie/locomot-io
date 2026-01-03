@@ -6350,7 +6350,14 @@
             let powerupStatus = [];
             if (invincibleTimer > 0) powerupStatus.push('🛡️' + Math.ceil(invincibleTimer / 1000));
             if (speedTimer > 0) powerupStatus.push('🚀' + Math.ceil(speedTimer / 1000));
-            if (trailBoostTimer > 0) powerupStatus.push("⚡DRAFTING"); if (isLeader) powerupStatus.push("👑LEADER"); if (teamMode) powerupStatus.push("👥TEAM"); if (magnetTimer > 0) powerupStatus.push('🧲' + Math.ceil(magnetTimer / 1000));
+            if (trailBoostTimer > 0) powerupStatus.push("⚡DRAFT");
+            if (isLeader) powerupStatus.push("👑LEADER");
+            if (teamMode && cachedTeamLead) {
+                // Strip HTML tags for HUD display
+                const leadText = cachedTeamLead.replace(/<[^>]*>/g, '');
+                powerupStatus.push(leadText);
+            }
+            if (magnetTimer > 0) powerupStatus.push('🧲' + Math.ceil(magnetTimer / 1000));
             
             if (powerupStatus.length > 0) {
                 document.getElementById('score').textContent = powerupStatus.join(' ');
