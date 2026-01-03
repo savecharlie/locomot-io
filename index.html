@@ -6047,9 +6047,11 @@
                 ctx.textAlign = 'center';
                 // Show team in team mode
                 if (teamMode) {
-                    const teammateCount = [...Multiplayer.otherPlayers.values()].filter(p => p.team === playerTeam).length;
+                    const others = [...Multiplayer.otherPlayers.values()];
+                    const teammateCount = others.filter(p => p.team === playerTeam).length;
+                    const otherTeams = others.map(p => p.team || '?').join(',');
                     const teamLabel = playerTeam === 'blue' ? '🔵' : '🔴';
-                    ctx.fillText(`${teamLabel} ${Multiplayer.username} (+${teammateCount})`, head.x * GRID + GRID/2, head.y * GRID - 8);
+                    ctx.fillText(`${teamLabel}${playerTeam} ${Multiplayer.username} (+${teammateCount}) [${otherTeams}]`, head.x * GRID + GRID/2, head.y * GRID - 8);
                 } else {
                     ctx.fillText(`👤 ${Multiplayer.username}`, head.x * GRID + GRID/2, head.y * GRID - 8);
                 }
