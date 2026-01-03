@@ -241,6 +241,10 @@
                     <button class="mode-btn ffa" id="startFFA">⚔️ FREE FOR ALL</button>
                     <button class="mode-btn teams" id="startTeams">👥 TEAM BATTLE</button>
                 </div>
+                <label style="display: flex; align-items: center; justify-content: center; gap: 6px; margin-top: 12px; font-size: 9px; color: #666; cursor: pointer;">
+                    <input type="checkbox" id="trainDataConsent" checked style="width: 12px; height: 12px; cursor: pointer;">
+                    <span>Help train smarter AI with my gameplay data</span>
+                </label>
             </div>
             <div style="margin-top: 20px; padding-top: 16px; border-top: 1px solid #222;">
                 <div id="kofiWidgetContainerStart" style="display: flex; justify-content: center; margin-bottom: 12px;"></div>
@@ -283,10 +287,14 @@
             </div>
 
             <!-- Main Buttons -->
-            <div style="display: flex; gap: 10px; margin-bottom: 20px;">
+            <div style="display: flex; gap: 10px; margin-bottom: 12px;">
                 <button class="start-btn" id="restartBtn" style="flex: 1;">▶ PLAY AGAIN</button>
                 <button class="start-btn" id="spectateBtn" style="flex: 1; background: #155;">👁 SPECTATE</button>
             </div>
+            <label style="display: flex; align-items: center; justify-content: center; gap: 6px; margin-bottom: 15px; font-size: 9px; color: #666; cursor: pointer;">
+                <input type="checkbox" id="trainDataConsentDeath" checked style="width: 12px; height: 12px; cursor: pointer;">
+                <span>Help train smarter AI with my gameplay data</span>
+            </label>
 
             <!-- Change Name -->
             <input type="text" id="usernameInputDeath" placeholder="Change name..." maxlength="12"
@@ -3231,21 +3239,53 @@
             toggle() {
                 this.enabled = !this.enabled;
                 localStorage.setItem('locomotio_recorder', this.enabled ? '1' : '0');
+                this.syncCheckboxes();
                 console.log('[RECORDER]', this.enabled ? 'ENABLED' : 'DISABLED');
                 return this.enabled;
             },
 
-            // Initialize from localStorage
+            // Set recording state (called from checkboxes)
+            setEnabled(enabled) {
+                this.enabled = enabled;
+                localStorage.setItem('locomotio_recorder', enabled ? '1' : '0');
+                this.syncCheckboxes();
+                console.log('[RECORDER]', enabled ? 'ENABLED (opt-in)' : 'DISABLED (opt-out)');
+            },
+
+            // Sync checkboxes with current state
+            syncCheckboxes() {
+                const cb1 = document.getElementById('trainDataConsent');
+                const cb2 = document.getElementById('trainDataConsentDeath');
+                if (cb1) cb1.checked = this.enabled;
+                if (cb2) cb2.checked = this.enabled;
+            },
+
+            // Initialize - default to ENABLED (opt-out model)
             async init() {
-                this.enabled = localStorage.getItem('locomotio_recorder') === '1';
+                // Default to enabled unless explicitly set to '0'
+                const stored = localStorage.getItem('locomotio_recorder');
+                this.enabled = stored !== '0'; // Enabled by default!
+                if (stored === null) {
+                    localStorage.setItem('locomotio_recorder', '1'); // Save default
+                }
                 await this.initDB();
                 const count = await this.getSessionCount();
-                console.log(`[RECORDER] Initialized. ${count} sessions stored. Recording: ${this.enabled ? 'ON' : 'OFF'}`);
+                console.log(`[RECORDER] Initialized. ${count} sessions stored. Recording: ${this.enabled ? 'ON' : 'OFF'} (opt-out model)`);
+                // Sync checkboxes after DOM loads
+                setTimeout(() => this.syncCheckboxes(), 100);
             }
         };
 
         // Initialize recorder on load
         DataRecorder.init();
+
+        // Checkbox event listeners for training data consent
+        document.addEventListener('DOMContentLoaded', () => {
+            const cb1 = document.getElementById('trainDataConsent');
+            const cb2 = document.getElementById('trainDataConsentDeath');
+            if (cb1) cb1.addEventListener('change', (e) => DataRecorder.setEnabled(e.target.checked));
+            if (cb2) cb2.addEventListener('change', (e) => DataRecorder.setEnabled(e.target.checked));
+        });
 
         // === STRATEGY CLASSIFIER - Makes player strategy backfire ===
         const strategyClassifier = {
