@@ -6287,26 +6287,26 @@
                     // Expand 3-char hex to 6-char for alpha
                     let c = p.type.color;
                     if (c.length === 4) c = '#' + c[1] + c[1] + c[2] + c[2] + c[3] + c[3];
-                    // Outer tips (faintest)
-                    ctx.fillStyle = c + '1e';
+                    // Outer tips (brightest)
+                    ctx.fillStyle = c;
                     ctx.fillRect(x, y - 3, 1, 1);
                     ctx.fillRect(x, y + 3, 1, 1);
                     ctx.fillRect(x - 3, y, 1, 1);
                     ctx.fillRect(x + 3, y, 1, 1);
                     // Mid glow
-                    ctx.fillStyle = c + '46';
+                    ctx.fillStyle = c + 'aa';
                     ctx.fillRect(x + 1, y - 2, 1, 1); ctx.fillRect(x - 1, y - 2, 1, 1);
                     ctx.fillRect(x + 2, y - 1, 1, 1); ctx.fillRect(x - 2, y - 1, 1, 1);
                     ctx.fillRect(x + 1, y + 2, 1, 1); ctx.fillRect(x - 1, y + 2, 1, 1);
                     ctx.fillRect(x + 2, y + 1, 1, 1); ctx.fillRect(x - 2, y + 1, 1, 1);
                     // Inner glow
-                    ctx.fillStyle = c + '8c';
+                    ctx.fillStyle = c + '66';
                     ctx.fillRect(x, y - 2, 1, 1); ctx.fillRect(x, y + 2, 1, 1);
                     ctx.fillRect(x - 2, y, 1, 1); ctx.fillRect(x + 2, y, 1, 1);
                     ctx.fillRect(x + 1, y - 1, 1, 1); ctx.fillRect(x - 1, y - 1, 1, 1);
                     ctx.fillRect(x + 1, y + 1, 1, 1); ctx.fillRect(x - 1, y + 1, 1, 1);
-                    // Core diamond
-                    ctx.fillStyle = c;
+                    // Core diamond (dimmest)
+                    ctx.fillStyle = c + '33';
                     ctx.fillRect(x, y, 1, 1);
                     ctx.fillRect(x, y - 1, 1, 1); ctx.fillRect(x, y + 1, 1, 1);
                     ctx.fillRect(x - 1, y, 1, 1); ctx.fillRect(x + 1, y, 1, 1);
