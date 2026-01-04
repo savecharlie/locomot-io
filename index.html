@@ -926,6 +926,20 @@
         // Player username
         let playerName = localStorage.getItem('locomot_username') || 'Train' + Math.floor(Math.random() * 999);
 
+        // Get persistent player ID for bot training (username or anon ID)
+        function getPlayerId() {
+            const username = localStorage.getItem('locomot_username');
+            if (username && username !== 'anon') return username;
+
+            // Generate persistent anon ID if needed
+            let anonId = localStorage.getItem('locomot_anon_id');
+            if (!anonId) {
+                anonId = 'anon_' + crypto.randomUUID().slice(0, 8);
+                localStorage.setItem('locomot_anon_id', anonId);
+            }
+            return anonId;
+        }
+
         const Multiplayer = {
             username: playerName,
             socket: null,
@@ -3665,41 +3679,35 @@
 
             // Find player's bot in manifest
             findMyBot() {
-                const username = localStorage.getItem('locomot_username');
-                // Anon users can't track their bots (no persistent identity)
-                if (!username || username === 'anon') return null;
-
+                const playerId = getPlayerId();
                 const manifest = genomeRegistry.manifest;
                 if (!manifest) return null;
 
                 return manifest.genomes.find(g =>
-                    g.source === `player:${username}` ||
-                    g.id === username.toLowerCase()
+                    g.source === `player:${playerId}` ||
+                    g.id.startsWith(playerId.toLowerCase())
                 );
             },
 
             // Find ALL bots related to this player (offspring, fine-tuned, etc.)
             findMyBots() {
-                const username = localStorage.getItem('locomot_username');
-                // Anon users can't track their bots (no persistent identity)
-                if (!username || username === 'anon') return [];
-
+                const playerId = getPlayerId();
                 const manifest = genomeRegistry.manifest;
                 if (!manifest) return [];
 
-                const lowerUsername = username.toLowerCase();
+                const lowerId = playerId.toLowerCase();
 
                 // Find bots where:
-                // - source is player:username
-                // - source contains the username (finetune:ivy, breed:ivy×other)
-                // - id starts with username
+                // - source is player:playerId
+                // - source contains the playerId (finetune:ivy, breed:ivy×other)
+                // - id starts with playerId
                 const related = manifest.genomes.filter(g => {
                     const source = (g.source || '').toLowerCase();
                     const id = (g.id || '').toLowerCase();
 
-                    return source === `player:${lowerUsername}` ||
-                           source.includes(lowerUsername) ||
-                           id.startsWith(lowerUsername);
+                    return source === `player:${lowerId}` ||
+                           source.includes(lowerId) ||
+                           id.startsWith(lowerId);
                 });
 
                 // Sort by fitness (highest first)
@@ -3730,13 +3738,6 @@
                 const container = document.getElementById('botStatusContainer');
 
                 if (!container) return;
-
-                const username = localStorage.getItem('locomot_username');
-                if (!username || username === 'anon') {
-                    // Anon users still train bots but can't track them
-                    container.style.display = 'none';
-                    return;
-                }
                 container.style.display = 'block';
 
                 // Check for bot
@@ -3814,13 +3815,6 @@
                 const container = document.getElementById('botStatusContainerStart');
 
                 if (!container) return;
-
-                const username = localStorage.getItem('locomot_username');
-                if (!username || username === 'anon') {
-                    // Anon users still train bots but can't track them
-                    container.style.display = 'none';
-                    return;
-                }
                 container.style.display = 'block';
 
                 const bot = this.findMyBot();
@@ -4106,13 +4100,11 @@
                     return;
                 }
 
-                // Use 'anon' for anonymous users - they all contribute to shared AnonBot
-                const username = localStorage.getItem('locomot_username') || 'anon';
-                const isAnon = !localStorage.getItem('locomot_username') || username === 'anon';
+                // Get persistent player ID (username or anon_xyz)
+                const playerId = getPlayerId();
 
-                // Named users: skip if already have a bot
-                // Anon users: always allow (contributes to shared pool)
-                if (!isAnon && BotTracker.findMyBot()) {
+                // Skip if player already has a bot
+                if (BotTracker.findMyBot()) {
                     console.log('[BOT_TRAINER] Player already has bot, skipping');
                     return;
                 }
@@ -4136,7 +4128,7 @@
                     }
 
                     // Upload to server
-                    const botId = await this.uploadWeights(weights, username);
+                    const botId = await this.uploadWeights(weights, playerId);
                     if (botId) {
                         this.trainedBotId = botId;
                         this.pendingCelebration = true;
