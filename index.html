@@ -7940,7 +7940,6 @@
         
         function drawSnake() {
             // Update train frame for wheel animation
-            for(let i=1;i<tronTrail.length;i++){const t0=tronTrail[i-1],t1=tronTrail[i];if(Math.abs(t1.x-t0.x)>2||Math.abs(t1.y-t0.y)>2)continue;ctx.strokeStyle="rgba(255,215,0,"+(i/tronTrail.length)*0.7+")";ctx.lineWidth=2+(i/tronTrail.length)*3;ctx.beginPath();ctx.moveTo(t0.x*GRID+GRID/2,t0.y*GRID+GRID/2);ctx.lineTo(t1.x*GRID+GRID/2,t1.y*GRID+GRID/2);ctx.stroke();}
             trainFrame++;
 
             // Draw smoke behind everything
