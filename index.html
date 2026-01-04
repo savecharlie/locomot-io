@@ -2257,8 +2257,21 @@
         const MVP_SWITCH_THRESHOLD = 1.5; // New MVP must be 50% more interesting to switch
         let cameraLerpFactor = 0.1; // Dynamic lerp factor for smooth panning
         
-        // Qwen AI name generator - batch generation with prefetch queue
-        const FALLBACK_NAMES = ['Phantom', 'Eclipse', 'Vortex', 'Nebula', 'Havoc', 'Cipher', 'Spectre', 'Zenith', 'Onyx', 'Crimson', 'Raven', 'Tempest', 'Nova', 'Flux', 'Ember', 'Wraith', 'Axiom', 'Pulse', 'Drift', 'Chaos', 'Vesper', 'Nyx', 'Aether', 'Solace', 'Revenant', 'Oblivion', 'Seraph', 'Dusk', 'Fury', 'Blight'];
+        // Bot name pool - curated train-themed names (authentic railroad slang + gamer vibes)
+        const FALLBACK_NAMES = [
+            // Railroad slang
+            'Foamer', 'Hogger', 'Brakie', 'Gunzel', 'Gricer', 'Bakehead', 'Gandy', 'Highball', 'Deadhead', 'Hotshot',
+            // Train parts
+            'Caboose', 'Coupler', 'Ballast', 'Buffer', 'Cowcatcher', 'Bogie', 'Tender', 'Pantograph',
+            // Jobs
+            'Shunter', 'Stoker', 'Flagman', 'Throttle', 'Whistle', 'Yardmaster', 'Switchman',
+            // Freight
+            'Hopper', 'Clinker', 'Boxcar', 'Flatbed', 'Tanker', 'Gondola',
+            // Gamer style
+            'DelayedAgain', 'EndOfLine', 'CoalDust', 'SteamLeak', 'GhostTrain', 'WrongTrack', 'NightMail', 'Derail',
+            // Bonus
+            'Railbird', 'Trainspotter', 'Rivet'
+        ];
         const generatedNames = new Set();
         const nameQueue = [];
         let fallbackIndex = 0;
@@ -2275,45 +2288,15 @@
             return true;
         }
 
-        // Fetch batch of 15 names in one request
-        async function fetchNameBatch() {
-            if (fetchingBatch) return;
-            fetchingBatch = true;
-            try {
-                const res = await fetch('http://localhost:11434/api/chat', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        model: 'qwen2.5:3b',
-                        messages: [
-                            { role: 'system', content: 'Generate 15 unique creative gamer names. Single words, 4-10 letters, no numbers. Mythology, nature, emotion, abstract themes. Output as comma-separated list only.' },
-                            { role: 'user', content: 'Names:' }
-                        ],
-                        stream: false,
-                        options: { num_predict: 120, temperature: 1.4 }
-                    }),
-                    signal: AbortSignal.timeout(10000)
-                });
-                const text = (await res.json()).message?.content || '';
-                const names = text.split(/[,\n]+/).map(n => {
-                    n = n.replace(/[^a-zA-Z]/g, '').slice(0, 12);
-                    return n.length >= 4 ? n.charAt(0).toUpperCase() + n.slice(1).toLowerCase() : null;
-                }).filter(n => n && isNameUnique(n));
-                nameQueue.push(...names);
-            } catch (e) { console.log('Name batch fetch failed:', e); }
-            fetchingBatch = false;
-        }
+        // No-op: Ollama disabled, using preset name pool only
+        function fetchNameBatch() { }
 
-        async function generateTrainName() {
-            // Refill queue if low
-            if (nameQueue.length < 5 && !fetchingBatch) {
-                fetchNameBatch(); // Don't await - let it run in background
-            }
-
-            // Try queue first
-            while (nameQueue.length > 0) {
-                const name = nameQueue.shift();
+        function generateTrainName() {
+            // Cycle through preset names, preferring unique ones
+            for (let i = 0; i < FALLBACK_NAMES.length; i++) {
+                const name = FALLBACK_NAMES[(fallbackIndex + i) % FALLBACK_NAMES.length];
                 if (isNameUnique(name)) {
+                    fallbackIndex = (fallbackIndex + i + 1) % FALLBACK_NAMES.length;
                     generatedNames.add(name);
                     if (generatedNames.size > 80) {
                         generatedNames.delete(generatedNames.values().next().value);
@@ -2321,28 +2304,7 @@
                     return name;
                 }
             }
-
-            // Wait for batch if queue empty
-            if (fetchingBatch) {
-                await new Promise(r => setTimeout(r, 500));
-                if (nameQueue.length > 0) {
-                    const name = nameQueue.shift();
-                    if (isNameUnique(name)) {
-                        generatedNames.add(name);
-                        return name;
-                    }
-                }
-            }
-
-            // Fallback: cycle through cool names
-            for (let i = 0; i < FALLBACK_NAMES.length; i++) {
-                const name = FALLBACK_NAMES[(fallbackIndex + i) % FALLBACK_NAMES.length];
-                if (isNameUnique(name)) {
-                    fallbackIndex = (fallbackIndex + i + 1) % FALLBACK_NAMES.length;
-                    generatedNames.add(name);
-                    return name;
-                }
-            }
+            // All names in use, just cycle
             return FALLBACK_NAMES[fallbackIndex++ % FALLBACK_NAMES.length];
         }
 
@@ -2360,7 +2322,7 @@
             }
         }
 
-        async function processNamingQueue() {
+        function processNamingQueue() {
             if (namingInProgress || namingQueue.length === 0) return;
             if (!snake[0]) return; // No player yet
             namingInProgress = true;
@@ -2382,7 +2344,7 @@
             // Name the closest one
             const enemy = namingQueue.shift();
             if (enemy && enemy.segments?.length > 0 && enemy.name === '...') {
-                const name = await generateTrainName();
+                const name = generateTrainName();
                 if (enemy.segments.length > 0) {
                     enemy.name = name;
                     if (reputationSystem) reputationSystem.initEnemy(enemy.id, name);
@@ -5302,7 +5264,7 @@
                 // Assign team to balance (alternate)
                 team: enemies.filter(e => e.team === 'blue').length <= enemies.filter(e => e.team === 'red').length ? 'blue' : 'red',
                 stableId: stableId, // Stable ID for multiplayer matching
-                name: '...', // Placeholder until async name generation
+                name: generateTrainName(), // Assign name immediately
                 segments, dir: startDir, nextDir: startDir,
                 baseSpeed: 8 + wave * 0.5, damage: 10 + wave * 2,
                 moveTimer: Math.random() * 500, // Stagger movement
@@ -5327,11 +5289,6 @@
                     const gInfo = genomeRegistry.manifest?.genomes.find(g => g.id === genome);
                     if (gInfo) newEnemy.name = gInfo.name;
                 }
-            }
-
-            // Queue for distance-priority naming (only host generates, syncs to clients)
-            if (!Multiplayer.connected || Multiplayer.isHost) {
-                queueForNaming(newEnemy);
             }
 
         }
@@ -5891,7 +5848,7 @@
                 // Assign team to balance (alternate)
                 team: enemies.filter(e => e.team === 'blue').length <= enemies.filter(e => e.team === 'red').length ? 'blue' : 'red',
                 stableId: stableId, // Stable ID for multiplayer matching
-                name: '...', // Placeholder until Qwen generates name
+                name: generateTrainName(), // Assign name immediately
                 segments, dir: startDir, nextDir: startDir,
                 baseSpeed: 8 + wave * 0.5, damage: 10 + wave * 2,
                 moveTimer: 0, lastFired: 0, fireRate: 1200 - wave * 40,
@@ -5906,7 +5863,7 @@
             const newEnemy = enemies[enemies.length - 1];
             if (teamMode) newEnemy.color = newEnemy.team === "blue" ? "#0af" : "#f55";
             else newEnemy.color = initialGunType.color; // Use gun color for "All Same Gun"
-            
+
             // Assign behavioral genome (85% chance for user-trained bot)
             if (Math.random() < 0.85) {
                 const genome = genomeRegistry.getRandomActiveGenome();
@@ -5916,11 +5873,6 @@
                     const gInfo = genomeRegistry.manifest?.genomes.find(g => g.id === genome);
                     if (gInfo) newEnemy.name = gInfo.name;
                 }
-            }
-
-            // Queue for distance-priority naming (only host generates, syncs to clients)
-            if (!Multiplayer.connected || Multiplayer.isHost) {
-                queueForNaming(newEnemy);
             }
 
             // Initialize reputation for this enemy
@@ -7870,7 +7822,6 @@
             const top = entries.slice(0, 12);
             document.getElementById('leaderboardEntries').innerHTML = top.map((e, i) => {
                 const cameraIcon = e.isMVP ? '📷 ' : '';
-                const typeIcon = e.isHuman ? '👤' : '🤖';
                 // In team mode, use team colors for everyone
                 let entryColor;
                 if (teamMode) {
@@ -7878,7 +7829,7 @@
                 } else {
                     entryColor = e.isPlayer ? '#0f0' : (e.color && /^#[0-9a-f]{3,6}$/i.test(e.color) ? e.color : '#fff');
                 }
-                return `<div class="leaderboard-entry ${e.isPlayer ? 'player' : ''} ${e.isNeural ? 'neural' : ''} ${e.isMultiplayer ? 'multiplayer' : ''} ${e.isMVP ? 'mvp' : ''}" style="color:${entryColor}"><span class="leaderboard-rank">${i + 1}.</span><span class="leaderboard-name">${cameraIcon}${typeIcon} ${esc(e.name)}</span><span class="leaderboard-score">${e.length}</span></div>`;
+                return `<div class="leaderboard-entry ${e.isPlayer ? 'player' : ''} ${e.isNeural ? 'neural' : ''} ${e.isMultiplayer ? 'multiplayer' : ''} ${e.isMVP ? 'mvp' : ''}" style="color:${entryColor}"><span class="leaderboard-rank">${i + 1}.</span><span class="leaderboard-name">${cameraIcon}${esc(e.name)}</span><span class="leaderboard-score">${e.length}</span></div>`;
             }).join('');
         }
         
@@ -8221,7 +8172,7 @@
                 ctx.fillStyle = enemyColor || '#fff';
                 ctx.font = '6px "Press Start 2P"';
                 ctx.textAlign = 'center';
-                ctx.fillText(`🤖 ${e.name || 'Train'}`, hx, hy);
+                ctx.fillText(e.name || 'Train', hx, hy);
                 ctx.restore();
 
                 // Danger indicator - skull for enemies that killed player
