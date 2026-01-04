@@ -5280,8 +5280,8 @@
             if (teamMode) newEnemy.color = newEnemy.team === "blue" ? "#0af" : "#f55";
             else newEnemy.color = initialGunType.color; // Use gun color for "All Same Gun"
 
-            // Assign behavioral genome (30% chance for pool genome)
-            if (Math.random() < 0.3) {
+            // Assign behavioral genome (85% chance for user-trained bot)
+            if (Math.random() < 0.85) {
                 const genome = genomeRegistry.getRandomActiveGenome();
                 if (genome) {
                     newEnemy.genome = genome;
@@ -5869,8 +5869,8 @@
             if (teamMode) newEnemy.color = newEnemy.team === "blue" ? "#0af" : "#f55";
             else newEnemy.color = initialGunType.color; // Use gun color for "All Same Gun"
             
-            // Assign behavioral genome (30% chance for pool genome)
-            if (Math.random() < 0.3) {
+            // Assign behavioral genome (85% chance for user-trained bot)
+            if (Math.random() < 0.85) {
                 const genome = genomeRegistry.getRandomActiveGenome();
                 if (genome) {
                     newEnemy.genome = genome;
