@@ -2272,44 +2272,32 @@
             // Bonus
             'Railbird', 'Trainspotter', 'Rivet'
         ];
-        const generatedNames = new Set();
-        const nameQueue = [];
         let fallbackIndex = 0;
-        let fetchingBatch = false;
 
-        // Check if name is too similar to existing ones
-        function isNameUnique(name) {
-            if (!name || name.length < 4 || name.length > 12) return false;
-            if (generatedNames.has(name)) return false;
-            const prefix = name.slice(0, 4).toLowerCase();
-            for (const existing of generatedNames) {
-                if (existing.slice(0, 4).toLowerCase() === prefix) return false;
+        // Check if name is currently used by a living enemy
+        function isNameInUse(name) {
+            for (const e of enemies) {
+                if (e.name === name && e.segments && e.segments.length > 0) return true;
             }
-            return true;
+            return false;
         }
 
-        // No-op: Ollama disabled, using preset name pool only
-        function fetchNameBatch() { }
-
         function generateTrainName() {
-            // Cycle through preset names, preferring unique ones
+            // Find first unused name from pool
             for (let i = 0; i < FALLBACK_NAMES.length; i++) {
                 const name = FALLBACK_NAMES[(fallbackIndex + i) % FALLBACK_NAMES.length];
-                if (isNameUnique(name)) {
+                if (!isNameInUse(name)) {
                     fallbackIndex = (fallbackIndex + i + 1) % FALLBACK_NAMES.length;
-                    generatedNames.add(name);
-                    if (generatedNames.size > 80) {
-                        generatedNames.delete(generatedNames.values().next().value);
-                    }
                     return name;
                 }
             }
-            // All names in use, just cycle
-            return FALLBACK_NAMES[fallbackIndex++ % FALLBACK_NAMES.length];
+            // All 42 names in use - add number suffix for overflow
+            const baseName = FALLBACK_NAMES[fallbackIndex++ % FALLBACK_NAMES.length];
+            let suffix = 2;
+            while (isNameInUse(baseName + suffix)) suffix++;
+            return baseName + suffix;
         }
 
-        // Prefetch first batch on load
-        fetchNameBatch();
 
         // Distance-priority naming queue
         const namingQueue = [];
