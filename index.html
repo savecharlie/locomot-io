@@ -8138,112 +8138,138 @@
             for (const e of enemies) {
                 if (e.segments.length === 0) continue;
 
+                // Get wrap offsets for seamless world wrapping
+                const head = e.segments[0];
+                const wrapOffsets = [{ x: 0, y: 0 }]; // Always draw at real position
+
+                // Add wrapped positions if near edges
+                if (head.x < 15) wrapOffsets.push({ x: WORLD_COLS, y: 0 });
+                if (head.x > WORLD_COLS - 15) wrapOffsets.push({ x: -WORLD_COLS, y: 0 });
+                if (head.y < 15) wrapOffsets.push({ x: 0, y: WORLD_ROWS });
+                if (head.y > WORLD_ROWS - 15) wrapOffsets.push({ x: 0, y: -WORLD_ROWS });
+
+                for (const offset of wrapOffsets) {
+                    drawEnemyAt(e, offset.x, offset.y);
+                }
+            }
+        }
+
+        function drawEnemyAt(e, offsetX, offsetY) {
                 // Aim line
                 if (e.aimAngle !== undefined) {
                     const head = e.segments[0];
-                    const hx = head.x * GRID + GRID / 2;
-                    const hy = head.y * GRID + GRID / 2;
+                    const hx = (head.x + offsetX) * GRID + GRID / 2;
+                    const hy = (head.y + offsetY) * GRID + GRID / 2;
                     ctx.strokeStyle = e.color + '44'; ctx.lineWidth = 2; ctx.setLineDash([4, 4]);
                     ctx.beginPath(); ctx.moveTo(hx, hy); ctx.lineTo(hx + Math.cos(e.aimAngle) * 80, hy + Math.sin(e.aimAngle) * 80); ctx.stroke();
                     ctx.setLineDash([]);
                 }
 
-                // Get direction for each segment
-                function getEnemySegDir(i) {
-                    if (i === 0) return e.dir;
-                    const curr = e.segments[i];
-                    const prev = e.segments[i - 1];
-                    const dx = prev.x - curr.x;
-                    const dy = prev.y - curr.y;
-                    if (dx > 0 || dx < -1) return DIR.RIGHT;
-                    if (dx < 0 || dx > 1) return DIR.LEFT;
-                    if (dy > 0 || dy < -1) return DIR.DOWN;
-                    if (dy < 0 || dy > 1) return DIR.UP;
-                    return e.dir;
+            // Get direction for each segment
+            function getEnemySegDir(i) {
+                if (i === 0) return e.dir;
+                const curr = e.segments[i];
+                const prev = e.segments[i - 1];
+                const dx = prev.x - curr.x;
+                const dy = prev.y - curr.y;
+                if (dx > 0 || dx < -1) return DIR.RIGHT;
+                if (dx < 0 || dx > 1) return DIR.LEFT;
+                if (dy > 0 || dy < -1) return DIR.DOWN;
+                if (dy < 0 || dy > 1) return DIR.UP;
+                return e.dir;
+            }
+
+            // Draw from back to front
+            // In team mode, use team color (teammate=blue, opponent=red)
+            const enemyColor = teamMode ? (e.team === playerTeam ? '#0af' : '#f55') : e.color;
+            for (let i = e.segments.length - 1; i >= 0; i--) {
+                const seg = e.segments[i];
+                const x = (seg.x + offsetX) * GRID + GRID/2, y = (seg.y + offsetY) * GRID + GRID/2;
+                const segDir = getEnemySegDir(i);
+
+                if (i === 0) {
+                    drawEnemyLocomotive(ctx, x, y, GRID, segDir, trainFrame, enemyColor, e.personality.neural);
+                } else {
+                    drawEnemyBoxcar(ctx, x, y, GRID, segDir, trainFrame, enemyColor, seg.hp, seg.maxHp);
                 }
 
-                // Draw from back to front
-                // In team mode, use team color (teammate=blue, opponent=red)
-                const enemyColor = teamMode ? (e.team === playerTeam ? '#0af' : '#f55') : e.color;
-                for (let i = e.segments.length - 1; i >= 0; i--) {
-                    const seg = e.segments[i];
-                    const x = seg.x * GRID + GRID/2, y = seg.y * GRID + GRID/2;
-                    const segDir = getEnemySegDir(i);
-
-                    if (i === 0) {
-                        drawEnemyLocomotive(ctx, x, y, GRID, segDir, trainFrame, enemyColor, e.personality.neural);
-                    } else {
-                        drawEnemyBoxcar(ctx, x, y, GRID, segDir, trainFrame, enemyColor, seg.hp, seg.maxHp);
-                    }
-
-                    // Health bar
-                    if (i > 0 && seg.hp !== undefined && seg.maxHp > 0 && seg.hp < seg.maxHp) {
-                        const bw = 10;
-                        const pct = Math.max(0, Math.min(1, seg.hp / seg.maxHp));
-                        ctx.fillStyle = '#400';
-                        ctx.fillRect(x - bw/2, y - GRID/2 - 8, bw, 2);
-                        ctx.fillStyle = '#f44';
-                        ctx.fillRect(x - bw/2, y - GRID/2 - 8, bw * pct, 2);
-                    }
+                // Health bar
+                if (i > 0 && seg.hp !== undefined && seg.maxHp > 0 && seg.hp < seg.maxHp) {
+                    const bw = 10;
+                    const pct = Math.max(0, Math.min(1, seg.hp / seg.maxHp));
+                    ctx.fillStyle = '#400';
+                    ctx.fillRect(x - bw/2, y - GRID/2 - 8, bw, 2);
+                    ctx.fillStyle = '#f44';
+                    ctx.fillRect(x - bw/2, y - GRID/2 - 8, bw * pct, 2);
                 }
+            }
 
-                // Name + length above head
-                const head = e.segments[0];
-                const hx = head.x * GRID + GRID/2;
-                const hy = head.y * GRID - 12;
-                ctx.save();
-                ctx.fillStyle = enemyColor || '#fff';
-                ctx.font = '6px "Press Start 2P"';
+            // Name + length above head
+            const head = e.segments[0];
+            const hx = (head.x + offsetX) * GRID + GRID/2;
+            const hy = (head.y + offsetY) * GRID - 12;
+            ctx.save();
+            ctx.fillStyle = enemyColor || '#fff';
+            ctx.font = '6px "Press Start 2P"';
+            ctx.textAlign = 'center';
+            ctx.fillText(e.name || 'Train', hx, hy);
+            ctx.restore();
+
+            // Danger indicator - skull for enemies that killed player
+            const enemyRep = reputationSystem.enemies.get(e.id);
+            if (enemyRep && enemyRep.isDangerous) {
+                ctx.font = '10px monospace';
+                ctx.fillStyle = '#f55';
+                ctx.fillText('☠', hx + 12, hy + 4);
+            }
+
+            // Pack leader indicator
+            if (enemyRep && enemyRep.isPackLeader) {
+                ctx.font = '10px monospace';
+                ctx.fillStyle = '#ff0';
+                ctx.fillText('★', hx - 12, hy + 4);
+            }
+
+            // MVP indicator
+            if (e.isMVP && gameState === 'dead') {
+                ctx.fillStyle = '#ff0';
+                ctx.font = 'bold 12px monospace';
                 ctx.textAlign = 'center';
-                ctx.fillText(e.name || 'Train', hx, hy);
-                ctx.restore();
-
-                // Danger indicator - skull for enemies that killed player
-                const enemyRep = reputationSystem.enemies.get(e.id);
-                if (enemyRep && enemyRep.isDangerous) {
-                    const head = e.segments[0];
-                    ctx.font = '10px monospace';
-                    ctx.fillStyle = '#f55';
-                    ctx.fillText('☠', head.x * GRID + GRID/2 + 12, head.y * GRID - 8);
-                }
-
-                // Pack leader indicator
-                if (enemyRep && enemyRep.isPackLeader) {
-                    const head = e.segments[0];
-                    ctx.font = '10px monospace';
-                    ctx.fillStyle = '#ff0';
-                    ctx.fillText('★', head.x * GRID + GRID/2 - 12, head.y * GRID - 8);
-                }
-
-                // MVP indicator
-                if (e.isMVP && gameState === 'dead') {
-                    const head = e.segments[0];
-                    ctx.fillStyle = '#ff0';
-                    ctx.font = 'bold 12px monospace';
-                    ctx.textAlign = 'center';
-                    ctx.fillText('★ MVP ★', head.x * GRID + GRID/2, head.y * GRID - 20);
-                }
+                ctx.fillText('★ MVP ★', hx, hy - 8);
             }
         }
         
         function drawProjectiles() {
             ctx.globalAlpha = 0.5; // Translucent bullets
-            for (const p of projectiles) {
-                ctx.fillStyle = p.color;
-                const s = p.size * 2;
-                ctx.fillRect(Math.floor(p.x - s/2), Math.floor(p.y - s/2), s, s);
-            }
-            for (const p of enemyProjectiles) {
-                ctx.fillStyle = p.color;
-                const s = p.size * 2;
-                ctx.fillRect(Math.floor(p.x - s/2), Math.floor(p.y - s/2), s, s);
+            const allProjectiles = [...projectiles, ...enemyProjectiles];
+            for (const p of allProjectiles) {
+                // Get wrap offsets for seamless world wrapping
+                const wrapOffsets = [{ x: 0, y: 0 }];
+                if (p.x < GRID * 15) wrapOffsets.push({ x: WORLD_WIDTH, y: 0 });
+                if (p.x > WORLD_WIDTH - GRID * 15) wrapOffsets.push({ x: -WORLD_WIDTH, y: 0 });
+                if (p.y < GRID * 15) wrapOffsets.push({ x: 0, y: WORLD_HEIGHT });
+                if (p.y > WORLD_HEIGHT - GRID * 15) wrapOffsets.push({ x: 0, y: -WORLD_HEIGHT });
+
+                for (const offset of wrapOffsets) {
+                    ctx.fillStyle = p.color;
+                    const s = p.size * 2;
+                    ctx.fillRect(Math.floor(p.x + offset.x - s/2), Math.floor(p.y + offset.y - s/2), s, s);
+                }
             }
             ctx.globalAlpha = 1;
         }
         
         function drawPickups(time) {
             for (const p of pickups) {
-                const x = p.x, y = p.y;
+                // Get wrap offsets for seamless world wrapping
+                const wrapOffsets = [{ x: 0, y: 0 }];
+                if (p.x < GRID * 15) wrapOffsets.push({ x: WORLD_WIDTH, y: 0 });
+                if (p.x > WORLD_WIDTH - GRID * 15) wrapOffsets.push({ x: -WORLD_WIDTH, y: 0 });
+                if (p.y < GRID * 15) wrapOffsets.push({ x: 0, y: WORLD_HEIGHT });
+                if (p.y > WORLD_HEIGHT - GRID * 15) wrapOffsets.push({ x: 0, y: -WORLD_HEIGHT });
+
+                for (const offset of wrapOffsets) {
+                const x = p.x + offset.x, y = p.y + offset.y;
                 const isOwnRecentDrop = p.droppedBy === 'player' && p.droppedAt && Date.now() - p.droppedAt < PICKUP_COOLOFF_MS;
 
                 if (p.isPowerup) {
@@ -8286,11 +8312,22 @@
                     ctx.fillRect(x - 1, y, 1, 1); ctx.fillRect(x + 1, y, 1, 1);
                     ctx.globalAlpha = 1;
                 }
+                } // end wrapOffsets loop
             }
         }
         
         function drawParticles() {
             for (const p of particles) {
+                // Get wrap offsets for seamless world wrapping
+                const wrapOffsets = [{ x: 0, y: 0 }];
+                if (p.x < GRID * 15) wrapOffsets.push({ x: WORLD_WIDTH, y: 0 });
+                if (p.x > WORLD_WIDTH - GRID * 15) wrapOffsets.push({ x: -WORLD_WIDTH, y: 0 });
+                if (p.y < GRID * 15) wrapOffsets.push({ x: 0, y: WORLD_HEIGHT });
+                if (p.y > WORLD_HEIGHT - GRID * 15) wrapOffsets.push({ x: 0, y: -WORLD_HEIGHT });
+
+                for (const wOff of wrapOffsets) {
+                const px = p.x + wOff.x, py = p.y + wOff.y;
+
                 if (p.isAoe) {
                     // Triple ring AOE - compact fading dots
                     const progress = 1 - (p.life / 15); // 0 to 1 as it expands
@@ -8315,8 +8352,8 @@
                             const angle = i * angleStep + offset;
                             const dx = Math.cos(angle) * ring.r;
                             const dy = Math.sin(angle) * ring.r;
-                            const x = Math.floor(p.x + dx);
-                            const y = Math.floor(p.y + dy);
+                            const x = Math.floor(px + dx);
+                            const y = Math.floor(py + dy);
 
                             ctx.fillStyle = `rgb(${ring.bright}, 0, ${ring.bright})`;
                             ctx.fillRect(x - ring.size, y - ring.size, ring.size * 2, ring.size * 2);
@@ -8329,11 +8366,12 @@
                     ctx.globalAlpha = (p.alpha || 1) * Math.min(1, p.life / 8);
                     ctx.fillStyle = p.color;
                     // Snap to pixel grid for retro look
-                    const px = Math.floor(p.x / sz) * sz;
-                    const py = Math.floor(p.y / sz) * sz;
-                    ctx.fillRect(px - sz/2, py - sz/2, sz, sz);
+                    const sparkX = Math.floor(px / sz) * sz;
+                    const sparkY = Math.floor(py / sz) * sz;
+                    ctx.fillRect(sparkX - sz/2, sparkY - sz/2, sz, sz);
                     ctx.globalAlpha = 1;
-                } else { ctx.globalAlpha = p.life / 30; ctx.fillStyle = p.color; ctx.fillRect(p.x - 2, p.y - 2, 4, 4); ctx.globalAlpha = 1; }
+                } else { ctx.globalAlpha = p.life / 30; ctx.fillStyle = p.color; ctx.fillRect(px - 2, py - 2, 4, 4); ctx.globalAlpha = 1; }
+                } // end wrapOffsets loop
             }
         }
         
