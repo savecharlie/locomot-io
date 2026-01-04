@@ -7250,7 +7250,8 @@
                     continue;
                 }
                 p.x += p.vx * dt * 0.2; p.y += p.vy * dt * 0.2; p.life -= dt;
-                
+                const hitRadiusSq = (p.size + GRID/2) ** 2; // Pre-compute for all collision checks
+
                 // Check hit on player (skip if invincible, same team, or reduced damage during grace)
                 if (!(teamMode && p.owner && p.owner.team === playerTeam)) {
                     if (invincibleTimer <= 0) {
@@ -7258,8 +7259,8 @@
                             if (si === 0 && snake.length > 1) continue;
                             const seg = snake[si];
                             const sx = seg.x * GRID + GRID/2, sy = seg.y * GRID + GRID/2;
-                            const dist = Math.sqrt((p.x - sx)**2 + (p.y - sy)**2);
-                            if (dist < p.size + GRID/2) {
+                            const distSq = (p.x - sx)**2 + (p.y - sy)**2;
+                            if (distSq < hitRadiusSq) {
                                 // Reduced damage during 2 second grace period
                                 const dmg = invincibleTimer > -2000 ? p.damage * 0.3 : p.damage;
                                 seg.hp -= dmg; p.life = 0; haptic('medium');
@@ -7282,9 +7283,9 @@
                             if (si === 0 && op.segments.length > 1) continue;
                             const seg = op.segments[si];
                             const sx = seg.x * GRID + GRID/2, sy = seg.y * GRID + GRID/2;
-                            const dist = Math.sqrt((p.x - sx)**2 + (p.y - sy)**2);
-                            if (dist < p.size + GRID/2) {
-                                console.log('[HIT] Enemy projectile hit client', pid, 'at', sx, sy, 'dist:', dist);
+                            const distSq = (p.x - sx)**2 + (p.y - sy)**2;
+                            if (distSq < hitRadiusSq) {
+                                console.log('[HIT] Enemy projectile hit client', pid, 'at', sx, sy, 'distSq:', distSq);
                                 sendProxyHit(pid, p.damage);
                                 p.life = 0;
                                 particles.push({ x: p.x, y: p.y, vx: 0, vy: 0, life: 10, color: '#f00' });
@@ -7304,8 +7305,8 @@
                             if (si === 0 && e.segments.length > 1) continue;
                             const seg = e.segments[si];
                             const sx = seg.x * GRID + GRID/2, sy = seg.y * GRID + GRID/2;
-                            const dist = Math.sqrt((p.x - sx)**2 + (p.y - sy)**2);
-                            if (dist < p.size + GRID/2) {
+                            const distSq = (p.x - sx)**2 + (p.y - sy)**2;
+                            if (distSq < hitRadiusSq) {
                                 seg.hp -= p.damage; p.life = 0;
                                 particles.push({ x: p.x, y: p.y, vx: 0, vy: 0, life: 10, color: '#ff0' });
                                 break;
@@ -7340,7 +7341,8 @@
             for (let i = projectiles.length - 1; i >= 0; i--) {
                 const p = projectiles[i];
                 p.x += p.vx * dt * 0.25; p.y += p.vy * dt * 0.25; p.life -= dt;
-                
+                const hitRadiusSq = (GRID/2 + p.size) ** 2; // Pre-compute for collision checks
+
                 // Hit any target (enemies or players)
                 outer: for (const e of allTargets) {
                     // Skip same team in team mode
@@ -7350,8 +7352,8 @@
                         if (si === 0 && e.segments.length > 1) continue;
                         const seg = e.segments[si];
                         const sx = seg.x * GRID + GRID/2, sy = seg.y * GRID + GRID/2;
-                        const dist = Math.sqrt((p.x - sx)**2 + (p.y - sy)**2);
-                        if (dist < GRID/2 + p.size) {
+                        const distSq = (p.x - sx)**2 + (p.y - sy)**2;
+                        if (distSq < hitRadiusSq) {
                             if (e.isPlayer && e.invincibleUntil && Date.now() < e.invincibleUntil) {
                                 continue;
                             }
