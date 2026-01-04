@@ -1564,10 +1564,12 @@
             }
         };
 
-        // Auto-connect to multiplayer IMMEDIATELY (no delay - prevents race with start button)
+        // Only connect to multiplayer if ?room= is specified (single player by default)
         const urlParams = new URLSearchParams(window.location.search);
-        const roomParam = urlParams.get('room') || 'main';
-        Multiplayer.connect(roomParam);
+        const roomParam = urlParams.get('room');
+        if (roomParam) {
+            Multiplayer.connect(roomParam);
+        }
         
         // === KILL FEED ===
         const killFeed = {
