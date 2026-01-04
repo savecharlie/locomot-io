@@ -1210,7 +1210,7 @@ export default class LocomotServer implements Party.Server {
                   name: 'DefaultFFA',
                   source: 'embedded',
                   created: new Date().toISOString(),
-                  performance: { games: 0, avg_score: 0, avg_survival: 0, win_rate: 0 },
+                  performance: { games: 0, avg_score: 0, avg_survival: 0, win_rate: 0, fitness: 100, kills: 0, player_kills: 0, deaths: 0 },
                   active: true
                 },
                 {
@@ -1219,7 +1219,7 @@ export default class LocomotServer implements Party.Server {
                   name: 'DefaultTeam',
                   source: 'embedded',
                   created: new Date().toISOString(),
-                  performance: { games: 0, avg_score: 0, avg_survival: 0, win_rate: 0 },
+                  performance: { games: 0, avg_score: 0, avg_survival: 0, win_rate: 0, fitness: 100, kills: 0, player_kills: 0, deaths: 0 },
                   active: true
                 }
               ],
@@ -1228,6 +1228,23 @@ export default class LocomotServer implements Party.Server {
               version: 1
             };
             await this.room.storage.put('genome_manifest', manifest);
+          }
+
+          // Apply fitness decay (0.995 per hour) to prevent stagnation
+          const now = Date.now();
+          const lastDecay = manifest.lastFitnessDecay || now;
+          const hoursPassed = (now - lastDecay) / (1000 * 60 * 60);
+
+          if (hoursPassed >= 1) {
+            const decayFactor = Math.pow(0.995, hoursPassed);
+            for (const g of manifest.genomes) {
+              if (g.performance?.fitness) {
+                g.performance.fitness = Math.max(10, Math.round(g.performance.fitness * decayFactor));
+              }
+            }
+            manifest.lastFitnessDecay = now;
+            await this.room.storage.put('genome_manifest', manifest);
+            console.log(`[GenomePool] Applied fitness decay (${hoursPassed.toFixed(1)}h, factor ${decayFactor.toFixed(4)})`);
           }
 
           return new Response(JSON.stringify(manifest), {
@@ -1315,7 +1332,7 @@ export default class LocomotServer implements Party.Server {
             parents: reg.parents || [],  // Parent genome IDs for bred genomes
             generation: reg.generation || 0,  // Generation number (0 = original player)
             created: new Date().toISOString(),
-            performance: { games: 0, avg_score: 0, avg_survival: 0, win_rate: 0 },
+            performance: { games: 0, avg_score: 0, avg_survival: 0, win_rate: 0, fitness: 100, kills: 0, player_kills: 0, deaths: 0 },
             active: manifest.genomes.length < manifest.max_active
           };
 
@@ -1434,7 +1451,7 @@ export default class LocomotServer implements Party.Server {
             name: finalize.name || finalize.genome_id,
             source: finalize.source || 'unknown',
             created: new Date().toISOString(),
-            performance: { games: 0, avg_score: 0, avg_survival: 0, win_rate: 0 },
+            performance: { games: 0, avg_score: 0, avg_survival: 0, win_rate: 0, fitness: 100, kills: 0, player_kills: 0, deaths: 0 },
             active: manifest.genomes.length < manifest.max_active
           };
 
@@ -1481,7 +1498,7 @@ export default class LocomotServer implements Party.Server {
             name: submission.name || submission.id,
             source: submission.source || 'unknown',
             created: new Date().toISOString(),
-            performance: { games: 0, avg_score: 0, avg_survival: 0, win_rate: 0 },
+            performance: { games: 0, avg_score: 0, avg_survival: 0, win_rate: 0, fitness: 100, kills: 0, player_kills: 0, deaths: 0 },
             active: manifest.genomes.length < manifest.max_active
           };
 
@@ -1541,6 +1558,74 @@ export default class LocomotServer implements Party.Server {
           await this.room.storage.put('genome_manifest', manifest);
 
           return new Response(JSON.stringify({ success: true, performance: p }), {
+            headers: { ...headers, 'Content-Type': 'application/json' }
+          });
+        }
+
+        if (data.type === 'report_fitness_events') {
+          // Report kills/deaths from live gameplay for fitness tracking
+          const req = data as any;
+          if (!req.events || !Array.isArray(req.events)) {
+            return new Response(JSON.stringify({ error: 'Invalid events array' }), {
+              status: 400, headers: { ...headers, 'Content-Type': 'application/json' }
+            });
+          }
+
+          let manifest = await this.room.storage.get('genome_manifest') as any;
+          if (!manifest) {
+            return new Response(JSON.stringify({ error: 'Manifest not found' }), {
+              status: 404, headers: { ...headers, 'Content-Type': 'application/json' }
+            });
+          }
+
+          // Fitness values for each event type
+          const fitnessValues: { [key: string]: number } = {
+            'kill_player': 50,      // Big reward for killing a human
+            'kill_bot': 5,          // Small reward for killing another bot
+            'killed_by_player': -20, // Penalty for dying to human
+            'killed_by_bot': -10    // Smaller penalty for dying to bot
+          };
+
+          let updated = 0;
+          for (const event of req.events) {
+            const { genome_id, event_type } = event;
+            if (!genome_id || !event_type) continue;
+
+            const genome = manifest.genomes.find((g: any) => g.id === genome_id);
+            if (!genome) continue;
+
+            // Ensure performance has fitness fields
+            if (!genome.performance) {
+              genome.performance = { games: 0, avg_score: 0, avg_survival: 0, win_rate: 0, fitness: 100, kills: 0, player_kills: 0, deaths: 0 };
+            }
+            if (genome.performance.fitness === undefined) genome.performance.fitness = 100;
+            if (genome.performance.kills === undefined) genome.performance.kills = 0;
+            if (genome.performance.player_kills === undefined) genome.performance.player_kills = 0;
+            if (genome.performance.deaths === undefined) genome.performance.deaths = 0;
+
+            // Apply fitness change
+            const delta = fitnessValues[event_type] || 0;
+            genome.performance.fitness = Math.max(0, Math.min(1000, genome.performance.fitness + delta));
+
+            // Update counters
+            if (event_type === 'kill_player') {
+              genome.performance.kills++;
+              genome.performance.player_kills++;
+            } else if (event_type === 'kill_bot') {
+              genome.performance.kills++;
+            } else if (event_type === 'killed_by_player' || event_type === 'killed_by_bot') {
+              genome.performance.deaths++;
+            }
+
+            updated++;
+          }
+
+          if (updated > 0) {
+            await this.room.storage.put('genome_manifest', manifest);
+            console.log(`[GenomePool] Applied ${updated} fitness events`);
+          }
+
+          return new Response(JSON.stringify({ success: true, updated }), {
             headers: { ...headers, 'Content-Type': 'application/json' }
           });
         }

@@ -543,10 +543,29 @@
             },
 
             getRandomActiveGenome() {
-                // Return a random active genome ID, or null for default
+                // Return a genome weighted by fitness (higher fitness = more spawns)
                 const loaded = this.activeGenomes.filter(id => this.brains.has(id));
                 if (loaded.length === 0) return null;
-                return loaded[Math.floor(Math.random() * loaded.length)];
+
+                // 30% pure random for diversity (new genomes get a chance)
+                if (Math.random() < 0.3) {
+                    return loaded[Math.floor(Math.random() * loaded.length)];
+                }
+
+                // 70% weighted by fitness
+                const weights = loaded.map(id => {
+                    const genome = this.manifest?.genomes.find(g => g.id === id);
+                    const fitness = genome?.performance?.fitness || 100;
+                    return fitness + 20; // +20 baseline ensures new genomes get picked
+                });
+
+                const totalWeight = weights.reduce((a, b) => a + b, 0);
+                let random = Math.random() * totalWeight;
+                for (let i = 0; i < loaded.length; i++) {
+                    random -= weights[i];
+                    if (random <= 0) return loaded[i];
+                }
+                return loaded[loaded.length - 1];
             },
 
             getBrain(genomeId) {
@@ -567,6 +586,33 @@
                 } catch (e) {
                     // Silent fail - stats are optional
                 }
+            },
+
+            // Live fitness tracking - kills/deaths in gameplay affect evolution
+            pendingFitnessEvents: [],
+
+            reportFitnessEvent(genomeId, eventType) {
+                if (!genomeId) return;
+                this.pendingFitnessEvents.push({
+                    genome_id: genomeId,
+                    event_type: eventType,
+                    timestamp: Date.now()
+                });
+            },
+
+            async flushFitnessEvents() {
+                if (this.pendingFitnessEvents.length === 0) return;
+                const events = this.pendingFitnessEvents.splice(0);
+                try {
+                    await fetch(GENOME_SERVER, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ type: 'report_fitness_events', events })
+                    });
+                    console.log('[GenomeRegistry] Flushed', events.length, 'fitness events');
+                } catch (e) {
+                    // Silent fail
+                }
             }
         };
 
@@ -579,6 +625,9 @@
             console.log('[GenomeRegistry] Refreshing manifest...');
             genomeRegistry.loadActiveGenomes();
         }, 5 * 60 * 1000);
+
+        // Flush fitness events every 30 seconds
+        setInterval(() => genomeRegistry.flushFitnessEvents(), 30000);
 
         // Get the appropriate brain based on current mode and genome
         function getNeuralBrain(genome = null) {
@@ -4907,6 +4956,8 @@
                 }).catch(() => {});
                 // Upload player training data if we collected enough
                 playerDataRecorder.upload();
+                // Flush any pending fitness events from this session
+                genomeRegistry.flushFitnessEvents();
             } catch(e) {}
 
             // End run tracking
@@ -6139,6 +6190,7 @@
 
                         if (enemyIsLoneHead) {
                             // Lone head enemy dies instantly
+                            if (e.genome) genomeRegistry.reportFitnessEvent(e.genome, 'killed_by_player');
                             const eCount = e.segments.length;
                             checkAndCreateLeaderGrave(e.name || 'Train', e.segments);
                             dropPickupsFromSegments(e.segments, e.id);
@@ -6156,12 +6208,14 @@
                             // Player survives, enemy dies
                         } else if (playerIsLoneHead) {
                             // Player is lone head, enemy is not = player dies
+                            if (e.genome) genomeRegistry.reportFitnessEvent(e.genome, 'kill_player');
                             checkAndCreateLeaderGrave(playerName, snake);
                             if (canSpawnPlayerDrops) dropPickupsFromSegments(snake, 'player');
                             deathReason = 'Head-on collision with ' + (e.name || 'enemy');
                             return true;
                         } else if (playerLen === enemyLen) {
                             // Equal size = both die
+                            if (e.genome) genomeRegistry.reportFitnessEvent(e.genome, 'killed_by_player');
                             const eCount = e.segments.length;
                             checkAndCreateLeaderGrave(e.name || 'Train', e.segments);
                             dropPickupsFromSegments(e.segments, e.id);
@@ -6193,6 +6247,8 @@
 
                         if (eIsLoneHead && otherIsLoneHead) {
                             // Both lone heads = both die
+                            if (e.genome) genomeRegistry.reportFitnessEvent(e.genome, 'killed_by_bot');
+                            if (other.genome) genomeRegistry.reportFitnessEvent(other.genome, 'killed_by_bot');
                             checkAndCreateLeaderGrave(e.name || 'Train', e.segments);
                             checkAndCreateLeaderGrave(other.name || 'Train', other.segments);
                             dropPickupsFromSegments(e.segments, e.id);
@@ -6204,6 +6260,8 @@
                             other.segments = [];
                         } else if (eIsLoneHead) {
                             // e is lone head, dies to other
+                            if (e.genome) genomeRegistry.reportFitnessEvent(e.genome, 'killed_by_bot');
+                            if (other.genome) genomeRegistry.reportFitnessEvent(other.genome, 'kill_bot');
                             checkAndCreateLeaderGrave(e.name || 'Train', e.segments);
                             dropPickupsFromSegments(e.segments, e.id);
                             waveKills += 1;
@@ -6211,6 +6269,8 @@
                             e.segments = [];
                         } else if (otherIsLoneHead) {
                             // other is lone head, dies to e
+                            if (other.genome) genomeRegistry.reportFitnessEvent(other.genome, 'killed_by_bot');
+                            if (e.genome) genomeRegistry.reportFitnessEvent(e.genome, 'kill_bot');
                             checkAndCreateLeaderGrave(other.name || 'Train', other.segments);
                             dropPickupsFromSegments(other.segments, other.id);
                             waveKills += 1;
@@ -6218,6 +6278,8 @@
                             other.segments = [];
                         } else if (eLen === otherLen) {
                             // Equal size = both die
+                            if (e.genome) genomeRegistry.reportFitnessEvent(e.genome, 'killed_by_bot');
+                            if (other.genome) genomeRegistry.reportFitnessEvent(other.genome, 'killed_by_bot');
                             checkAndCreateLeaderGrave(e.name || 'Train', e.segments);
                             checkAndCreateLeaderGrave(other.name || 'Train', other.segments);
                             dropPickupsFromSegments(e.segments, e.id);
@@ -6269,6 +6331,7 @@
                             if (seg.x === ps.x && seg.y === ps.y) {
                                 if (si === 0 && j > 0) {
                                     // Enemy head hit player body: enemy dies
+                                    if (e.genome) genomeRegistry.reportFitnessEvent(e.genome, 'killed_by_player');
                                     const segCount = e.segments.length;
                                     const victimName = e.name || 'Train';
                                     const wasNeural = e.personality?.neural;
@@ -6287,6 +6350,7 @@
                                 } else if (si > 0 && j === 0) {
                                     // Player head hit enemy body: player dies
                                     if (snake.length === 1) {
+                                        if (e.genome) genomeRegistry.reportFitnessEvent(e.genome, 'kill_player');
                                         checkAndCreateLeaderGrave(playerName, snake);
                                         if (canSpawnPlayerDrops) dropPickupsFromSegments(snake, 'player');
                                         deathReason = `Crashed into ${e.name || 'enemy'} body`;
