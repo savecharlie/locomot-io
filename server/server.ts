@@ -653,12 +653,26 @@ export default class LocomotServer implements Party.Server {
       }
       visits.sort((a, b) => b.timestamp - a.timestamp);
 
+      // Fetch session data for duration info
+      const allSessions = await this.room.storage.list({ prefix: 'session_' });
+      const sessions: any[] = [];
+      for (const [, value] of allSessions) {
+        sessions.push(value);
+      }
+
       const now = Date.now();
       const hour = 60 * 60 * 1000;
       const day = 24 * hour;
 
       const lastHour = visits.filter(v => now - v.timestamp < hour).length;
       const last24h = visits.filter(v => now - v.timestamp < day).length;
+
+      // Calculate total play time (completed sessions only)
+      const completedSessions = sessions.filter(s => s.leaveTime && s.region !== 'Arizona');
+      const totalPlayTimeMs = completedSessions.reduce((sum, s) => sum + (s.leaveTime - s.joinTime), 0);
+      const avgSessionMins = completedSessions.length > 0
+        ? Math.round(totalPlayTimeMs / completedSessions.length / 60000)
+        : 0;
 
       // Group by location
       const byLocation: Record<string, number> = {};
@@ -690,6 +704,21 @@ export default class LocomotServer implements Party.Server {
         const user = v.username || '<i>anon</i>';
         const loc = v.country !== 'unknown' ? `${v.city}, ${v.country}` : 'Unknown';
         return `<tr><td>${time}</td><td>${user}</td><td>${loc}</td></tr>`;
+      }).join('');
+
+      // Recent sessions with duration (exclude Arizona/dev sessions)
+      const recentSessions = sessions
+        .filter(s => s.region !== 'Arizona')
+        .sort((a, b) => b.joinTime - a.joinTime)
+        .slice(0, 15);
+      const sessionRows = recentSessions.map(s => {
+        const time = new Date(s.joinTime).toLocaleString();
+        const loc = s.country !== 'unknown' ? `${s.city}, ${s.country}` : 'Unknown';
+        const durationMs = s.leaveTime ? s.leaveTime - s.joinTime : now - s.joinTime;
+        const mins = Math.floor(durationMs / 60000);
+        const secs = Math.floor((durationMs % 60000) / 1000);
+        const duration = s.leaveTime ? `${mins}m ${secs}s` : `<span style="color:#0f0">${mins}m ${secs}s (active)</span>`;
+        return `<tr><td>${time}</td><td>${loc}</td><td>${duration}</td></tr>`;
       }).join('');
 
       const html = `<!DOCTYPE html>
@@ -736,6 +765,14 @@ export default class LocomotServer implements Party.Server {
       <div class="stat-value">${Object.keys(byUser).filter(u => u !== 'anonymous').length}</div>
       <div class="stat-label">Named Players</div>
     </div>
+    <div class="stat">
+      <div class="stat-value">${avgSessionMins}m</div>
+      <div class="stat-label">Avg Session</div>
+    </div>
+    <div class="stat">
+      <div class="stat-value">${Math.round(totalPlayTimeMs / 3600000)}h</div>
+      <div class="stat-label">Total Play Time</div>
+    </div>
   </div>
 
   <div class="grid">
@@ -752,6 +789,11 @@ export default class LocomotServer implements Party.Server {
   <div class="section">
     <h2>🕐 Recent Visits</h2>
     ${recentRows ? `<table><tr><th>Time</th><th>Player</th><th>Location</th></tr>${recentRows}</table>` : '<p>No visits yet</p>'}
+  </div>
+
+  <div class="section">
+    <h2>⏱️ Session Durations</h2>
+    ${sessionRows ? `<table><tr><th>Time</th><th>Location</th><th>Duration</th></tr>${sessionRows}</table>` : '<p>No sessions yet</p>'}
   </div>
 </body>
 </html>`;
