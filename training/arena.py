@@ -1068,7 +1068,7 @@ def main():
     elif args.daemon:
         console.print(Panel.fit(
             "[bold cyan]ARENA DAEMON[/bold cyan]\n"
-            "[dim]Training bots while you sleep...[/dim]",
+            "[dim]Hybrid evolution: live fitness + arena training[/dim]",
             border_style="cyan"
         ))
 
@@ -1077,36 +1077,69 @@ def main():
             cycle += 1
             console.print(f"\n[yellow]━━━ Cycle {cycle} ━━━[/yellow]")
 
-            # 1. Run tournament
+            # 1. Fetch live fitness from manifest (from actual gameplay)
+            manifest = fetch_manifest()
+            live_fitness = {}
+            if manifest:
+                for g in manifest['genomes']:
+                    if g.get('active'):
+                        perf = g.get('performance', {})
+                        live_fitness[g['id']] = perf.get('fitness', 100)
+                console.print(f"[cyan]Live fitness loaded for {len(live_fitness)} active genomes[/cyan]")
+
+            # 2. Run tournament for additional training signal
             tournament = Tournament()
             rankings = tournament.run_tournament(args.matches)
             tournament.display_rankings(rankings)
 
-            # 2. Upload results to server
+            # 3. Upload results to server
             upload_tournament_results(rankings)
 
-            # 3. Fine-tune top 3
-            if len(rankings) >= 3:
-                for r in rankings[:3]:
-                    console.print(f"\n[cyan]Fine-tuning {r['id']}...[/cyan]")
+            # 4. Create hybrid rankings (60% live fitness, 40% arena)
+            hybrid_rankings = []
+            for r in rankings:
+                gid = r['id']
+                live_fit = live_fitness.get(gid, 100)
+                arena_fit = r['fitness']
+                # Normalize arena fitness to 0-200 scale (like live fitness)
+                arena_normalized = arena_fit * 100
+                # Blend: live gameplay matters more
+                hybrid_fit = 0.6 * live_fit + 0.4 * arena_normalized
+                hybrid_rankings.append({
+                    **r,
+                    'live_fitness': live_fit,
+                    'hybrid_fitness': hybrid_fit
+                })
+            hybrid_rankings.sort(key=lambda x: x['hybrid_fitness'], reverse=True)
+
+            # Display hybrid rankings
+            console.print("\n[bold magenta]Hybrid Rankings (Live + Arena)[/bold magenta]")
+            for i, r in enumerate(hybrid_rankings[:10]):
+                console.print(f"  #{i+1} {r['id']}: live={r['live_fitness']:.0f} arena={r['fitness']:.3f} -> hybrid={r['hybrid_fitness']:.0f}")
+
+            # 5. Fine-tune top 3 by hybrid fitness
+            if len(hybrid_rankings) >= 3:
+                for r in hybrid_rankings[:3]:
+                    console.print(f"\n[cyan]Fine-tuning {r['id']} (hybrid={r['hybrid_fitness']:.0f})...[/cyan]")
                     try:
                         finetuner = FineTuner(r['id'], [x['id'] for x in rankings])
                         finetuner.finetune(500)
                     except Exception as e:
                         console.print(f"[red]Fine-tuning failed: {e}[/red]")
 
-            # 4. Breed top performers
-            if len(rankings) >= 2:
+            # 6. Breed top 2 by hybrid fitness
+            if len(hybrid_rankings) >= 2:
                 from breed_genome import breed_genomes
-                console.print(f"\n[magenta]Breeding {rankings[0]['id']} x {rankings[1]['id']}...[/magenta]")
+                parent1, parent2 = hybrid_rankings[0]['id'], hybrid_rankings[1]['id']
+                console.print(f"\n[magenta]Breeding {parent1} x {parent2}...[/magenta]")
                 try:
-                    breed_genomes(rankings[0]['id'], rankings[1]['id'])
+                    breed_genomes(parent1, parent2)
                 except Exception as e:
                     console.print(f"[red]Breeding failed: {e}[/red]")
 
-            # 5. Cull bottom performers (keep top 10)
-            console.print("\n[yellow]Culling weak performers...[/yellow]")
-            culled = cull_weakest(rankings, keep_top=10)
+            # 7. Cull by hybrid fitness (keep top 10)
+            console.print("\n[yellow]Culling weak performers (by hybrid fitness)...[/yellow]")
+            culled = cull_weakest(hybrid_rankings, keep_top=10)
             if culled:
                 console.print(f"[red]Culled: {', '.join(culled)}[/red]")
 
