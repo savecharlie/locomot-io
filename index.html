@@ -196,6 +196,8 @@
     </style>
     <script src='https://storage.ko-fi.com/cdn/widget/Widget_2.js'></script>
     <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-7560120281604459" crossorigin="anonymous"></script>
+    <!-- TensorFlow.js for client-side bot training -->
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.17.0"></script>
 </head>
 <body>
     <div class="hud">
@@ -3865,6 +3867,217 @@
 
         // Initialize BotTracker
         BotTracker.init();
+
+        // === BOT TRAINER - Client-side TensorFlow.js training ===
+        const BotTrainer = {
+            model: null,
+            isTraining: false,
+
+            // Network architecture (must match PyTorch: 133 -> 192 -> 96 -> 4)
+            INPUT_SIZE: 133,
+            HIDDEN1_SIZE: 192,
+            HIDDEN2_SIZE: 96,
+            OUTPUT_SIZE: 4,
+
+            // Build TF.js model matching PyTorch architecture
+            buildModel() {
+                if (typeof tf === 'undefined') {
+                    console.error('[BOT_TRAINER] TensorFlow.js not loaded');
+                    return null;
+                }
+
+                const model = tf.sequential();
+                model.add(tf.layers.dense({
+                    units: this.HIDDEN1_SIZE,
+                    activation: 'relu',
+                    inputShape: [this.INPUT_SIZE],
+                    kernelInitializer: 'glorotNormal'
+                }));
+                model.add(tf.layers.dense({
+                    units: this.HIDDEN2_SIZE,
+                    activation: 'relu',
+                    kernelInitializer: 'glorotNormal'
+                }));
+                model.add(tf.layers.dense({
+                    units: this.OUTPUT_SIZE,
+                    activation: 'softmax',
+                    kernelInitializer: 'glorotNormal'
+                }));
+
+                model.compile({
+                    optimizer: tf.train.adam(0.001),
+                    loss: 'categoricalCrossentropy',
+                    metrics: ['accuracy']
+                });
+
+                console.log('[BOT_TRAINER] Model built:', model.summary());
+                return model;
+            },
+
+            // Train from IndexedDB sessions
+            async trainFromSessions(sessions, onProgress) {
+                if (this.isTraining) {
+                    console.warn('[BOT_TRAINER] Already training');
+                    return null;
+                }
+
+                this.isTraining = true;
+                const startTime = performance.now();
+
+                try {
+                    // Extract frames from all sessions
+                    const allFrames = [];
+                    for (const session of sessions) {
+                        if (session.frames) {
+                            for (const frame of session.frames) {
+                                if (frame.state && frame.state.length >= this.INPUT_SIZE && frame.action !== undefined) {
+                                    allFrames.push({
+                                        state: frame.state.slice(0, this.INPUT_SIZE),
+                                        action: frame.action
+                                    });
+                                }
+                            }
+                        }
+                    }
+
+                    console.log(`[BOT_TRAINER] Training on ${allFrames.length} frames from ${sessions.length} sessions`);
+
+                    if (allFrames.length < 100) {
+                        console.warn('[BOT_TRAINER] Not enough frames for training');
+                        return null;
+                    }
+
+                    // Convert to tensors
+                    const xs = tf.tensor2d(allFrames.map(f => f.state));
+                    const ys = tf.tensor2d(allFrames.map(f => {
+                        const onehot = [0, 0, 0, 0];
+                        onehot[f.action] = 1;
+                        return onehot;
+                    }));
+
+                    // Build model
+                    this.model = this.buildModel();
+                    if (!this.model) {
+                        xs.dispose();
+                        ys.dispose();
+                        return null;
+                    }
+
+                    // Train
+                    const epochs = 30;
+                    const batchSize = 64;
+
+                    await this.model.fit(xs, ys, {
+                        epochs: epochs,
+                        batchSize: batchSize,
+                        shuffle: true,
+                        callbacks: {
+                            onEpochEnd: (epoch, logs) => {
+                                if (onProgress) {
+                                    onProgress({
+                                        epoch: epoch + 1,
+                                        totalEpochs: epochs,
+                                        loss: logs.loss,
+                                        accuracy: logs.acc
+                                    });
+                                }
+                                console.log(`[BOT_TRAINER] Epoch ${epoch + 1}/${epochs} - loss: ${logs.loss.toFixed(4)}, acc: ${logs.acc.toFixed(4)}`);
+                            }
+                        }
+                    });
+
+                    // Clean up tensors
+                    xs.dispose();
+                    ys.dispose();
+
+                    const elapsed = ((performance.now() - startTime) / 1000).toFixed(2);
+                    console.log(`[BOT_TRAINER] Training complete in ${elapsed}s`);
+
+                    return this.exportWeights();
+                } catch (err) {
+                    console.error('[BOT_TRAINER] Training failed:', err);
+                    return null;
+                } finally {
+                    this.isTraining = false;
+                }
+            },
+
+            // Export weights in PyTorch format (with transpose)
+            exportWeights() {
+                if (!this.model) return null;
+
+                const weights = {};
+                const layers = this.model.layers;
+
+                // Layer 0: input -> hidden1
+                const w0 = layers[0].getWeights()[0].arraySync(); // [in, out] in TF
+                const b0 = layers[0].getWeights()[1].arraySync();
+                // Transpose to PyTorch format [out, in]
+                weights['net.0.weight'] = this.transpose2D(w0);
+                weights['net.0.bias'] = b0;
+
+                // Layer 1: hidden1 -> hidden2 (net.2 in PyTorch due to ReLU being net.1)
+                const w2 = layers[1].getWeights()[0].arraySync();
+                const b2 = layers[1].getWeights()[1].arraySync();
+                weights['net.2.weight'] = this.transpose2D(w2);
+                weights['net.2.bias'] = b2;
+
+                // Layer 2: hidden2 -> output (net.4 in PyTorch)
+                const w4 = layers[2].getWeights()[0].arraySync();
+                const b4 = layers[2].getWeights()[1].arraySync();
+                weights['net.4.weight'] = this.transpose2D(w4);
+                weights['net.4.bias'] = b4;
+
+                console.log('[BOT_TRAINER] Weights exported (PyTorch format)');
+                return weights;
+            },
+
+            // Transpose 2D array
+            transpose2D(arr) {
+                const rows = arr.length;
+                const cols = arr[0].length;
+                const result = [];
+                for (let j = 0; j < cols; j++) {
+                    result[j] = [];
+                    for (let i = 0; i < rows; i++) {
+                        result[j][i] = arr[i][j];
+                    }
+                }
+                return result;
+            },
+
+            // Test training with dummy data (for benchmarking)
+            async testTraining(numFrames = 1000) {
+                console.log(`[BOT_TRAINER] Running test with ${numFrames} dummy frames...`);
+
+                // Generate dummy sessions
+                const dummySessions = [{
+                    frames: Array(numFrames).fill(null).map(() => ({
+                        state: Array(this.INPUT_SIZE).fill(0).map(() => Math.random()),
+                        action: Math.floor(Math.random() * this.OUTPUT_SIZE)
+                    }))
+                }];
+
+                const startTime = performance.now();
+                const weights = await this.trainFromSessions(dummySessions, (progress) => {
+                    console.log(`  Epoch ${progress.epoch}/${progress.totalEpochs}`);
+                });
+                const elapsed = ((performance.now() - startTime) / 1000).toFixed(2);
+
+                if (weights) {
+                    console.log(`[BOT_TRAINER] TEST PASSED - Training took ${elapsed}s`);
+                    console.log(`  Weight keys: ${Object.keys(weights).join(', ')}`);
+                    console.log(`  net.0.weight shape: ${weights['net.0.weight'].length} x ${weights['net.0.weight'][0].length}`);
+                    return { success: true, elapsed: parseFloat(elapsed), weights };
+                } else {
+                    console.log('[BOT_TRAINER] TEST FAILED');
+                    return { success: false };
+                }
+            }
+        };
+
+        // Expose for console testing: BotTrainer.testTraining()
+        window.BotTrainer = BotTrainer;
 
         // Checkbox event listeners for training data consent
         document.addEventListener('DOMContentLoaded', () => {
