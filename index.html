@@ -449,13 +449,18 @@
                 this.inputSize = this.w0[0] ? this.w0[0].length : 85;
                 this.h1Size = this.b0 ? this.b0.length : 128;
                 this.h2Size = this.b2 ? this.b2.length : 64;
+
+                // Pre-allocate arrays for forward pass (avoid GC pressure)
+                this._h1 = new Array(this.h1Size).fill(0);
+                this._h2 = new Array(this.h2Size).fill(0);
+                this._output = new Array(3).fill(0);
             }
 
             relu(x) { return Math.max(0, x); }
 
             forward(input) {
-                // Layer 0: input -> h1
-                let h1 = new Array(this.h1Size).fill(0);
+                // Layer 0: input -> h1 (reuse pre-allocated array)
+                const h1 = this._h1;
                 for (let i = 0; i < this.h1Size; i++) {
                     let sum = this.b0[i];
                     for (let j = 0; j < this.inputSize; j++) {
@@ -464,8 +469,8 @@
                     h1[i] = this.relu(sum);
                 }
 
-                // Layer 2: h1 -> h2
-                let h2 = new Array(this.h2Size).fill(0);
+                // Layer 2: h1 -> h2 (reuse pre-allocated array)
+                const h2 = this._h2;
                 for (let i = 0; i < this.h2Size; i++) {
                     let sum = this.b2[i];
                     for (let j = 0; j < this.h1Size; j++) {
@@ -474,8 +479,8 @@
                     h2[i] = this.relu(sum);
                 }
 
-                // Layer 4: h2 -> 3 (output)
-                let output = new Array(3).fill(0);
+                // Layer 4: h2 -> 3 (output) (reuse pre-allocated array)
+                const output = this._output;
                 for (let i = 0; i < 3; i++) {
                     let sum = this.b4[i];
                     for (let j = 0; j < this.h2Size; j++) {
