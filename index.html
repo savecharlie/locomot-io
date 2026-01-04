@@ -449,18 +449,13 @@
                 this.inputSize = this.w0[0] ? this.w0[0].length : 85;
                 this.h1Size = this.b0 ? this.b0.length : 128;
                 this.h2Size = this.b2 ? this.b2.length : 64;
-
-                // Pre-allocate arrays for forward pass (avoid GC pressure)
-                this._h1 = new Array(this.h1Size);
-                this._h2 = new Array(this.h2Size);
-                this._output = new Array(3);
             }
 
             relu(x) { return Math.max(0, x); }
 
             forward(input) {
-                // Layer 0: input -> h1 (reuse pre-allocated array)
-                const h1 = this._h1;
+                // Layer 0: input -> h1
+                let h1 = new Array(this.h1Size).fill(0);
                 for (let i = 0; i < this.h1Size; i++) {
                     let sum = this.b0[i];
                     for (let j = 0; j < this.inputSize; j++) {
@@ -469,8 +464,8 @@
                     h1[i] = this.relu(sum);
                 }
 
-                // Layer 2: h1 -> h2 (reuse pre-allocated array)
-                const h2 = this._h2;
+                // Layer 2: h1 -> h2
+                let h2 = new Array(this.h2Size).fill(0);
                 for (let i = 0; i < this.h2Size; i++) {
                     let sum = this.b2[i];
                     for (let j = 0; j < this.h1Size; j++) {
@@ -479,8 +474,8 @@
                     h2[i] = this.relu(sum);
                 }
 
-                // Layer 4: h2 -> 3 (output) (reuse pre-allocated array)
-                const output = this._output;
+                // Layer 4: h2 -> 3 (output)
+                let output = new Array(3).fill(0);
                 for (let i = 0; i < 3; i++) {
                     let sum = this.b4[i];
                     for (let j = 0; j < this.h2Size; j++) {
@@ -2403,7 +2398,6 @@
         let teamMode = false; // Set by mode selection at start
         let playerTeam = 'blue'; // Player's team (blue or red)
         let lastTeamScoreUpdate = 0; // Throttle team score display updates
-        let lastLeaderboardUpdate = 0; // Throttle leaderboard updates (perf optimization)
         let cachedTeamLead = ''; // Cached display string
         let score = 0, wave = 1, lastTime = 0, moveTimer = 0, MOVE_INTERVAL = 70; // Faster!
         let aimAngle = 0, isAiming = false;
@@ -2447,11 +2441,7 @@
 
             // Get current population (AI + real players)
             getTotalPopulation() {
-                // Count alive enemies without creating new array
-                let aiCount = 0;
-                for (let i = 0; i < enemies.length; i++) {
-                    if (enemies[i].segments && enemies[i].segments.length > 0) aiCount++;
-                }
+                const aiCount = enemies.filter(e => e.segments && e.segments.length > 0).length;
                 const realCount = Multiplayer.connected ? Multiplayer.otherPlayers.size : 0;
                 // Only count player if they're alive
                 const playerAlive = (gameState === 'playing' && snake && snake.length > 0) ? 1 : 0;
@@ -4856,7 +4846,7 @@
         
         // Vision system for neural network - matches training exactly
         // LOOKAHEAD AI - Simulate future moves to predict outcomes
-        function simulateLookahead(headX, headY, currentDir, segments, allEnemies, allPickups, playerSnake, depth = 4, selfSegments = null) {
+        function simulateLookahead(headX, headY, currentDir, segments, allEnemies, allPickups, playerSnake, depth = 4) {
             const scores = [0, 0, 0]; // left, straight, right
             const directions = [turnLeft(currentDir), currentDir, turnRight(currentDir)];
             
@@ -4864,26 +4854,25 @@
                 let simX = headX;
                 let simY = headY;
                 let simDir = directions[d];
-                // Note: simSegments isn't moved during simulation, so no need to copy
-                // We check collision against current body positions (conservative)
+                let simSegments = segments.map(s => ({x: s.x, y: s.y}));
                 let alive = true;
                 let foodCollected = 0;
                 let score = 0;
-
+                
                 // Simulate several steps ahead
                 for (let step = 0; step < depth && alive; step++) {
                     // Move in current direction
                     simX += simDir.x;
                     simY += simDir.y;
-
+                    
                     // Wrap around world
                     if (simX < 0) simX = WORLD_COLS - 1;
                     if (simX >= WORLD_COLS) simX = 0;
                     if (simY < 0) simY = WORLD_ROWS - 1;
                     if (simY >= WORLD_ROWS) simY = 0;
-
-                    // Check self collision (against current positions - conservative check)
-                    for (const seg of segments) {
+                    
+                    // Check self collision
+                    for (const seg of simSegments) {
                         if (seg.x === simX && seg.y === simY) {
                             alive = false;
                             score -= 100; // Death is very bad
@@ -4896,7 +4885,6 @@
                     // Check collision with other enemies
                     for (const enemy of allEnemies) {
                         if (!enemy.segments) continue;
-                        if (enemy.segments === selfSegments) continue; // Skip self
                         for (const seg of enemy.segments) {
                             if (seg.x === simX && seg.y === simY) {
                                 alive = false;
@@ -4984,13 +4972,8 @@
             const GUN_TYPE_INDEX = { 'MACHINEGUN': 0, 'SHOTGUN': 1, 'CANNON': 2, 'PULSE': 3 };
             const GUN_TYPE_VALUE = { 'MACHINEGUN': 0.25, 'SHOTGUN': 0.5, 'CANNON': 0.75, 'PULSE': 1.0 };
 
-            // Don't combine projectile arrays - check both separately to avoid allocation
-
-            // Pre-build snake list ONCE (was inside distance loop - huge perf bug!)
-            const allSnakes = [...allEnemies];
-            if (playerSnake && playerSnake.length > 0) {
-                allSnakes.push({ segments: playerSnake, isPlayer: true, gunType: playerGunType, team: ctxPlayerTeam });
-            }
+            // Combine all projectiles for danger detection
+            const allProjectiles = [...projectiles, ...enemyProjectiles];
 
             for (let i = 0; i < 8; i++) {
                 const angle = headingAngle + angles[i];
@@ -5036,9 +5019,9 @@
                         }
                     }
 
-                    // Projectile danger - check both arrays without combining (avoids allocation)
+                    // Projectile danger - check all bullets
                     if (projectileDanger === 0) {
-                        for (const p of projectiles) {
+                        for (const p of allProjectiles) {
                             const px = Math.floor(p.x / GRID);
                             const py = Math.floor(p.y / GRID);
                             if (px === checkX && py === checkY) {
@@ -5046,19 +5029,14 @@
                                 break;
                             }
                         }
-                        if (projectileDanger === 0) {
-                            for (const p of enemyProjectiles) {
-                                const px = Math.floor(p.x / GRID);
-                                const py = Math.floor(p.y / GRID);
-                                if (px === checkX && py === checkY) {
-                                    projectileDanger = 1 / dist;
-                                    break;
-                                }
-                            }
-                        }
                     }
 
-                    // Other snakes (enemies and allies) - uses allSnakes from outside loop
+                    // Other snakes (enemies and allies)
+                    const allSnakes = [...allEnemies];
+                    if (playerSnake && playerSnake.length > 0) {
+                        allSnakes.push({ segments: playerSnake, isPlayer: true, gunType: playerGunType, team: ctxPlayerTeam });
+                    }
+
                     for (const other of allSnakes) {
                         const otherSegs = other.segments || other;
                         if (!otherSegs || otherSegs.length === 0) continue;
@@ -5393,7 +5371,7 @@
                         e.dir = newDir;
                         e.aimAngle = Math.atan2(e.dir.y, e.dir.x); // AI aim follows movement too
 
-                        // Move - save positions then shift
+                        // Move
                         const prevPositions = e.segments.map(s => ({ x: s.x, y: s.y }));
                         head.x = (head.x + e.dir.x + WORLD_COLS) % WORLD_COLS;
                         head.y = (head.y + e.dir.y + WORLD_ROWS) % WORLD_ROWS;
@@ -6083,13 +6061,12 @@
             const headPx = wrappedX * GRID + GRID / 2;
             const headPy = wrappedY * GRID + GRID / 2;
             const pickupRange = magnetTimer > 0 ? GRID * 3 : GRID;
-            const pickupRangeSq = pickupRange * pickupRange;
-
+            
             for (let i = pickups.length - 1; i >= 0; i--) {
                 const p = pickups[i];
-                const distSq = (p.x - headPx) ** 2 + (p.y - headPy) ** 2;
+                const dist = Math.sqrt((p.x - headPx) ** 2 + (p.y - headPy) ** 2);
 
-                if (distSq < pickupRangeSq) {
+                if (dist < pickupRange) {
                     // Skip own recently dropped pickups (cooloff period)
                     if (p.droppedBy === 'player' && p.droppedAt && Date.now() - p.droppedAt < PICKUP_COOLOFF_MS) {
                         continue;
@@ -6464,7 +6441,7 @@
                         const enemySpeedMultiplier = 1 / (1 + (e.segments.length - 1) * 0.05);
                         const enemyActualSpeed = (e.baseSpeed || 8) * enemySpeedMultiplier;
 
-                        const vision = getVision(head.x, head.y, e.dir, e.segments, enemies, pickups, snake, e, {
+                        const vision = getVision(head.x, head.y, e.dir, e.segments, enemies.filter(oe => oe !== e), pickups, snake, e, {
                             projectiles: projectiles,
                             enemyProjectiles: enemyProjectiles,
                             teamMode: teamMode,
@@ -6558,7 +6535,7 @@
                         // LOOKAHEAD: Simulate future moves to avoid bad outcomes
                         const lookaheadScores = simulateLookahead(
                             head.x, head.y, e.dir, e.segments,
-                            enemies, pickups, snake, 5, e.segments
+                            enemies.filter(oe => oe !== e), pickups, snake, 5
                         );
                         
                         // Combine neural output with lookahead (lookahead can veto bad moves)
@@ -7266,8 +7243,7 @@
                     continue;
                 }
                 p.x += p.vx * dt * 0.2; p.y += p.vy * dt * 0.2; p.life -= dt;
-                const hitRadiusSq = (p.size + GRID/2) ** 2; // Pre-compute for all collision checks
-
+                
                 // Check hit on player (skip if invincible, same team, or reduced damage during grace)
                 if (!(teamMode && p.owner && p.owner.team === playerTeam)) {
                     if (invincibleTimer <= 0) {
@@ -7275,8 +7251,8 @@
                             if (si === 0 && snake.length > 1) continue;
                             const seg = snake[si];
                             const sx = seg.x * GRID + GRID/2, sy = seg.y * GRID + GRID/2;
-                            const distSq = (p.x - sx)**2 + (p.y - sy)**2;
-                            if (distSq < hitRadiusSq) {
+                            const dist = Math.sqrt((p.x - sx)**2 + (p.y - sy)**2);
+                            if (dist < p.size + GRID/2) {
                                 // Reduced damage during 2 second grace period
                                 const dmg = invincibleTimer > -2000 ? p.damage * 0.3 : p.damage;
                                 seg.hp -= dmg; p.life = 0; haptic('medium');
@@ -7299,9 +7275,9 @@
                             if (si === 0 && op.segments.length > 1) continue;
                             const seg = op.segments[si];
                             const sx = seg.x * GRID + GRID/2, sy = seg.y * GRID + GRID/2;
-                            const distSq = (p.x - sx)**2 + (p.y - sy)**2;
-                            if (distSq < hitRadiusSq) {
-                                console.log('[HIT] Enemy projectile hit client', pid, 'at', sx, sy, 'distSq:', distSq);
+                            const dist = Math.sqrt((p.x - sx)**2 + (p.y - sy)**2);
+                            if (dist < p.size + GRID/2) {
+                                console.log('[HIT] Enemy projectile hit client', pid, 'at', sx, sy, 'dist:', dist);
                                 sendProxyHit(pid, p.damage);
                                 p.life = 0;
                                 particles.push({ x: p.x, y: p.y, vx: 0, vy: 0, life: 10, color: '#f00' });
@@ -7321,8 +7297,8 @@
                             if (si === 0 && e.segments.length > 1) continue;
                             const seg = e.segments[si];
                             const sx = seg.x * GRID + GRID/2, sy = seg.y * GRID + GRID/2;
-                            const distSq = (p.x - sx)**2 + (p.y - sy)**2;
-                            if (distSq < hitRadiusSq) {
+                            const dist = Math.sqrt((p.x - sx)**2 + (p.y - sy)**2);
+                            if (dist < p.size + GRID/2) {
                                 seg.hp -= p.damage; p.life = 0;
                                 particles.push({ x: p.x, y: p.y, vx: 0, vy: 0, life: 10, color: '#ff0' });
                                 break;
@@ -7337,10 +7313,9 @@
         }
         
         function updateProjectiles(dt) {
-            // In single player, use enemies directly. In multiplayer, combine with other players
-            let allTargets;
-            if (Multiplayer.connected && Multiplayer.otherPlayers.size > 0) {
-                allTargets = [...enemies];
+            // Combine enemies + other players into one target list
+            const allTargets = [...enemies];
+            if (Multiplayer.connected) {
                 for (const [playerId, op] of Multiplayer.otherPlayers) {
                     if (op.segments && op.segments.length > 0) {
                         allTargets.push({
@@ -7353,15 +7328,12 @@
                         });
                     }
                 }
-            } else {
-                allTargets = enemies; // No copy needed in single player
             }
             
             for (let i = projectiles.length - 1; i >= 0; i--) {
                 const p = projectiles[i];
                 p.x += p.vx * dt * 0.25; p.y += p.vy * dt * 0.25; p.life -= dt;
-                const hitRadiusSq = (GRID/2 + p.size) ** 2; // Pre-compute for collision checks
-
+                
                 // Hit any target (enemies or players)
                 outer: for (const e of allTargets) {
                     // Skip same team in team mode
@@ -7371,8 +7343,8 @@
                         if (si === 0 && e.segments.length > 1) continue;
                         const seg = e.segments[si];
                         const sx = seg.x * GRID + GRID/2, sy = seg.y * GRID + GRID/2;
-                        const distSq = (p.x - sx)**2 + (p.y - sy)**2;
-                        if (distSq < hitRadiusSq) {
+                        const dist = Math.sqrt((p.x - sx)**2 + (p.y - sy)**2);
+                        if (dist < GRID/2 + p.size) {
                             if (e.isPlayer && e.invincibleUntil && Date.now() < e.invincibleUntil) {
                                 continue;
                             }
@@ -7796,11 +7768,6 @@
         }
         
         function updateLeaderboard() {
-            // Throttle to 5 updates/sec (every 200ms) - doesn't need 60fps
-            const now = Date.now();
-            if (now - lastLeaderboardUpdate < 200) return;
-            lastLeaderboardUpdate = now;
-
             const entries = [];
             const showPlayerEntry = gameState === 'playing' && !isSpectating && !devMode.spectating;
             let blueTotal = 0, redTotal = 0;
@@ -7973,6 +7940,7 @@
         
         function drawSnake() {
             // Update train frame for wheel animation
+            for(let i=1;i<tronTrail.length;i++){const t0=tronTrail[i-1],t1=tronTrail[i];if(Math.abs(t1.x-t0.x)>2||Math.abs(t1.y-t0.y)>2)continue;ctx.strokeStyle="rgba(255,215,0,"+(i/tronTrail.length)*0.7+")";ctx.lineWidth=2+(i/tronTrail.length)*3;ctx.beginPath();ctx.moveTo(t0.x*GRID+GRID/2,t0.y*GRID+GRID/2);ctx.lineTo(t1.x*GRID+GRID/2,t1.y*GRID+GRID/2);ctx.stroke();}
             trainFrame++;
 
             // Draw smoke behind everything
