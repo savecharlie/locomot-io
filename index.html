@@ -264,12 +264,8 @@
                         <div style="font-size: 7px; color: #888;">Your playstyle now lives in the game</div>
                     </div>
                     <div id="botStatusStart" style="display: none; text-align: center;">
-                        <div style="font-size: 9px; color: #888; margin-bottom: 6px;">YOUR BOT</div>
-                        <div id="botNameStatusStart" style="font-size: 11px; color: #ff0; margin-bottom: 6px;"></div>
-                        <div style="display: flex; gap: 12px; justify-content: center; font-size: 7px; color: #888;">
-                            <span>Fitness: <span id="botFitnessStart" style="color: #0f0;">100</span></span>
-                            <span>Kills: <span id="botKillsStart" style="color: #f55;">0</span></span>
-                        </div>
+                        <div style="font-size: 9px; color: #888; margin-bottom: 8px;">YOUR BOTS</div>
+                        <div id="botListStart" style="max-height: 120px; overflow-y: auto; font-size: 7px;"></div>
                     </div>
                 </div>
             </div>
@@ -340,12 +336,8 @@
                     <div style="font-size: 7px; color: #888;">Your playstyle now lives in the game</div>
                 </div>
                 <div id="botStatus" style="display: none; text-align: center;">
-                    <div style="font-size: 9px; color: #888; margin-bottom: 6px;">YOUR BOT</div>
-                    <div id="botNameStatus" style="font-size: 11px; color: #ff0; margin-bottom: 6px;"></div>
-                    <div style="display: flex; gap: 12px; justify-content: center; font-size: 7px; color: #888;">
-                        <span>Fitness: <span id="botFitness" style="color: #0f0;">100</span></span>
-                        <span>Kills: <span id="botKills" style="color: #f55;">0</span></span>
-                    </div>
+                    <div style="font-size: 9px; color: #888; margin-bottom: 8px;">YOUR BOTS</div>
+                    <div id="botList" style="max-height: 120px; overflow-y: auto; font-size: 7px;"></div>
                 </div>
             </div>
 
@@ -3667,6 +3659,35 @@
                 );
             },
 
+            // Find ALL bots related to this player (offspring, fine-tuned, etc.)
+            findMyBots() {
+                const username = localStorage.getItem('locomot_username');
+                if (!username || username === 'anon') return [];
+
+                const manifest = genomeRegistry.manifest;
+                if (!manifest) return [];
+
+                const lowerUsername = username.toLowerCase();
+
+                // Find bots where:
+                // - source is player:username
+                // - source contains the username (finetune:ivy, breed:ivy×other)
+                // - id starts with username
+                const related = manifest.genomes.filter(g => {
+                    const source = (g.source || '').toLowerCase();
+                    const id = (g.id || '').toLowerCase();
+
+                    return source === `player:${lowerUsername}` ||
+                           source.includes(lowerUsername) ||
+                           id.startsWith(lowerUsername);
+                });
+
+                // Sort by fitness (highest first)
+                return related.sort((a, b) =>
+                    (b.performance?.fitness || 100) - (a.performance?.fitness || 100)
+                );
+            },
+
             // Update death screen UI
             async updateDeathScreenUI() {
                 const progressDiv = document.getElementById('botProgress');
@@ -3702,13 +3723,26 @@
                         document.getElementById('botNameCelebration').textContent =
                             `${bot.name || username + 'Bot'} joins the game!`;
                     } else {
-                        // Status mode
+                        // Status mode - show ALL related bots
                         progressDiv.style.display = 'none';
                         celebrationDiv.style.display = 'none';
                         statusDiv.style.display = 'block';
-                        document.getElementById('botNameStatus').textContent = bot.name || username + 'Bot';
-                        document.getElementById('botFitness').textContent = Math.round(bot.performance?.fitness || 100);
-                        document.getElementById('botKills').textContent = bot.performance?.kills || 0;
+
+                        const allBots = this.findMyBots();
+                        const botList = document.getElementById('botList');
+                        if (botList && allBots.length > 0) {
+                            botList.innerHTML = allBots.map(b => `
+                                <div style="display: flex; justify-content: space-between; padding: 4px 8px; margin: 2px 0; background: #1a1a2a; border-radius: 3px;">
+                                    <span style="color: #ff0;">${b.name || b.id}</span>
+                                    <span style="color: #888;">
+                                        <span style="color: #0f0;">${Math.round(b.performance?.fitness || 100)}</span> fit
+                                        <span style="color: #f55; margin-left: 6px;">${b.performance?.kills || 0}</span> kills
+                                    </span>
+                                </div>
+                            `).join('') + `
+                                <div style="text-align: center; color: #0ff; margin-top: 8px; font-size: 6px;">Keep playing to improve your scores!</div>
+                            `;
+                        }
                     }
                 } else {
                     // No bot yet - show progress
@@ -3756,13 +3790,26 @@
                 const sessionCount = await DataRecorder.getSessionCount();
 
                 if (bot) {
-                    // Bot exists - show status
+                    // Bot exists - show ALL related bots
                     progressDiv.style.display = 'none';
                     celebrationDiv.style.display = 'none';
                     statusDiv.style.display = 'block';
-                    document.getElementById('botNameStatusStart').textContent = bot.name || username + 'Bot';
-                    document.getElementById('botFitnessStart').textContent = Math.round(bot.performance?.fitness || 100);
-                    document.getElementById('botKillsStart').textContent = bot.performance?.kills || 0;
+
+                    const allBots = this.findMyBots();
+                    const botList = document.getElementById('botListStart');
+                    if (botList && allBots.length > 0) {
+                        botList.innerHTML = allBots.map(b => `
+                            <div style="display: flex; justify-content: space-between; padding: 4px 8px; margin: 2px 0; background: #1a1a2a; border-radius: 3px;">
+                                <span style="color: #ff0;">${b.name || b.id}</span>
+                                <span style="color: #888;">
+                                    <span style="color: #0f0;">${Math.round(b.performance?.fitness || 100)}</span> fit
+                                    <span style="color: #f55; margin-left: 6px;">${b.performance?.kills || 0}</span> kills
+                                </span>
+                            </div>
+                        `).join('') + `
+                            <div style="text-align: center; color: #0ff; margin-top: 8px; font-size: 6px;">Keep playing to improve your scores!</div>
+                        `;
+                    }
                 } else {
                     // No bot yet - show progress
                     progressDiv.style.display = 'block';
