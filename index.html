@@ -5395,6 +5395,9 @@
 
                         // Move - shift segments from tail to head (no array allocation!)
                         const headOldX = head.x, headOldY = head.y;
+                        // Save tail position for potential new segment spawn
+                        const tail = e.segments[e.segments.length - 1];
+                        const tailOldX = tail.x, tailOldY = tail.y;
                         for (let j = e.segments.length - 1; j >= 1; j--) {
                             const seg = e.segments[j];
                             const prev = e.segments[j - 1];
@@ -5431,9 +5434,8 @@
                                 e.color = p.type.color; // Update enemy color to match gun
 
                                 // Add new segment at previous tail position
-                                const tailPos = prevPositions[prevPositions.length - 1];
                                 e.segments.push({
-                                    x: tailPos.x, y: tailPos.y,
+                                    x: tailOldX, y: tailOldY,
                                     hp: 20 + wave * 5, maxHp: 20 + wave * 5,
                                     type: p.type, lastFired: 0
                                 });
