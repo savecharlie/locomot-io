@@ -3,9 +3,14 @@
 LOCOMOT.IO Continuous Behavioral Training Daemon
 Trains on human player data, updating as new data arrives.
 
-Run: python3 train_behavioral.py [--once] [--deploy]
+Run: python3 train_behavioral.py [--once] [--deploy] [--player USERNAME]
   --once: Train once on all available data, then exit
-  --deploy: Auto-deploy trained model to server after each training cycle
+  --deploy: Auto-deploy trained model to genome pool
+  --player: Train genome for specific player (creates "UsernameBot")
+
+Examples:
+  python3 train_behavioral.py --once --deploy --player ivy  # Creates IvyBot
+  python3 train_behavioral.py --deploy                       # Continuous generic training
 """
 
 import torch
@@ -149,9 +154,12 @@ class ReplayBuffer:
 
 
 # ========== DATA FETCHING ==========
-def fetch_all_behavioral_data():
-    """Fetch all behavioral sessions from the server."""
-    console.print("[yellow]Fetching all behavioral data...[/yellow]")
+def fetch_all_behavioral_data(player_id=None):
+    """Fetch all behavioral sessions from the server, optionally filtered by player."""
+    if player_id:
+        console.print(f"[yellow]Fetching behavioral data for player: {player_id}[/yellow]")
+    else:
+        console.print("[yellow]Fetching all behavioral data...[/yellow]")
 
     try:
         response = requests.post(SERVER_URL, json={
@@ -164,8 +172,16 @@ def fetch_all_behavioral_data():
             return []
 
         data = response.json()
-        console.print(f"[green]Fetched {data['count']} sessions, {data['totalFrames']} total frames[/green]")
-        return data.get('sessions', [])
+        sessions = data.get('sessions', [])
+
+        # Filter by player if specified
+        if player_id:
+            sessions = [s for s in sessions if s.get('playerId', '').lower() == player_id.lower()]
+            console.print(f"[green]Found {len(sessions)} sessions for {player_id}[/green]")
+        else:
+            console.print(f"[green]Fetched {data['count']} sessions, {data['totalFrames']} total frames[/green]")
+
+        return sessions
 
     except Exception as e:
         console.print(f"[red]Fetch error: {e}[/red]")
@@ -258,45 +274,112 @@ def export_to_json(model, filename):
     return filename
 
 
-def deploy_to_server(model):
-    """Upload trained model weights to the server."""
-    console.print("[yellow]Deploying model to server...[/yellow]")
+def deploy_to_server(model, player_id=None):
+    """Upload trained model weights to the genome pool."""
+    # Generate genome ID and name
+    if player_id:
+        genome_id = player_id.lower().replace(' ', '_')
+        genome_name = f"{player_id}Bot"
+    else:
+        genome_id = f"behavioral_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+        genome_name = "BehavioralBot"
+
+    console.print(f"[yellow]Uploading {genome_name} to genome pool...[/yellow]")
 
     state_dict = model.state_dict()
-    brain = {
-        'input_size': INPUT_SIZE,
-        'type': 'behavioral',
-        'trained_at': datetime.now().isoformat()
-    }
-
+    weights = {}
     for key, tensor in state_dict.items():
-        brain[key] = tensor.cpu().numpy().tolist()
+        weights[key] = tensor.cpu().numpy().tolist()
+
+    MAX_CHUNK_SIZE = 50000
+    stored_keys = []
 
     try:
+        for key in weights:
+            data = weights[key]
+
+            if isinstance(data[0], list):
+                # 2D array - may need chunking
+                rows = len(data)
+                row_size = len(json.dumps(data[0]))
+                rows_per_chunk = max(1, MAX_CHUNK_SIZE // row_size)
+                num_chunks = (rows + rows_per_chunk - 1) // rows_per_chunk
+
+                if num_chunks > 1:
+                    for i in range(num_chunks):
+                        start = i * rows_per_chunk
+                        end = min((i + 1) * rows_per_chunk, rows)
+                        chunk_data = data[start:end]
+                        chunk_key = f"{key}_chunk{i}"
+
+                        response = requests.post(SERVER_URL, json={
+                            'type': 'store_genome_part',
+                            'genome_id': genome_id,
+                            'key': chunk_key,
+                            'data': chunk_data
+                        }, timeout=60)
+
+                        if response.status_code != 200:
+                            console.print(f"[red]Chunk {i} failed[/red]")
+                            return False
+                        stored_keys.append(chunk_key)
+
+                    # Store meta
+                    stored_keys.append(f"{key}_meta")
+                    requests.post(SERVER_URL, json={
+                        'type': 'store_genome_part',
+                        'genome_id': genome_id,
+                        'key': f"{key}_meta",
+                        'data': {'chunks': num_chunks, 'rows_per_chunk': rows_per_chunk, 'total_rows': rows}
+                    }, timeout=30)
+                    continue
+
+            # Small enough to store directly
+            response = requests.post(SERVER_URL, json={
+                'type': 'store_genome_part',
+                'genome_id': genome_id,
+                'key': key,
+                'data': data
+            }, timeout=60)
+
+            if response.status_code == 200:
+                stored_keys.append(key)
+
+        # Register the genome
         response = requests.post(SERVER_URL, json={
-            'type': 'set_brain',
-            'brain': brain
+            'type': 'register_genome',
+            'genome_id': genome_id,
+            'name': genome_name,
+            'genome_type': 'behavioral',
+            'source': f'player:{player_id}' if player_id else 'behavioral_training',
+            'keys': stored_keys,
+            'parents': [],
+            'generation': 0,
+            'active': True  # Make player bots active by default
         }, timeout=30)
 
         if response.status_code == 200:
-            console.print("[green]Model deployed to server![/green]")
+            console.print(f"[green]{genome_name} uploaded to pool![/green]")
             return True
         else:
-            console.print(f"[red]Deploy failed: {response.status_code}[/red]")
+            console.print(f"[red]Registration failed: {response.text}[/red]")
             return False
+
     except Exception as e:
         console.print(f"[red]Deploy error: {e}[/red]")
         return False
 
 
 # ========== MAIN DAEMON ==========
-def run_daemon(auto_deploy=False):
+def run_daemon(auto_deploy=False, player_id=None):
     """Run the continuous training daemon."""
     global running
 
     console.print("[bold magenta]LOCOMOT.IO Continuous Training Daemon[/bold magenta]")
     console.print(f"Device: [cyan]{device}[/cyan]")
     console.print(f"Auto-deploy: [cyan]{auto_deploy}[/cyan]")
+    if player_id:
+        console.print(f"Player: [cyan]{player_id}[/cyan]")
     console.print("=" * 50)
 
     # Initialize
@@ -311,7 +394,7 @@ def run_daemon(auto_deploy=False):
 
     # Initial data fetch
     console.print("\n[bold]Initial data load...[/bold]")
-    sessions = fetch_all_behavioral_data()
+    sessions = fetch_all_behavioral_data(player_id=player_id)
 
     for session in sessions:
         added = buffer.add_session(session)
@@ -341,7 +424,7 @@ def run_daemon(auto_deploy=False):
         export_to_json(model, 'brain_behavioral_latest.json')
 
         if auto_deploy:
-            deploy_to_server(model)
+            deploy_to_server(model, player_id=player_id)
     else:
         console.print(f"[yellow]Need {MIN_BUFFER_SIZE - len(buffer)} more frames before training...[/yellow]")
 
@@ -380,7 +463,7 @@ def run_daemon(auto_deploy=False):
 
                         # Deploy if enabled
                         if auto_deploy:
-                            deploy_to_server(model)
+                            deploy_to_server(model, player_id=player_id)
 
             # Periodic checkpoint
             if time.time() - last_checkpoint > CHECKPOINT_INTERVAL and len(buffer) >= MIN_BUFFER_SIZE:
@@ -408,14 +491,16 @@ def run_daemon(auto_deploy=False):
     console.print("[bold green]Daemon stopped.[/bold green]")
 
 
-def run_once(deploy=False):
+def run_once(deploy=False, player_id=None):
     """Train once on all available data, then exit."""
     console.print("[bold magenta]LOCOMOT.IO Behavioral Training (One-shot)[/bold magenta]")
     console.print(f"Device: [cyan]{device}[/cyan]")
+    if player_id:
+        console.print(f"Player: [cyan]{player_id}[/cyan]")
     console.print("=" * 50)
 
     # Fetch all data
-    sessions = fetch_all_behavioral_data()
+    sessions = fetch_all_behavioral_data(player_id=player_id)
 
     if not sessions:
         console.print("[red]No sessions found![/red]")
@@ -530,7 +615,7 @@ def run_once(deploy=False):
     console.print(f"[green]Saved: brain_behavioral_latest.json[/green]")
 
     if deploy:
-        deploy_to_server(model)
+        deploy_to_server(model, player_id=player_id)
 
     console.print("\n[bold green]Training complete![/bold green]")
 
@@ -539,12 +624,13 @@ def main():
     parser = argparse.ArgumentParser(description='LOCOMOT.IO Behavioral Training')
     parser.add_argument('--once', action='store_true', help='Train once then exit')
     parser.add_argument('--deploy', action='store_true', help='Auto-deploy to server')
+    parser.add_argument('--player', type=str, help='Train genome for specific player username')
     args = parser.parse_args()
 
     if args.once:
-        run_once(deploy=args.deploy)
+        run_once(deploy=args.deploy, player_id=args.player)
     else:
-        run_daemon(auto_deploy=args.deploy)
+        run_daemon(auto_deploy=args.deploy, player_id=args.player)
 
 
 if __name__ == '__main__':
