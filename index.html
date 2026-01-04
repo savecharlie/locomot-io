@@ -3665,11 +3665,16 @@
 
             // Find player's bot in manifest
             findMyBot() {
-                const username = localStorage.getItem('locomot_username');
-                if (!username || username === 'anon') return null;
+                const username = localStorage.getItem('locomot_username') || 'anon';
+                const isAnon = !localStorage.getItem('locomot_username') || username === 'anon';
 
                 const manifest = genomeRegistry.manifest;
                 if (!manifest) return null;
+
+                if (isAnon) {
+                    // Anonymous users share AnonBot
+                    return manifest.genomes.find(g => g.id === 'anonbot');
+                }
 
                 return manifest.genomes.find(g =>
                     g.source === `player:${username}` ||
@@ -3679,11 +3684,17 @@
 
             // Find ALL bots related to this player (offspring, fine-tuned, etc.)
             findMyBots() {
-                const username = localStorage.getItem('locomot_username');
-                if (!username || username === 'anon') return [];
+                const username = localStorage.getItem('locomot_username') || 'anon';
+                const isAnon = !localStorage.getItem('locomot_username') || username === 'anon';
 
                 const manifest = genomeRegistry.manifest;
                 if (!manifest) return [];
+
+                if (isAnon) {
+                    // Anonymous users share AnonBot
+                    const anonBot = manifest.genomes.find(g => g.id === 'anonbot');
+                    return anonBot ? [anonBot] : [];
+                }
 
                 const lowerUsername = username.toLowerCase();
 
@@ -3729,12 +3740,9 @@
 
                 if (!container) return;
 
-                const username = localStorage.getItem('locomot_username');
-                if (!username || username === 'anon') {
-                    // Anonymous - hide the whole section
-                    container.style.display = 'none';
-                    return;
-                }
+                // Use 'anon' for anonymous users
+                const username = localStorage.getItem('locomot_username') || 'anon';
+                const isAnon = !localStorage.getItem('locomot_username') || username === 'anon';
                 container.style.display = 'block';
 
                 // Check for bot
@@ -3813,11 +3821,8 @@
 
                 if (!container) return;
 
-                const username = localStorage.getItem('locomot_username');
-                if (!username || username === 'anon') {
-                    container.style.display = 'none';
-                    return;
-                }
+                // Use 'anon' for anonymous users
+                const username = localStorage.getItem('locomot_username') || 'anon';
                 container.style.display = 'block';
 
                 const bot = this.findMyBot();
@@ -4103,14 +4108,13 @@
                     return;
                 }
 
-                const username = localStorage.getItem('locomot_username');
-                if (!username || username === 'anon') {
-                    console.log('[BOT_TRAINER] No username, skipping training');
-                    return;
-                }
+                // Use 'anon' for anonymous users - they all contribute to shared AnonBot
+                const username = localStorage.getItem('locomot_username') || 'anon';
+                const isAnon = !localStorage.getItem('locomot_username') || username === 'anon';
 
-                // Check if player already has a bot
-                if (BotTracker.findMyBot()) {
+                // Named users: skip if already have a bot
+                // Anon users: always allow (contributes to shared pool)
+                if (!isAnon && BotTracker.findMyBot()) {
                     console.log('[BOT_TRAINER] Player already has bot, skipping');
                     return;
                 }
@@ -4155,8 +4159,10 @@
 
             // Upload weights to self-hosted server
             async uploadWeights(weights, username) {
-                const botId = `${username.toLowerCase()}_${Date.now()}`;
-                const botName = `${username}Bot`;
+                // Anon users share a single bot, named users get unique bots
+                const isAnon = username === 'anon';
+                const botId = isAnon ? 'anonbot' : `${username.toLowerCase()}_${Date.now()}`;
+                const botName = isAnon ? 'AnonBot' : `${username}Bot`;
                 const botsServerUrl = 'https://bots.locomot.io';
 
                 console.log('[BOT_TRAINER] Uploading weights to self-hosted:', botId);
