@@ -4851,7 +4851,7 @@
         
         // Vision system for neural network - matches training exactly
         // LOOKAHEAD AI - Simulate future moves to predict outcomes
-        function simulateLookahead(headX, headY, currentDir, segments, allEnemies, allPickups, playerSnake, depth = 4) {
+        function simulateLookahead(headX, headY, currentDir, segments, allEnemies, allPickups, playerSnake, depth = 4, selfSegments = null) {
             const scores = [0, 0, 0]; // left, straight, right
             const directions = [turnLeft(currentDir), currentDir, turnRight(currentDir)];
             
@@ -4890,6 +4890,7 @@
                     // Check collision with other enemies
                     for (const enemy of allEnemies) {
                         if (!enemy.segments) continue;
+                        if (enemy.segments === selfSegments) continue; // Skip self
                         for (const seg of enemy.segments) {
                             if (seg.x === simX && seg.y === simY) {
                                 alive = false;
@@ -6448,7 +6449,7 @@
                         const enemySpeedMultiplier = 1 / (1 + (e.segments.length - 1) * 0.05);
                         const enemyActualSpeed = (e.baseSpeed || 8) * enemySpeedMultiplier;
 
-                        const vision = getVision(head.x, head.y, e.dir, e.segments, enemies.filter(oe => oe !== e), pickups, snake, e, {
+                        const vision = getVision(head.x, head.y, e.dir, e.segments, enemies, pickups, snake, e, {
                             projectiles: projectiles,
                             enemyProjectiles: enemyProjectiles,
                             teamMode: teamMode,
@@ -6542,7 +6543,7 @@
                         // LOOKAHEAD: Simulate future moves to avoid bad outcomes
                         const lookaheadScores = simulateLookahead(
                             head.x, head.y, e.dir, e.segments,
-                            enemies.filter(oe => oe !== e), pickups, snake, 5
+                            enemies, pickups, snake, 5, e.segments
                         );
                         
                         // Combine neural output with lookahead (lookahead can veto bad moves)
