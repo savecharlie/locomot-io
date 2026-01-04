@@ -43,6 +43,7 @@ const EXCLUDED_REGIONS = ['AZ', 'Arizona']; // Your region
 export default class LocomotServer implements Party.Server {
   state: GameState;
   cleanupInterval: ReturnType<typeof setInterval> | null = null;
+  backupInterval: ReturnType<typeof setInterval> | null = null;
   sessions: PlayerSession[] = []; // All sessions for metrics
   lastSpikeAlert: number = 0;
 
@@ -56,20 +57,92 @@ export default class LocomotServer implements Party.Server {
 
     // Clean up stale players every 10 seconds
     this.cleanupInterval = setInterval(() => this.cleanupStalePlayers(), 10000);
+
+    // Backup all data every hour to prevent data loss
+    this.backupInterval = setInterval(() => {
+      this.saveSessions(); // This now saves to multiple backup keys
+      this.backupVisitData();
+      console.log('[Backup] Hourly backup completed');
+    }, 60 * 60 * 1000);
   }
 
-  // Load sessions from storage on room start
+  // Load sessions from storage on room start - with backup recovery
   async onStart() {
-    const stored = await this.room.storage.get<PlayerSession[]>('sessions');
-    if (stored) {
+    // Try main storage first
+    let stored = await this.room.storage.get<PlayerSession[]>('sessions');
+
+    // If empty, try to recover from backups
+    if (!stored || stored.length === 0) {
+      console.log('Main sessions empty, checking backups...');
+
+      // Try backup keys in order (most recent first)
+      const backupKeys = ['sessions_backup_daily', 'sessions_backup_weekly', 'sessions_backup_permanent'];
+      for (const key of backupKeys) {
+        const backup = await this.room.storage.get<PlayerSession[]>(key);
+        if (backup && backup.length > 0) {
+          stored = backup;
+          console.log(`Recovered ${backup.length} sessions from ${key}`);
+          // Restore to main storage
+          await this.room.storage.put('sessions', backup);
+          break;
+        }
+      }
+    }
+
+    if (stored && stored.length > 0) {
       this.sessions = stored;
       console.log(`Loaded ${this.sessions.length} sessions from storage`);
+    } else {
+      console.log('No sessions found in any storage location');
+    }
+
+    // Also recover visit_ data if needed
+    await this.recoverVisitData();
+  }
+
+  // Recover visit data from backup
+  async recoverVisitData() {
+    const allVisits = await this.room.storage.list({ prefix: 'visit_' });
+    if (allVisits.size === 0) {
+      console.log('Visit data empty, checking backup...');
+      const backup = await this.room.storage.get<any[]>('visits_backup');
+      if (backup && backup.length > 0) {
+        console.log(`Recovering ${backup.length} visits from backup`);
+        for (const visit of backup) {
+          const key = `visit_${visit.timestamp}_${Math.random().toString(36).slice(2, 8)}`;
+          await this.room.storage.put(key, visit);
+        }
+      }
     }
   }
 
-  // Save sessions to storage
+  // Save sessions to storage with redundant backups
   async saveSessions() {
+    // Save to main storage
     await this.room.storage.put('sessions', this.sessions);
+
+    // Always save to permanent backup (never gets cleared)
+    await this.room.storage.put('sessions_backup_permanent', this.sessions);
+
+    // Daily backup (overwritten each day)
+    const today = new Date().toISOString().split('T')[0];
+    await this.room.storage.put('sessions_backup_daily', this.sessions);
+    await this.room.storage.put(`sessions_backup_${today}`, this.sessions);
+
+    // Weekly backup (keeps 7 days)
+    const dayOfWeek = new Date().getDay();
+    await this.room.storage.put('sessions_backup_weekly', this.sessions);
+  }
+
+  // Backup all visit data periodically
+  async backupVisitData() {
+    const allVisits = await this.room.storage.list({ prefix: 'visit_' });
+    const visits: any[] = [];
+    allVisits.forEach((value) => visits.push(value));
+    if (visits.length > 0) {
+      await this.room.storage.put('visits_backup', visits);
+      console.log(`Backed up ${visits.length} visits`);
+    }
   }
 
   // Send email notification via formsubmit.co
@@ -643,6 +716,40 @@ export default class LocomotServer implements Party.Server {
       });
     }
 
+    // BACKUP STATUS - check all backup keys
+    if (req.method === 'GET' && url.pathname.endsWith('/backup-status')) {
+      const backupKeys = ['sessions', 'sessions_backup_permanent', 'sessions_backup_daily', 'sessions_backup_weekly', 'visits_backup'];
+      const status: Record<string, any> = {};
+
+      for (const key of backupKeys) {
+        const data = await this.room.storage.get(key);
+        if (Array.isArray(data)) {
+          status[key] = { count: data.length, exists: true };
+        } else if (data) {
+          status[key] = { exists: true, type: typeof data };
+        } else {
+          status[key] = { exists: false };
+        }
+      }
+
+      // Also check visit_ prefix count
+      const allVisits = await this.room.storage.list({ prefix: 'visit_' });
+      status['visit_entries'] = { count: allVisits.size };
+
+      return new Response(JSON.stringify(status, null, 2), {
+        headers: { ...headers, 'Content-Type': 'application/json' }
+      });
+    }
+
+    // MANUAL BACKUP TRIGGER
+    if (req.method === 'POST' && url.pathname.endsWith('/backup-now')) {
+      await this.saveSessions();
+      await this.backupVisitData();
+      return new Response(JSON.stringify({ ok: true, message: 'Backup completed', sessions: this.sessions.length }), {
+        headers: { ...headers, 'Content-Type': 'application/json' }
+      });
+    }
+
     // VISITORS DASHBOARD - who is playing?
     if (req.method === 'GET' && url.pathname.endsWith('/visitors')) {
       // Fetch visit data
@@ -1047,6 +1154,11 @@ export default class LocomotServer implements Party.Server {
           }
 
           console.log(`[Visit] ${visit.username || 'anon'} from ${city}, ${region}, ${country}`);
+
+          // Backup visit data after every 10 visits
+          if (allVisits.size % 10 === 0) {
+            await this.backupVisitData();
+          }
 
           return new Response(JSON.stringify({ ok: true }), {
             headers: { ...headers, 'Content-Type': 'application/json' }

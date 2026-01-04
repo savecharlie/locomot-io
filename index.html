@@ -4259,7 +4259,7 @@
             if (cb2) cb2.addEventListener('change', (e) => DataRecorder.setEnabled(e.target.checked));
 
             // Track page visit for analytics
-            fetch('https://locomot-io.savecharlie.partykit.dev/party/collective', {
+            fetch('https://locomot-io.savecharlie.partykit.dev/parties/main/game', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
