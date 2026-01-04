@@ -4984,8 +4984,7 @@
             const GUN_TYPE_INDEX = { 'MACHINEGUN': 0, 'SHOTGUN': 1, 'CANNON': 2, 'PULSE': 3 };
             const GUN_TYPE_VALUE = { 'MACHINEGUN': 0.25, 'SHOTGUN': 0.5, 'CANNON': 0.75, 'PULSE': 1.0 };
 
-            // Combine all projectiles for danger detection
-            const allProjectiles = [...projectiles, ...enemyProjectiles];
+            // Don't combine projectile arrays - check both separately to avoid allocation
 
             // Pre-build snake list ONCE (was inside distance loop - huge perf bug!)
             const allSnakes = [...allEnemies];
@@ -5037,14 +5036,24 @@
                         }
                     }
 
-                    // Projectile danger - check all bullets
+                    // Projectile danger - check both arrays without combining (avoids allocation)
                     if (projectileDanger === 0) {
-                        for (const p of allProjectiles) {
+                        for (const p of projectiles) {
                             const px = Math.floor(p.x / GRID);
                             const py = Math.floor(p.y / GRID);
                             if (px === checkX && py === checkY) {
                                 projectileDanger = 1 / dist;
                                 break;
+                            }
+                        }
+                        if (projectileDanger === 0) {
+                            for (const p of enemyProjectiles) {
+                                const px = Math.floor(p.x / GRID);
+                                const py = Math.floor(p.y / GRID);
+                                if (px === checkX && py === checkY) {
+                                    projectileDanger = 1 / dist;
+                                    break;
+                                }
                             }
                         }
                     }
