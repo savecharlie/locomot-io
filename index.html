@@ -5393,29 +5393,25 @@
                         e.dir = newDir;
                         e.aimAngle = Math.atan2(e.dir.y, e.dir.x); // AI aim follows movement too
 
-                        // Move - shift segments from tail to head (no array allocation!)
-                        const headOldX = head.x, headOldY = head.y;
-                        // Save tail position for potential new segment spawn
-                        const tail = e.segments[e.segments.length - 1];
-                        const tailOldX = tail.x, tailOldY = tail.y;
-                        for (let j = e.segments.length - 1; j >= 1; j--) {
-                            const seg = e.segments[j];
-                            const prev = e.segments[j - 1];
-                            const oldX = seg.x, oldY = seg.y;
-                            seg.x = prev.x;
-                            seg.y = prev.y;
+                        // Move - save positions then shift
+                        const prevPositions = e.segments.map(s => ({ x: s.x, y: s.y }));
+                        head.x = (head.x + e.dir.x + WORLD_COLS) % WORLD_COLS;
+                        head.y = (head.y + e.dir.y + WORLD_ROWS) % WORLD_ROWS;
+                        for (let j = 1; j < e.segments.length; j++) {
+                            const oldX = e.segments[j].x;
+                            const oldY = e.segments[j].y;
+                            e.segments[j].x = prevPositions[j - 1].x;
+                            e.segments[j].y = prevPositions[j - 1].y;
 
                             // Turn sparks for enemy trains
-                            const newDx = seg.x - oldX;
-                            const newDy = seg.y - oldY;
-                            const oldDir = seg.lastDir || { x: newDx, y: newDy };
+                            const newDx = e.segments[j].x - oldX;
+                            const newDy = e.segments[j].y - oldY;
+                            const oldDir = e.segments[j].lastDir || { x: newDx, y: newDy };
                             if ((oldDir.x !== newDx || oldDir.y !== newDy) && (oldDir.x !== 0 || oldDir.y !== 0)) {
                                 emitTurnSparks(oldX, oldY, oldDir, { x: newDx, y: newDy }, e.color);
                             }
-                            seg.lastDir = { x: newDx, y: newDy };
+                            e.segments[j].lastDir = { x: newDx, y: newDy };
                         }
-                        head.x = (headOldX + e.dir.x + WORLD_COLS) % WORLD_COLS;
-                        head.y = (headOldY + e.dir.y + WORLD_ROWS) % WORLD_ROWS;
                         
                         // Pickup collection
                         for (let pi = pickups.length - 1; pi >= 0; pi--) {
@@ -5434,8 +5430,9 @@
                                 e.color = p.type.color; // Update enemy color to match gun
 
                                 // Add new segment at previous tail position
+                                const tailPos = prevPositions[prevPositions.length - 1];
                                 e.segments.push({
-                                    x: tailOldX, y: tailOldY,
+                                    x: tailPos.x, y: tailPos.y,
                                     hp: 20 + wave * 5, maxHp: 20 + wave * 5,
                                     type: p.type, lastFired: 0
                                 });
