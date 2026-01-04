@@ -7707,21 +7707,38 @@
 
             // When spectating, use leader; otherwise use player
             const head = (gameState === 'dead' && followTarget) || devTarget ? followTarget : snake[0];
-            const len = (gameState === 'dead' && followTarget) || devTarget ? followLength : snake.length;
-            
+            const segments = (gameState === 'dead' || devTarget) ? (followTarget ? [followTarget] : []) : snake;
+
             if (!head || head.x === undefined) return; // Safety check
 
-            targetCameraX = head.x * GRID + GRID/2 - canvas.width/2/cameraZoom;
-            targetCameraY = head.y * GRID + GRID/2 - canvas.height/2/cameraZoom;
-            const minZoom = 0.6, maxZoom = 2.0, zoomPerSegment = 0.025;
-            targetZoom = Math.max(minZoom, maxZoom - (len - 2) * zoomPerSegment);
-            // Use dynamic lerp factor for smooth MVP transitions
+            // Calculate bounding box of entire snake
+            let minX = head.x, maxX = head.x, minY = head.y, maxY = head.y;
+            for (const seg of segments) {
+                if (seg.x < minX) minX = seg.x;
+                if (seg.x > maxX) maxX = seg.x;
+                if (seg.y < minY) minY = seg.y;
+                if (seg.y > maxY) maxY = seg.y;
+            }
+
+            // Add padding (5 squares around the train)
+            const padding = 5;
+            const trainWidth = (maxX - minX + 1 + padding * 2) * GRID;
+            const trainHeight = (maxY - minY + 1 + padding * 2) * GRID;
+
+            // Zoom to fit train in view (with minimum zoom)
+            const zoomToFitX = canvas.width / trainWidth;
+            const zoomToFitY = canvas.height / trainHeight;
+            const minZoom = 0.5, maxZoom = 2.5;
+            targetZoom = Math.max(minZoom, Math.min(maxZoom, Math.min(zoomToFitX, zoomToFitY)));
+
+            // Center camera on head
+            targetCameraX = head.x * GRID + GRID/2 - canvas.width/2/targetZoom;
+            targetCameraY = head.y * GRID + GRID/2 - canvas.height/2/targetZoom;
+
+            // Smooth camera movement
             cameraX += (targetCameraX - cameraX) * cameraLerpFactor;
             cameraY += (targetCameraY - cameraY) * cameraLerpFactor;
-            cameraZoom += (targetZoom - cameraZoom) * (cameraLerpFactor * 0.2);
-            const viewWidth = canvas.width / cameraZoom, viewHeight = canvas.height / cameraZoom;
-            cameraX = Math.max(0, Math.min(WORLD_WIDTH - viewWidth, cameraX));
-            cameraY = Math.max(0, Math.min(WORLD_HEIGHT - viewHeight, cameraY));
+            cameraZoom += (targetZoom - cameraZoom) * (cameraLerpFactor * 0.3);
         }
         
         function updateLeaderboard() {
@@ -7887,16 +7904,35 @@
         }
         
         function drawGrid() {
-            const startX = Math.floor(cameraX / GRID) * GRID, startY = Math.floor(cameraY / GRID) * GRID;
-            const endX = Math.min(WORLD_WIDTH, cameraX + canvas.width/cameraZoom + GRID);
-            const endY = Math.min(WORLD_HEIGHT, cameraY + canvas.height/cameraZoom + GRID);
-            // Batch all lines into single path
+            // Infinite grid - no world boundaries visible
+            const viewWidth = canvas.width / cameraZoom + GRID * 2;
+            const viewHeight = canvas.height / cameraZoom + GRID * 2;
+            const startX = Math.floor(cameraX / GRID) * GRID;
+            const startY = Math.floor(cameraY / GRID) * GRID;
+            const endX = startX + viewWidth;
+            const endY = startY + viewHeight;
+
             ctx.strokeStyle = '#150d20'; ctx.lineWidth = 1;
             ctx.beginPath();
             for (let x = startX; x <= endX; x += GRID) { ctx.moveTo(x, startY); ctx.lineTo(x, endY); }
             for (let y = startY; y <= endY; y += GRID) { ctx.moveTo(startX, y); ctx.lineTo(endX, y); }
             ctx.stroke();
-            ctx.strokeStyle = '#402040'; ctx.lineWidth = 3; ctx.strokeRect(0, 0, WORLD_WIDTH, WORLD_HEIGHT);
+            // No world border - feels infinite
+        }
+
+        // Helper to get wrapped screen positions for an entity
+        function getWrapPositions(x, y) {
+            const positions = [{ x, y }];
+            const viewW = canvas.width / cameraZoom;
+            const viewH = canvas.height / cameraZoom;
+
+            // Check if near edges and add wrapped positions
+            if (x * GRID < cameraX + GRID * 10) positions.push({ x: x + WORLD_COLS, y });
+            if (x * GRID > cameraX + viewW - GRID * 10) positions.push({ x: x - WORLD_COLS, y });
+            if (y * GRID < cameraY + GRID * 10) positions.push({ x, y: y + WORLD_ROWS });
+            if (y * GRID > cameraY + viewH - GRID * 10) positions.push({ x, y: y - WORLD_ROWS });
+
+            return positions;
         }
         
         function drawSnake() {
