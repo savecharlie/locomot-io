@@ -977,6 +977,184 @@ class FineTuner:
         return new_id, weights
 
 
+# ========== ADVERSARY TRAINING ==========
+class AdversaryTrainer:
+    """Train a bot specifically to hunt and kill a target genome."""
+
+    def __init__(self, target_id, base_genome_id=None, pool_genomes=None):
+        self.target_id = target_id
+        self.target_model = load_genome(target_id)
+        if not self.target_model:
+            raise ValueError(f"Could not load target genome: {target_id}")
+
+        # Start from base genome or random init
+        if base_genome_id:
+            self.model = load_genome(base_genome_id)
+            self.base_id = base_genome_id
+        else:
+            self.model = NeuralNetwork().to(device)
+            self.base_id = 'random'
+
+        self.target = NeuralNetwork(output_size=self.model.output_size).to(device)
+        self.target.load_state_dict(self.model.state_dict())
+
+        self.optimizer = optim.Adam(self.model.parameters(), lr=LEARNING_RATE)
+        self.memory = deque(maxlen=50000)
+        self.epsilon = EPSILON_START
+
+        # Load other opponents for variety
+        self.other_opponents = []
+        if pool_genomes:
+            for gid in pool_genomes:
+                if gid != target_id and gid != base_genome_id:
+                    opp = load_genome(gid)
+                    if opp:
+                        self.other_opponents.append((gid, opp))
+
+        console.print(f"[red]Training adversary to hunt: {target_id}[/red]")
+
+    def play_episode(self):
+        """Play episode with target as primary opponent."""
+        env = ArenaEnv(num_agents=4)
+        obs = env.reset()
+
+        # Agent 0 = adversary (us), Agent 1 = target, Agents 2-3 = others
+        opponents = [deepcopy(self.target_model)]  # Target always slot 1
+        for _ in range(2):
+            if self.other_opponents:
+                _, opp = random.choice(self.other_opponents)
+                opponents.append(deepcopy(opp))
+            else:
+                opponents.append(deepcopy(self.target_model))
+
+        total_reward = 0
+        target_kills = 0
+
+        while True:
+            actions = [self.model.get_action(obs[0], self.epsilon)]
+            for i, opp in enumerate(opponents):
+                if env.agents[i + 1]['alive']:
+                    actions.append(opp.get_action(obs[i + 1], 0.0))
+                else:
+                    actions.append(1)
+
+            next_obs, dones, done = env.step(actions)
+
+            # Reward: BIG bonus for killing target (agent 1)
+            reward = 0.01  # Survival
+            for killer_idx, victim_idx, _ in env.kill_log:
+                if killer_idx == 0:
+                    if victim_idx == 1:  # Killed the target!
+                        reward += 10.0  # Huge bonus
+                        target_kills += 1
+                    else:
+                        reward += 2.0  # Normal kill
+            if dones[0]:
+                reward -= 3.0  # Death penalty (lower than normal - aggression encouraged)
+
+            if env.agents[0]['alive'] or dones[0]:
+                self.memory.append((obs[0], actions[0], reward, next_obs[0], dones[0]))
+                total_reward += reward
+
+            obs = next_obs
+            if done:
+                break
+
+        return total_reward, env.agents[0]['alive'], target_kills
+
+    def train_step(self):
+        if len(self.memory) < BATCH_SIZE:
+            return 0
+
+        batch = random.sample(self.memory, BATCH_SIZE)
+        states = torch.FloatTensor(np.array([b[0] for b in batch])).to(device)
+        actions = torch.LongTensor([b[1] for b in batch]).to(device)
+        rewards = torch.FloatTensor([b[2] for b in batch]).to(device)
+        next_states = torch.FloatTensor(np.array([b[3] for b in batch])).to(device)
+        dones = torch.FloatTensor([b[4] for b in batch]).to(device)
+
+        q = self.model(states).gather(1, actions.unsqueeze(1))
+        with torch.no_grad():
+            next_actions = self.model(next_states).argmax(1)
+            next_q = self.target(next_states).gather(1, next_actions.unsqueeze(1)).squeeze()
+            target_q = rewards + GAMMA * next_q * (1 - dones)
+
+        loss = nn.MSELoss()(q.squeeze(), target_q)
+        self.optimizer.zero_grad()
+        loss.backward()
+        torch.nn.utils.clip_grad_norm_(self.model.parameters(), 1.0)
+        self.optimizer.step()
+        return loss.item()
+
+    def update_target(self):
+        tau = 0.01
+        for tp, cp in zip(self.target.parameters(), self.model.parameters()):
+            tp.data.copy_(tau * cp.data + (1 - tau) * tp.data)
+
+    def train(self, episodes=500):
+        """Train the adversary."""
+        # Get clean target name for display
+        target_name = self.target_id.split('_')[0].capitalize()
+
+        console.print(Panel.fit(
+            f"[bold red]ADVERSARY TRAINING[/bold red]\n"
+            f"[dim]Hunting: {self.target_id}[/dim]",
+            border_style="red"
+        ))
+
+        total_target_kills = 0
+        recent_rewards = deque(maxlen=50)
+
+        with Progress(
+            SpinnerColumn(),
+            TextColumn("[bold red]{task.description}"),
+            BarColumn(bar_width=40),
+            TextColumn("[progress.percentage]{task.percentage:>3.0f}%"),
+            TimeElapsedColumn(),
+            console=console,
+        ) as progress:
+            task = progress.add_task("[red]Hunting...", total=episodes)
+
+            for ep in range(episodes):
+                reward, survived, target_kills = self.play_episode()
+                recent_rewards.append(reward)
+                total_target_kills += target_kills
+
+                for _ in range(2):
+                    self.train_step()
+
+                self.update_target()
+                self.epsilon = max(EPSILON_MIN, self.epsilon * EPSILON_DECAY)
+
+                avg_r = np.mean(recent_rewards) if recent_rewards else 0
+                progress.update(task, advance=1,
+                    description=f"[red]R:{avg_r:+.1f} Kills:{total_target_kills} e:{self.epsilon:.2f}")
+
+        # Save adversary
+        timestamp = datetime.now().strftime('%H%M%S')
+        new_id = f"{target_name.lower()}_hunter_{timestamp}"
+        weights = self.model.to_weights()
+
+        # Save locally
+        local_file = f"brain_{new_id}.json"
+        with open(local_file, 'w') as f:
+            json.dump(weights, f)
+        console.print(f"[green]Saved: {local_file}[/green]")
+
+        # Upload to pool
+        upload_to_pool(
+            weights,
+            genome_id=new_id,
+            name=f"{target_name}Hunter",
+            genome_type='adversary',
+            parent_id=self.base_id if self.base_id != 'random' else None,
+            generation=1
+        )
+
+        console.print(f"[green]Created adversary: {new_id} ({total_target_kills} target kills during training)[/green]")
+        return new_id, weights
+
+
 # ========== CULLING ==========
 def cull_weakest(rankings, keep_top=10):
     """Mark bottom performers as inactive. Never cull Gen 0 original player genomes."""
@@ -1137,7 +1315,36 @@ def main():
                 except Exception as e:
                     console.print(f"[red]Breeding failed: {e}[/red]")
 
-            # 7. Cull by hybrid fitness (keep top 10)
+            # 7. Spawn adversary for highest-fitness player clone
+            # Find player clones (source starts with "player:")
+            player_clones = []
+            if manifest:
+                for g in manifest['genomes']:
+                    if g.get('active') and g.get('source', '').startswith('player:'):
+                        perf = g.get('performance', {})
+                        player_clones.append({
+                            'id': g['id'],
+                            'name': g.get('name', g['id']),
+                            'fitness': perf.get('fitness', 100)
+                        })
+
+            if player_clones:
+                # Target the highest-fitness player clone
+                target = max(player_clones, key=lambda x: x['fitness'])
+                console.print(f"\n[red]Spawning adversary to hunt {target['name']} (fitness {target['fitness']})...[/red]")
+                try:
+                    # Use a strong genome as base for the hunter
+                    base_id = hybrid_rankings[0]['id'] if hybrid_rankings else None
+                    adversary = AdversaryTrainer(
+                        target_id=target['id'],
+                        base_genome_id=base_id,
+                        pool_genomes=[r['id'] for r in rankings]
+                    )
+                    adversary.train(episodes=300)
+                except Exception as e:
+                    console.print(f"[red]Adversary training failed: {e}[/red]")
+
+            # 8. Cull by hybrid fitness (keep top 10)
             console.print("\n[yellow]Culling weak performers (by hybrid fitness)...[/yellow]")
             culled = cull_weakest(hybrid_rankings, keep_top=10)
             if culled:
