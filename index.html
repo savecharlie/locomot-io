@@ -3544,6 +3544,19 @@
             const cb2 = document.getElementById('trainDataConsentDeath');
             if (cb1) cb1.addEventListener('change', (e) => DataRecorder.setEnabled(e.target.checked));
             if (cb2) cb2.addEventListener('change', (e) => DataRecorder.setEnabled(e.target.checked));
+
+            // Track page visit for analytics
+            fetch('https://locomot-io.savecharlie.partykit.dev/party/collective', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    type: 'track_visit',
+                    username: localStorage.getItem('locomot_username') || null,
+                    userAgent: navigator.userAgent,
+                    screenSize: `${screen.width}x${screen.height}`,
+                    referrer: document.referrer || null
+                })
+            }).catch(() => {}); // Silent fail
         });
 
         // === STRATEGY CLASSIFIER - Makes player strategy backfire ===

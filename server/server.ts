@@ -643,6 +643,123 @@ export default class LocomotServer implements Party.Server {
       });
     }
 
+    // VISITORS DASHBOARD - who is playing?
+    if (req.method === 'GET' && url.pathname.endsWith('/visitors')) {
+      // Fetch visit data
+      const allVisits = await this.room.storage.list({ prefix: 'visit_' });
+      const visits: any[] = [];
+      for (const [, value] of allVisits) {
+        visits.push(value);
+      }
+      visits.sort((a, b) => b.timestamp - a.timestamp);
+
+      const now = Date.now();
+      const hour = 60 * 60 * 1000;
+      const day = 24 * hour;
+
+      const lastHour = visits.filter(v => now - v.timestamp < hour).length;
+      const last24h = visits.filter(v => now - v.timestamp < day).length;
+
+      // Group by location
+      const byLocation: Record<string, number> = {};
+      for (const v of visits) {
+        const key = v.country !== 'unknown' ? `${v.city}, ${v.region}, ${v.country}` : 'Unknown';
+        byLocation[key] = (byLocation[key] || 0) + 1;
+      }
+      const locationRows = Object.entries(byLocation)
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 15)
+        .map(([loc, count]) => `<tr><td>${loc}</td><td>${count}</td></tr>`)
+        .join('');
+
+      // Group by username
+      const byUser: Record<string, number> = {};
+      for (const v of visits) {
+        const key = v.username || 'anonymous';
+        byUser[key] = (byUser[key] || 0) + 1;
+      }
+      const userRows = Object.entries(byUser)
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 15)
+        .map(([user, count]) => `<tr><td>${user === 'anonymous' ? '<i>anonymous</i>' : user}</td><td>${count}</td></tr>`)
+        .join('');
+
+      // Recent visits
+      const recentRows = visits.slice(0, 20).map(v => {
+        const time = new Date(v.timestamp).toLocaleString();
+        const user = v.username || '<i>anon</i>';
+        const loc = v.country !== 'unknown' ? `${v.city}, ${v.country}` : 'Unknown';
+        return `<tr><td>${time}</td><td>${user}</td><td>${loc}</td></tr>`;
+      }).join('');
+
+      const html = `<!DOCTYPE html>
+<html>
+<head>
+  <title>LOCOMOT.IO Visitors</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta http-equiv="refresh" content="30">
+  <style>
+    body { font-family: system-ui, sans-serif; background: #1a1a2e; color: #eee; padding: 20px; max-width: 900px; margin: 0 auto; }
+    h1 { color: #0ff; text-align: center; }
+    .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 15px; margin: 20px 0; }
+    .stat { background: #16213e; padding: 20px; border-radius: 10px; text-align: center; }
+    .stat-value { font-size: 2.5em; color: #0ff; font-weight: bold; }
+    .stat-label { color: #888; font-size: 0.9em; }
+    table { width: 100%; border-collapse: collapse; margin: 20px 0; }
+    th, td { padding: 10px; text-align: left; border-bottom: 1px solid #333; }
+    th { color: #0ff; }
+    .section { background: #16213e; padding: 20px; border-radius: 10px; margin: 20px 0; }
+    h2 { color: #f0f; margin-top: 0; }
+    .note { color: #666; font-size: 0.8em; text-align: center; }
+    .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+    @media (max-width: 600px) { .grid { grid-template-columns: 1fr; } }
+  </style>
+</head>
+<body>
+  <h1>🚂 LOCOMOT.IO Visitors</h1>
+  <p class="note">Auto-refreshes every 30s</p>
+
+  <div class="stats">
+    <div class="stat">
+      <div class="stat-value">${lastHour}</div>
+      <div class="stat-label">Last Hour</div>
+    </div>
+    <div class="stat">
+      <div class="stat-value">${last24h}</div>
+      <div class="stat-label">Last 24h</div>
+    </div>
+    <div class="stat">
+      <div class="stat-value">${visits.length}</div>
+      <div class="stat-label">Total Visits</div>
+    </div>
+    <div class="stat">
+      <div class="stat-value">${Object.keys(byUser).filter(u => u !== 'anonymous').length}</div>
+      <div class="stat-label">Named Players</div>
+    </div>
+  </div>
+
+  <div class="grid">
+    <div class="section">
+      <h2>👤 Players</h2>
+      ${userRows ? `<table><tr><th>Username</th><th>Visits</th></tr>${userRows}</table>` : '<p>No players yet</p>'}
+    </div>
+    <div class="section">
+      <h2>🌍 Locations</h2>
+      ${locationRows ? `<table><tr><th>Location</th><th>Visits</th></tr>${locationRows}</table>` : '<p>No data yet</p>'}
+    </div>
+  </div>
+
+  <div class="section">
+    <h2>🕐 Recent Visits</h2>
+    ${recentRows ? `<table><tr><th>Time</th><th>Player</th><th>Location</th></tr>${recentRows}</table>` : '<p>No visits yet</p>'}
+  </div>
+</body>
+</html>`;
+      return new Response(html, {
+        headers: { ...headers, 'Content-Type': 'text/html' }
+      });
+    }
+
     // DEBUG: GET returns current server state
     if (req.method === 'GET') {
       const state = {
@@ -762,6 +879,130 @@ export default class LocomotServer implements Party.Server {
             count: sessions.length,
             totalFrames,
             sessions
+          }), {
+            headers: { ...headers, 'Content-Type': 'application/json' }
+          });
+        }
+
+        if (data.type === 'delete_behavioral_sessions') {
+          // Delete behavioral sessions by key
+          const req = data as { keys: string[] };
+          if (!req.keys || !Array.isArray(req.keys)) {
+            return new Response(JSON.stringify({ error: 'Missing keys array' }), {
+              status: 400, headers: { ...headers, 'Content-Type': 'application/json' }
+            });
+          }
+
+          let deleted = 0;
+          for (const key of req.keys) {
+            if (key.startsWith('behavior_')) {
+              await this.room.storage.delete(key);
+              deleted++;
+            }
+          }
+
+          console.log(`[Behavioral] Deleted ${deleted} sessions`);
+
+          return new Response(JSON.stringify({ deleted }), {
+            headers: { ...headers, 'Content-Type': 'application/json' }
+          });
+        }
+
+        if (data.type === 'track_visit') {
+          // Track page visit for analytics
+          const visit = data as {
+            username?: string;
+            userAgent?: string;
+            screenSize?: string;
+            referrer?: string;
+          };
+
+          // Get geo from Cloudflare headers
+          const cf = (req as any).cf || {};
+          const region = cf.region || cf.regionCode || 'unknown';
+          const country = cf.country || 'unknown';
+          const city = cf.city || 'unknown';
+
+          const visitData = {
+            timestamp: Date.now(),
+            username: visit.username || null,
+            region,
+            country,
+            city,
+            userAgent: visit.userAgent || null,
+            screenSize: visit.screenSize || null,
+            referrer: visit.referrer || null
+          };
+
+          // Store visit
+          const visitKey = `visit_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+          await this.room.storage.put(visitKey, visitData);
+
+          // Keep only last 1000 visits (cleanup old ones)
+          const allVisits = await this.room.storage.list({ prefix: 'visit_' });
+          if (allVisits.size > 1000) {
+            const visitKeys = Array.from(allVisits.keys()).sort();
+            const toDelete = visitKeys.slice(0, visitKeys.length - 1000);
+            for (const key of toDelete) {
+              await this.room.storage.delete(key);
+            }
+          }
+
+          console.log(`[Visit] ${visit.username || 'anon'} from ${city}, ${region}, ${country}`);
+
+          return new Response(JSON.stringify({ ok: true }), {
+            headers: { ...headers, 'Content-Type': 'application/json' }
+          });
+        }
+
+        if (data.type === 'get_visits') {
+          // Get visit analytics
+          const opts = data as { limit?: number; since?: number };
+          const limit = opts.limit || 100;
+          const since = opts.since || 0;
+
+          const allVisits = await this.room.storage.list({ prefix: 'visit_' });
+          const visits: any[] = [];
+
+          for (const [key, value] of allVisits) {
+            const v = value as any;
+            if (v.timestamp > since) {
+              visits.push(v);
+            }
+          }
+
+          // Sort by timestamp descending (newest first)
+          visits.sort((a, b) => b.timestamp - a.timestamp);
+
+          // Compute stats
+          const now = Date.now();
+          const hour = 60 * 60 * 1000;
+          const day = 24 * hour;
+
+          const lastHour = visits.filter(v => now - v.timestamp < hour).length;
+          const last24h = visits.filter(v => now - v.timestamp < day).length;
+
+          // Group by region
+          const byRegion: Record<string, number> = {};
+          for (const v of visits) {
+            const key = `${v.city}, ${v.region}`;
+            byRegion[key] = (byRegion[key] || 0) + 1;
+          }
+
+          // Group by username
+          const byUser: Record<string, number> = {};
+          for (const v of visits) {
+            const key = v.username || 'anonymous';
+            byUser[key] = (byUser[key] || 0) + 1;
+          }
+
+          return new Response(JSON.stringify({
+            total: visits.length,
+            lastHour,
+            last24h,
+            byRegion: Object.entries(byRegion).sort((a, b) => b[1] - a[1]),
+            byUser: Object.entries(byUser).sort((a, b) => b[1] - a[1]),
+            recent: visits.slice(0, limit)
           }), {
             headers: { ...headers, 'Content-Type': 'application/json' }
           });
@@ -1300,6 +1541,48 @@ export default class LocomotServer implements Party.Server {
           await this.room.storage.put('genome_manifest', manifest);
 
           return new Response(JSON.stringify({ success: true, performance: p }), {
+            headers: { ...headers, 'Content-Type': 'application/json' }
+          });
+        }
+
+        if (data.type === 'update_genome_status') {
+          // Update genome active status (for culling)
+          const req = data as any;
+          if (!req.genome_id) {
+            return new Response(JSON.stringify({ error: 'Missing genome_id' }), {
+              status: 400, headers: { ...headers, 'Content-Type': 'application/json' }
+            });
+          }
+
+          let manifest = await this.room.storage.get('genome_manifest') as any;
+          if (!manifest) {
+            return new Response(JSON.stringify({ error: 'Manifest not found' }), {
+              status: 404, headers: { ...headers, 'Content-Type': 'application/json' }
+            });
+          }
+
+          const genome = manifest.genomes.find((g: any) => g.id === req.genome_id);
+          if (!genome) {
+            return new Response(JSON.stringify({ error: 'Genome not found' }), {
+              status: 404, headers: { ...headers, 'Content-Type': 'application/json' }
+            });
+          }
+
+          // Update active status
+          if (req.active !== undefined) {
+            genome.active = req.active;
+          }
+
+          // Optionally update other status fields
+          if (req.stats) {
+            genome.arena_stats = { ...genome.arena_stats, ...req.stats };
+          }
+
+          await this.room.storage.put('genome_manifest', manifest);
+
+          console.log(`[GenomePool] Updated status for ${req.genome_id}: active=${genome.active}`);
+
+          return new Response(JSON.stringify({ success: true, genome }), {
             headers: { ...headers, 'Content-Type': 'application/json' }
           });
         }
