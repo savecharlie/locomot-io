@@ -2268,9 +2268,22 @@
             if (!snake[0]) return; // No player yet
             namingInProgress = true;
 
-            // Sort by distance to player (closest first)
+            // Sort by: 1) genome bots first (leaderboard), 2) distance to player
             const px = snake[0].x, py = snake[0].y;
             namingQueue.sort((a, b) => {
+                // Genome bots get priority (they're on the leaderboard)
+                const aHasGenome = a.genome ? 1 : 0;
+                const bHasGenome = b.genome ? 1 : 0;
+                if (aHasGenome !== bHasGenome) return bHasGenome - aHasGenome;
+
+                // Among genome bots, higher fitness first
+                if (aHasGenome && bHasGenome) {
+                    const aFit = genomeRegistry.manifest?.genomes.find(g => g.id === a.genome)?.performance?.fitness || 100;
+                    const bFit = genomeRegistry.manifest?.genomes.find(g => g.id === b.genome)?.performance?.fitness || 100;
+                    if (aFit !== bFit) return bFit - aFit;
+                }
+
+                // Then by distance (closest first)
                 const aDist = a.segments?.[0] ? Math.abs(a.segments[0].x - px) + Math.abs(a.segments[0].y - py) : 9999;
                 const bDist = b.segments?.[0] ? Math.abs(b.segments[0].x - px) + Math.abs(b.segments[0].y - py) : 9999;
                 return aDist - bDist;
