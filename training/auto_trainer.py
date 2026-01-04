@@ -190,6 +190,60 @@ def train_player_bot(player_id, sessions):
     return success
 
 
+def retrain_hunters_for_player(player_id, manifest):
+    """Retrain any hunters that target this player's bot."""
+    if not manifest:
+        return
+
+    # Find the player's bot ID
+    player_bot_id = None
+    for g in manifest.get('genomes', []):
+        if g.get('source') == f'player:{player_id}':
+            player_bot_id = g['id']
+            break
+
+    if not player_bot_id:
+        return
+
+    # Find hunters targeting this player (by name pattern or source)
+    player_name = player_id.split('_')[0].lower()
+    hunters_to_retrain = []
+
+    for g in manifest.get('genomes', []):
+        gid = g['id'].lower()
+        # Match hunters by name pattern (e.g., ivy_hunter, compy_hunter)
+        if f'{player_name}_hunter' in gid or f'{player_name}hunter' in gid:
+            hunters_to_retrain.append(g)
+
+    if not hunters_to_retrain:
+        return
+
+    console.print(f"[red]🎯 Retraining {len(hunters_to_retrain)} hunter(s) for updated {player_id}Bot...[/red]")
+
+    # Import AdversaryTrainer from arena
+    try:
+        import sys
+        sys.path.insert(0, '/home/ivy/locomot-io/training')
+        from arena import AdversaryTrainer
+
+        pool_ids = [g['id'] for g in manifest['genomes'] if g.get('active')]
+
+        for hunter in hunters_to_retrain:
+            console.print(f"[red]  Retraining {hunter['name']}...[/red]")
+            try:
+                adversary = AdversaryTrainer(
+                    target_id=player_bot_id,
+                    base_genome_id=hunter['id'],  # Start from existing hunter
+                    pool_genomes=pool_ids
+                )
+                adversary.train(episodes=300)
+            except Exception as e:
+                console.print(f"[red]  Failed: {e}[/red]")
+
+    except Exception as e:
+        console.print(f"[red]Hunter retrain failed: {e}[/red]")
+
+
 def run_daemon():
     """Main daemon loop."""
     console.print("[bold magenta]LOCOMOT.IO Auto-Trainer Daemon[/bold magenta]")
@@ -251,6 +305,9 @@ def run_daemon():
                     if train_player_bot(player_id, player_sessions):
                         trained_top5[player_id] = top5_hash
                         actions_taken.append(f"🏆 {player_id}Bot improved!")
+
+                        # Retrain any hunters targeting this player
+                        retrain_hunters_for_player(player_id, manifest)
 
             # Summary
             if actions_taken:
