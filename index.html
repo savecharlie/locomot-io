@@ -5383,25 +5383,26 @@
                         e.dir = newDir;
                         e.aimAngle = Math.atan2(e.dir.y, e.dir.x); // AI aim follows movement too
 
-                        // Move
-                        const prevPositions = e.segments.map(s => ({ x: s.x, y: s.y }));
-                        head.x = (head.x + e.dir.x + WORLD_COLS) % WORLD_COLS;
-                        head.y = (head.y + e.dir.y + WORLD_ROWS) % WORLD_ROWS;
-                        for (let j = 1; j < e.segments.length; j++) {
-                            const oldX = e.segments[j].x;
-                            const oldY = e.segments[j].y;
-                            e.segments[j].x = prevPositions[j - 1].x;
-                            e.segments[j].y = prevPositions[j - 1].y;
+                        // Move - shift segments from tail to head (no array allocation!)
+                        const headOldX = head.x, headOldY = head.y;
+                        for (let j = e.segments.length - 1; j >= 1; j--) {
+                            const seg = e.segments[j];
+                            const prev = e.segments[j - 1];
+                            const oldX = seg.x, oldY = seg.y;
+                            seg.x = prev.x;
+                            seg.y = prev.y;
 
                             // Turn sparks for enemy trains
-                            const newDx = e.segments[j].x - oldX;
-                            const newDy = e.segments[j].y - oldY;
-                            const oldDir = e.segments[j].lastDir || { x: newDx, y: newDy };
+                            const newDx = seg.x - oldX;
+                            const newDy = seg.y - oldY;
+                            const oldDir = seg.lastDir || { x: newDx, y: newDy };
                             if ((oldDir.x !== newDx || oldDir.y !== newDy) && (oldDir.x !== 0 || oldDir.y !== 0)) {
                                 emitTurnSparks(oldX, oldY, oldDir, { x: newDx, y: newDy }, e.color);
                             }
-                            e.segments[j].lastDir = { x: newDx, y: newDy };
+                            seg.lastDir = { x: newDx, y: newDy };
                         }
+                        head.x = (headOldX + e.dir.x + WORLD_COLS) % WORLD_COLS;
+                        head.y = (headOldY + e.dir.y + WORLD_ROWS) % WORLD_ROWS;
                         
                         // Pickup collection
                         for (let pi = pickups.length - 1; pi >= 0; pi--) {
