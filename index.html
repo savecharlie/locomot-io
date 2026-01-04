@@ -2249,6 +2249,9 @@
         
         let cameraX = 0, cameraY = 0, targetCameraX = 0, targetCameraY = 0;
         let cameraZoom = 2, targetZoom = 2; // Start zoomed in
+        // Seamless wrap tracking - camera offset accumulates when player wraps
+        let lastHeadX = 0, lastHeadY = 0;
+        let cameraWrapOffsetX = 0, cameraWrapOffsetY = 0;
         let gameState = 'start';
         let currentMVP = null; // Track most interesting player for spectating
         let mvpScore = 0;
@@ -5640,6 +5643,10 @@
             isSpectating = false;
             SpawnDirector.reset(); // Reset intensity for fresh start
 
+            // Reset camera wrap offsets for fresh spawn
+            cameraWrapOffsetX = 0;
+            cameraWrapOffsetY = 0;
+
             // Find safe spawn location
             let spawnX, spawnY, attempts = 0;
             do {
@@ -5684,6 +5691,7 @@
             cameraZoom = 2; targetZoom = 2;
             cameraX = spawnX * GRID - canvas.width / 2 / cameraZoom;
             cameraY = spawnY * GRID - canvas.height / 2 / cameraZoom;
+            lastHeadX = spawnX; lastHeadY = spawnY; // Reset wrap tracking
             dirQueue = [];
 
             // Reset score on death (io game style)
@@ -7711,6 +7719,17 @@
 
             if (!head || head.x === undefined) return; // Safety check
 
+            // Detect world wrap and adjust camera offset for seamless scrolling
+            const dx = head.x - lastHeadX;
+            const dy = head.y - lastHeadY;
+            // If position jumped by more than half the world, it wrapped
+            if (dx > WORLD_COLS / 2) cameraWrapOffsetX -= WORLD_COLS; // Wrapped left
+            if (dx < -WORLD_COLS / 2) cameraWrapOffsetX += WORLD_COLS; // Wrapped right
+            if (dy > WORLD_ROWS / 2) cameraWrapOffsetY -= WORLD_ROWS; // Wrapped up
+            if (dy < -WORLD_ROWS / 2) cameraWrapOffsetY += WORLD_ROWS; // Wrapped down
+            lastHeadX = head.x;
+            lastHeadY = head.y;
+
             // Calculate bounding box of entire snake
             let minX = head.x, maxX = head.x, minY = head.y, maxY = head.y;
             for (const seg of segments) {
@@ -7731,9 +7750,11 @@
             const minZoom = 0.5, maxZoom = 2.5;
             targetZoom = Math.max(minZoom, Math.min(maxZoom, Math.min(zoomToFitX, zoomToFitY)));
 
-            // Center camera on head
-            targetCameraX = head.x * GRID + GRID/2 - canvas.width/2/targetZoom;
-            targetCameraY = head.y * GRID + GRID/2 - canvas.height/2/targetZoom;
+            // Center camera on head using virtual position (includes wrap offset)
+            const virtualHeadX = head.x + cameraWrapOffsetX;
+            const virtualHeadY = head.y + cameraWrapOffsetY;
+            targetCameraX = virtualHeadX * GRID + GRID/2 - canvas.width/2/targetZoom;
+            targetCameraY = virtualHeadY * GRID + GRID/2 - canvas.height/2/targetZoom;
 
             // Smooth camera movement
             cameraX += (targetCameraX - cameraX) * cameraLerpFactor;
@@ -8134,23 +8155,42 @@
             ctx.restore();
         }
 
+        // Find the best wrap offset to draw an entity closest to camera
+        function getBestWrapOffset(entityX, entityY) {
+            const camGridX = cameraX / GRID;
+            const camGridY = cameraY / GRID;
+            const viewGridW = canvas.width / cameraZoom / GRID;
+            const viewGridH = canvas.height / cameraZoom / GRID;
+            const camCenterX = camGridX + viewGridW / 2;
+            const camCenterY = camGridY + viewGridH / 2;
+
+            // Find which copy of the entity is closest to camera center
+            let bestOffsetX = 0, bestOffsetY = 0;
+            let bestDist = Infinity;
+
+            for (const ox of [-WORLD_COLS, 0, WORLD_COLS]) {
+                for (const oy of [-WORLD_ROWS, 0, WORLD_ROWS]) {
+                    const testX = entityX + ox;
+                    const testY = entityY + oy;
+                    const dist = Math.abs(testX - camCenterX) + Math.abs(testY - camCenterY);
+                    if (dist < bestDist) {
+                        bestDist = dist;
+                        bestOffsetX = ox;
+                        bestOffsetY = oy;
+                    }
+                }
+            }
+            return { x: bestOffsetX, y: bestOffsetY };
+        }
+
         function drawEnemies() {
             for (const e of enemies) {
                 if (e.segments.length === 0) continue;
 
-                // Get wrap offsets for seamless world wrapping
+                // Find best wrap offset to draw this enemy closest to camera
                 const head = e.segments[0];
-                const wrapOffsets = [{ x: 0, y: 0 }]; // Always draw at real position
-
-                // Add wrapped positions if near edges
-                if (head.x < 15) wrapOffsets.push({ x: WORLD_COLS, y: 0 });
-                if (head.x > WORLD_COLS - 15) wrapOffsets.push({ x: -WORLD_COLS, y: 0 });
-                if (head.y < 15) wrapOffsets.push({ x: 0, y: WORLD_ROWS });
-                if (head.y > WORLD_ROWS - 15) wrapOffsets.push({ x: 0, y: -WORLD_ROWS });
-
-                for (const offset of wrapOffsets) {
-                    drawEnemyAt(e, offset.x, offset.y);
-                }
+                const offset = getBestWrapOffset(head.x, head.y);
+                drawEnemyAt(e, offset.x, offset.y);
             }
         }
 
@@ -8243,33 +8283,22 @@
             ctx.globalAlpha = 0.5; // Translucent bullets
             const allProjectiles = [...projectiles, ...enemyProjectiles];
             for (const p of allProjectiles) {
-                // Get wrap offsets for seamless world wrapping
-                const wrapOffsets = [{ x: 0, y: 0 }];
-                if (p.x < GRID * 15) wrapOffsets.push({ x: WORLD_WIDTH, y: 0 });
-                if (p.x > WORLD_WIDTH - GRID * 15) wrapOffsets.push({ x: -WORLD_WIDTH, y: 0 });
-                if (p.y < GRID * 15) wrapOffsets.push({ x: 0, y: WORLD_HEIGHT });
-                if (p.y > WORLD_HEIGHT - GRID * 15) wrapOffsets.push({ x: 0, y: -WORLD_HEIGHT });
-
-                for (const offset of wrapOffsets) {
-                    ctx.fillStyle = p.color;
-                    const s = p.size * 2;
-                    ctx.fillRect(Math.floor(p.x + offset.x - s/2), Math.floor(p.y + offset.y - s/2), s, s);
-                }
+                // Find best wrap offset (uses pixel coords, convert to grid)
+                const offset = getBestWrapOffset(p.x / GRID, p.y / GRID);
+                ctx.fillStyle = p.color;
+                const s = p.size * 2;
+                const drawX = p.x + offset.x * GRID;
+                const drawY = p.y + offset.y * GRID;
+                ctx.fillRect(Math.floor(drawX - s/2), Math.floor(drawY - s/2), s, s);
             }
             ctx.globalAlpha = 1;
         }
         
         function drawPickups(time) {
             for (const p of pickups) {
-                // Get wrap offsets for seamless world wrapping
-                const wrapOffsets = [{ x: 0, y: 0 }];
-                if (p.x < GRID * 15) wrapOffsets.push({ x: WORLD_WIDTH, y: 0 });
-                if (p.x > WORLD_WIDTH - GRID * 15) wrapOffsets.push({ x: -WORLD_WIDTH, y: 0 });
-                if (p.y < GRID * 15) wrapOffsets.push({ x: 0, y: WORLD_HEIGHT });
-                if (p.y > WORLD_HEIGHT - GRID * 15) wrapOffsets.push({ x: 0, y: -WORLD_HEIGHT });
-
-                for (const offset of wrapOffsets) {
-                const x = p.x + offset.x, y = p.y + offset.y;
+                // Find best wrap offset for this pickup (uses pixel coords, convert to grid)
+                const offset = getBestWrapOffset(p.x / GRID, p.y / GRID);
+                const x = p.x + offset.x * GRID, y = p.y + offset.y * GRID;
                 const isOwnRecentDrop = p.droppedBy === 'player' && p.droppedAt && Date.now() - p.droppedAt < PICKUP_COOLOFF_MS;
 
                 if (p.isPowerup) {
@@ -8312,21 +8341,14 @@
                     ctx.fillRect(x - 1, y, 1, 1); ctx.fillRect(x + 1, y, 1, 1);
                     ctx.globalAlpha = 1;
                 }
-                } // end wrapOffsets loop
             }
         }
-        
+
         function drawParticles() {
             for (const p of particles) {
-                // Get wrap offsets for seamless world wrapping
-                const wrapOffsets = [{ x: 0, y: 0 }];
-                if (p.x < GRID * 15) wrapOffsets.push({ x: WORLD_WIDTH, y: 0 });
-                if (p.x > WORLD_WIDTH - GRID * 15) wrapOffsets.push({ x: -WORLD_WIDTH, y: 0 });
-                if (p.y < GRID * 15) wrapOffsets.push({ x: 0, y: WORLD_HEIGHT });
-                if (p.y > WORLD_HEIGHT - GRID * 15) wrapOffsets.push({ x: 0, y: -WORLD_HEIGHT });
-
-                for (const wOff of wrapOffsets) {
-                const px = p.x + wOff.x, py = p.y + wOff.y;
+                // Find best wrap offset (uses pixel coords, convert to grid)
+                const wrapOffset = getBestWrapOffset(p.x / GRID, p.y / GRID);
+                const px = p.x + wrapOffset.x * GRID, py = p.y + wrapOffset.y * GRID;
 
                 if (p.isAoe) {
                     // Triple ring AOE - compact fading dots
@@ -8346,10 +8368,10 @@
                     for (const ring of rings) {
                         const numDots = 10; // Fewer dots
                         const angleStep = (Math.PI * 2) / numDots;
-                        const offset = ring.r * 0.1;
+                        const ringOffset = ring.r * 0.1;
 
                         for (let i = 0; i < numDots; i++) {
-                            const angle = i * angleStep + offset;
+                            const angle = i * angleStep + ringOffset;
                             const dx = Math.cos(angle) * ring.r;
                             const dy = Math.sin(angle) * ring.r;
                             const x = Math.floor(px + dx);
@@ -8370,8 +8392,12 @@
                     const sparkY = Math.floor(py / sz) * sz;
                     ctx.fillRect(sparkX - sz/2, sparkY - sz/2, sz, sz);
                     ctx.globalAlpha = 1;
-                } else { ctx.globalAlpha = p.life / 30; ctx.fillStyle = p.color; ctx.fillRect(px - 2, py - 2, 4, 4); ctx.globalAlpha = 1; }
-                } // end wrapOffsets loop
+                } else {
+                    ctx.globalAlpha = p.life / 30;
+                    ctx.fillStyle = p.color;
+                    ctx.fillRect(px - 2, py - 2, 4, 4);
+                    ctx.globalAlpha = 1;
+                }
             }
         }
         
