@@ -1397,22 +1397,29 @@ export default class LocomotServer implements Party.Server {
         }
 
         if (data.type === 'register_genome') {
-          // Register a genome in the manifest (parts already stored)
+          // Register a genome in the manifest
+          // Supports two modes:
+          // 1. Self-hosted: weightsUrl provided, weights stored externally
+          // 2. PartyKit-hosted: keys provided, weights stored in parts
           const reg = data as any;
-          if (!reg.genome_id || !reg.keys) {
-            return new Response(JSON.stringify({ error: 'Invalid registration' }), {
+          const genomeId = reg.genome_id || reg.genomeId;
+
+          if (!genomeId) {
+            return new Response(JSON.stringify({ error: 'Missing genome id' }), {
               status: 400, headers: { ...headers, 'Content-Type': 'application/json' }
             });
           }
 
-          // Verify all parts exist
-          for (const key of reg.keys) {
-            const partKey = `genome_part_${reg.genome_id}_${key.replace(/\./g, '_')}`;
-            const exists = await this.room.storage.get(partKey);
-            if (!exists) {
-              return new Response(JSON.stringify({ error: `Missing part: ${key}` }), {
-                status: 400, headers: { ...headers, 'Content-Type': 'application/json' }
-              });
+          // If no weightsUrl, require keys and verify parts exist
+          if (!reg.weightsUrl && reg.keys) {
+            for (const key of reg.keys) {
+              const partKey = `genome_part_${genomeId}_${key.replace(/\./g, '_')}`;
+              const exists = await this.room.storage.get(partKey);
+              if (!exists) {
+                return new Response(JSON.stringify({ error: `Missing part: ${key}` }), {
+                  status: 400, headers: { ...headers, 'Content-Type': 'application/json' }
+                });
+              }
             }
           }
 
@@ -1420,18 +1427,20 @@ export default class LocomotServer implements Party.Server {
           let manifest = await this.room.storage.get('genome_manifest') as any;
           if (!manifest) manifest = { genomes: [], max_active: 15, version: 1 };
 
-          const existing = manifest.genomes.findIndex((g: any) => g.id === reg.genome_id);
+          const existing = manifest.genomes.findIndex((g: any) => g.id === genomeId);
           const genomeEntry = {
-            id: reg.genome_id,
+            id: genomeId,
             type: reg.genome_type || 'behavioral',
-            name: reg.name || reg.genome_id,
+            name: reg.name || genomeId,
             source: reg.source || 'unknown',
-            keys: reg.keys,  // Store which keys this genome has
-            parents: reg.parents || [],  // Parent genome IDs for bred genomes
-            generation: reg.generation || 0,  // Generation number (0 = original player)
+            weightsUrl: reg.weightsUrl || null,  // URL to external weights (self-hosted)
+            keys: reg.keys || null,  // Keys for PartyKit-hosted parts
+            parents: reg.parents || [],
+            generation: reg.generation || 0,
+            trained: reg.trained || 'server',  // 'client' or 'server'
             created: new Date().toISOString(),
             performance: { games: 0, avg_score: 0, avg_survival: 0, win_rate: 0, fitness: 100, kills: 0, player_kills: 0, deaths: 0 },
-            active: true  // Always active - culling handles cleanup
+            active: true
           };
 
           if (existing >= 0) {
@@ -1443,11 +1452,11 @@ export default class LocomotServer implements Party.Server {
           manifest.version++;
           await this.room.storage.put('genome_manifest', manifest);
 
-          console.log(`[GenomePool] Registered genome: ${reg.genome_id}`);
+          console.log(`[GenomePool] Registered genome: ${genomeId} (${reg.weightsUrl ? 'self-hosted' : 'partykit'})`);
 
           return new Response(JSON.stringify({
             success: true,
-            id: reg.genome_id,
+            id: genomeId,
             active: genomeEntry.active
           }), {
             headers: { ...headers, 'Content-Type': 'application/json' }

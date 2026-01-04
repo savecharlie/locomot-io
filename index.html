@@ -514,17 +514,18 @@
                 this.loading.add(genomeId);
                 try {
                     let data;
-                    if (url) {
-                        // Load from local file
-                        const response = await fetch(url);
+                    const genomeInfo = this.manifest?.genomes.find(g => g.id === genomeId);
+
+                    // Check for weightsUrl (self-hosted) first
+                    const weightsUrl = url || genomeInfo?.weightsUrl;
+
+                    if (weightsUrl) {
+                        // Load from URL (self-hosted or local file)
+                        console.log('[GenomeRegistry] Loading from URL:', weightsUrl);
+                        const response = await fetch(weightsUrl);
                         data = await response.json();
-                    } else {
-                        // Load from server parts
-                        const genomeInfo = this.manifest?.genomes.find(g => g.id === genomeId);
-                        if (!genomeInfo || !genomeInfo.keys) {
-                            console.error('[GenomeRegistry] No keys info for', genomeId);
-                            return;
-                        }
+                    } else if (genomeInfo?.keys) {
+                        // Load from PartyKit server parts (legacy)
 
                         data = {};
                         const baseKeys = new Set();
@@ -574,6 +575,9 @@
                                 data[baseKey] = (await partResp.json()).data;
                             }
                         }
+                    } else {
+                        console.error('[GenomeRegistry] No weightsUrl or keys for', genomeId);
+                        return;
                     }
                     if (data && data['net.0.weight']) {
                         this.brains.set(genomeId, new NeuralNetwork(data));
@@ -4156,45 +4160,44 @@
                 }
             },
 
-            // Upload weights to server
+            // Upload weights to self-hosted server
             async uploadWeights(weights, username) {
                 const botId = `${username.toLowerCase()}_${Date.now()}`;
                 const botName = `${username}Bot`;
+                const botsServerUrl = 'https://bots.locomot.io';
 
-                console.log('[BOT_TRAINER] Uploading weights as:', botId);
+                console.log('[BOT_TRAINER] Uploading weights to self-hosted:', botId);
 
                 try {
-                    // Convert weights to JSON string and split into chunks
-                    const weightsJson = JSON.stringify(weights);
-                    const chunkSize = 50000; // 50KB chunks
-                    const chunks = [];
-                    for (let i = 0; i < weightsJson.length; i += chunkSize) {
-                        chunks.push(weightsJson.slice(i, i + chunkSize));
+                    // Upload weights to Ivy's server
+                    const uploadResponse = await fetch(`${botsServerUrl}/bots`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ id: botId, weights })
+                    });
+
+                    if (!uploadResponse.ok) {
+                        throw new Error(`Upload to bots server failed: ${uploadResponse.status}`);
                     }
 
-                    // Upload each chunk
-                    for (let i = 0; i < chunks.length; i++) {
-                        const response = await fetch('https://locomot-io.savecharlie.partykit.dev/party/collective', {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({
-                                type: 'store_genome_part',
-                                genomeId: botId,
-                                partIndex: i,
-                                totalParts: chunks.length,
-                                data: chunks[i],
-                                metadata: i === 0 ? {
-                                    name: botName,
-                                    source: `player:${username}`,
-                                    trained: 'client',
-                                    timestamp: Date.now()
-                                } : undefined
-                            })
-                        });
+                    console.log('[BOT_TRAINER] Weights uploaded to bots.locomot.io');
 
-                        if (!response.ok) {
-                            throw new Error(`Upload failed: ${response.status}`);
-                        }
+                    // Register in PartyKit manifest (metadata only, with weightsUrl)
+                    const registerResponse = await fetch('https://locomot-io.savecharlie.partykit.dev/party/collective', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            type: 'register_genome',
+                            genomeId: botId,
+                            name: botName,
+                            source: `player:${username}`,
+                            weightsUrl: `${botsServerUrl}/bots/${botId}.json`,
+                            trained: 'client'
+                        })
+                    });
+
+                    if (!registerResponse.ok) {
+                        console.warn('[BOT_TRAINER] Manifest registration failed, but weights are saved');
                     }
 
                     console.log('[BOT_TRAINER] Upload complete!');
