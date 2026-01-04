@@ -4864,7 +4864,7 @@
                 let simX = headX;
                 let simY = headY;
                 let simDir = directions[d];
-                // No need to copy segments - we only read from them, never modify
+                let simSegments = segments.map(s => ({x: s.x, y: s.y}));
                 let alive = true;
                 let foodCollected = 0;
                 let score = 0;
@@ -4881,8 +4881,8 @@
                     if (simY < 0) simY = WORLD_ROWS - 1;
                     if (simY >= WORLD_ROWS) simY = 0;
 
-                    // Check self collision (use original segments - read only)
-                    for (const seg of segments) {
+                    // Check self collision
+                    for (const seg of simSegments) {
                         if (seg.x === simX && seg.y === simY) {
                             alive = false;
                             score -= 100; // Death is very bad
