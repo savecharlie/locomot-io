@@ -6358,11 +6358,13 @@
                                     }
                                 } else if (si > 0 && j > 0) {
                                     seg.hp -= 30;
+                                    if (e.genome) genomeRegistry.reportFitnessEvent(e.genome, 'damaged_by_player');
                                     // Only damage each player segment once per frame total (not per enemy)
                                     // Reduced damage during grace period
                                     if (!playerSegmentsDamagedThisFrame.has(j)) {
                                         const dmg = invincibleTimer > -2000 ? e.damage * 0.3 : e.damage;
                                         ps.hp -= dmg;
+                                        if (e.genome) genomeRegistry.reportFitnessEvent(e.genome, 'damage_player');
                                         playerSegmentsDamagedThisFrame.add(j);
                                         haptic('heavy');
                                     }
@@ -6463,6 +6465,7 @@
                 for (let j = e.segments.length - 1; j >= 0; j--) {
                     if (e.segments[j].hp <= 0) {
                         const seg = e.segments[j];
+                        if (e.genome) genomeRegistry.reportFitnessEvent(e.genome, 'lost_segment');
                         score += 10; waveKills++;
                         // Track segment kills for strategy classifier
                         strategyClassifier.onKill(1); // Single segment kill
@@ -6544,6 +6547,7 @@
                                 // Reduced damage during 2 second grace period
                                 const dmg = invincibleTimer > -2000 ? p.damage * 0.3 : p.damage;
                                 seg.hp -= dmg; p.life = 0; haptic('medium');
+                                if (p.owner?.genome) genomeRegistry.reportFitnessEvent(p.owner.genome, 'damage_player');
                                 SpawnDirector.onCombat(0, dmg); // Player took damage
                                 particles.push({ x: p.x, y: p.y, vx: 0, vy: 0, life: 10, color: '#f00' });
                                 break;

@@ -1580,10 +1580,14 @@ export default class LocomotServer implements Party.Server {
 
           // Fitness values for each event type
           const fitnessValues: { [key: string]: number } = {
-            'kill_player': 50,      // Big reward for killing a human
-            'kill_bot': 5,          // Small reward for killing another bot
+            'kill_player': 50,       // Big reward for killing a human
+            'kill_bot': 5,           // Small reward for killing another bot
             'killed_by_player': -20, // Penalty for dying to human
-            'killed_by_bot': -10    // Smaller penalty for dying to bot
+            'killed_by_bot': -10,    // Smaller penalty for dying to bot
+            'damage_player': 1,      // Minor reward for landing a hit
+            'damaged_by_player': -1, // Minor penalty for taking a hit
+            'destroy_segment': 3,    // Good reward for destroying a segment
+            'lost_segment': -3       // Bigger penalty for losing a segment
           };
 
           let updated = 0;
