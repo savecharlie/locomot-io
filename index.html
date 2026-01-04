@@ -7327,9 +7327,10 @@
         }
         
         function updateProjectiles(dt) {
-            // Combine enemies + other players into one target list
-            const allTargets = [...enemies];
-            if (Multiplayer.connected) {
+            // In single player, use enemies directly. In multiplayer, combine with other players
+            let allTargets;
+            if (Multiplayer.connected && Multiplayer.otherPlayers.size > 0) {
+                allTargets = [...enemies];
                 for (const [playerId, op] of Multiplayer.otherPlayers) {
                     if (op.segments && op.segments.length > 0) {
                         allTargets.push({
@@ -7342,6 +7343,8 @@
                         });
                     }
                 }
+            } else {
+                allTargets = enemies; // No copy needed in single player
             }
             
             for (let i = projectiles.length - 1; i >= 0; i--) {
