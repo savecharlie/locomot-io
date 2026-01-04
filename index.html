@@ -2403,6 +2403,7 @@
         let teamMode = false; // Set by mode selection at start
         let playerTeam = 'blue'; // Player's team (blue or red)
         let lastTeamScoreUpdate = 0; // Throttle team score display updates
+        let lastLeaderboardUpdate = 0; // Throttle leaderboard updates
         let cachedTeamLead = ''; // Cached display string
         let score = 0, wave = 1, lastTime = 0, moveTimer = 0, MOVE_INTERVAL = 70; // Faster!
         let aimAngle = 0, isAiming = false;
@@ -2446,7 +2447,11 @@
 
             // Get current population (AI + real players)
             getTotalPopulation() {
-                const aiCount = enemies.filter(e => e.segments && e.segments.length > 0).length;
+                // Count alive enemies without creating new array
+                let aiCount = 0;
+                for (let i = 0; i < enemies.length; i++) {
+                    if (enemies[i].segments && enemies[i].segments.length > 0) aiCount++;
+                }
                 const realCount = Multiplayer.connected ? Multiplayer.otherPlayers.size : 0;
                 // Only count player if they're alive
                 const playerAlive = (gameState === 'playing' && snake && snake.length > 0) ? 1 : 0;
@@ -7778,6 +7783,11 @@
         }
         
         function updateLeaderboard() {
+            // Throttle to 5 updates/sec (every 200ms) - doesn't need 60fps
+            const now = Date.now();
+            if (now - lastLeaderboardUpdate < 200) return;
+            lastLeaderboardUpdate = now;
+
             const entries = [];
             const showPlayerEntry = gameState === 'playing' && !isSpectating && !devMode.spectating;
             let blueTotal = 0, redTotal = 0;
