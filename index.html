@@ -574,6 +574,12 @@
         // IvyBot now loaded from server via loadActiveGenomes()
         genomeRegistry.loadActiveGenomes();
 
+        // Periodic manifest refresh (every 5 minutes) to pick up new genomes
+        setInterval(() => {
+            console.log('[GenomeRegistry] Refreshing manifest...');
+            genomeRegistry.loadActiveGenomes();
+        }, 5 * 60 * 1000);
+
         // Get the appropriate brain based on current mode and genome
         function getNeuralBrain(genome = null) {
             // If genome specified and loaded, use it
@@ -3126,7 +3132,7 @@
                 if (!this.enabled) return;
                 this.session = {
                     id: crypto.randomUUID(),
-                    playerId: localStorage.getItem('locomot_player_id') || 'anon',
+                    playerId: localStorage.getItem('locomot_username') || 'anon',
                     timestamp: Date.now(),
                     mode: timedMode ? 'timed' : (teamMode ? 'team' : 'ffa'),
                     frames: [],
@@ -4955,6 +4961,9 @@
             maxLength = 4;
             deathReason = '';
             deathDebugInfo = null;
+
+            // Check for new genomes on respawn
+            genomeRegistry.fetchManifest();
 
             gameState = 'playing';
             canvas.classList.add('playing');
