@@ -1,0 +1,6 @@
+# robots.txt for locomot.io
+User-agent: *
+Allow: /
+
+# Sitemap
+Sitemap: https://locomot.io/sitemap.xml
