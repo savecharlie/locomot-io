@@ -3970,9 +3970,9 @@
                         return null;
                     }
 
-                    // Train
-                    const epochs = 30;
-                    const batchSize = 64;
+                    // Train (reduced epochs for mobile - 10 is enough for behavioral cloning)
+                    const epochs = 10;
+                    const batchSize = 32;
 
                     await this.model.fit(xs, ys, {
                         epochs: epochs,
@@ -4106,10 +4106,10 @@
                 return;
             }
 
-            statusDiv.textContent = 'Training 1500 frames (30 epochs)...';
+            statusDiv.textContent = 'Training 1000 frames (10 epochs)...';
 
             try {
-                const result = await BotTrainer.testTraining(1500);
+                const result = await BotTrainer.testTraining(1000);
 
                 if (result.success) {
                     statusDiv.textContent = 'SUCCESS!';
