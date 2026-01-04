@@ -856,6 +856,24 @@ export default class LocomotServer implements Party.Server {
             const key = `behavior_${Date.now()}_${session.id?.slice(0,8) || 'anon'}`;
             await this.room.storage.put(key, session);
             console.log(`Behavioral session: ${session.frames.length} frames, quality: ${session.quality?.toFixed(2) || '?'}`);
+
+            // Auto-prune old sessions if over limit (keep max 500)
+            const MAX_SESSIONS = 500;
+            try {
+              const allKeys = await this.room.storage.list({ prefix: 'behavior_', limit: MAX_SESSIONS + 50 });
+              if (allKeys.size > MAX_SESSIONS) {
+                // Keys are sorted by name (which includes timestamp), so oldest come first
+                const keysArray = Array.from(allKeys.keys());
+                const toDelete = keysArray.slice(0, allKeys.size - MAX_SESSIONS);
+                for (const oldKey of toDelete) {
+                  await this.room.storage.delete(oldKey);
+                }
+                console.log(`[Behavioral] Auto-pruned ${toDelete.length} old sessions`);
+              }
+            } catch (e) {
+              console.log(`[Behavioral] Prune check failed: ${e}`);
+            }
+
             return new Response(JSON.stringify({ success: true, key, frames: session.frames.length }), {
               headers: { ...headers, 'Content-Type': 'application/json' }
             });
@@ -948,6 +966,44 @@ export default class LocomotServer implements Party.Server {
           return new Response(JSON.stringify({ deleted }), {
             headers: { ...headers, 'Content-Type': 'application/json' }
           });
+        }
+
+        if (data.type === 'purge_behavioral_batch') {
+          // Delete a batch of behavioral sessions without listing all
+          // Uses storage.list with a small limit to avoid memory overflow
+          const req = data as { batch_size?: number, keep_player?: string };
+          const batchSize = Math.min(req.batch_size || 50, 100);
+
+          try {
+            // List a small batch of behavioral keys
+            const keys = await this.room.storage.list({ prefix: 'behavior_', limit: batchSize });
+
+            let deleted = 0;
+            const keepPlayer = req.keep_player;
+
+            for (const [key, value] of keys) {
+              // Optionally keep sessions from a specific player
+              if (keepPlayer && typeof value === 'object' && (value as any).playerId === keepPlayer) {
+                continue;
+              }
+              await this.room.storage.delete(key);
+              deleted++;
+            }
+
+            console.log(`[Behavioral] Purged ${deleted} sessions (batch of ${batchSize})`);
+
+            return new Response(JSON.stringify({
+              deleted,
+              remaining: keys.size - deleted,
+              message: deleted > 0 ? 'Call again to delete more' : 'No more sessions to delete'
+            }), {
+              headers: { ...headers, 'Content-Type': 'application/json' }
+            });
+          } catch (e) {
+            return new Response(JSON.stringify({ error: String(e) }), {
+              status: 500, headers: { ...headers, 'Content-Type': 'application/json' }
+            });
+          }
         }
 
         if (data.type === 'track_visit') {

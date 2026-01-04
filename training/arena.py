@@ -575,34 +575,50 @@ def fetch_genome_weights(genome_id):
 
     # Fetch each key
     for base_key in base_keys:
-        meta_key = f"{base_key}_meta"
-        if meta_key in genome_info.get('keys', []):
-            # Chunked - fetch meta first
-            meta_resp = requests.post(SERVER_URL, json={
-                'type': 'get_genome_part',
-                'genome_id': genome_id,
-                'key': meta_key
-            }, timeout=30)
-            meta = meta_resp.json()['data']
-
-            # Fetch all chunks
-            rows = []
-            for i in range(meta['chunks']):
-                chunk_resp = requests.post(SERVER_URL, json={
+        try:
+            meta_key = f"{base_key}_meta"
+            if meta_key in genome_info.get('keys', []):
+                # Chunked - fetch meta first
+                meta_resp = requests.post(SERVER_URL, json={
                     'type': 'get_genome_part',
                     'genome_id': genome_id,
-                    'key': f"{base_key}_chunk{i}"
+                    'key': meta_key
                 }, timeout=30)
-                rows.extend(chunk_resp.json()['data'])
-            weights[base_key] = rows
-        else:
-            # Direct fetch
-            part_resp = requests.post(SERVER_URL, json={
-                'type': 'get_genome_part',
-                'genome_id': genome_id,
-                'key': base_key
-            }, timeout=30)
-            weights[base_key] = part_resp.json()['data']
+                resp_json = meta_resp.json()
+                if 'data' not in resp_json:
+                    console.print(f"[yellow]Missing data for {genome_id}/{meta_key}[/yellow]")
+                    return None
+                meta = resp_json['data']
+
+                # Fetch all chunks
+                rows = []
+                for i in range(meta['chunks']):
+                    chunk_resp = requests.post(SERVER_URL, json={
+                        'type': 'get_genome_part',
+                        'genome_id': genome_id,
+                        'key': f"{base_key}_chunk{i}"
+                    }, timeout=30)
+                    chunk_json = chunk_resp.json()
+                    if 'data' not in chunk_json:
+                        console.print(f"[yellow]Missing chunk {i} for {genome_id}/{base_key}[/yellow]")
+                        return None
+                    rows.extend(chunk_json['data'])
+                weights[base_key] = rows
+            else:
+                # Direct fetch
+                part_resp = requests.post(SERVER_URL, json={
+                    'type': 'get_genome_part',
+                    'genome_id': genome_id,
+                    'key': base_key
+                }, timeout=30)
+                resp_json = part_resp.json()
+                if 'data' not in resp_json:
+                    console.print(f"[yellow]Missing data for {genome_id}/{base_key}[/yellow]")
+                    return None
+                weights[base_key] = resp_json['data']
+        except Exception as e:
+            console.print(f"[yellow]Error fetching {genome_id}/{base_key}: {e}[/yellow]")
+            return None
 
     return weights
 

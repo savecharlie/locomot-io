@@ -244,7 +244,7 @@
                 </div>
                 <label style="display: flex; align-items: center; justify-content: center; gap: 6px; margin-top: 12px; font-size: 9px; color: #666; cursor: pointer;">
                     <input type="checkbox" id="trainDataConsent" checked style="width: 12px; height: 12px; cursor: pointer;">
-                    <span>Help train smarter AI with my gameplay data</span>
+                    <span>Create a bot that plays like you</span>
                 </label>
             </div>
             <div style="margin-top: 20px; padding-top: 16px; border-top: 1px solid #222;">
@@ -294,8 +294,34 @@
             </div>
             <label style="display: flex; align-items: center; justify-content: center; gap: 6px; margin-bottom: 15px; font-size: 9px; color: #666; cursor: pointer;">
                 <input type="checkbox" id="trainDataConsentDeath" checked style="width: 12px; height: 12px; cursor: pointer;">
-                <span>Help train smarter AI with my gameplay data</span>
+                <span>Create a bot that plays like you</span>
             </label>
+
+            <!-- Your Bot Status -->
+            <div id="botStatusContainer" style="max-width: 280px; margin-bottom: 15px; padding: 12px; background: linear-gradient(180deg, #1a1a2a, #111); border-radius: 8px; border: 1px solid #333;">
+                <div id="botProgress" style="text-align: center;">
+                    <div style="font-size: 9px; color: #888; margin-bottom: 8px;">TRAINING YOUR BOT</div>
+                    <div style="display: flex; gap: 4px; justify-content: center; margin-bottom: 8px;">
+                        <div class="progress-dot" style="width: 20px; height: 6px; background: #333; border-radius: 3px;"></div>
+                        <div class="progress-dot" style="width: 20px; height: 6px; background: #333; border-radius: 3px;"></div>
+                        <div class="progress-dot" style="width: 20px; height: 6px; background: #333; border-radius: 3px;"></div>
+                    </div>
+                    <div id="progressText" style="font-size: 8px; color: #0ff;">Play 3 games to create your bot!</div>
+                </div>
+                <div id="botCelebration" style="display: none; text-align: center;">
+                    <div style="font-size: 12px; color: #ff0; text-shadow: 0 0 10px #ff0; margin-bottom: 8px;">YOUR BOT IS BORN!</div>
+                    <div id="botNameCelebration" style="font-size: 10px; color: #0f0; margin-bottom: 8px;"></div>
+                    <div style="font-size: 7px; color: #888;">Your playstyle now lives in the game</div>
+                </div>
+                <div id="botStatus" style="display: none; text-align: center;">
+                    <div style="font-size: 9px; color: #888; margin-bottom: 6px;">YOUR BOT</div>
+                    <div id="botNameStatus" style="font-size: 11px; color: #ff0; margin-bottom: 6px;"></div>
+                    <div style="display: flex; gap: 12px; justify-content: center; font-size: 7px; color: #888;">
+                        <span>Fitness: <span id="botFitness" style="color: #0f0;">100</span></span>
+                        <span>Kills: <span id="botKills" style="color: #f55;">0</span></span>
+                    </div>
+                </div>
+            </div>
 
             <!-- Change Name -->
             <input type="text" id="usernameInputDeath" placeholder="Change name..." maxlength="12"
@@ -3595,6 +3621,103 @@
         // Initialize recorder on load
         DataRecorder.init();
 
+        // === BOT TRACKER - Shows player their bot status ===
+        const BotTracker = {
+            myBot: null,
+            lastSessionCount: 0,
+            justBorn: false,
+
+            // Find player's bot in manifest
+            findMyBot() {
+                const username = localStorage.getItem('locomot_username');
+                if (!username || username === 'anon') return null;
+
+                const manifest = genomeRegistry.manifest;
+                if (!manifest) return null;
+
+                return manifest.genomes.find(g =>
+                    g.source === `player:${username}` ||
+                    g.id === username.toLowerCase()
+                );
+            },
+
+            // Update death screen UI
+            async updateDeathScreenUI() {
+                const progressDiv = document.getElementById('botProgress');
+                const celebrationDiv = document.getElementById('botCelebration');
+                const statusDiv = document.getElementById('botStatus');
+                const container = document.getElementById('botStatusContainer');
+
+                if (!container) return;
+
+                const username = localStorage.getItem('locomot_username');
+                if (!username || username === 'anon') {
+                    // Anonymous - hide the whole section
+                    container.style.display = 'none';
+                    return;
+                }
+                container.style.display = 'block';
+
+                // Check for bot
+                const bot = this.findMyBot();
+                const sessionCount = await DataRecorder.getSessionCount();
+
+                if (bot) {
+                    // Bot exists!
+                    const wasJustBorn = !this.myBot && bot;
+                    this.myBot = bot;
+
+                    if (wasJustBorn || this.justBorn) {
+                        // Celebration mode
+                        this.justBorn = false;
+                        progressDiv.style.display = 'none';
+                        celebrationDiv.style.display = 'block';
+                        statusDiv.style.display = 'none';
+                        document.getElementById('botNameCelebration').textContent =
+                            `${bot.name || username + 'Bot'} joins the game!`;
+                    } else {
+                        // Status mode
+                        progressDiv.style.display = 'none';
+                        celebrationDiv.style.display = 'none';
+                        statusDiv.style.display = 'block';
+                        document.getElementById('botNameStatus').textContent = bot.name || username + 'Bot';
+                        document.getElementById('botFitness').textContent = Math.round(bot.performance?.fitness || 100);
+                        document.getElementById('botKills').textContent = bot.performance?.kills || 0;
+                    }
+                } else {
+                    // No bot yet - show progress
+                    progressDiv.style.display = 'block';
+                    celebrationDiv.style.display = 'none';
+                    statusDiv.style.display = 'none';
+
+                    // Update progress dots
+                    const dots = document.querySelectorAll('.progress-dot');
+                    dots.forEach((dot, i) => {
+                        dot.style.background = i < sessionCount ? '#0f0' : '#333';
+                    });
+
+                    // Update text
+                    const remaining = Math.max(0, 3 - sessionCount);
+                    const progressText = document.getElementById('progressText');
+                    if (remaining > 0) {
+                        progressText.textContent = `${remaining} more game${remaining > 1 ? 's' : ''} to create your bot!`;
+                    } else {
+                        progressText.textContent = 'Your bot is being created...';
+                        this.justBorn = true; // Flag for next death
+                    }
+                }
+
+                this.lastSessionCount = sessionCount;
+            },
+
+            // Check if an enemy is the player's bot
+            isMyBot(enemy) {
+                if (!enemy.genome) return false;
+                const bot = this.findMyBot();
+                return bot && enemy.genome === bot.id;
+            }
+        };
+
         // Checkbox event listeners for training data consent
         document.addEventListener('DOMContentLoaded', () => {
             const cb1 = document.getElementById('trainDataConsent');
@@ -4975,6 +5098,9 @@
             gameState = 'dead';
             canvas.classList.remove('playing');
             document.getElementById('gameOverScreen').classList.remove('hidden');
+
+            // Update bot status on death screen
+            BotTracker.updateDeathScreenUI();
         }
 
         function doRespawn() {
