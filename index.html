@@ -246,6 +246,32 @@
                     <input type="checkbox" id="trainDataConsent" checked style="width: 12px; height: 12px; cursor: pointer;">
                     <span>Create a bot that plays like you</span>
                 </label>
+
+                <!-- Your Bot Status (Start Screen) -->
+                <div id="botStatusContainerStart" style="max-width: 280px; margin: 15px auto 0; padding: 12px; background: linear-gradient(180deg, #1a1a2a, #111); border-radius: 8px; border: 1px solid #333;">
+                    <div id="botProgressStart" style="text-align: center;">
+                        <div style="font-size: 9px; color: #888; margin-bottom: 8px;">TRAINING YOUR BOT</div>
+                        <div style="display: flex; gap: 4px; justify-content: center; margin-bottom: 8px;">
+                            <div class="progress-dot-start" style="width: 20px; height: 6px; background: #333; border-radius: 3px;"></div>
+                            <div class="progress-dot-start" style="width: 20px; height: 6px; background: #333; border-radius: 3px;"></div>
+                            <div class="progress-dot-start" style="width: 20px; height: 6px; background: #333; border-radius: 3px;"></div>
+                        </div>
+                        <div id="progressTextStart" style="font-size: 8px; color: #0ff;">Play 3 games to create your bot!</div>
+                    </div>
+                    <div id="botCelebrationStart" style="display: none; text-align: center;">
+                        <div style="font-size: 12px; color: #ff0; text-shadow: 0 0 10px #ff0; margin-bottom: 8px;">YOUR BOT IS BORN!</div>
+                        <div id="botNameCelebrationStart" style="font-size: 10px; color: #0f0; margin-bottom: 8px;"></div>
+                        <div style="font-size: 7px; color: #888;">Your playstyle now lives in the game</div>
+                    </div>
+                    <div id="botStatusStart" style="display: none; text-align: center;">
+                        <div style="font-size: 9px; color: #888; margin-bottom: 6px;">YOUR BOT</div>
+                        <div id="botNameStatusStart" style="font-size: 11px; color: #ff0; margin-bottom: 6px;"></div>
+                        <div style="display: flex; gap: 12px; justify-content: center; font-size: 7px; color: #888;">
+                            <span>Fitness: <span id="botFitnessStart" style="color: #0f0;">100</span></span>
+                            <span>Kills: <span id="botKillsStart" style="color: #f55;">0</span></span>
+                        </div>
+                    </div>
+                </div>
             </div>
             <div style="margin-top: 20px; padding-top: 16px; border-top: 1px solid #222;">
                 <div id="kofiWidgetContainerStart" style="display: flex; justify-content: center; margin-bottom: 12px;"></div>
@@ -3710,13 +3736,70 @@
                 this.lastSessionCount = sessionCount;
             },
 
+            // Update start screen UI
+            async updateStartScreenUI() {
+                const progressDiv = document.getElementById('botProgressStart');
+                const celebrationDiv = document.getElementById('botCelebrationStart');
+                const statusDiv = document.getElementById('botStatusStart');
+                const container = document.getElementById('botStatusContainerStart');
+
+                if (!container) return;
+
+                const username = localStorage.getItem('locomot_username');
+                if (!username || username === 'anon') {
+                    container.style.display = 'none';
+                    return;
+                }
+                container.style.display = 'block';
+
+                const bot = this.findMyBot();
+                const sessionCount = await DataRecorder.getSessionCount();
+
+                if (bot) {
+                    // Bot exists - show status
+                    progressDiv.style.display = 'none';
+                    celebrationDiv.style.display = 'none';
+                    statusDiv.style.display = 'block';
+                    document.getElementById('botNameStatusStart').textContent = bot.name || username + 'Bot';
+                    document.getElementById('botFitnessStart').textContent = Math.round(bot.performance?.fitness || 100);
+                    document.getElementById('botKillsStart').textContent = bot.performance?.kills || 0;
+                } else {
+                    // No bot yet - show progress
+                    progressDiv.style.display = 'block';
+                    celebrationDiv.style.display = 'none';
+                    statusDiv.style.display = 'none';
+
+                    const dots = document.querySelectorAll('.progress-dot-start');
+                    dots.forEach((dot, i) => {
+                        dot.style.background = i < sessionCount ? '#0f0' : '#333';
+                    });
+
+                    const remaining = Math.max(0, 3 - sessionCount);
+                    const progressText = document.getElementById('progressTextStart');
+                    if (remaining > 0) {
+                        progressText.textContent = `${remaining} more game${remaining > 1 ? 's' : ''} to create your bot!`;
+                    } else {
+                        progressText.textContent = 'Your bot is being created...';
+                    }
+                }
+            },
+
             // Check if an enemy is the player's bot
             isMyBot(enemy) {
                 if (!enemy.genome) return false;
                 const bot = this.findMyBot();
                 return bot && enemy.genome === bot.id;
+            },
+
+            // Initialize - update start screen on load
+            init() {
+                // Wait for manifest to load, then update start screen
+                setTimeout(() => this.updateStartScreenUI(), 2000);
             }
         };
+
+        // Initialize BotTracker
+        BotTracker.init();
 
         // Checkbox event listeners for training data consent
         document.addEventListener('DOMContentLoaded', () => {
