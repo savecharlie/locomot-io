@@ -7661,7 +7661,9 @@
                         }
                     }
                     // Only host runs enemy AI - non-hosts get enemy positions from host
-                    const gameOver = (Multiplayer.connected && Multiplayer.isHost) ? updateEnemies(dt) : false;
+                    // Single player (!connected && !socket) also runs enemy AI
+                    const isSinglePlayer = !Multiplayer.connected && !Multiplayer.socket;
+                    const gameOver = (isSinglePlayer || (Multiplayer.connected && Multiplayer.isHost)) ? updateEnemies(dt) : false;
                     if (gameOver) {
                         console.log('RESPAWN:', deathReason || 'Destroyed');
                         haptic('death');
@@ -7812,8 +7814,9 @@
                 
                 // SPECTATOR MODE: Keep updating when dead so player can watch
                 if (gameState === 'dead') {
-                    if (Multiplayer.connected && Multiplayer.isHost) {
-                        hostResolvePlayerCollisions();
+                    const canRunAI = (!Multiplayer.connected && !Multiplayer.socket) || (Multiplayer.connected && Multiplayer.isHost);
+                    if (canRunAI) {
+                        if (Multiplayer.connected) hostResolvePlayerCollisions();
                         updateEnemies(dt);
                     }
                     updateEnemyProjectiles(dt);
@@ -7826,8 +7829,9 @@
 
                 // CONTINUOUS ARENA: Keep arena alive during start screen
                 if (gameState === 'start' && enemies.length > 0) {
-                    if (Multiplayer.connected && Multiplayer.isHost) {
-                        hostResolvePlayerCollisions();
+                    const canRunAI = (!Multiplayer.connected && !Multiplayer.socket) || (Multiplayer.connected && Multiplayer.isHost);
+                    if (canRunAI) {
+                        if (Multiplayer.connected) hostResolvePlayerCollisions();
                         updateEnemies(dt);
                     }
                     updateEnemyProjectiles(dt);
