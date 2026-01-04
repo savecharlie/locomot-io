@@ -6068,12 +6068,13 @@
             const headPx = wrappedX * GRID + GRID / 2;
             const headPy = wrappedY * GRID + GRID / 2;
             const pickupRange = magnetTimer > 0 ? GRID * 3 : GRID;
-            
+            const pickupRangeSq = pickupRange * pickupRange;
+
             for (let i = pickups.length - 1; i >= 0; i--) {
                 const p = pickups[i];
-                const dist = Math.sqrt((p.x - headPx) ** 2 + (p.y - headPy) ** 2);
+                const distSq = (p.x - headPx) ** 2 + (p.y - headPy) ** 2;
 
-                if (dist < pickupRange) {
+                if (distSq < pickupRangeSq) {
                     // Skip own recently dropped pickups (cooloff period)
                     if (p.droppedBy === 'player' && p.droppedAt && Date.now() - p.droppedAt < PICKUP_COOLOFF_MS) {
                         continue;
