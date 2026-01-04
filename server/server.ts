@@ -1375,7 +1375,7 @@ export default class LocomotServer implements Party.Server {
             generation: reg.generation || 0,  // Generation number (0 = original player)
             created: new Date().toISOString(),
             performance: { games: 0, avg_score: 0, avg_survival: 0, win_rate: 0, fitness: 100, kills: 0, player_kills: 0, deaths: 0 },
-            active: manifest.genomes.length < manifest.max_active
+            active: true  // Always active - culling handles cleanup
           };
 
           if (existing >= 0) {
@@ -1494,7 +1494,7 @@ export default class LocomotServer implements Party.Server {
             source: finalize.source || 'unknown',
             created: new Date().toISOString(),
             performance: { games: 0, avg_score: 0, avg_survival: 0, win_rate: 0, fitness: 100, kills: 0, player_kills: 0, deaths: 0 },
-            active: manifest.genomes.length < manifest.max_active
+            active: true  // Always active - culling handles cleanup
           };
 
           if (existing >= 0) {
@@ -1541,7 +1541,7 @@ export default class LocomotServer implements Party.Server {
             source: submission.source || 'unknown',
             created: new Date().toISOString(),
             performance: { games: 0, avg_score: 0, avg_survival: 0, win_rate: 0, fitness: 100, kills: 0, player_kills: 0, deaths: 0 },
-            active: manifest.genomes.length < manifest.max_active
+            active: true  // Always active - culling handles cleanup
           };
 
           if (existing >= 0) {
