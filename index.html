@@ -3688,6 +3688,20 @@
                 );
             },
 
+            // Get rank of a bot among all bots (by fitness)
+            getBotRank(botId) {
+                const manifest = genomeRegistry.manifest;
+                if (!manifest) return { rank: '?', total: '?' };
+
+                // Sort all bots by fitness
+                const sorted = [...manifest.genomes].sort((a, b) =>
+                    (b.performance?.fitness || 100) - (a.performance?.fitness || 100)
+                );
+
+                const rank = sorted.findIndex(g => g.id === botId) + 1;
+                return { rank: rank || '?', total: sorted.length };
+            },
+
             // Update death screen UI
             async updateDeathScreenUI() {
                 const progressDiv = document.getElementById('botProgress');
@@ -3731,16 +3745,18 @@
                         const allBots = this.findMyBots();
                         const botList = document.getElementById('botList');
                         if (botList && allBots.length > 0) {
-                            botList.innerHTML = allBots.map(b => `
+                            botList.innerHTML = allBots.map(b => {
+                                const { rank, total } = this.getBotRank(b.id);
+                                return `
                                 <div style="display: flex; justify-content: space-between; padding: 4px 8px; margin: 2px 0; background: #1a1a2a; border-radius: 3px;">
                                     <span style="color: #ff0;">${b.name || b.id}</span>
                                     <span style="color: #888;">
-                                        <span style="color: #0f0;">${Math.round(b.performance?.fitness || 100)}</span> fit
+                                        <span style="color: #5ff;">#${rank}</span>/<span style="color: #666;">${total}</span>
                                         <span style="color: #f55; margin-left: 6px;">${b.performance?.kills || 0}</span> kills
                                     </span>
                                 </div>
-                            `).join('') + `
-                                <div style="text-align: center; color: #0ff; margin-top: 8px; font-size: 6px;">Keep playing to improve your scores!</div>
+                            `}).join('') + `
+                                <div style="text-align: center; color: #0ff; margin-top: 8px; font-size: 6px;">Keep playing to improve your ranking!</div>
                             `;
                         }
                     }
@@ -3798,16 +3814,18 @@
                     const allBots = this.findMyBots();
                     const botList = document.getElementById('botListStart');
                     if (botList && allBots.length > 0) {
-                        botList.innerHTML = allBots.map(b => `
+                        botList.innerHTML = allBots.map(b => {
+                            const { rank, total } = this.getBotRank(b.id);
+                            return `
                             <div style="display: flex; justify-content: space-between; padding: 4px 8px; margin: 2px 0; background: #1a1a2a; border-radius: 3px;">
                                 <span style="color: #ff0;">${b.name || b.id}</span>
                                 <span style="color: #888;">
-                                    <span style="color: #0f0;">${Math.round(b.performance?.fitness || 100)}</span> fit
+                                    <span style="color: #5ff;">#${rank}</span>/<span style="color: #666;">${total}</span>
                                     <span style="color: #f55; margin-left: 6px;">${b.performance?.kills || 0}</span> kills
                                 </span>
                             </div>
-                        `).join('') + `
-                            <div style="text-align: center; color: #0ff; margin-top: 8px; font-size: 6px;">Keep playing to improve your scores!</div>
+                        `}).join('') + `
+                            <div style="text-align: center; color: #0ff; margin-top: 8px; font-size: 6px;">Keep playing to improve your ranking!</div>
                         `;
                     }
                 } else {
