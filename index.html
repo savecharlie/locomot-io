@@ -3412,6 +3412,13 @@
                 });
 
                 this.session = null;
+
+                // Check if we should start background training
+                const sessionCount = await this.getSessionCount();
+                if (sessionCount >= 3 && typeof BotTrainer !== 'undefined') {
+                    // Start training in background (don't await - let it run async)
+                    BotTrainer.startBackgroundTraining();
+                }
             },
 
             // Compute genome features from session data
@@ -3588,6 +3595,11 @@
                     };
                     request.onerror = () => reject(request.error);
                 });
+            },
+
+            // Get all sessions (alias for exportSessions)
+            async getAllSessions() {
+                return this.exportSessions(0);
             },
 
             // Get session count
@@ -4080,6 +4092,133 @@
                     console.log('[BOT_TRAINER] TEST FAILED');
                     return { success: false };
                 }
+            },
+
+            // === BACKGROUND TRAINING ===
+            trainingInProgress: false,
+            pendingCelebration: false,
+            trainedBotId: null,
+
+            // Start background training (called after 3rd session)
+            async startBackgroundTraining() {
+                if (this.trainingInProgress) {
+                    console.log('[BOT_TRAINER] Training already in progress');
+                    return;
+                }
+
+                const username = localStorage.getItem('locomot_username');
+                if (!username || username === 'anon') {
+                    console.log('[BOT_TRAINER] No username, skipping training');
+                    return;
+                }
+
+                // Check if player already has a bot
+                if (BotTracker.findMyBot()) {
+                    console.log('[BOT_TRAINER] Player already has bot, skipping');
+                    return;
+                }
+
+                this.trainingInProgress = true;
+                console.log('[BOT_TRAINER] Starting background training...');
+
+                try {
+                    // Get all sessions from IndexedDB
+                    const sessions = await DataRecorder.getAllSessions();
+                    if (sessions.length < 3) {
+                        console.log('[BOT_TRAINER] Not enough sessions:', sessions.length);
+                        return;
+                    }
+
+                    // Train the model
+                    const weights = await this.trainFromSessions(sessions);
+                    if (!weights) {
+                        console.error('[BOT_TRAINER] Training failed');
+                        return;
+                    }
+
+                    // Upload to server
+                    const botId = await this.uploadWeights(weights, username);
+                    if (botId) {
+                        this.trainedBotId = botId;
+                        this.pendingCelebration = true;
+                        console.log('[BOT_TRAINER] Bot created:', botId);
+
+                        // If death screen visible, celebrate now
+                        const deathScreen = document.getElementById('gameOverScreen');
+                        if (deathScreen && !deathScreen.classList.contains('hidden')) {
+                            this.showCelebration();
+                        }
+                    }
+                } catch (err) {
+                    console.error('[BOT_TRAINER] Background training error:', err);
+                } finally {
+                    this.trainingInProgress = false;
+                }
+            },
+
+            // Upload weights to server
+            async uploadWeights(weights, username) {
+                const botId = `${username.toLowerCase()}_${Date.now()}`;
+                const botName = `${username}Bot`;
+
+                console.log('[BOT_TRAINER] Uploading weights as:', botId);
+
+                try {
+                    // Convert weights to JSON string and split into chunks
+                    const weightsJson = JSON.stringify(weights);
+                    const chunkSize = 50000; // 50KB chunks
+                    const chunks = [];
+                    for (let i = 0; i < weightsJson.length; i += chunkSize) {
+                        chunks.push(weightsJson.slice(i, i + chunkSize));
+                    }
+
+                    // Upload each chunk
+                    for (let i = 0; i < chunks.length; i++) {
+                        const response = await fetch('https://locomot-io.savecharlie.partykit.dev/party/collective', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                                type: 'store_genome_part',
+                                genomeId: botId,
+                                partIndex: i,
+                                totalParts: chunks.length,
+                                data: chunks[i],
+                                metadata: i === 0 ? {
+                                    name: botName,
+                                    source: `player:${username}`,
+                                    trained: 'client',
+                                    timestamp: Date.now()
+                                } : undefined
+                            })
+                        });
+
+                        if (!response.ok) {
+                            throw new Error(`Upload failed: ${response.status}`);
+                        }
+                    }
+
+                    console.log('[BOT_TRAINER] Upload complete!');
+
+                    // Refresh manifest to include new bot
+                    await genomeRegistry.loadManifest();
+
+                    return botId;
+                } catch (err) {
+                    console.error('[BOT_TRAINER] Upload error:', err);
+                    return null;
+                }
+            },
+
+            // Show celebration (called when death screen opens)
+            showCelebration() {
+                if (!this.pendingCelebration) return;
+
+                console.log('[BOT_TRAINER] Showing celebration!');
+                this.pendingCelebration = false;
+
+                // Trigger BotTracker celebration mode
+                BotTracker.justBorn = true;
+                BotTracker.updateDeathScreenUI();
             }
         };
 
@@ -5513,8 +5652,13 @@
             canvas.classList.remove('playing');
             document.getElementById('gameOverScreen').classList.remove('hidden');
 
-            // Update bot status on death screen
-            BotTracker.updateDeathScreenUI();
+            // Check for pending bot celebration (training finished while playing)
+            if (typeof BotTrainer !== 'undefined' && BotTrainer.pendingCelebration) {
+                BotTrainer.showCelebration();
+            } else {
+                // Update bot status on death screen
+                BotTracker.updateDeathScreenUI();
+            }
         }
 
         function doRespawn() {
