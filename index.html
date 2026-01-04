@@ -8256,24 +8256,24 @@
         function drawParticles() {
             for (const p of particles) {
                 if (p.isAoe) {
-                    // Triple ring AOE - fading outward dots
+                    // Triple ring AOE - compact fading dots
                     const progress = 1 - (p.life / 15); // 0 to 1 as it expands
-                    const baseRadius = 20 + progress * 35; // Expands from 20 to 55
+                    const baseRadius = 12 + progress * 20; // Expands from 12 to 32
 
-                    // Three rings with different brightness
+                    // Three rings with different brightness (tighter spacing)
                     const rings = [
-                        { r: baseRadius, bright: 255, size: 2 },      // Inner - bright
-                        { r: baseRadius + 15, bright: 180, size: 2 }, // Middle - medium
-                        { r: baseRadius + 30, bright: 100, size: 1 }, // Outer - dim
+                        { r: baseRadius, bright: 255, size: 1 },      // Inner - bright
+                        { r: baseRadius + 8, bright: 180, size: 1 },  // Middle - medium
+                        { r: baseRadius + 16, bright: 100, size: 1 }, // Outer - dim
                     ];
 
                     const alpha = Math.min(1, p.life / 8); // Fade out
                     ctx.globalAlpha = alpha;
 
                     for (const ring of rings) {
-                        const numDots = ring.r < 30 ? 12 : (ring.r < 45 ? 16 : 20);
+                        const numDots = 10; // Fewer dots
                         const angleStep = (Math.PI * 2) / numDots;
-                        const offset = ring.r * 0.1; // Stagger rings
+                        const offset = ring.r * 0.1;
 
                         for (let i = 0; i < numDots; i++) {
                             const angle = i * angleStep + offset;
@@ -8529,9 +8529,10 @@
                 }
                 
                 ctx.save(); ctx.scale(cameraZoom, cameraZoom); ctx.translate(-cameraX, -cameraY);
-                drawGrid(); drawPickups(time); renderLeaderGrave(ctx); drawEnemies(); Multiplayer.drawOtherPlayers(ctx);
+                drawGrid(); drawPickups(time); renderLeaderGrave(ctx);
+                drawProjectiles(); drawParticles(); // Draw bullets/effects UNDER trains
+                drawEnemies(); Multiplayer.drawOtherPlayers(ctx);
                 if (gameState === 'playing') { drawSnake(); drawDirectionQueue(); drawLeaderArrow(); }
-                drawProjectiles(); drawParticles();
                 ctx.restore(); drawScanlines(); drawPatternFlash(ctx); devMode.draw(ctx);
 
                 // Timed mode countdown
