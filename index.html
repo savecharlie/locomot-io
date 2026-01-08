@@ -8637,6 +8637,8 @@
                 drawEnemies(); Multiplayer.drawOtherPlayers(ctx);
                 if (gameState === 'playing') { console.log('[DEBUG] Drawing snake, length:', snake.length); drawSnake(); drawDirectionQueue(); drawLeaderArrow(); }
                 ctx.restore(); drawScanlines(); drawPatternFlash(ctx); devMode.draw(ctx);
+                // DEBUG: Draw snake info on screen
+                ctx.fillStyle = '#ff0'; ctx.font = '12px monospace'; ctx.fillText(`snake.len=${snake.length} gameState=${gameState}`, 10, canvas.height - 10);
 
                 // Timed mode countdown
                 if (timedMode && gameState === 'playing') {
