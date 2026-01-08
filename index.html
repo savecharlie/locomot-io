@@ -2255,6 +2255,7 @@
         let lastHeadX = 0, lastHeadY = 0;
         let cameraWrapOffsetX = 0, cameraWrapOffsetY = 0;
         let gameState = 'start';
+        let loadingFrames = 0; // Countdown before game starts moving
         let currentMVP = null; // Track most interesting player for spectating
         let mvpScore = 0;
         let lastMVPChangeTime = 0; // When we last switched MVP
@@ -5705,7 +5706,8 @@
             // Check for new genomes on respawn
             genomeRegistry.fetchManifest();
 
-            gameState = 'playing';
+            gameState = 'loading';
+            loadingFrames = 30; // Wait 30 frames (~0.5s) for visuals to stabilize
             canvas.classList.add('playing');
             Multiplayer.selfLastTurn = Date.now(); // Reset AFK timer
             Multiplayer.selfAfkWarned = false;
@@ -8431,7 +8433,16 @@
             try {
                 const dt = time - lastTime; lastTime = time;
                 ctx.fillStyle = '#0a0610'; ctx.fillRect(0, 0, canvas.width, canvas.height);
-                
+
+                // Loading state: draw everything but don't update - wait for visuals to stabilize
+                if (gameState === 'loading') {
+                    loadingFrames--;
+                    if (loadingFrames <= 0) {
+                        gameState = 'playing';
+                        console.log('Loading complete - game starting');
+                    }
+                }
+
                 if (gameState === 'playing') {
                     moveTimer += dt;
                     let selfCollision = false;
@@ -8634,7 +8645,7 @@
                 drawGrid(); drawPickups(time); renderLeaderGrave(ctx);
                 drawProjectiles(); drawParticles(); // Draw bullets/effects UNDER trains
                 drawEnemies(); Multiplayer.drawOtherPlayers(ctx);
-                if (gameState === 'playing') { drawSnake(); drawDirectionQueue(); drawLeaderArrow(); }
+                if (gameState === 'playing' || gameState === 'loading') { drawSnake(); drawDirectionQueue(); drawLeaderArrow(); }
                 ctx.restore(); drawScanlines(); drawPatternFlash(ctx); devMode.draw(ctx);
 
                 // Timed mode countdown
@@ -8841,7 +8852,8 @@
             // Same as FFA, just timed
             init();
 
-            gameState = 'playing';
+            gameState = 'loading';
+            loadingFrames = 30;
             canvas.classList.add('playing');
             RunTracker.startRun('timed', Multiplayer.username);
             console.log('[TIMED] Starting recorder, enabled:', DataRecorder.enabled);
@@ -8933,7 +8945,8 @@
                     Multiplayer.pendingArenaSync = true;
                 }
             }
-            gameState = 'playing';
+            gameState = 'loading';
+            loadingFrames = 30;
             canvas.classList.add('playing');
             RunTracker.startRun('ffa', Multiplayer.username);
             DataRecorder.startSession(); // Start behavioral cloning recording
@@ -8969,7 +8982,8 @@
                     Multiplayer.pendingArenaSync = true;
                 }
             }
-            gameState = 'playing';
+            gameState = 'loading';
+            loadingFrames = 30;
             canvas.classList.add('playing');
             RunTracker.startRun('team', Multiplayer.username);
             DataRecorder.startSession(); // Start behavioral cloning recording
