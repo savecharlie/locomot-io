@@ -1116,7 +1116,8 @@
 
         // Premium settings
         const FREE_LAYER_LIMIT = 2;
-        const isPremium = () => localStorage.getItem('pixelArtPremium') === 'true';
+        // TODO: Set to false when auth is ready (currently true for development)
+        const isPremium = () => true;
 
         function addLayer(insertAbove = true) {
             // Check layer limit for free users
