@@ -1114,7 +1114,17 @@
             return layer;
         }
 
+        // Premium settings
+        const FREE_LAYER_LIMIT = 2;
+        const isPremium = () => localStorage.getItem('pixelArtPremium') === 'true';
+
         function addLayer(insertAbove = true) {
+            // Check layer limit for free users
+            if (!isPremium() && state.layers.length >= FREE_LAYER_LIMIT) {
+                showToast(`Free: ${FREE_LAYER_LIMIT} layers max. Upgrade for unlimited!`);
+                return null;
+            }
+
             const layer = createLayer();
             if (insertAbove) {
                 state.layers.splice(state.currentLayerIndex + 1, 0, layer);
