@@ -7957,6 +7957,9 @@
         }
         
         function drawSnake() {
+            // DEBUG: Check snake state
+            if (trainFrame % 60 === 0) console.log('[DRAW_SNAKE] snake.length:', snake.length, 'first seg:', snake[0]);
+
             // Update train frame for wheel animation
             trainFrame++;
 
@@ -8632,7 +8635,7 @@
                 drawGrid(); drawPickups(time); renderLeaderGrave(ctx);
                 drawProjectiles(); drawParticles(); // Draw bullets/effects UNDER trains
                 drawEnemies(); Multiplayer.drawOtherPlayers(ctx);
-                if (gameState === 'playing') { drawSnake(); drawDirectionQueue(); drawLeaderArrow(); }
+                if (gameState === 'playing') { console.log('[DEBUG] Drawing snake, length:', snake.length); drawSnake(); drawDirectionQueue(); drawLeaderArrow(); }
                 ctx.restore(); drawScanlines(); drawPatternFlash(ctx); devMode.draw(ctx);
 
                 // Timed mode countdown
