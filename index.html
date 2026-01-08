@@ -8648,6 +8648,20 @@
                 if (gameState === 'playing' || gameState === 'loading') { drawSnake(); drawDirectionQueue(); drawLeaderArrow(); }
                 ctx.restore(); drawScanlines(); drawPatternFlash(ctx); devMode.draw(ctx);
 
+                // Loading indicator
+                if (gameState === 'loading') {
+                    ctx.fillStyle = 'rgba(10, 6, 16, 0.7)';
+                    ctx.fillRect(0, 0, canvas.width, canvas.height);
+                    ctx.fillStyle = '#0f0';
+                    ctx.font = '24px "Press Start 2P"';
+                    ctx.textAlign = 'center';
+                    ctx.textBaseline = 'middle';
+                    ctx.shadowColor = '#0f0';
+                    ctx.shadowBlur = 20;
+                    ctx.fillText('LOADING...', canvas.width/2, canvas.height/2);
+                    ctx.shadowBlur = 0;
+                }
+
                 // Timed mode countdown
                 if (timedMode && gameState === 'playing') {
                     const elapsed = performance.now() - timedModeStartTime;
