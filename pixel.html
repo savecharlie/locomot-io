@@ -856,6 +856,7 @@
             <button class="tool-btn" data-tool="fill" title="Fill"><canvas class="pixel-icon" data-icon="fill"></canvas></button>
             <button class="tool-btn" data-tool="eyedropper" title="Eyedropper"><canvas class="pixel-icon" data-icon="eyedropper"></canvas></button>
             <button class="tool-btn" data-tool="replace" title="Replace"><canvas class="pixel-icon" data-icon="replace"></canvas></button>
+            <button class="tool-btn layers-btn" id="layersBtn" title="Layers">📑</button>
         </div>
         <div class="status-bar">
             <span id="statusTool">Tool: Pencil</span>
@@ -996,6 +997,21 @@
         </div>
     </div>
 
+    <!-- Layers Modal -->
+    <div class="modal-overlay" id="layersModal">
+        <div class="modal" style="max-width: 320px;">
+            <h2>Layers</h2>
+            <div class="layers-controls" style="display:flex;gap:8px;margin-bottom:12px;">
+                <button class="btn btn-secondary" id="addLayerBtn" style="flex:1;">+ Add</button>
+                <button class="btn btn-secondary" id="deleteLayerBtn" style="flex:1;">🗑️ Delete</button>
+            </div>
+            <div id="layersList" style="max-height:300px;overflow-y:auto;"></div>
+            <div class="modal-buttons" style="margin-top:12px;">
+                <button class="btn btn-primary" id="closeLayersBtn">Close</button>
+            </div>
+        </div>
+    </div>
+
     <!-- Toast -->
     <div class="toast" id="toast"></div>
 
@@ -1038,6 +1054,10 @@
             clipboard: null, // ImageData for copy/paste
             lassoPixels: [], // Array of {x,y} for lasso drawing
             lassoStart: null, // Starting pixel of lasso
+            // Layers
+            layers: [], // Array of layer objects: {id, name, canvas, ctx, visible, opacity, locked}
+            currentLayerIndex: 0,
+            nextLayerId: 1,
         };
 
         // ===== PALETTES =====
@@ -1073,6 +1093,130 @@
         const gridCtx = gridCanvas.getContext('2d');
         const previewCtx = previewCanvas.getContext('2d');
         const selCtx = selectionCanvas.getContext('2d');
+
+        // ===== LAYER MANAGEMENT =====
+        function createLayer(name = null) {
+            const canvas = document.createElement('canvas');
+            canvas.width = state.canvasWidth;
+            canvas.height = state.canvasHeight;
+            const ctx = canvas.getContext('2d');
+            ctx.imageSmoothingEnabled = false;
+
+            const layer = {
+                id: state.nextLayerId++,
+                name: name || `Layer ${state.layers.length + 1}`,
+                canvas: canvas,
+                ctx: ctx,
+                visible: true,
+                opacity: 1,
+                locked: false
+            };
+            return layer;
+        }
+
+        function addLayer(insertAbove = true) {
+            const layer = createLayer();
+            if (insertAbove) {
+                state.layers.splice(state.currentLayerIndex + 1, 0, layer);
+                state.currentLayerIndex++;
+            } else {
+                state.layers.push(layer);
+                state.currentLayerIndex = state.layers.length - 1;
+            }
+            compositeAndRender();
+            updateLayersPanel();
+            return layer;
+        }
+
+        function deleteLayer(index) {
+            if (state.layers.length <= 1) {
+                showToast('Cannot delete only layer');
+                return;
+            }
+            state.layers.splice(index, 1);
+            if (state.currentLayerIndex >= state.layers.length) {
+                state.currentLayerIndex = state.layers.length - 1;
+            }
+            compositeAndRender();
+            updateLayersPanel();
+        }
+
+        function moveLayer(fromIndex, toIndex) {
+            if (toIndex < 0 || toIndex >= state.layers.length) return;
+            const [layer] = state.layers.splice(fromIndex, 1);
+            state.layers.splice(toIndex, 0, layer);
+            if (state.currentLayerIndex === fromIndex) {
+                state.currentLayerIndex = toIndex;
+            }
+            compositeAndRender();
+            updateLayersPanel();
+        }
+
+        function duplicateLayer(index) {
+            const src = state.layers[index];
+            const newLayer = createLayer(src.name + ' copy');
+            newLayer.ctx.drawImage(src.canvas, 0, 0);
+            newLayer.opacity = src.opacity;
+            newLayer.visible = src.visible;
+            state.layers.splice(index + 1, 0, newLayer);
+            state.currentLayerIndex = index + 1;
+            compositeAndRender();
+            updateLayersPanel();
+        }
+
+        function mergeLayerDown(index) {
+            if (index <= 0) return;
+            const upper = state.layers[index];
+            const lower = state.layers[index - 1];
+            lower.ctx.globalAlpha = upper.opacity;
+            lower.ctx.drawImage(upper.canvas, 0, 0);
+            lower.ctx.globalAlpha = 1;
+            state.layers.splice(index, 1);
+            state.currentLayerIndex = index - 1;
+            compositeAndRender();
+            updateLayersPanel();
+            saveState();
+        }
+
+        function getCurrentLayer() {
+            return state.layers[state.currentLayerIndex];
+        }
+
+        function getCurrentCtx() {
+            return state.layers[state.currentLayerIndex]?.ctx || ctx;
+        }
+
+        function compositeAndRender() {
+            // Clear main canvas
+            ctx.clearRect(0, 0, state.canvasWidth, state.canvasHeight);
+
+            // Draw layers from bottom to top
+            for (let i = 0; i < state.layers.length; i++) {
+                const layer = state.layers[i];
+                if (!layer.visible) continue;
+                ctx.globalAlpha = layer.opacity;
+                ctx.drawImage(layer.canvas, 0, 0);
+            }
+            ctx.globalAlpha = 1;
+        }
+
+        function flattenForExport() {
+            // Create a temp canvas with all layers merged
+            const tempCanvas = document.createElement('canvas');
+            tempCanvas.width = state.canvasWidth;
+            tempCanvas.height = state.canvasHeight;
+            const tempCtx = tempCanvas.getContext('2d');
+            tempCtx.imageSmoothingEnabled = false;
+
+            for (let i = 0; i < state.layers.length; i++) {
+                const layer = state.layers[i];
+                if (!layer.visible) continue;
+                tempCtx.globalAlpha = layer.opacity;
+                tempCtx.drawImage(layer.canvas, 0, 0);
+            }
+            tempCtx.globalAlpha = 1;
+            return tempCanvas;
+        }
 
         // ===== INITIALIZATION =====
         // ===== PIXEL ART ICONS =====
@@ -1336,11 +1480,25 @@
             // Clear canvas to transparent
             ctx.clearRect(0, 0, width, height);
 
+            // Initialize layers if empty
+            if (state.layers.length === 0) {
+                state.layers = [createLayer('Background')];
+                state.currentLayerIndex = 0;
+            } else {
+                // Resize existing layers
+                state.layers.forEach(layer => {
+                    layer.canvas.width = width;
+                    layer.canvas.height = height;
+                    layer.ctx.imageSmoothingEnabled = false;
+                });
+            }
+
             // Clear selection
             clearSelection();
 
             updateCanvasSize();
             drawGrid();
+            updateLayersPanel();
             saveState();
         }
 
@@ -1456,12 +1614,15 @@
         // ===== DRAWING =====
         function setPixel(x, y, color) {
             if (x < 0 || x >= state.canvasWidth || y < 0 || y >= state.canvasHeight) return;
+            const layer = getCurrentLayer();
+            if (!layer || layer.locked) return;
+            const layerCtx = layer.ctx;
 
             if (color === null || color === 'transparent') {
-                ctx.clearRect(x, y, 1, 1);
+                layerCtx.clearRect(x, y, 1, 1);
             } else {
-                ctx.fillStyle = color;
-                ctx.fillRect(x, y, 1, 1);
+                layerCtx.fillStyle = color;
+                layerCtx.fillRect(x, y, 1, 1);
             }
         }
 
@@ -1476,9 +1637,11 @@
             }
         }
 
-        function getPixel(x, y) {
+        function getPixel(x, y, fromComposite = false) {
             if (x < 0 || x >= state.canvasWidth || y < 0 || y >= state.canvasHeight) return null;
-            const data = ctx.getImageData(x, y, 1, 1).data;
+            // Read from current layer or composite view
+            const targetCtx = fromComposite ? ctx : (getCurrentLayer()?.ctx || ctx);
+            const data = targetCtx.getImageData(x, y, 1, 1).data;
             if (data[3] === 0) return null;
             return '#' + [data[0], data[1], data[2]].map(v => v.toString(16).padStart(2, '0')).join('');
         }
@@ -1560,7 +1723,11 @@
             startX = Math.floor(startX);
             startY = Math.floor(startY);
 
-            const imageData = ctx.getImageData(0, 0, state.canvasWidth, state.canvasHeight);
+            const layer = getCurrentLayer();
+            if (!layer || layer.locked) return;
+            const layerCtx = layer.ctx;
+
+            const imageData = layerCtx.getImageData(0, 0, state.canvasWidth, state.canvasHeight);
             const data = imageData.data;
             const targetColor = getColorAt(data, startX, startY);
             const fillRgba = hexToRgba(fillColor);
@@ -1586,7 +1753,8 @@
                 stack.push([x + 1, y], [x - 1, y], [x, y + 1], [x, y - 1]);
             }
 
-            ctx.putImageData(imageData, 0, 0);
+            layerCtx.putImageData(imageData, 0, 0);
+            compositeAndRender();
         }
 
         function getColorAt(data, x, y) {
@@ -1614,7 +1782,11 @@
         }
 
         function replaceColor(fromColor, toColor) {
-            const imageData = ctx.getImageData(0, 0, state.canvasWidth, state.canvasHeight);
+            const layer = getCurrentLayer();
+            if (!layer || layer.locked) return;
+            const layerCtx = layer.ctx;
+
+            const imageData = layerCtx.getImageData(0, 0, state.canvasWidth, state.canvasHeight);
             const data = imageData.data;
             const fromRgba = hexToRgba(fromColor);
             const toRgba = hexToRgba(toColor);
@@ -1629,7 +1801,8 @@
                 }
             }
 
-            ctx.putImageData(imageData, 0, 0);
+            layerCtx.putImageData(imageData, 0, 0);
+            compositeAndRender();
         }
 
         // ===== PREVIEW LAYER =====
@@ -2106,10 +2279,12 @@
                 case 'pencil':
                     saveState();
                     setBrushPixel(x, y, state.currentColor);
+                    compositeAndRender();
                     break;
                 case 'eraser':
                     saveState();
                     setBrushPixel(x, y, null);
+                    compositeAndRender();
                     break;
                 case 'line':
                 case 'rect':
@@ -2182,11 +2357,13 @@
                     bresenhamLine(state.lastX, state.lastY, x, y, (px, py) => {
                         setBrushPixel(px, py, state.currentColor);
                     });
+                    compositeAndRender();
                     break;
                 case 'eraser':
                     bresenhamLine(state.lastX, state.lastY, x, y, (px, py) => {
                         setBrushPixel(px, py, null);
                     });
+                    compositeAndRender();
                     break;
                 case 'line':
                     if (state.lineStartPoint) {
@@ -2282,6 +2459,7 @@
                 clearPreview();
             }
 
+            compositeAndRender();
             autoSave();
         }
 
@@ -2411,8 +2589,16 @@
 
         // ===== UNDO/REDO =====
         function saveState() {
-            const imageData = ctx.getImageData(0, 0, state.canvasWidth, state.canvasHeight);
-            state.undoStack.push(imageData);
+            // Save current layer's state
+            const layer = getCurrentLayer();
+            if (!layer) return;
+
+            const imageData = layer.ctx.getImageData(0, 0, state.canvasWidth, state.canvasHeight);
+            const undoEntry = {
+                layerIndex: state.currentLayerIndex,
+                imageData: imageData
+            };
+            state.undoStack.push(undoEntry);
             if (state.undoStack.length > state.maxHistory) {
                 state.undoStack.shift();
             }
@@ -2423,24 +2609,38 @@
         function undo() {
             if (state.undoStack.length <= 1) return;
 
-            const currentState = state.undoStack.pop();
-            state.redoStack.push(currentState);
+            const currentEntry = state.undoStack.pop();
+            state.redoStack.push(currentEntry);
 
-            const prevState = state.undoStack[state.undoStack.length - 1];
-            ctx.putImageData(prevState, 0, 0);
+            const prevEntry = state.undoStack[state.undoStack.length - 1];
 
+            // Restore to the correct layer
+            const targetLayer = state.layers[prevEntry.layerIndex];
+            if (targetLayer) {
+                targetLayer.ctx.putImageData(prevEntry.imageData, 0, 0);
+            }
+
+            compositeAndRender();
             updateUndoRedoButtons();
+            updateLayersPanel();
             autoSave();
         }
 
         function redo() {
             if (state.redoStack.length === 0) return;
 
-            const nextState = state.redoStack.pop();
-            state.undoStack.push(nextState);
-            ctx.putImageData(nextState, 0, 0);
+            const nextEntry = state.redoStack.pop();
+            state.undoStack.push(nextEntry);
 
+            // Restore to the correct layer
+            const targetLayer = state.layers[nextEntry.layerIndex];
+            if (targetLayer) {
+                targetLayer.ctx.putImageData(nextEntry.imageData, 0, 0);
+            }
+
+            compositeAndRender();
             updateUndoRedoButtons();
+            updateLayersPanel();
             autoSave();
         }
 
@@ -2458,7 +2658,9 @@
 
         // ===== FILE OPERATIONS =====
         function exportPNG() {
-            mainCanvas.toBlob(async (blob) => {
+            // Flatten all visible layers for export
+            const exportCanvas = flattenForExport();
+            exportCanvas.toBlob(async (blob) => {
                 // Try Web Share API first (mobile-friendly)
                 if (navigator.share && navigator.canShare) {
                     try {
@@ -2499,6 +2701,9 @@
 
             state.undoStack = [];
             state.redoStack = [];
+            state.layers = []; // Clear layers so initCanvas creates a new one
+            state.currentLayerIndex = 0;
+            state.nextLayerId = 1;
             initCanvas(width, height);
 
             document.getElementById('newCanvasModal').classList.remove('active');
@@ -2507,12 +2712,25 @@
 
         function autoSave() {
             try {
+                // Save layer data
+                const layersData = state.layers.map(layer => ({
+                    id: layer.id,
+                    name: layer.name,
+                    visible: layer.visible,
+                    opacity: layer.opacity,
+                    locked: layer.locked,
+                    image: layer.canvas.toDataURL()
+                }));
+
                 const data = {
                     width: state.canvasWidth,
                     height: state.canvasHeight,
-                    image: mainCanvas.toDataURL(),
+                    image: mainCanvas.toDataURL(), // Keep for backwards compatibility
                     palette: state.palette,
-                    zoom: state.zoom
+                    zoom: state.zoom,
+                    layers: layersData,
+                    currentLayerIndex: state.currentLayerIndex,
+                    nextLayerId: state.nextLayerId
                 };
                 localStorage.setItem('pixelArtAutoSave', JSON.stringify(data));
             } catch (e) {
@@ -2545,16 +2763,55 @@
                     previewCtx.imageSmoothingEnabled = false;
                     selCtx.imageSmoothingEnabled = false;
 
-                    const img = new Image();
-                    img.onload = () => {
-                        ctx.imageSmoothingEnabled = false;
-                        ctx.drawImage(img, 0, 0);
-                        updateCanvasSize();
-                        drawGrid();
-                        renderPalette();
-                        saveState();
-                    };
-                    img.src = data.image;
+                    // Load layers if present, otherwise fall back to single image
+                    if (data.layers && data.layers.length > 0) {
+                        state.layers = [];
+                        state.currentLayerIndex = data.currentLayerIndex || 0;
+                        state.nextLayerId = data.nextLayerId || data.layers.length + 1;
+
+                        let loadedCount = 0;
+                        data.layers.forEach((layerData, i) => {
+                            const layer = createLayer(layerData.name);
+                            layer.id = layerData.id;
+                            layer.visible = layerData.visible;
+                            layer.opacity = layerData.opacity;
+                            layer.locked = layerData.locked || false;
+
+                            const img = new Image();
+                            img.onload = () => {
+                                layer.ctx.imageSmoothingEnabled = false;
+                                layer.ctx.drawImage(img, 0, 0);
+                                loadedCount++;
+                                if (loadedCount === data.layers.length) {
+                                    compositeAndRender();
+                                    updateCanvasSize();
+                                    drawGrid();
+                                    renderPalette();
+                                    updateLayersPanel();
+                                    saveState();
+                                }
+                            };
+                            img.src = layerData.image;
+                            state.layers.push(layer);
+                        });
+                    } else {
+                        // Legacy: load single image into a background layer
+                        state.layers = [createLayer('Background')];
+                        state.currentLayerIndex = 0;
+
+                        const img = new Image();
+                        img.onload = () => {
+                            state.layers[0].ctx.imageSmoothingEnabled = false;
+                            state.layers[0].ctx.drawImage(img, 0, 0);
+                            compositeAndRender();
+                            updateCanvasSize();
+                            drawGrid();
+                            renderPalette();
+                            updateLayersPanel();
+                            saveState();
+                        };
+                        img.src = data.image;
+                    }
                 }
             } catch (e) {
                 console.warn('Load autosave failed:', e);
@@ -3328,6 +3585,100 @@
             updateUndoRedoButtons();
             document.getElementById('gridBtn').style.color = state.showGrid ? 'var(--accent)' : 'var(--text)';
         }
+
+        // ===== LAYERS PANEL =====
+        function updateLayersPanel() {
+            const list = document.getElementById('layersList');
+            if (!list) return;
+
+            list.innerHTML = '';
+            // Draw layers from top to bottom in the list
+            for (let i = state.layers.length - 1; i >= 0; i--) {
+                const layer = state.layers[i];
+                const item = document.createElement('div');
+                item.className = 'layer-item' + (i === state.currentLayerIndex ? ' active' : '');
+                item.style.cssText = 'display:flex;align-items:center;gap:8px;padding:8px;margin-bottom:4px;background:var(--bg-light);border-radius:4px;cursor:pointer;border:2px solid ' + (i === state.currentLayerIndex ? 'var(--accent)' : 'transparent');
+
+                // Visibility toggle
+                const visBtn = document.createElement('button');
+                visBtn.textContent = layer.visible ? '👁️' : '👁️‍🗨️';
+                visBtn.style.cssText = 'background:none;border:none;font-size:16px;cursor:pointer;opacity:' + (layer.visible ? '1' : '0.4');
+                visBtn.onclick = (e) => {
+                    e.stopPropagation();
+                    layer.visible = !layer.visible;
+                    compositeAndRender();
+                    updateLayersPanel();
+                };
+
+                // Layer preview thumbnail
+                const thumb = document.createElement('canvas');
+                thumb.width = 24;
+                thumb.height = 24;
+                thumb.style.cssText = 'border:1px solid var(--text-dim);background:repeating-conic-gradient(#808080 0% 25%, #404040 0% 50%) 50%/8px 8px;';
+                const thumbCtx = thumb.getContext('2d');
+                thumbCtx.imageSmoothingEnabled = false;
+                thumbCtx.drawImage(layer.canvas, 0, 0, 24, 24);
+
+                // Layer name
+                const name = document.createElement('span');
+                name.textContent = layer.name;
+                name.style.cssText = 'flex:1;font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;';
+
+                // Opacity slider
+                const opacity = document.createElement('input');
+                opacity.type = 'range';
+                opacity.min = '0';
+                opacity.max = '100';
+                opacity.value = Math.round(layer.opacity * 100);
+                opacity.style.cssText = 'width:50px;';
+                opacity.onclick = (e) => e.stopPropagation();
+                opacity.oninput = (e) => {
+                    layer.opacity = parseInt(e.target.value) / 100;
+                    compositeAndRender();
+                };
+
+                // Move buttons
+                const moveUp = document.createElement('button');
+                moveUp.textContent = '↑';
+                moveUp.style.cssText = 'background:var(--bg-medium);border:none;color:var(--text);padding:2px 6px;border-radius:4px;cursor:pointer;';
+                moveUp.onclick = (e) => { e.stopPropagation(); moveLayer(i, i + 1); };
+
+                const moveDown = document.createElement('button');
+                moveDown.textContent = '↓';
+                moveDown.style.cssText = 'background:var(--bg-medium);border:none;color:var(--text);padding:2px 6px;border-radius:4px;cursor:pointer;';
+                moveDown.onclick = (e) => { e.stopPropagation(); moveLayer(i, i - 1); };
+
+                item.onclick = () => {
+                    state.currentLayerIndex = i;
+                    updateLayersPanel();
+                };
+
+                item.appendChild(visBtn);
+                item.appendChild(thumb);
+                item.appendChild(name);
+                item.appendChild(opacity);
+                item.appendChild(moveUp);
+                item.appendChild(moveDown);
+                list.appendChild(item);
+            }
+        }
+
+        // Layers modal events
+        document.getElementById('layersBtn')?.addEventListener('click', () => {
+            updateLayersPanel();
+            document.getElementById('layersModal').classList.add('active');
+        });
+        document.getElementById('closeLayersBtn')?.addEventListener('click', () => {
+            document.getElementById('layersModal').classList.remove('active');
+        });
+        document.getElementById('addLayerBtn')?.addEventListener('click', () => {
+            addLayer();
+            saveState();
+        });
+        document.getElementById('deleteLayerBtn')?.addEventListener('click', () => {
+            deleteLayer(state.currentLayerIndex);
+            saveState();
+        });
 
         // ===== START =====
         init();
