@@ -1938,6 +1938,10 @@
                 document.getElementById('menuModal').classList.remove('active');
                 showPaletteGenerator();
             };
+            document.getElementById('importImageBtn').onclick = () => {
+                document.getElementById('menuModal').classList.remove('active');
+                importImage();
+            };
 
             // New canvas modal
             document.getElementById('cancelNewCanvas').onclick = () => document.getElementById('newCanvasModal').classList.remove('active');
@@ -2704,6 +2708,64 @@
                 showToast('PNG ready!');
                 setTimeout(() => URL.revokeObjectURL(url), 60000);
             }, 'image/png');
+        }
+
+        function importImage() {
+            const input = document.createElement('input');
+            input.type = 'file';
+            input.accept = 'image/*';
+            input.onchange = (e) => {
+                const file = e.target.files[0];
+                if (!file) return;
+
+                const img = new Image();
+                img.onload = () => {
+                    // Resize canvas to match image (capped at 256)
+                    const width = Math.min(img.width, 256);
+                    const height = Math.min(img.height, 256);
+
+                    state.undoStack = [];
+                    state.redoStack = [];
+                    state.layers = [];
+                    state.currentLayerIndex = 0;
+                    state.nextLayerId = 1;
+
+                    state.canvasWidth = width;
+                    state.canvasHeight = height;
+
+                    mainCanvas.width = width;
+                    mainCanvas.height = height;
+                    gridCanvas.width = width;
+                    gridCanvas.height = height;
+                    previewCanvas.width = width;
+                    previewCanvas.height = height;
+                    selectionCanvas.width = width;
+                    selectionCanvas.height = height;
+
+                    ctx.imageSmoothingEnabled = false;
+                    gridCtx.imageSmoothingEnabled = false;
+                    previewCtx.imageSmoothingEnabled = false;
+                    selCtx.imageSmoothingEnabled = false;
+
+                    // Create layer and draw image
+                    const layer = createLayer('Imported');
+                    layer.ctx.imageSmoothingEnabled = false;
+                    layer.ctx.drawImage(img, 0, 0, width, height);
+                    state.layers.push(layer);
+
+                    compositeAndRender();
+                    updateCanvasSize();
+                    drawGrid();
+                    updateLayersPanel();
+                    saveState();
+                    autoSave();
+
+                    showToast(`Imported ${width}x${height}`);
+                    URL.revokeObjectURL(img.src);
+                };
+                img.src = URL.createObjectURL(file);
+            };
+            input.click();
         }
 
         function createNewCanvas() {
