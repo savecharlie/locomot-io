@@ -8439,6 +8439,7 @@
                 if (gameState === 'loading') {
                     loadingFrames--;
                     countdownSeconds = Math.ceil(loadingFrames / 60);
+                    updateCamera(); // Keep camera centered on player during loading
                     if (loadingFrames <= 0) {
                         gameState = 'playing';
                         countdownSeconds = 0;
