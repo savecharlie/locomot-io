@@ -270,7 +270,6 @@
                     <button class="mode-btn ffa" id="startFFA">⚔️ FREE FOR ALL</button>
                     <button class="mode-btn teams" id="startTeams">👥 TEAM BATTLE</button>
                     <button class="mode-btn timed" id="startTimed" style="background: linear-gradient(135deg, #f80, #f40);">⏱️ TIMED (2min)</button>
-                    <button class="mode-btn" id="helloBtn" style="background: #f0f;" onclick="alert('HELLO WORLD')">HELLO WORLD TEST</button>
                 </div>
                 <label style="display: flex; align-items: center; justify-content: center; gap: 6px; margin-top: 12px; font-size: 9px; color: #666; cursor: pointer;">
                     <input type="checkbox" id="trainDataConsent" checked style="width: 12px; height: 12px; cursor: pointer;">
@@ -2257,6 +2256,7 @@
         let cameraWrapOffsetX = 0, cameraWrapOffsetY = 0;
         let gameState = 'start';
         let loadingFrames = 0; // Countdown before game starts moving
+        let countdownSeconds = 0; // Visual countdown from 5
         let currentMVP = null; // Track most interesting player for spectating
         let mvpScore = 0;
         let lastMVPChangeTime = 0; // When we last switched MVP
@@ -5708,7 +5708,7 @@
             genomeRegistry.fetchManifest();
 
             gameState = 'loading';
-            loadingFrames = 30; // Wait 30 frames (~0.5s) for visuals to stabilize
+            loadingFrames = 300; // 5 second countdown // Wait 30 frames (~0.5s) for visuals to stabilize
             canvas.classList.add('playing');
             Multiplayer.selfLastTurn = Date.now(); // Reset AFK timer
             Multiplayer.selfAfkWarned = false;
@@ -8435,12 +8435,14 @@
                 const dt = time - lastTime; lastTime = time;
                 ctx.fillStyle = '#0a0610'; ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-                // Loading state: draw everything but don't update - wait for visuals to stabilize
+                // Loading state: 5 second countdown, freeze all movement
                 if (gameState === 'loading') {
                     loadingFrames--;
+                    countdownSeconds = Math.ceil(loadingFrames / 60);
                     if (loadingFrames <= 0) {
                         gameState = 'playing';
-                        console.log('Loading complete - game starting');
+                        countdownSeconds = 0;
+                        console.log('Countdown complete - GO!');
                     }
                 }
 
@@ -8649,17 +8651,19 @@
                 if (gameState === 'playing' || gameState === 'loading') { drawSnake(); drawDirectionQueue(); drawLeaderArrow(); }
                 ctx.restore(); drawScanlines(); drawPatternFlash(ctx); devMode.draw(ctx);
 
-                // Loading indicator
-                if (gameState === 'loading') {
-                    ctx.fillStyle = 'rgba(10, 6, 16, 0.7)';
+                // Countdown overlay
+                if (gameState === 'loading' && countdownSeconds > 0) {
+                    ctx.fillStyle = 'rgba(10, 6, 16, 0.8)';
                     ctx.fillRect(0, 0, canvas.width, canvas.height);
                     ctx.fillStyle = '#0f0';
-                    ctx.font = '24px "Press Start 2P"';
+                    ctx.font = '80px "Press Start 2P"';
                     ctx.textAlign = 'center';
                     ctx.textBaseline = 'middle';
                     ctx.shadowColor = '#0f0';
-                    ctx.shadowBlur = 20;
-                    ctx.fillText('LOADING...', canvas.width/2, canvas.height/2);
+                    ctx.shadowBlur = 30;
+                    ctx.fillText(countdownSeconds.toString(), canvas.width/2, canvas.height/2);
+                    ctx.font = '16px "Press Start 2P"';
+                    ctx.fillText('GET READY', canvas.width/2, canvas.height/2 - 80);
                     ctx.shadowBlur = 0;
                 }
 
@@ -8868,7 +8872,7 @@
             init();
 
             gameState = 'loading';
-            loadingFrames = 30;
+            loadingFrames = 300; // 5 second countdown
             canvas.classList.add('playing');
             RunTracker.startRun('timed', Multiplayer.username);
             console.log('[TIMED] Starting recorder, enabled:', DataRecorder.enabled);
@@ -8961,7 +8965,7 @@
                 }
             }
             gameState = 'loading';
-            loadingFrames = 30;
+            loadingFrames = 300; // 5 second countdown
             canvas.classList.add('playing');
             RunTracker.startRun('ffa', Multiplayer.username);
             DataRecorder.startSession(); // Start behavioral cloning recording
@@ -8998,7 +9002,7 @@
                 }
             }
             gameState = 'loading';
-            loadingFrames = 30;
+            loadingFrames = 300; // 5 second countdown
             canvas.classList.add('playing');
             RunTracker.startRun('team', Multiplayer.username);
             DataRecorder.startSession(); // Start behavioral cloning recording
