@@ -5496,11 +5496,12 @@
             cameraZoom = 2; targetZoom = 2; // Start zoomed in
             cameraX = spawnX * GRID - canvas.width / 2 / cameraZoom;
             cameraY = spawnY * GRID - canvas.height / 2 / cameraZoom;
+            cameraWrapOffsetX = 0; cameraWrapOffsetY = 0; // Reset wrap tracking
             dirQueue = []; // Clear direction queue
-            
+
             updateHUD(); updateLeaderboard(); announceSpawn();
         }
-        
+
         function announceSpawn() {
             const el = document.getElementById('waveAnnounce');
             el.textContent = '🛡️ 10s SHIELD';
@@ -5768,6 +5769,7 @@
             cameraZoom = 2; targetZoom = 2;
             cameraX = spawnX * GRID - canvas.width / 2 / cameraZoom;
             cameraY = spawnY * GRID - canvas.height / 2 / cameraZoom;
+            cameraWrapOffsetX = 0; cameraWrapOffsetY = 0; // Reset wrap tracking
 
             const el = document.getElementById('waveAnnounce');
             el.textContent = '🚂 JOINING ARENA...';
