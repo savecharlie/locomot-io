@@ -1930,38 +1930,47 @@
         }
 
         async function saveProjectToCloud(tab) {
-            // Ensure tab has a valid UUID (migrate old numeric IDs)
-            if (typeof tab.id === 'number' || (typeof tab.id === 'string' && !tab.id.includes('-'))) {
-                tab.id = crypto.randomUUID();
+            try {
+                console.log('saveProjectToCloud called for:', tab.id, tab.name);
+
+                // Ensure tab has a valid UUID (migrate old numeric IDs)
+                if (typeof tab.id === 'number' || (typeof tab.id === 'string' && !tab.id.includes('-'))) {
+                    tab.id = crypto.randomUUID();
+                    console.log('Generated new UUID:', tab.id);
+                }
+
+                console.log('Building project data...');
+                const projectData = {
+                    id: tab.id,
+                    user_id: state.user.id,
+                    name: tab.name,
+                    canvas_width: tab.canvasWidth,
+                    canvas_height: tab.canvasHeight,
+                    data: {
+                        layers: tab.layers,
+                        currentLayerIndex: tab.currentLayerIndex,
+                        nextLayerId: tab.nextLayerId,
+                        palette: tab.palette,
+                        currentColor: tab.currentColor,
+                        zoom: tab.zoom,
+                        panX: tab.panX,
+                        panY: tab.panY
+                    },
+                    updated_at: new Date().toISOString()
+                };
+
+                console.log('Upserting project:', tab.id, 'data size:', JSON.stringify(projectData).length);
+                const { data, error } = await supabaseClient
+                    .from('projects')
+                    .upsert(projectData, { onConflict: 'id' })
+                    .select();
+
+                console.log('Upsert result:', { data, error });
+                if (error) throw error;
+            } catch (e) {
+                console.error('saveProjectToCloud error:', e);
+                throw e;
             }
-
-            const projectData = {
-                id: tab.id,
-                user_id: state.user.id,
-                name: tab.name,
-                canvas_width: tab.canvasWidth,
-                canvas_height: tab.canvasHeight,
-                data: {
-                    layers: tab.layers,
-                    currentLayerIndex: tab.currentLayerIndex,
-                    nextLayerId: tab.nextLayerId,
-                    palette: tab.palette,
-                    currentColor: tab.currentColor,
-                    zoom: tab.zoom,
-                    panX: tab.panX,
-                    panY: tab.panY
-                },
-                updated_at: new Date().toISOString()
-            };
-
-            console.log('Upserting project:', tab.id);
-            const { data, error } = await supabaseClient
-                .from('projects')
-                .upsert(projectData, { onConflict: 'id' })
-                .select();
-
-            console.log('Upsert result:', { data, error });
-            if (error) throw error;
         }
 
         async function saveWorkspaceToCloud() {
