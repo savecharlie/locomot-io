@@ -2728,9 +2728,6 @@
             const pendingTap = touchState.pendingDrawStart;
             touchState.pendingDrawStart = null;
 
-            // Debug: show what we have
-            showToast('end: p=' + !!pendingTap + ' d=' + state.isDrawing);
-
             if (e.touches.length === 0) {
                 // Finalize pinch zoom - round to nearest integer and redraw grid
                 if (touchState.isPinching && touchState.smoothZoom) {
@@ -2750,7 +2747,6 @@
 
                 // Handle quick tap - draw wasn't started yet but we have pending coords
                 if (pendingTap && !state.isDrawing) {
-                    showToast('tap ' + pendingTap.x + ',' + pendingTap.y);
                     handleToolStart(pendingTap.x, pendingTap.y);
                     handleToolEnd(pendingTap.x, pendingTap.y);
                     autoSave();
