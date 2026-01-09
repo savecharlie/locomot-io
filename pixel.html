@@ -4841,9 +4841,12 @@ Canvas: ${state.canvasWidth}x${state.canvasHeight}`;
 
         function saveCurrentTabState() {
             if (state.tabs.length === 0) return;
-            console.log('saveCurrentTabState: saving tab', state.activeTabIndex, 'with', state.layers.length, 'layers');
 
             const tab = state.tabs[state.activeTabIndex];
+
+            // DEBUG: Check if we have layers with content
+            const layerInfo = state.layers.map(l => l.canvas.toDataURL().length).join(',');
+            console.log('SAVE tab', state.activeTabIndex, '- layers:', state.layers.length, '- sizes:', layerInfo);
             tab.canvasWidth = state.canvasWidth;
             tab.canvasHeight = state.canvasHeight;
             tab.currentLayerIndex = state.currentLayerIndex;
@@ -4875,6 +4878,10 @@ Canvas: ${state.canvasWidth}x${state.canvasHeight}`;
 
         function loadTabState(tabIndex) {
             const tab = state.tabs[tabIndex];
+
+            // DEBUG: Check what we're loading
+            const layerInfo = tab.layers ? tab.layers.map(l => l.image ? l.image.length : 0).join(',') : 'none';
+            console.log('LOAD tab', tabIndex, '- layers:', tab.layers ? tab.layers.length : 0, '- sizes:', layerInfo);
 
             state.canvasWidth = tab.canvasWidth;
             state.canvasHeight = tab.canvasHeight;
@@ -4924,6 +4931,8 @@ Canvas: ${state.canvasWidth}x${state.canvasHeight}`;
                         img.onload = () => {
                             ctx.drawImage(img, 0, 0);
                             compositeAndRender();
+                            // Save after image loads to preserve content
+                            setTimeout(() => autoSave(), 100);
                         };
                         img.src = layerData.image;
                     }
@@ -4959,13 +4968,11 @@ Canvas: ${state.canvasWidth}x${state.canvasHeight}`;
 
             // Update tab bar UI
             renderTabBar();
-            autoSave();
+            // Note: Don't autoSave here - images are still loading async
+            // AutoSave will happen on next user action
         }
 
         function createNewTab(width = 32, height = 32) {
-            // DEBUG: Check tabs at very start
-            alert('START: tabs=' + state.tabs.length);
-
             // Save current tab first
             if (state.tabs.length > 0) {
                 saveCurrentTabState();
@@ -4975,8 +4982,6 @@ Canvas: ${state.canvasWidth}x${state.canvasHeight}`;
             const tab = createTabObject(width, height);
             state.tabs.push(tab);
             state.activeTabIndex = state.tabs.length - 1;
-
-            alert('AFTER PUSH: tabs=' + state.tabs.length);
 
             // Initialize canvas for new tab
             state.canvasWidth = width;
@@ -5014,8 +5019,6 @@ Canvas: ${state.canvasWidth}x${state.canvasHeight}`;
             updateCanvasTransform();
             drawGrid();
             compositeAndRender();
-            console.log('Before renderTabBar, tabs:', state.tabs.length);
-            showToast(`Before render: ${state.tabs.length} tabs`);
             renderTabBar();
             autoSave();
         }
@@ -5048,13 +5051,6 @@ Canvas: ${state.canvasWidth}x${state.canvasHeight}`;
         function renderTabBar() {
             const container = document.getElementById('tabsContainer');
             container.innerHTML = '';
-            console.log('renderTabBar: rendering', state.tabs.length, 'tabs');
-
-            // Debug: show count
-            const countEl = document.createElement('span');
-            countEl.style.cssText = 'color: yellow; font-size: 12px; padding: 4px;';
-            countEl.textContent = `[${state.tabs.length}]`;
-            container.appendChild(countEl);
 
             state.tabs.forEach((tab, i) => {
                 const tabEl = document.createElement('div');
