@@ -5494,15 +5494,14 @@ Canvas: ${state.canvasWidth}x${state.canvasHeight}`;
 
         function renderTabBar() {
             const container = document.getElementById('tabsContainer');
-            container.innerHTML = '';
 
-            console.log('renderTabBar: tabs=' + state.tabs.length + ', activeIndex=' + state.activeTabIndex);
+            // Build new tabs in a fragment first to avoid flash
+            const fragment = document.createDocumentFragment();
 
             state.tabs.forEach((tab, i) => {
                 const tabEl = document.createElement('div');
                 const isActive = i === state.activeTabIndex;
                 tabEl.className = 'tab' + (isActive ? ' active' : '');
-                console.log('Tab ' + i + ': active=' + isActive + ', class=' + tabEl.className);
                 tabEl.onclick = () => switchToTab(i);
 
                 const nameSpan = document.createElement('span');
@@ -5519,8 +5518,12 @@ Canvas: ${state.canvasWidth}x${state.canvasHeight}`;
 
                 tabEl.appendChild(nameSpan);
                 tabEl.appendChild(closeBtn);
-                container.appendChild(tabEl);
+                fragment.appendChild(tabEl);
             });
+
+            // Replace all at once - atomic operation
+            container.innerHTML = '';
+            container.appendChild(fragment);
         }
 
         // Tab event handlers
