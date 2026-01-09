@@ -2503,8 +2503,13 @@
             return { x, y };
         }
 
+        function isModalOpen() {
+            return document.querySelector('.modal-overlay.active') !== null;
+        }
+
         function handlePointerStart(e) {
             if (e.button !== 0) return; // Only left click
+            if (isModalOpen()) return; // Don't draw when modal is open
 
             const { x, y } = getCanvasCoords(e);
             state.isDrawing = true;
@@ -2580,6 +2585,9 @@
         };
 
         function handleTouchStart(e) {
+            // Don't handle canvas touches when modal is open
+            if (isModalOpen()) return;
+
             e.preventDefault();
 
             // Clear any existing long press timer
@@ -2618,6 +2626,7 @@
         }
 
         function handleTouchMove(e) {
+            if (isModalOpen()) return;
             e.preventDefault();
 
             // Cancel long press on any movement
@@ -2664,6 +2673,7 @@
         }
 
         function handleTouchEnd(e) {
+            if (isModalOpen()) return;
             e.preventDefault();
 
             // Clear long press timer
