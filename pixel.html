@@ -1057,17 +1057,17 @@
             align-items: center;
             background: var(--bg-dark);
             border-bottom: 1px solid var(--bg-light);
-            padding: 0 4px;
-            min-height: 36px;
-            gap: 4px;
+            padding: 4px 4px;
+            min-height: 48px;
+            gap: 8px;
         }
 
         .tabs-container {
             display: flex;
             flex: 1;
             overflow-x: auto;
-            gap: 2px;
-            padding: 4px 0;
+            gap: 8px;
+            padding: 4px 8px;
             min-width: 0;
             touch-action: pan-x;
         }
@@ -1084,17 +1084,17 @@
         .tab {
             display: flex;
             align-items: center;
-            gap: 6px;
-            padding: 6px 10px;
+            gap: 8px;
+            padding: 10px 14px;
             background: var(--bg-medium);
-            border: 1px solid var(--bg-light);
-            border-radius: 6px 6px 0 0;
+            border: 2px solid var(--bg-light);
+            border-radius: 8px 8px 0 0;
             color: var(--text-dim);
-            font-size: 13px;
+            font-size: 14px;
             cursor: pointer;
             white-space: nowrap;
-            min-width: 60px;
-            max-width: 150px;
+            min-width: 80px;
+            max-width: 160px;
             flex-shrink: 0;
         }
 
@@ -1103,9 +1103,9 @@
         }
 
         .tab.active {
-            background: var(--bg-medium);
-            border-bottom-color: var(--bg-medium);
-            color: var(--text);
+            background: var(--accent);
+            border-color: var(--accent);
+            color: white;
         }
 
         .tab-name {
