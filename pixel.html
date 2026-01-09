@@ -57,8 +57,8 @@
         ]
     }
     </script>
-    <!-- Supabase SDK - loaded async to not block rendering -->
-    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2" async></script>
+    <!-- Supabase SDK -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <style>
         * {
             margin: 0;
@@ -1775,26 +1775,17 @@
         const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZ3bGJqanpudmN6ZmVjam5yamVuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njc5Nzc5OTIsImV4cCI6MjA4MzU1Mzk5Mn0.didh9h1rGEDEhzVlUBp7WhAxFMPsUTSvsuvIwa0aDro';
         let supabase = null;
 
-        // Initialize Supabase when SDK loads (it's async)
-        function initSupabase() {
+        // Initialize Supabase (SDK loaded synchronously in head)
+        try {
             if (window.supabase) {
-                try {
-                    supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-                    console.log('Supabase initialized');
-                    setupAuthListener();
-                } catch (e) {
-                    console.error('Supabase init failed:', e);
-                }
+                supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+                console.log('Supabase initialized');
+            } else {
+                console.error('Supabase SDK not loaded');
             }
+        } catch (e) {
+            console.error('Supabase init error:', e);
         }
-
-        // Check for Supabase SDK periodically until it loads
-        const supabaseCheck = setInterval(() => {
-            if (window.supabase) {
-                clearInterval(supabaseCheck);
-                initSupabase();
-            }
-        }, 100);
 
         // Auth functions
         async function signInWithGoogle() {
@@ -2275,6 +2266,7 @@
             loadPalette('pico8');
             initCanvas(32, 32);
             setupEventListeners();
+            setupAuthListener();
             updateUI();
             loadAutoSave();
 
