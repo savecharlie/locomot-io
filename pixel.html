@@ -2594,7 +2594,11 @@
             lastPinchDist: 0,
             lastPinchCenter: null,
             longPressTimer: null,
-            longPressTriggered: false
+            longPressTriggered: false,
+            drawDelayTimer: null,
+            pendingDrawStart: null,
+            smoothZoom: null,
+            rafPending: false
         };
 
         function handleTouchStart(e) {
@@ -2611,7 +2615,11 @@
             touchState.longPressTriggered = false;
 
             if (e.touches.length === 2) {
-                // Start pinch zoom
+                // Start pinch zoom - cancel any pending draw
+                if (touchState.drawDelayTimer) {
+                    clearTimeout(touchState.drawDelayTimer);
+                    touchState.drawDelayTimer = null;
+                }
                 touchState.isPinching = true;
                 const dist = getTouchDistance(e.touches[0], e.touches[1]);
                 touchState.lastPinchDist = dist;
@@ -2633,8 +2641,16 @@
                     }
                 }, 500);
 
-                state.isDrawing = true;
-                handleToolStart(x, y);
+                // Delay draw start to allow for pinch gesture detection
+                touchState.pendingDrawStart = { x, y };
+                touchState.drawDelayTimer = setTimeout(() => {
+                    if (!touchState.isPinching && touchState.pendingDrawStart) {
+                        state.isDrawing = true;
+                        handleToolStart(touchState.pendingDrawStart.x, touchState.pendingDrawStart.y);
+                        touchState.pendingDrawStart = null;
+                    }
+                    touchState.drawDelayTimer = null;
+                }, 60); // 60ms delay to detect second finger
             }
         }
 
@@ -2701,6 +2717,13 @@
                 clearTimeout(touchState.longPressTimer);
                 touchState.longPressTimer = null;
             }
+
+            // Clear draw delay timer
+            if (touchState.drawDelayTimer) {
+                clearTimeout(touchState.drawDelayTimer);
+                touchState.drawDelayTimer = null;
+            }
+            touchState.pendingDrawStart = null;
 
             if (e.touches.length === 0) {
                 // Finalize pinch zoom - round to nearest integer and redraw grid
