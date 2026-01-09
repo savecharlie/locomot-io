@@ -1847,13 +1847,28 @@
         }
 
         // ===== CLOUD SYNC =====
+        let lastSyncTrigger = 0;
         function debouncedCloudSync() {
+            const now = Date.now();
             if (state.syncDebounceTimer) {
                 clearTimeout(state.syncDebounceTimer);
             }
-            state.syncDebounceTimer = setTimeout(() => {
+
+            // Force sync if it's been more than 5 seconds since first trigger
+            if (!lastSyncTrigger) lastSyncTrigger = now;
+            const timeSinceFirst = now - lastSyncTrigger;
+
+            if (timeSinceFirst > 5000) {
+                // Max wait exceeded, sync now
+                lastSyncTrigger = 0;
                 syncToCloud();
-            }, 2000);
+            } else {
+                // Debounce for 1 second
+                state.syncDebounceTimer = setTimeout(() => {
+                    lastSyncTrigger = 0;
+                    syncToCloud();
+                }, 1000);
+            }
         }
 
         function updateSyncStatus(status) {
