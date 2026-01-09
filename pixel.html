@@ -1773,12 +1773,12 @@
         // ===== SUPABASE =====
         const SUPABASE_URL = 'https://vwlbjjznvczfecjnrjen.supabase.co';
         const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZ3bGJqanpudmN6ZmVjam5yamVuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njc5Nzc5OTIsImV4cCI6MjA4MzU1Mzk5Mn0.didh9h1rGEDEhzVlUBp7WhAxFMPsUTSvsuvIwa0aDro';
-        let supabase = null;
+        let supabaseClient = null;
 
         // Initialize Supabase (SDK loaded synchronously in head)
         try {
             if (window.supabase) {
-                supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+                supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
                 console.log('Supabase initialized');
             } else {
                 console.error('Supabase SDK not loaded');
@@ -1789,11 +1789,11 @@
 
         // Auth functions
         async function signInWithGoogle() {
-            if (!supabase) {
+            if (!supabaseClient) {
                 showToast('Cloud sync loading...');
                 return;
             }
-            const { error } = await supabase.auth.signInWithOAuth({
+            const { error } = await supabaseClient.auth.signInWithOAuth({
                 provider: 'google',
                 options: {
                     redirectTo: window.location.origin + window.location.pathname
@@ -1806,8 +1806,8 @@
         }
 
         async function signOut() {
-            if (!supabase) return;
-            const { error } = await supabase.auth.signOut();
+            if (!supabaseClient) return;
+            const { error } = await supabaseClient.auth.signOut();
             if (error) console.error('Sign out error:', error);
             state.user = null;
             updateAuthUI();
@@ -1833,8 +1833,8 @@
         }
 
         function setupAuthListener() {
-            if (!supabase) return;
-            supabase.auth.onAuthStateChange((event, session) => {
+            if (!supabaseClient) return;
+            supabaseClient.auth.onAuthStateChange((event, session) => {
                 console.log('Auth state:', event);
                 state.user = session?.user || null;
                 updateAuthUI();
