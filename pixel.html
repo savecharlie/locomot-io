@@ -1895,9 +1895,12 @@
 
                 state.lastSyncTime = new Date();
                 updateSyncStatus('synced');
-                console.log('Synced to cloud');
+                console.log('Synced to cloud', state.tabs.length, 'tabs');
             } catch (error) {
                 console.error('Sync error:', error);
+                const errMsg = JSON.stringify(error, null, 2);
+                navigator.clipboard.writeText(errMsg).catch(() => {});
+                showToast('Sync error (copied)');
                 updateSyncStatus('error');
             }
         }
@@ -4208,6 +4211,7 @@ Canvas: ${state.canvasWidth}x${state.canvasHeight}`;
 
                 // Cloud sync if logged in
                 if (state.user) {
+                    console.log('Triggering cloud sync for user:', state.user.email);
                     debouncedCloudSync();
                 }
             } catch (e) {
