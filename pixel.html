@@ -1834,11 +1834,165 @@
 
         function setupAuthListener() {
             if (!supabaseClient) return;
-            supabaseClient.auth.onAuthStateChange((event, session) => {
+            supabaseClient.auth.onAuthStateChange(async (event, session) => {
                 console.log('Auth state:', event);
                 state.user = session?.user || null;
                 updateAuthUI();
+
+                if (event === 'SIGNED_IN' && state.user) {
+                    // Merge cloud data with local data
+                    await mergeWithCloud();
+                }
             });
+        }
+
+        // ===== CLOUD SYNC =====
+        function debouncedCloudSync() {
+            if (state.syncDebounceTimer) {
+                clearTimeout(state.syncDebounceTimer);
+            }
+            state.syncDebounceTimer = setTimeout(() => {
+                syncToCloud();
+            }, 2000);
+        }
+
+        function updateSyncStatus(status) {
+            state.syncStatus = status;
+            const syncStatus = document.getElementById('syncStatus');
+            if (!syncStatus) return;
+
+            syncStatus.classList.remove('syncing', 'synced', 'error');
+            switch(status) {
+                case 'syncing':
+                    syncStatus.classList.add('syncing');
+                    break;
+                case 'synced':
+                    syncStatus.classList.add('synced');
+                    break;
+                case 'error':
+                    syncStatus.classList.add('error');
+                    break;
+            }
+        }
+
+        async function syncToCloud() {
+            if (!state.user || !supabaseClient) return;
+
+            updateSyncStatus('syncing');
+            try {
+                // Save current tab state first
+                if (state.tabs.length > 0) {
+                    saveCurrentTabState();
+                }
+
+                // Save each tab as a project
+                for (const tab of state.tabs) {
+                    await saveProjectToCloud(tab);
+                }
+
+                // Save workspace state
+                await saveWorkspaceToCloud();
+
+                state.lastSyncTime = new Date();
+                updateSyncStatus('synced');
+                console.log('Synced to cloud');
+            } catch (error) {
+                console.error('Sync error:', error);
+                updateSyncStatus('error');
+            }
+        }
+
+        async function saveProjectToCloud(tab) {
+            const projectData = {
+                id: String(tab.id),
+                user_id: state.user.id,
+                name: tab.name,
+                canvas_width: tab.canvasWidth,
+                canvas_height: tab.canvasHeight,
+                data: {
+                    layers: tab.layers,
+                    currentLayerIndex: tab.currentLayerIndex,
+                    nextLayerId: tab.nextLayerId,
+                    palette: tab.palette,
+                    currentColor: tab.currentColor,
+                    zoom: tab.zoom,
+                    panX: tab.panX,
+                    panY: tab.panY
+                },
+                updated_at: new Date().toISOString()
+            };
+
+            const { error } = await supabaseClient
+                .from('projects')
+                .upsert(projectData, { onConflict: 'id' });
+
+            if (error) throw error;
+        }
+
+        async function saveWorkspaceToCloud() {
+            const workspaceData = {
+                user_id: state.user.id,
+                open_project_ids: state.tabs.map(t => String(t.id)),
+                active_project_id: state.tabs[state.activeTabIndex] ? String(state.tabs[state.activeTabIndex].id) : null,
+                updated_at: new Date().toISOString()
+            };
+
+            const { error } = await supabaseClient
+                .from('workspaces')
+                .upsert(workspaceData, { onConflict: 'user_id' });
+
+            if (error) throw error;
+        }
+
+        async function mergeWithCloud() {
+            if (!state.user || !supabaseClient) return;
+
+            try {
+                // Get cloud projects for this user
+                const { data: cloudProjects, error } = await supabaseClient
+                    .from('projects')
+                    .select('*')
+                    .eq('user_id', state.user.id);
+
+                if (error) throw error;
+
+                if (cloudProjects && cloudProjects.length > 0) {
+                    // Get existing local tab IDs
+                    const localIds = new Set(state.tabs.map(t => String(t.id)));
+
+                    // Add cloud projects that aren't already local
+                    for (const proj of cloudProjects) {
+                        if (!localIds.has(proj.id)) {
+                            const tab = {
+                                id: proj.id,
+                                name: proj.name,
+                                canvasWidth: proj.canvas_width,
+                                canvasHeight: proj.canvas_height,
+                                layers: proj.data?.layers || [],
+                                currentLayerIndex: proj.data?.currentLayerIndex || 0,
+                                nextLayerId: proj.data?.nextLayerId || 1,
+                                palette: proj.data?.palette || [...PALETTES.pico8],
+                                currentColor: proj.data?.currentColor || '#000000',
+                                undoStack: [],
+                                redoStack: [],
+                                zoom: proj.data?.zoom || 8,
+                                panX: proj.data?.panX || 0,
+                                panY: proj.data?.panY || 0
+                            };
+                            state.tabs.push(tab);
+                        }
+                    }
+                    renderTabBar();
+                    showToast('Synced with cloud');
+                }
+
+                // Now sync local tabs to cloud
+                await syncToCloud();
+
+            } catch (error) {
+                console.error('Merge error:', error);
+                showToast('Sync failed');
+            }
         }
 
         // ===== PALETTES =====
@@ -4046,6 +4200,11 @@ Canvas: ${state.canvasWidth}x${state.canvasHeight}`;
                     nextTabId: state.nextTabId
                 };
                 localStorage.setItem('pixelArtAutoSave', JSON.stringify(data));
+
+                // Cloud sync if logged in
+                if (state.user) {
+                    debouncedCloudSync();
+                }
             } catch (e) {
                 console.warn('AutoSave failed:', e);
             }
