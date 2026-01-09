@@ -4342,10 +4342,28 @@ Canvas: ${state.canvasWidth}x${state.canvasHeight}`;
             const offY = state.selection.floatingOffset.y;
 
             saveState();
-            // Write to current layer, not main canvas
+            // Write to current layer - only non-transparent pixels (don't overwrite with empty)
             const layer = getCurrentLayer();
             if (layer) {
-                layer.ctx.putImageData(state.selection.floatingData, bounds.x + offX, bounds.y + offY);
+                const srcData = state.selection.floatingData;
+                const destX = bounds.x + offX;
+                const destY = bounds.y + offY;
+
+                // Get destination data to blend with
+                const destData = layer.ctx.getImageData(destX, destY, bounds.width, bounds.height);
+
+                // Only copy non-transparent pixels
+                for (let i = 0; i < srcData.data.length; i += 4) {
+                    const alpha = srcData.data[i + 3];
+                    if (alpha > 0) {
+                        destData.data[i] = srcData.data[i];
+                        destData.data[i + 1] = srcData.data[i + 1];
+                        destData.data[i + 2] = srcData.data[i + 2];
+                        destData.data[i + 3] = alpha;
+                    }
+                }
+
+                layer.ctx.putImageData(destData, destX, destY);
             }
             previewCtx.clearRect(0, 0, state.canvasWidth, state.canvasHeight);
             clearSelection();
