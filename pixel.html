@@ -4962,8 +4962,11 @@ Canvas: ${state.canvasWidth}x${state.canvasHeight}`;
         }
 
         function createNewTab(width = 32, height = 32) {
+            console.log('createNewTab called, current tabs:', state.tabs.length);
+
             // Save current tab first
             if (state.tabs.length > 0) {
+                console.log('Saving current tab state for tab index:', state.activeTabIndex);
                 saveCurrentTabState();
             }
 
@@ -4971,6 +4974,8 @@ Canvas: ${state.canvasWidth}x${state.canvasHeight}`;
             const tab = createTabObject(width, height);
             state.tabs.push(tab);
             state.activeTabIndex = state.tabs.length - 1;
+            console.log('New tab created, total tabs now:', state.tabs.length);
+            showToast(`Tab ${state.tabs.length} created (${state.tabs.length} total)`);
 
             // Initialize canvas for new tab
             state.canvasWidth = width;
@@ -5040,6 +5045,7 @@ Canvas: ${state.canvasWidth}x${state.canvasHeight}`;
         function renderTabBar() {
             const container = document.getElementById('tabsContainer');
             container.innerHTML = '';
+            console.log('renderTabBar: rendering', state.tabs.length, 'tabs');
 
             state.tabs.forEach((tab, i) => {
                 const tabEl = document.createElement('div');
@@ -5048,7 +5054,7 @@ Canvas: ${state.canvasWidth}x${state.canvasHeight}`;
 
                 const nameSpan = document.createElement('span');
                 nameSpan.className = 'tab-name';
-                nameSpan.textContent = tab.name;
+                nameSpan.textContent = `${i + 1}. ${tab.name}`;
 
                 const closeBtn = document.createElement('button');
                 closeBtn.className = 'tab-close';
