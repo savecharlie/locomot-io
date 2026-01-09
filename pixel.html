@@ -769,6 +769,21 @@
             50% { transform: translate(-50%, -50%) scale(1.3); opacity: 0.7; }
         }
 
+        /* Analogous row buttons */
+        .analogous-row-btn {
+            display: flex;
+            justify-content: center;
+            gap: 8px;
+            padding: 8px;
+            background: var(--bg-dark);
+            border-radius: 6px;
+            margin: 4px 0;
+        }
+
+        .analogous-row-btn button {
+            font-size: 12px;
+        }
+
         /* Color Editor Modal */
         .color-editor-modal {
             min-width: 320px;
@@ -1290,18 +1305,6 @@
                     <option value="tetradic">Tetradic</option>
                 </select>
             </div>
-            <div class="form-group" id="analogousControls" style="display:none;">
-                <label>Analogous Rows</label>
-                <div style="display:flex;gap:8px;align-items:center;">
-                    <button class="btn btn-secondary" id="addRowCool" style="padding:6px 12px;">+ Warm</button>
-                    <span id="analogousRowCount" style="flex:1;text-align:center;">3 rows</span>
-                    <button class="btn btn-secondary" id="addRowWarm" style="padding:6px 12px;">+ Cool</button>
-                </div>
-                <div style="display:flex;gap:8px;margin-top:8px;">
-                    <button class="btn btn-secondary" id="removeRowCool" style="padding:6px 12px;flex:1;">− Warm</button>
-                    <button class="btn btn-secondary" id="removeRowWarm" style="padding:6px 12px;flex:1;">− Cool</button>
-                </div>
-            </div>
             <div class="form-group">
                 <label>Colors per Ramp: <span id="rampSizeVal">6</span></label>
                 <input type="range" id="rampSize" min="3" max="9" value="6">
@@ -1316,7 +1319,15 @@
             </div>
             <div class="form-group">
                 <label>Click colors to select/deselect. Click row/column buttons to toggle whole rows/columns.</label>
+                <div id="analogousAddTop" class="analogous-row-btn" style="display:none;">
+                    <button class="btn btn-secondary" id="addRowTop">+ Add Row</button>
+                    <button class="btn btn-secondary" id="removeRowTop" style="padding:4px 8px;">−</button>
+                </div>
                 <div id="palettePreview" class="palette-gen-grid"></div>
+                <div id="analogousAddBottom" class="analogous-row-btn" style="display:none;">
+                    <button class="btn btn-secondary" id="addRowBottom">+ Add Row</button>
+                    <button class="btn btn-secondary" id="removeRowBottom" style="padding:4px 8px;">−</button>
+                </div>
                 <div class="palette-gen-actions">
                     <button id="selectAllColors">Select All</button>
                     <button id="deselectAllColors">Deselect All</button>
@@ -2406,40 +2417,39 @@
             document.getElementById('harmonyType').onchange = (e) => {
                 // Show/hide analogous controls
                 const isAnalogous = e.target.value === 'analogous';
-                document.getElementById('analogousControls').style.display = isAnalogous ? 'block' : 'none';
+                document.getElementById('analogousAddTop').style.display = isAnalogous ? 'flex' : 'none';
+                document.getElementById('analogousAddBottom').style.display = isAnalogous ? 'flex' : 'none';
                 updatePalettePreview();
             };
 
-            // Analogous row controls
-            function updateAnalogousRowCount() {
-                const total = state.analogousCoolRows + 1 + state.analogousWarmRows;
-                document.getElementById('analogousRowCount').textContent = `${total} rows`;
+            // Analogous row controls (top = cool direction, bottom = warm direction)
+            function updateAnalogousRows() {
                 state.selectedColors.clear();
                 updatePalettePreview();
             }
 
-            document.getElementById('addRowCool').onclick = () => {
+            document.getElementById('addRowTop').onclick = () => {
                 if (state.analogousCoolRows < 5) {
                     state.analogousCoolRows++;
-                    updateAnalogousRowCount();
+                    updateAnalogousRows();
                 }
             };
-            document.getElementById('removeRowCool').onclick = () => {
+            document.getElementById('removeRowTop').onclick = () => {
                 if (state.analogousCoolRows > 0) {
                     state.analogousCoolRows--;
-                    updateAnalogousRowCount();
+                    updateAnalogousRows();
                 }
             };
-            document.getElementById('addRowWarm').onclick = () => {
+            document.getElementById('addRowBottom').onclick = () => {
                 if (state.analogousWarmRows < 5) {
                     state.analogousWarmRows++;
-                    updateAnalogousRowCount();
+                    updateAnalogousRows();
                 }
             };
-            document.getElementById('removeRowWarm').onclick = () => {
+            document.getElementById('removeRowBottom').onclick = () => {
                 if (state.analogousWarmRows > 0) {
                     state.analogousWarmRows--;
-                    updateAnalogousRowCount();
+                    updateAnalogousRows();
                 }
             };
 
@@ -2639,27 +2649,34 @@
             }
 
             if (e.touches.length === 2 && touchState.isPinching) {
-                // Pinch zoom
+                // Pinch zoom - smooth floating point zoom
                 const dist = getTouchDistance(e.touches[0], e.touches[1]);
                 const center = getTouchCenter(e.touches[0], e.touches[1]);
 
                 const scale = dist / touchState.lastPinchDist;
-                let newZoom = Math.round(state.zoom * scale);
-                newZoom = Math.max(1, Math.min(32, newZoom));
 
-                if (newZoom !== state.zoom) {
-                    state.zoom = newZoom;
-                    updateCanvasSize();
-                    drawGrid();
-                }
+                // Use floating point for smooth zoom, clamp to valid range
+                if (!touchState.smoothZoom) touchState.smoothZoom = state.zoom;
+                touchState.smoothZoom = Math.max(1, Math.min(32, touchState.smoothZoom * scale));
 
-                // Pan
+                // Apply zoom (will be used by transform)
+                state.zoom = touchState.smoothZoom;
+
+                // Pan with center offset
                 if (touchState.lastPinchCenter) {
                     const dx = center.x - touchState.lastPinchCenter.x;
                     const dy = center.y - touchState.lastPinchCenter.y;
                     state.panX += dx;
                     state.panY += dy;
-                    updateCanvasSize();
+                }
+
+                // Use requestAnimationFrame for smooth updates
+                if (!touchState.rafPending) {
+                    touchState.rafPending = true;
+                    requestAnimationFrame(() => {
+                        updateCanvasSize();
+                        touchState.rafPending = false;
+                    });
                 }
 
                 touchState.lastPinchDist = dist;
@@ -2686,6 +2703,13 @@
             }
 
             if (e.touches.length === 0) {
+                // Finalize pinch zoom - round to nearest integer and redraw grid
+                if (touchState.isPinching && touchState.smoothZoom) {
+                    state.zoom = Math.round(touchState.smoothZoom);
+                    touchState.smoothZoom = null;
+                    updateCanvasSize();
+                    drawGrid();
+                }
                 touchState.isPinching = false;
 
                 // Skip normal handling if long press was triggered
