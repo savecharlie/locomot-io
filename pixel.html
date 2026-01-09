@@ -4133,8 +4133,10 @@ Canvas: ${state.canvasWidth}x${state.canvasHeight}`;
             switch (action) {
                 case 'copy':
                 case 'cut':
-                    // Create masked clipboard with only selected pixels
-                    const copySrc = ctx.getImageData(bounds.x, bounds.y, bounds.width, bounds.height);
+                    // Create masked clipboard with only selected pixels from current layer
+                    const copyLayer = getCurrentLayer();
+                    if (!copyLayer) break;
+                    const copySrc = copyLayer.ctx.getImageData(bounds.x, bounds.y, bounds.width, bounds.height);
                     const copyMasked = new ImageData(bounds.width, bounds.height);
                     state.selection.pixels.forEach(key => {
                         const [px, py] = key.split(',').map(Number);
@@ -4154,8 +4156,9 @@ Canvas: ${state.canvasWidth}x${state.canvasHeight}`;
                         saveState();
                         state.selection.pixels.forEach(key => {
                             const [x, y] = key.split(',').map(Number);
-                            ctx.clearRect(x, y, 1, 1);
+                            copyLayer.ctx.clearRect(x, y, 1, 1);
                         });
+                        compositeAndRender();
                         showToast('Cut!');
                     } else {
                         showToast('Copied!');
@@ -4164,11 +4167,14 @@ Canvas: ${state.canvasWidth}x${state.canvasHeight}`;
                     break;
 
                 case 'delete':
+                    const deleteLayer = getCurrentLayer();
+                    if (!deleteLayer) break;
                     saveState();
                     state.selection.pixels.forEach(key => {
                         const [x, y] = key.split(',').map(Number);
-                        ctx.clearRect(x, y, 1, 1);
+                        deleteLayer.ctx.clearRect(x, y, 1, 1);
                     });
+                    compositeAndRender();
                     showToast('Deleted!');
                     clearSelection();
                     break;
