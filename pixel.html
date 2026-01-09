@@ -1769,7 +1769,7 @@
             lastSyncTime: null,
             syncDebounceTimer: null,
             realtimeChannel: null,
-            lastInteractionTime: 0,  // Track when this device last had input
+            lastSyncTimestamp: 0,  // When we last saved to cloud
         };
 
         // ===== SUPABASE =====
@@ -1877,14 +1877,16 @@
                             const cloudProject = payload.new;
                             const localTab = state.tabs.find(t => t.id === cloudProject.id);
 
-                            // If this device had recent interaction, IT is authoritative - ignore incoming
-                            const timeSinceInteraction = Date.now() - state.lastInteractionTime;
-                            const isThisDeviceActive = timeSinceInteraction < 2000; // 2 second window
+                            // Compare timestamps: accept if cloud is newer than our last sync
+                            const cloudTime = new Date(cloudProject.updated_at).getTime();
+                            const ourLastSync = state.lastSyncTimestamp || 0;
 
-                            if (isThisDeviceActive) {
-                                console.log('Ignoring remote update - this device is active');
+                            if (cloudTime <= ourLastSync) {
+                                console.log('Ignoring older update (cloud:', cloudTime, 'ours:', ourLastSync, ')');
                                 return;
                             }
+
+                            console.log('Accepting newer update (cloud:', cloudTime, 'ours:', ourLastSync, ')');
 
                             if (localTab) {
                                 // Update existing tab with cloud data
@@ -2015,8 +2017,9 @@
                 console.log('Workspace saved');
 
                 state.lastSyncTime = new Date();
+                state.lastSyncTimestamp = Date.now();  // For comparing with incoming updates
                 updateSyncStatus('synced');
-                console.log('Synced to cloud', state.tabs.length, 'tabs');
+                console.log('Synced to cloud', state.tabs.length, 'tabs, timestamp:', state.lastSyncTimestamp);
             } catch (error) {
                 console.error('Sync error:', error);
                 const errMsg = JSON.stringify(error, null, 2);
@@ -3491,9 +3494,6 @@
             if (e.button !== 0) return; // Only left click
             if (isModalOpen()) return; // Don't draw when modal is open
 
-            // This device becomes authoritative on any interaction
-            state.lastInteractionTime = Date.now();
-
             const { x, y } = getCanvasCoords(e);
             state.isDrawing = true;
 
@@ -3577,9 +3577,6 @@
         function handleTouchStart(e) {
             // Don't handle canvas touches when modal is open
             if (isModalOpen()) return;
-
-            // This device becomes authoritative on any interaction
-            state.lastInteractionTime = Date.now();
 
             e.preventDefault();
 
