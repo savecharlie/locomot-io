@@ -4077,8 +4077,21 @@
         document.getElementById('cancelColorEditor').onclick = cancelColorEditor;
 
         // Click on current color buttons to open editor
-        document.getElementById('currentColor').onclick = openColorEditor;
-        document.getElementById('mobileCurrentColor').onclick = openColorEditor;
+        const currentColorBtn = document.getElementById('currentColor');
+        const mobileCurrentColorBtn = document.getElementById('mobileCurrentColor');
+
+        // Use both click and touchend for better mobile support
+        currentColorBtn.addEventListener('click', openColorEditor);
+        currentColorBtn.addEventListener('touchend', (e) => {
+            e.preventDefault();
+            openColorEditor();
+        });
+
+        mobileCurrentColorBtn.addEventListener('click', openColorEditor);
+        mobileCurrentColorBtn.addEventListener('touchend', (e) => {
+            e.preventDefault();
+            openColorEditor();
+        });
 
         // ===== LAYERS PANEL =====
         function updateLayersPanel() {
