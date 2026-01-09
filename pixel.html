@@ -1954,10 +1954,13 @@
                 updated_at: new Date().toISOString()
             };
 
-            const { error } = await supabaseClient
+            console.log('Upserting project:', tab.id);
+            const { data, error } = await supabaseClient
                 .from('projects')
-                .upsert(projectData, { onConflict: 'id' });
+                .upsert(projectData, { onConflict: 'id' })
+                .select();
 
+            console.log('Upsert result:', { data, error });
             if (error) throw error;
         }
 
