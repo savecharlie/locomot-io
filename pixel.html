@@ -2405,7 +2405,7 @@
         // Dither gradient preview - show gradient direction line
         function drawPreviewDither(x0, y0, x1, y1, startColor) {
             clearPreview();
-            const endColor = getPixelColor(x1, y1) || state.currentColor;
+            const endColor = state.currentColor; // Use selected color
 
             // Draw a dithered line to show gradient direction
             const points = [];
@@ -3077,14 +3077,14 @@
                     break;
                 case 'dither':
                     if (!state.lineStartPoint) {
-                        // First tap - set start point and capture color
+                        // First tap - set start point, use selected color
                         state.lineStartPoint = { x, y };
-                        state.ditherStartColor = getPixelColor(x, y) || state.currentColor;
-                        showToast('Tap end point for gradient fill');
+                        state.ditherStartColor = state.currentColor;
+                        showToast('Select 2nd color, tap end point');
                     } else {
-                        // Second tap - draw dither gradient
+                        // Second tap - draw dither gradient with current selected color as end
                         saveState();
-                        const endColor = getPixelColor(x, y) || state.currentColor;
+                        const endColor = state.currentColor;
                         drawDitherGradient(state.lineStartPoint.x, state.lineStartPoint.y, x, y, state.ditherStartColor, endColor);
                         state.lineStartPoint = null;
                         state.ditherStartColor = null;
