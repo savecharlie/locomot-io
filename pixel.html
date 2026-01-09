@@ -1863,6 +1863,11 @@
         }
 
         function setupRealtimeSync() {
+            // DISABLED: Realtime sync causes racing/flickering issues
+            // Cloud save still works for persistence - refresh to pull latest
+            console.log('Realtime sync disabled - refresh to pull from cloud');
+            return;
+
             if (!supabaseClient || !state.user || state.realtimeChannel) return;
 
             console.log('Setting up realtime sync...');
