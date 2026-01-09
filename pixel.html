@@ -4329,9 +4329,14 @@ Canvas: ${state.canvasWidth}x${state.canvasHeight}`;
             const offY = state.selection.floatingOffset.y;
 
             saveState();
-            ctx.putImageData(state.selection.floatingData, bounds.x + offX, bounds.y + offY);
+            // Write to current layer, not main canvas
+            const layer = getCurrentLayer();
+            if (layer) {
+                layer.ctx.putImageData(state.selection.floatingData, bounds.x + offX, bounds.y + offY);
+            }
             previewCtx.clearRect(0, 0, state.canvasWidth, state.canvasHeight);
             clearSelection();
+            compositeAndRender();
         }
 
         // ===== SELECTION HELPER FUNCTIONS =====
