@@ -1185,6 +1185,7 @@
             <button class="tool-btn" data-tool="select" title="Select (M)"><canvas class="pixel-icon" data-icon="select"></canvas></button>
             <button class="tool-btn" data-tool="lasso" title="Lasso (S)"><canvas class="pixel-icon" data-icon="lasso"></canvas></button>
             <button class="tool-btn" data-tool="line" title="Line (L)"><canvas class="pixel-icon" data-icon="line"></canvas></button>
+            <button class="tool-btn" data-tool="dither" title="Dither Gradient (G)"><canvas class="pixel-icon" data-icon="dither"></canvas></button>
             <button class="tool-btn" data-tool="rect" title="Rectangle (R)"><canvas class="pixel-icon" data-icon="rect"></canvas></button>
             <button class="tool-btn" data-tool="ellipse" title="Ellipse (O)"><canvas class="pixel-icon" data-icon="ellipse"></canvas></button>
             <button class="tool-btn" data-tool="fill" title="Fill Bucket (F)"><canvas class="pixel-icon" data-icon="fill"></canvas></button>
@@ -1262,6 +1263,7 @@
             <button class="tool-btn" data-tool="select" title="Select"><canvas class="pixel-icon" data-icon="select"></canvas></button>
             <button class="tool-btn" data-tool="lasso" title="Lasso"><canvas class="pixel-icon" data-icon="lasso"></canvas></button>
             <button class="tool-btn" data-tool="line" title="Line"><canvas class="pixel-icon" data-icon="line"></canvas></button>
+            <button class="tool-btn" data-tool="dither" title="Dither Gradient"><canvas class="pixel-icon" data-icon="dither"></canvas></button>
             <button class="tool-btn" data-tool="rect" title="Rectangle"><canvas class="pixel-icon" data-icon="rect"></canvas></button>
             <button class="tool-btn" data-tool="ellipse" title="Ellipse"><canvas class="pixel-icon" data-icon="ellipse"></canvas></button>
             <button class="tool-btn" data-tool="fill" title="Fill"><canvas class="pixel-icon" data-icon="fill"></canvas></button>
@@ -1520,6 +1522,7 @@
             lastX: -1,
             lastY: -1,
             lineStartPoint: null, // For two-tap line mode
+            ditherStartColor: null, // Color at start point for dither gradient
             palette: [],
             pinchStartDist: 0,
             pinchStartZoom: 1,
@@ -1803,6 +1806,25 @@
                     [_,W,W,_,_,_,_,_,_,_,_,_,_,_,_,_],
                     [W,W,_,_,_,_,_,_,_,_,_,_,_,_,_,_],
                     [W,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_],
+                    [_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_],
+                ],
+                // Dither gradient - checkerboard pattern fading
+                dither: [
+                    [_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_],
+                    [_,W,W,W,W,W,G,_,G,_,_,_,_,_,_,_],
+                    [_,W,W,W,W,W,_,G,_,G,_,_,_,_,_,_],
+                    [_,W,W,W,W,W,G,_,G,_,_,_,_,_,_,_],
+                    [_,W,W,W,W,W,_,G,_,G,_,_,_,_,_,_],
+                    [_,W,W,W,W,W,G,_,G,_,_,_,_,_,_,_],
+                    [_,W,W,W,W,W,_,G,_,G,_,_,_,_,_,_],
+                    [_,W,W,W,W,W,G,_,G,_,_,_,_,_,_,_],
+                    [_,W,W,W,W,W,_,G,_,G,_,_,_,_,_,_],
+                    [_,W,W,W,W,W,G,_,G,_,_,_,_,_,_,_],
+                    [_,W,W,W,W,W,_,G,_,G,_,_,_,_,_,_],
+                    [_,W,W,W,W,W,G,_,G,_,_,_,_,_,_,_],
+                    [_,W,W,W,W,W,_,G,_,G,_,_,_,_,_,_],
+                    [_,W,W,W,W,W,G,_,G,_,_,_,_,_,_,_],
+                    [_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_],
                     [_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_],
                 ],
                 // Rectangle - square outline
@@ -2118,6 +2140,7 @@
         function setTool(tool) {
             state.currentTool = tool;
             state.lineStartPoint = null;
+            state.ditherStartColor = null;
             state.pickingForReplace = false;
             clearPreview();
 
@@ -2372,6 +2395,65 @@
             bresenhamLine(x0, y0, x1, y1, (x, y) => {
                 previewCtx.fillRect(x, y, 1, 1);
             });
+        }
+
+        // Get pixel color from composite view (for dither tool)
+        function getPixelColor(x, y) {
+            return getPixel(x, y, true);
+        }
+
+        // Dither gradient preview
+        function drawPreviewDither(x0, y0, x1, y1, startColor) {
+            clearPreview();
+            const endColor = getPixelColor(x1, y1) || state.currentColor;
+
+            // Get all points on the line
+            const points = [];
+            bresenhamLine(x0, y0, x1, y1, (x, y) => points.push({x, y}));
+
+            if (points.length === 0) return;
+
+            // Draw dithered gradient along the line
+            points.forEach((p, i) => {
+                const t = points.length > 1 ? i / (points.length - 1) : 0;
+                const color = ditherPixel(t, startColor, endColor, p.x, p.y);
+                previewCtx.fillStyle = color;
+                previewCtx.fillRect(p.x, p.y, 1, 1);
+            });
+        }
+
+        // Draw dithered gradient between two points
+        function drawDitherGradient(x0, y0, x1, y1, startColor, endColor) {
+            // Get all points on the line
+            const points = [];
+            bresenhamLine(x0, y0, x1, y1, (x, y) => points.push({x, y}));
+
+            if (points.length === 0) return;
+
+            // Draw dithered gradient along the line
+            points.forEach((p, i) => {
+                const t = points.length > 1 ? i / (points.length - 1) : 0;
+                const color = ditherPixel(t, startColor, endColor, p.x, p.y);
+                setPixel(p.x, p.y, color);
+            });
+
+            compositeAndRender();
+        }
+
+        // Calculate dithered color based on position and threshold
+        function ditherPixel(t, color1, color2, x, y) {
+            // Bayer 4x4 dither matrix (normalized to 0-1)
+            const bayer = [
+                [0/16, 8/16, 2/16, 10/16],
+                [12/16, 4/16, 14/16, 6/16],
+                [3/16, 11/16, 1/16, 9/16],
+                [15/16, 7/16, 13/16, 5/16]
+            ];
+
+            const threshold = bayer[y % 4][x % 4];
+
+            // If t is greater than threshold, use color2, else color1
+            return t > threshold ? color2 : color1;
         }
 
         function drawPreviewRect(x0, y0, x1, y1, color) {
@@ -2942,6 +3024,22 @@
                         clearPreview();
                     }
                     break;
+                case 'dither':
+                    if (!state.lineStartPoint) {
+                        // First tap - set start point and capture color
+                        state.lineStartPoint = { x, y };
+                        state.ditherStartColor = getPixelColor(x, y) || state.currentColor;
+                        showToast('Tap end point for gradient');
+                    } else {
+                        // Second tap - draw dither gradient
+                        saveState();
+                        const endColor = getPixelColor(x, y) || state.currentColor;
+                        drawDitherGradient(state.lineStartPoint.x, state.lineStartPoint.y, x, y, state.ditherStartColor, endColor);
+                        state.lineStartPoint = null;
+                        state.ditherStartColor = null;
+                        clearPreview();
+                    }
+                    break;
                 case 'fill':
                     saveState();
                     floodFill(x, y, state.currentColor);
@@ -3011,6 +3109,12 @@
                         drawPreviewLine(state.lineStartPoint.x, state.lineStartPoint.y, x, y, state.currentColor);
                     }
                     break;
+                case 'dither':
+                    if (state.lineStartPoint) {
+                        // Preview the dither gradient
+                        drawPreviewDither(state.lineStartPoint.x, state.lineStartPoint.y, x, y, state.ditherStartColor);
+                    }
+                    break;
                 case 'rect':
                     if (state.lineStartPoint) {
                         drawPreviewRect(state.lineStartPoint.x, state.lineStartPoint.y, x, y, state.currentColor);
@@ -3062,6 +3166,18 @@
                     saveState();
                     drawShape(state.lineStartPoint.x, state.lineStartPoint.y, x, y);
                     state.lineStartPoint = null;
+                    clearPreview();
+                }
+            }
+
+            // For dither gradient drag
+            if (state.currentTool === 'dither' && state.lineStartPoint) {
+                if (state.lineStartPoint.x !== x || state.lineStartPoint.y !== y) {
+                    saveState();
+                    const endColor = getPixelColor(x, y) || state.currentColor;
+                    drawDitherGradient(state.lineStartPoint.x, state.lineStartPoint.y, x, y, state.ditherStartColor, endColor);
+                    state.lineStartPoint = null;
+                    state.ditherStartColor = null;
                     clearPreview();
                 }
             }
@@ -3189,6 +3305,7 @@
                 case 'p': setTool('pencil'); break;
                 case 'e': setTool('eraser'); break;
                 case 'l': setTool('line'); break;
+                case 'g': setTool('dither'); break;
                 case 'r': setTool('rect'); break;
                 case 'o': setTool('ellipse'); break;
                 case 'f': setTool('fill'); break;
