@@ -1193,6 +1193,10 @@
                 <input type="range" id="hueShift" min="0" max="30" value="15">
             </div>
             <div class="form-group">
+                <label>Temperature: <span id="tempShiftVal">0</span> <span style="color:var(--text-dim);font-size:12px;">(warm lights / cool darks)</span></label>
+                <input type="range" id="tempShift" min="0" max="40" value="0">
+            </div>
+            <div class="form-group">
                 <label>Click colors to select/deselect. Click row/column buttons to toggle whole rows/columns.</label>
                 <div id="palettePreview" class="palette-gen-grid"></div>
                 <div class="palette-gen-actions">
@@ -2264,6 +2268,10 @@
                 document.getElementById('hueShiftVal').textContent = e.target.value;
                 updatePalettePreview();
             };
+            document.getElementById('tempShift').oninput = (e) => {
+                document.getElementById('tempShiftVal').textContent = e.target.value;
+                updatePalettePreview();
+            };
             document.getElementById('selectAllColors').onclick = selectAllColors;
             document.getElementById('deselectAllColors').onclick = deselectAllColors;
             document.getElementById('invertSelection').onclick = invertColorSelection;
@@ -3160,8 +3168,9 @@
             const harmonyType = document.getElementById('harmonyType').value;
             const rampSize = parseInt(document.getElementById('rampSize').value);
             const hueShift = parseInt(document.getElementById('hueShift').value);
+            const tempShift = parseInt(document.getElementById('tempShift').value);
 
-            const palette = generatePalette(baseColor, harmonyType, rampSize, hueShift);
+            const palette = generatePalette(baseColor, harmonyType, rampSize, hueShift, tempShift);
             const oldLength = state.generatedPalette.length;
             state.generatedPalette = palette;
             state.paletteRampSize = rampSize;
@@ -3311,7 +3320,7 @@
             updateColorSelectionUI();
         }
 
-        function generatePalette(baseHex, harmonyType, rampSize, hueShift) {
+        function generatePalette(baseHex, harmonyType, rampSize, hueShift, tempShift = 0) {
             const baseHsl = hexToHsl(baseHex);
             const palette = [];
 
@@ -3320,7 +3329,7 @@
 
             // Generate ramp for each hue
             hues.forEach(hue => {
-                const ramp = generateColorRamp(hue, baseHsl.s, rampSize, hueShift);
+                const ramp = generateColorRamp(hue, baseHsl.s, rampSize, hueShift, tempShift);
                 palette.push(...ramp);
             });
 
@@ -3339,22 +3348,40 @@
             }
         }
 
-        function generateColorRamp(baseHue, baseSat, size, hueShiftAmount) {
+        function generateColorRamp(baseHue, baseSat, size, hueShiftAmount, tempShift = 0) {
             const ramp = [];
             const midpoint = Math.floor(size / 2);
+
+            // Helper: shortest hue distance toward target
+            function hueShiftToward(fromHue, targetHue, amount) {
+                let diff = targetHue - fromHue;
+                // Normalize to -180 to 180
+                while (diff > 180) diff -= 360;
+                while (diff < -180) diff += 360;
+                return diff * amount;
+            }
 
             for (let i = 0; i < size; i++) {
                 const t = i / (size - 1); // 0 to 1
                 const distFromMid = (i - midpoint) / midpoint; // -1 to 1
 
-                // Hue shifts: toward blue (240) for shadows, toward yellow (60) for highlights
+                // Base hue shift (existing behavior)
                 let hueOffset = distFromMid * hueShiftAmount;
                 if (distFromMid < 0) {
-                    // Shadow - shift toward blue
                     hueOffset = distFromMid * hueShiftAmount * 2;
+                }
+
+                // Temperature shift: lights toward yellow (60), darks toward blue (240)
+                // t=0 is darkest, t=1 is lightest
+                const tempAmount = tempShift / 100; // Normalize to 0-0.4
+                if (t < 0.5) {
+                    // Dark colors - shift toward blue (240)
+                    const darkness = (0.5 - t) * 2; // 0 to 1, stronger for darker
+                    hueOffset += hueShiftToward(baseHue, 240, darkness * tempAmount);
                 } else {
-                    // Highlight - shift toward yellow
-                    hueOffset = distFromMid * hueShiftAmount;
+                    // Light colors - shift toward yellow/orange (45)
+                    const lightness = (t - 0.5) * 2; // 0 to 1, stronger for lighter
+                    hueOffset += hueShiftToward(baseHue, 45, lightness * tempAmount);
                 }
 
                 const hue = (baseHue + hueOffset + 360) % 360;
