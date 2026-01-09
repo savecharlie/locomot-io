@@ -1769,6 +1769,7 @@
             lastSyncTime: null,
             syncDebounceTimer: null,
             realtimeChannel: null,
+            lastInteractionTime: 0,  // Track when this device last had input
         };
 
         // ===== SUPABASE =====
@@ -1876,35 +1877,36 @@
                             const cloudProject = payload.new;
                             const localTab = state.tabs.find(t => t.id === cloudProject.id);
 
+                            // If this device had recent interaction, IT is authoritative - ignore incoming
+                            const timeSinceInteraction = Date.now() - state.lastInteractionTime;
+                            const isThisDeviceActive = timeSinceInteraction < 2000; // 2 second window
+
+                            if (isThisDeviceActive) {
+                                console.log('Ignoring remote update - this device is active');
+                                return;
+                            }
+
                             if (localTab) {
-                                // Compare timestamps - cloud wins if newer
-                                const cloudTime = new Date(cloudProject.updated_at).getTime();
-                                const localTime = localTab.localUpdatedAt || 0;
+                                // Update existing tab with cloud data
+                                console.log('Applying remote update for', cloudProject.id.slice(0,8));
+                                localTab.name = cloudProject.name;
+                                localTab.canvasWidth = cloudProject.canvas_width;
+                                localTab.canvasHeight = cloudProject.canvas_height;
+                                localTab.layers = cloudProject.data?.layers || [];
+                                localTab.currentLayerIndex = cloudProject.data?.currentLayerIndex || 0;
+                                localTab.nextLayerId = cloudProject.data?.nextLayerId || 1;
+                                localTab.palette = cloudProject.data?.palette || [...PALETTES.pico8];
+                                localTab.currentColor = cloudProject.data?.currentColor || '#000000';
+                                localTab.zoom = cloudProject.data?.zoom || 8;
+                                localTab.panX = cloudProject.data?.panX || 0;
+                                localTab.panY = cloudProject.data?.panY || 0;
 
-                                if (cloudTime > localTime) {
-                                    console.log('Applying remote update for', cloudProject.id.slice(0,8));
-                                    // Update tab with cloud data
-                                    localTab.name = cloudProject.name;
-                                    localTab.canvasWidth = cloudProject.canvas_width;
-                                    localTab.canvasHeight = cloudProject.canvas_height;
-                                    localTab.layers = cloudProject.data?.layers || [];
-                                    localTab.currentLayerIndex = cloudProject.data?.currentLayerIndex || 0;
-                                    localTab.nextLayerId = cloudProject.data?.nextLayerId || 1;
-                                    localTab.palette = cloudProject.data?.palette || [...PALETTES.pico8];
-                                    localTab.currentColor = cloudProject.data?.currentColor || '#000000';
-                                    localTab.zoom = cloudProject.data?.zoom || 8;
-                                    localTab.panX = cloudProject.data?.panX || 0;
-                                    localTab.panY = cloudProject.data?.panY || 0;
-
-                                    // Reload if this is the active tab
-                                    const tabIndex = state.tabs.indexOf(localTab);
-                                    if (tabIndex === state.activeTabIndex) {
-                                        loadTabState(tabIndex);
-                                    }
-                                    renderTabBar();
-                                } else {
-                                    console.log('Ignoring older remote update');
+                                // Reload if this is the active tab
+                                const tabIndex = state.tabs.indexOf(localTab);
+                                if (tabIndex === state.activeTabIndex) {
+                                    loadTabState(tabIndex);
                                 }
+                                renderTabBar();
                             } else {
                                 // New project from another device
                                 console.log('Adding new project from remote:', cloudProject.id.slice(0,8));
@@ -3489,6 +3491,9 @@
             if (e.button !== 0) return; // Only left click
             if (isModalOpen()) return; // Don't draw when modal is open
 
+            // This device becomes authoritative on any interaction
+            state.lastInteractionTime = Date.now();
+
             const { x, y } = getCanvasCoords(e);
             state.isDrawing = true;
 
@@ -3572,6 +3577,9 @@
         function handleTouchStart(e) {
             // Don't handle canvas touches when modal is open
             if (isModalOpen()) return;
+
+            // This device becomes authoritative on any interaction
+            state.lastInteractionTime = Date.now();
 
             e.preventDefault();
 
