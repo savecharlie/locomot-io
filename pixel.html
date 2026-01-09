@@ -1293,13 +1293,13 @@
             <div class="form-group" id="analogousControls" style="display:none;">
                 <label>Analogous Rows</label>
                 <div style="display:flex;gap:8px;align-items:center;">
-                    <button class="btn btn-secondary" id="addRowCool" style="padding:6px 12px;">+ Cool</button>
+                    <button class="btn btn-secondary" id="addRowCool" style="padding:6px 12px;">+ Warm</button>
                     <span id="analogousRowCount" style="flex:1;text-align:center;">3 rows</span>
-                    <button class="btn btn-secondary" id="addRowWarm" style="padding:6px 12px;">+ Warm</button>
+                    <button class="btn btn-secondary" id="addRowWarm" style="padding:6px 12px;">+ Cool</button>
                 </div>
                 <div style="display:flex;gap:8px;margin-top:8px;">
-                    <button class="btn btn-secondary" id="removeRowCool" style="padding:6px 12px;flex:1;">− Cool</button>
-                    <button class="btn btn-secondary" id="removeRowWarm" style="padding:6px 12px;flex:1;">− Warm</button>
+                    <button class="btn btn-secondary" id="removeRowCool" style="padding:6px 12px;flex:1;">− Warm</button>
+                    <button class="btn btn-secondary" id="removeRowWarm" style="padding:6px 12px;flex:1;">− Cool</button>
                 </div>
             </div>
             <div class="form-group">
@@ -1870,8 +1870,11 @@
                 tab.currentColor = state.currentColor;
                 state.tabs.push(tab);
                 state.activeTabIndex = 0;
-                renderTabBar();
             }
+
+            // Always render tab bar at the end of init
+            renderTabBar();
+            console.log('Tabs initialized:', state.tabs.length, 'tabs');
         }
 
         function initCanvas(width, height) {
