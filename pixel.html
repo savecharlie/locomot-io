@@ -1960,12 +1960,11 @@
                 };
 
                 console.log('Upserting project:', tab.id, 'data size:', JSON.stringify(projectData).length);
-                const { data, error } = await supabaseClient
+                const { error } = await supabaseClient
                     .from('projects')
-                    .upsert(projectData, { onConflict: 'id' })
-                    .select();
+                    .upsert(projectData);
 
-                console.log('Upsert result:', { data, error });
+                console.log('Upsert done, error:', error);
                 if (error) throw error;
             } catch (e) {
                 console.error('saveProjectToCloud error:', e);
