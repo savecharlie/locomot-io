@@ -329,7 +329,7 @@
             align-items: center;
             padding: 8px 12px;
             gap: 8px;
-            overflow-x: auto;
+            overflow: hidden;
         }
 
         @media (min-width: 768px) {
@@ -757,12 +757,12 @@
         /* Mobile floating undo/redo */
         .mobile-undo-float {
             position: fixed;
-            top: 70px;
+            top: 100px;
             right: 8px;
             display: flex;
             flex-direction: column;
             gap: 4px;
-            z-index: 50;
+            z-index: 90;
         }
 
         @media (min-width: 768px) {
