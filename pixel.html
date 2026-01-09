@@ -1876,8 +1876,12 @@
         }
 
         async function syncToCloud() {
-            if (!state.user || !supabaseClient) return;
+            if (!state.user || !supabaseClient) {
+                console.log('Sync skipped - no user or client');
+                return;
+            }
 
+            console.log('Starting sync...');
             updateSyncStatus('syncing');
             try {
                 // Save current tab state first
@@ -1886,12 +1890,17 @@
                 }
 
                 // Save each tab as a project
-                for (const tab of state.tabs) {
-                    await saveProjectToCloud(tab);
+                console.log('Saving', state.tabs.length, 'tabs...');
+                for (let i = 0; i < state.tabs.length; i++) {
+                    console.log('Saving tab', i, state.tabs[i].id);
+                    await saveProjectToCloud(state.tabs[i]);
+                    console.log('Tab', i, 'saved');
                 }
 
                 // Save workspace state
+                console.log('Saving workspace...');
                 await saveWorkspaceToCloud();
+                console.log('Workspace saved');
 
                 state.lastSyncTime = new Date();
                 updateSyncStatus('synced');
