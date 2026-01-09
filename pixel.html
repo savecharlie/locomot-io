@@ -1781,12 +1781,18 @@
                 supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
                 console.log('Supabase initialized');
 
-                // Test if Supabase works at all
-                (async () => {
-                    console.log('Testing Supabase connection...');
-                    const { data, error } = await supabaseClient.from('profiles').select('id').limit(1);
-                    console.log('Supabase test result:', { data, error });
-                })();
+                // Test if Supabase works at all using raw fetch
+                console.log('Testing Supabase with fetch...');
+                fetch(`${SUPABASE_URL}/rest/v1/profiles?select=id&limit=1`, {
+                    headers: {
+                        'apikey': SUPABASE_ANON_KEY,
+                        'Authorization': `Bearer ${SUPABASE_ANON_KEY}`
+                    }
+                }).then(res => res.json()).then(data => {
+                    console.log('Fetch test SUCCESS:', data);
+                }).catch(e => {
+                    console.error('Fetch test ERROR:', e);
+                });
             } else {
                 console.error('Supabase SDK not loaded');
             }
