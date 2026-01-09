@@ -4191,8 +4191,12 @@ Canvas: ${state.canvasWidth}x${state.canvasHeight}`;
                     state.selection.floating = true;
                     state.selection.floatingOffset = {x: 0, y: 0};
 
-                    // Create masked ImageData with only selected pixels
-                    const srcData = ctx.getImageData(bounds.x, bounds.y, bounds.width, bounds.height);
+                    // Get current layer
+                    const moveLayer = getCurrentLayer();
+                    if (!moveLayer) break;
+
+                    // Create masked ImageData with only selected pixels from layer
+                    const srcData = moveLayer.ctx.getImageData(bounds.x, bounds.y, bounds.width, bounds.height);
                     const maskedData = new ImageData(bounds.width, bounds.height);
 
                     // Only copy pixels that are in the selection
@@ -4211,11 +4215,14 @@ Canvas: ${state.canvasWidth}x${state.canvasHeight}`;
 
                     state.selection.floatingData = maskedData;
 
-                    // Clear only selected pixels from canvas
+                    // Clear only selected pixels from the LAYER (not composite)
                     state.selection.pixels.forEach(key => {
                         const [x, y] = key.split(',').map(Number);
-                        ctx.clearRect(x, y, 1, 1);
+                        moveLayer.ctx.clearRect(x, y, 1, 1);
                     });
+
+                    // Update composite view
+                    compositeAndRender();
 
                     // Draw floating selection on preview
                     previewCtx.putImageData(state.selection.floatingData, bounds.x, bounds.y);
