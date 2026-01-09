@@ -1772,6 +1772,116 @@
             lastSyncTimestamp: 0,  // When we last saved to cloud
         };
 
+        // ===== LOCAL SAVE SERVER =====
+        // Set this to your local server IP:port (run pixel_save_server.py)
+        const LOCAL_SAVE_SERVER = 'http://192.168.1.164:8765';
+        let localServerAvailable = false;
+
+        // Check if local server is available
+        async function checkLocalServer() {
+            try {
+                const resp = await fetch(`${LOCAL_SAVE_SERVER}/health`, { method: 'GET', mode: 'cors' });
+                localServerAvailable = resp.ok;
+                console.log('Local save server:', localServerAvailable ? 'available' : 'not available');
+            } catch (e) {
+                localServerAvailable = false;
+                console.log('Local save server: not available');
+            }
+            return localServerAvailable;
+        }
+
+        async function saveToLocalServer() {
+            if (!localServerAvailable) return false;
+
+            try {
+                // Save current tab state first
+                if (state.tabs.length > 0) {
+                    saveCurrentTabState();
+                }
+
+                const projects = state.tabs.map(tab => ({
+                    id: tab.id,
+                    name: tab.name,
+                    canvas_width: tab.canvasWidth,
+                    canvas_height: tab.canvasHeight,
+                    data: {
+                        layers: tab.layers,
+                        currentLayerIndex: tab.currentLayerIndex,
+                        nextLayerId: tab.nextLayerId,
+                        palette: tab.palette,
+                        currentColor: tab.currentColor,
+                        zoom: tab.zoom,
+                        panX: tab.panX,
+                        panY: tab.panY
+                    }
+                }));
+
+                const resp = await fetch(`${LOCAL_SAVE_SERVER}/save-all`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ projects })
+                });
+
+                if (resp.ok) {
+                    console.log('Saved to local server');
+                    updateSyncStatus('synced');
+                    return true;
+                }
+            } catch (e) {
+                console.error('Local save error:', e);
+            }
+            return false;
+        }
+
+        async function loadFromLocalServer() {
+            if (!localServerAvailable) return false;
+
+            try {
+                const resp = await fetch(`${LOCAL_SAVE_SERVER}/projects`);
+                if (!resp.ok) return false;
+
+                const projects = await resp.json();
+                if (projects.length === 0) return false;
+
+                // Load each project's full data
+                const loadedTabs = [];
+                for (const proj of projects) {
+                    const projResp = await fetch(`${LOCAL_SAVE_SERVER}/projects/${proj.id}`);
+                    if (projResp.ok) {
+                        const data = await projResp.json();
+                        loadedTabs.push({
+                            id: data.id,
+                            name: data.name,
+                            canvasWidth: data.canvas_width || 32,
+                            canvasHeight: data.canvas_height || 32,
+                            layers: data.data?.layers || [],
+                            currentLayerIndex: data.data?.currentLayerIndex || 0,
+                            nextLayerId: data.data?.nextLayerId || 1,
+                            palette: data.data?.palette || [...PALETTES.pico8],
+                            currentColor: data.data?.currentColor || '#000000',
+                            undoStack: [],
+                            redoStack: [],
+                            zoom: data.data?.zoom || 8,
+                            panX: data.data?.panX || 0,
+                            panY: data.data?.panY || 0
+                        });
+                    }
+                }
+
+                if (loadedTabs.length > 0) {
+                    state.tabs = loadedTabs;
+                    state.activeTabIndex = 0;
+                    loadTabState(0);
+                    renderTabBar();
+                    console.log('Loaded', loadedTabs.length, 'projects from local server');
+                    return true;
+                }
+            } catch (e) {
+                console.error('Local load error:', e);
+            }
+            return false;
+        }
+
         // ===== SUPABASE =====
         const SUPABASE_URL = 'https://vwlbjjznvczfecjnrjen.supabase.co';
         const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZ3bGJqanpudmN6ZmVjam5yamVuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njc5Nzc5OTIsImV4cCI6MjA4MzU1Mzk5Mn0.didh9h1rGEDEhzVlUBp7WhAxFMPsUTSvsuvIwa0aDro';
@@ -2591,13 +2701,26 @@
             }
         }
 
-        function init() {
+        async function init() {
             drawPixelIcons();
             loadPalette('pico8');
             initCanvas(32, 32);
             setupEventListeners();
             setupAuthListener();
             updateUI();
+
+            // Check for local save server first
+            await checkLocalServer();
+            if (localServerAvailable) {
+                const loaded = await loadFromLocalServer();
+                if (loaded) {
+                    renderTabBar();
+                    console.log('Tabs initialized from local server:', state.tabs.length, 'tabs');
+                    return;
+                }
+            }
+
+            // Fall back to localStorage
             loadAutoSave();
 
             // If no tabs were loaded, create a default one
@@ -4376,6 +4499,11 @@ Canvas: ${state.canvasWidth}x${state.canvasHeight}`;
                     nextTabId: state.nextTabId
                 };
                 localStorage.setItem('pixelArtAutoSave', JSON.stringify(data));
+
+                // Local server sync (if available)
+                if (localServerAvailable) {
+                    saveToLocalServer();
+                }
 
                 // Cloud sync if logged in
                 if (state.user) {
