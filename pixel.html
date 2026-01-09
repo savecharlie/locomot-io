@@ -1778,21 +1778,12 @@
         // Initialize Supabase (SDK loaded synchronously in head)
         try {
             if (window.supabase) {
-                supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-                console.log('Supabase initialized');
-
-                // Test if Supabase works at all using raw fetch
-                console.log('Testing Supabase with fetch...');
-                fetch(`${SUPABASE_URL}/rest/v1/profiles?select=id&limit=1`, {
-                    headers: {
-                        'apikey': SUPABASE_ANON_KEY,
-                        'Authorization': `Bearer ${SUPABASE_ANON_KEY}`
-                    }
-                }).then(res => res.json()).then(data => {
-                    console.log('Fetch test SUCCESS:', data);
-                }).catch(e => {
-                    console.error('Fetch test ERROR:', e);
+                // Use noOpLock to prevent auth lock deadlocks (Issue #1594)
+                const noOpLock = async (name, acquireTimeout, fn) => await fn();
+                supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+                    auth: { lock: noOpLock }
                 });
+                console.log('Supabase initialized with noOpLock');
             } else {
                 console.error('Supabase SDK not loaded');
             }
@@ -1847,14 +1838,16 @@
 
         function setupAuthListener() {
             if (!supabaseClient) return;
-            supabaseClient.auth.onAuthStateChange(async (event, session) => {
+            // IMPORTANT: Don't use async callback - it breaks Supabase client (Discussion #40806)
+            supabaseClient.auth.onAuthStateChange((event, session) => {
                 console.log('Auth state:', event);
                 state.user = session?.user || null;
                 updateAuthUI();
 
                 // Merge on sign-in or when loading page with existing session
+                // Don't await - just fire and forget to avoid blocking
                 if ((event === 'SIGNED_IN' || event === 'INITIAL_SESSION') && state.user) {
-                    await mergeWithCloud();
+                    mergeWithCloud();
                 }
             });
         }
