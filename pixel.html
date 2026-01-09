@@ -1093,6 +1093,7 @@
             font-size: 13px;
             cursor: pointer;
             white-space: nowrap;
+            min-width: 60px;
             max-width: 150px;
             flex-shrink: 0;
         }
@@ -5043,11 +5044,11 @@ Canvas: ${state.canvasWidth}x${state.canvasHeight}`;
             state.tabs.forEach((tab, i) => {
                 const tabEl = document.createElement('div');
                 tabEl.className = 'tab' + (i === state.activeTabIndex ? ' active' : '');
+                tabEl.onclick = () => switchToTab(i);
 
                 const nameSpan = document.createElement('span');
                 nameSpan.className = 'tab-name';
                 nameSpan.textContent = tab.name;
-                nameSpan.onclick = () => switchToTab(i);
 
                 const closeBtn = document.createElement('button');
                 closeBtn.className = 'tab-close';
