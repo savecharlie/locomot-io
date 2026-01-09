@@ -1903,8 +1903,13 @@
         }
 
         async function saveProjectToCloud(tab) {
+            // Ensure tab has a valid UUID (migrate old numeric IDs)
+            if (typeof tab.id === 'number' || (typeof tab.id === 'string' && !tab.id.includes('-'))) {
+                tab.id = crypto.randomUUID();
+            }
+
             const projectData = {
-                id: String(tab.id),
+                id: tab.id,
                 user_id: state.user.id,
                 name: tab.name,
                 canvas_width: tab.canvasWidth,
@@ -1932,8 +1937,8 @@
         async function saveWorkspaceToCloud() {
             const workspaceData = {
                 user_id: state.user.id,
-                open_project_ids: state.tabs.map(t => String(t.id)),
-                active_project_id: state.tabs[state.activeTabIndex] ? String(state.tabs[state.activeTabIndex].id) : null,
+                open_project_ids: state.tabs.map(t => t.id),
+                active_project_id: state.tabs[state.activeTabIndex]?.id || null,
                 updated_at: new Date().toISOString()
             };
 
@@ -5552,8 +5557,9 @@ Canvas: ${state.canvasWidth}x${state.canvasHeight}`;
 
         // ===== TABS =====
         function createTabObject(width = 32, height = 32, name = null) {
-            const tabId = state.nextTabId++;
-            const tabName = name || `Untitled ${tabId}`;
+            const tabNum = state.nextTabId++;
+            const tabId = crypto.randomUUID(); // UUID for cloud sync
+            const tabName = name || `Untitled ${tabNum}`;
 
             return {
                 id: tabId,
