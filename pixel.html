@@ -1290,6 +1290,18 @@
                     <option value="tetradic">Tetradic</option>
                 </select>
             </div>
+            <div class="form-group" id="analogousControls" style="display:none;">
+                <label>Analogous Rows</label>
+                <div style="display:flex;gap:8px;align-items:center;">
+                    <button class="btn btn-secondary" id="addRowCool" style="padding:6px 12px;">+ Cool</button>
+                    <span id="analogousRowCount" style="flex:1;text-align:center;">3 rows</span>
+                    <button class="btn btn-secondary" id="addRowWarm" style="padding:6px 12px;">+ Warm</button>
+                </div>
+                <div style="display:flex;gap:8px;margin-top:8px;">
+                    <button class="btn btn-secondary" id="removeRowCool" style="padding:6px 12px;flex:1;">− Cool</button>
+                    <button class="btn btn-secondary" id="removeRowWarm" style="padding:6px 12px;flex:1;">− Warm</button>
+                </div>
+            </div>
             <div class="form-group">
                 <label>Colors per Ramp: <span id="rampSizeVal">6</span></label>
                 <input type="range" id="rampSize" min="3" max="9" value="6">
@@ -1410,6 +1422,8 @@
             selectedColors: new Set(), // Indices of selected colors
             paletteRampSize: 6, // Current ramp size for selection
             paletteNumRamps: 1, // Current number of ramps
+            analogousCoolRows: 1, // Extra rows toward cool (blue)
+            analogousWarmRows: 1, // Extra rows toward warm (yellow)
             // Selection state
             selection: {
                 active: false,
@@ -2386,7 +2400,46 @@
             };
             document.getElementById('applyPalette').onclick = applyGeneratedPalette;
             document.getElementById('baseColor').oninput = updatePalettePreview;
-            document.getElementById('harmonyType').onchange = updatePalettePreview;
+            document.getElementById('harmonyType').onchange = (e) => {
+                // Show/hide analogous controls
+                const isAnalogous = e.target.value === 'analogous';
+                document.getElementById('analogousControls').style.display = isAnalogous ? 'block' : 'none';
+                updatePalettePreview();
+            };
+
+            // Analogous row controls
+            function updateAnalogousRowCount() {
+                const total = state.analogousCoolRows + 1 + state.analogousWarmRows;
+                document.getElementById('analogousRowCount').textContent = `${total} rows`;
+                state.selectedColors.clear();
+                updatePalettePreview();
+            }
+
+            document.getElementById('addRowCool').onclick = () => {
+                if (state.analogousCoolRows < 5) {
+                    state.analogousCoolRows++;
+                    updateAnalogousRowCount();
+                }
+            };
+            document.getElementById('removeRowCool').onclick = () => {
+                if (state.analogousCoolRows > 0) {
+                    state.analogousCoolRows--;
+                    updateAnalogousRowCount();
+                }
+            };
+            document.getElementById('addRowWarm').onclick = () => {
+                if (state.analogousWarmRows < 5) {
+                    state.analogousWarmRows++;
+                    updateAnalogousRowCount();
+                }
+            };
+            document.getElementById('removeRowWarm').onclick = () => {
+                if (state.analogousWarmRows > 0) {
+                    state.analogousWarmRows--;
+                    updateAnalogousRowCount();
+                }
+            };
+
             document.getElementById('rampSize').oninput = (e) => {
                 document.getElementById('rampSizeVal').textContent = e.target.value;
                 state.selectedColors.clear(); // Reset selection when changing size
@@ -3450,7 +3503,22 @@
             switch (type) {
                 case 'monochromatic': return [baseHue];
                 case 'complementary': return [baseHue, (baseHue + 180) % 360];
-                case 'analogous': return [(baseHue - 30 + 360) % 360, baseHue, (baseHue + 30) % 360];
+                case 'analogous': {
+                    // Generate analogous hues based on state
+                    const hues = [];
+                    const step = 30; // degrees between analogous hues
+                    // Add cool rows (toward blue, negative direction)
+                    for (let i = state.analogousCoolRows; i >= 1; i--) {
+                        hues.push((baseHue - step * i + 360) % 360);
+                    }
+                    // Add base hue
+                    hues.push(baseHue);
+                    // Add warm rows (toward yellow, positive direction)
+                    for (let i = 1; i <= state.analogousWarmRows; i++) {
+                        hues.push((baseHue + step * i) % 360);
+                    }
+                    return hues;
+                }
                 case 'triadic': return [baseHue, (baseHue + 120) % 360, (baseHue + 240) % 360];
                 case 'splitcomp': return [baseHue, (baseHue + 150) % 360, (baseHue + 210) % 360];
                 case 'tetradic': return [baseHue, (baseHue + 90) % 360, (baseHue + 180) % 360, (baseHue + 270) % 360];
