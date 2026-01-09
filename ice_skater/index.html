@@ -1656,10 +1656,10 @@ function render() {
         spriteY = py - (TILE_H / 2) * SCALE - sprite.height * SCALE;
       }
 
-      // TEMP DISABLED for wall testing
-      // if (obj.transparent && obj.type !== 'penguin') {
-      //   ctx.globalAlpha = 0.65;
-      // }
+      // Transparency only for test chamber walls (border walls)
+      if (obj.transparent && obj.sprite === 'wall_color_16x24') {
+        ctx.globalAlpha = 0.65;
+      }
 
       ctx.drawImage(sprite, px, spriteY, sprite.width * SCALE, sprite.height * SCALE);
       ctx.globalAlpha = 1.0;
