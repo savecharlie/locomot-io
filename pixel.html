@@ -1165,19 +1165,21 @@
             padding: 4px 4px;
             min-height: 48px;
             gap: 8px;
+            width: 100%;
+            box-sizing: border-box;
         }
 
         .tabs-container {
             display: flex;
             flex-direction: row;
             flex-wrap: nowrap;
-            justify-content: flex-start;
             align-items: center;
-            flex: 1;
-            overflow-x: auto;
-            gap: 12px;
-            padding: 4px 8px;
+            flex: 1 1 0;
             min-width: 0;
+            overflow-x: auto;
+            overflow-y: hidden;
+            gap: 8px;
+            padding: 4px 8px;
             touch-action: pan-x;
         }
 
@@ -5524,6 +5526,9 @@ Canvas: ${state.canvasWidth}x${state.canvasHeight}`;
             // Replace all at once - atomic operation
             container.innerHTML = '';
             container.appendChild(fragment);
+
+            // Force reflow to ensure tabs render immediately
+            container.offsetHeight;
         }
 
         // Tab event handlers
