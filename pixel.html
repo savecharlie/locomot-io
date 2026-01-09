@@ -4841,6 +4841,7 @@ Canvas: ${state.canvasWidth}x${state.canvasHeight}`;
 
         function saveCurrentTabState() {
             if (state.tabs.length === 0) return;
+            console.log('saveCurrentTabState: saving tab', state.activeTabIndex, 'with', state.layers.length, 'layers');
 
             const tab = state.tabs[state.activeTabIndex];
             tab.canvasWidth = state.canvasWidth;
@@ -5046,6 +5047,12 @@ Canvas: ${state.canvasWidth}x${state.canvasHeight}`;
             const container = document.getElementById('tabsContainer');
             container.innerHTML = '';
             console.log('renderTabBar: rendering', state.tabs.length, 'tabs');
+
+            // Debug: show count
+            const countEl = document.createElement('span');
+            countEl.style.cssText = 'color: yellow; font-size: 12px; padding: 4px;';
+            countEl.textContent = `[${state.tabs.length}]`;
+            container.appendChild(countEl);
 
             state.tabs.forEach((tab, i) => {
                 const tabEl = document.createElement('div');
