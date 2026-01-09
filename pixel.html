@@ -2747,7 +2747,7 @@
 
                 // Handle quick tap - draw wasn't started yet but we have pending coords
                 if (pendingTap && !state.isDrawing) {
-                    console.log('Quick tap at', pendingTap.x, pendingTap.y);
+                    showToast('tap ' + pendingTap.x + ',' + pendingTap.y);
                     handleToolStart(pendingTap.x, pendingTap.y);
                     handleToolEnd(pendingTap.x, pendingTap.y);
                     autoSave();
