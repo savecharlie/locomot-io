@@ -1430,12 +1430,12 @@ function render() {
       // Check grid directly for penguin (blocks can be on same tile)
       if (renderState.grid[y][x] === 'P') {
         // If penguin is on a wall, draw wall underneath and elevate penguin
-        // Penguin only draws in front of player on win (sortY + 0.01)
-        const penguinSortY = gameState.won ? y + 0.01 : y - 0.01;
+        // Penguin on wall always draws on top; regular penguin only in front on win
         if (level.penguinOnWall) {
           objects.push({ type: 'wall', x, y, sortY: y, sprite: 'wall_16x24' });
-          objects.push({ type: 'penguin', x, y, sortY: penguinSortY, elevated: true, sprite: 'goal_penguin_16' });
+          objects.push({ type: 'penguin', x, y, sortY: y + 0.02, elevated: true, sprite: 'goal_penguin_16' });
         } else {
+          const penguinSortY = gameState.won ? y + 0.01 : y - 0.01;
           objects.push({ type: 'penguin', x, y, sortY: penguinSortY, sprite: 'goal_penguin_16' });
         }
       }
