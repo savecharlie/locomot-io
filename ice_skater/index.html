@@ -104,11 +104,20 @@
       #sidebar { display: flex; }
       #footer .mobile-only { display: none; }
     }
-    /* Mobile: hide sidebar, header, footer - just show the game */
+    /* Mobile: fullscreen game only */
     @media (max-width: 899px) {
       #sidebar { display: none; }
       #header { display: none; }
       #footer { display: none; }
+      #main-layout, #game-area, #game-container { display: contents; }
+      canvas {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100vw;
+        height: 100vh;
+        height: 100dvh;
+      }
     }
   </style>
 </head>
@@ -1170,27 +1179,29 @@ function render() {
   const w = level.width;
   const h = level.height;
 
-  // Calculate scale to fit puzzle with ICE_MARGIN_PX pixels of ice visible
+  // Calculate scale to fit puzzle in viewport
   // Level size in base pixels (before scale)
-  const levelPixelW = w * TILE_W + ICE_MARGIN_PX * 2;
-  const levelPixelH = h * TILE_H + TOP_PADDING + ICE_MARGIN_PX * 2 + 10;
+  const levelPixelW = w * TILE_W;
+  const levelPixelH = h * TILE_H + TOP_PADDING + 10;
 
-  // Fit to viewport
+  // Fill entire viewport
   const viewW = window.innerWidth;
   const viewH = window.innerHeight;
   const scaleX = viewW / levelPixelW;
   const scaleY = viewH / levelPixelH;
-  SCALE = Math.floor(Math.min(scaleX, scaleY));
+  SCALE = Math.min(scaleX, scaleY);  // No floor - use exact scale for fullscreen
   if (SCALE < 1) SCALE = 1;
 
-  // Canvas sized exactly to fit level + margin
-  canvas.width = levelPixelW * SCALE;
-  canvas.height = levelPixelH * SCALE;
+  // Canvas fills the viewport
+  canvas.width = viewW;
+  canvas.height = viewH;
   ctx.imageSmoothingEnabled = false;
 
-  // Offset positions level content with ice margin
-  const offsetX = ICE_MARGIN_PX * SCALE;
-  const offsetY = ICE_MARGIN_PX * SCALE;
+  // Center the level in the viewport
+  const scaledLevelW = levelPixelW * SCALE;
+  const scaledLevelH = levelPixelH * SCALE;
+  const offsetX = (viewW - scaledLevelW) / 2;
+  const offsetY = (viewH - scaledLevelH) / 2;
 
   const now = performance.now();
   if (now - lastKeyFrameTime > 200) {
@@ -1200,18 +1211,19 @@ function render() {
 
   // Draw ice tiles across entire canvas (3 variants for visual variety)
   const floorVariants = [sprites['ice_floor_16x12'], sprites['ice_floor_16x12_v1'], sprites['ice_floor_16x12_v2']];
-  const tilesX = Math.ceil(canvas.width / (TILE_W * SCALE)) + 2;
-  const tilesY = Math.ceil(canvas.height / (TILE_H * SCALE)) + 4;
-  for (let ty = -3; ty < tilesY; ty++) {
+  const tileW = TILE_W * SCALE;
+  const tileH = TILE_H * SCALE;
+  const tilesX = Math.ceil(canvas.width / tileW) + 2;
+  const tilesY = Math.ceil(canvas.height / tileH) + 4;
+  for (let ty = -2; ty < tilesY; ty++) {
     for (let tx = -1; tx < tilesX; tx++) {
-      const px = tx * TILE_W * SCALE;
-      const py = TOP_PADDING * SCALE + ty * TILE_H * SCALE;
+      const px = tx * tileW;
+      const py = ty * tileH;
       // Pick variant based on position (deterministic pseudo-random)
-      // Use Math.abs to avoid negative modulo giving invalid indices
       const variant = Math.abs((tx * 7 + ty * 13) % 3);
       const floorSprite = floorVariants[variant];
       if (floorSprite) {
-        ctx.drawImage(floorSprite, px, py - (TILE_H / 2) * SCALE, TILE_W * SCALE, TILE_H * SCALE);
+        ctx.drawImage(floorSprite, px, py, tileW, tileH);
       }
     }
   }
