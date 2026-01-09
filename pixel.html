@@ -4245,7 +4245,54 @@ Canvas: ${state.canvasWidth}x${state.canvasHeight}`;
             const bounds = state.selection.bounds;
             saveState();
 
-            // Get source image data
+            // Handle floating selection - flip the floatingData directly
+            if (state.selection.floating && state.selection.floatingData) {
+                const srcData = state.selection.floatingData;
+                const w = srcData.width;
+                const h = srcData.height;
+                const flippedData = new ImageData(w, h);
+
+                for (let y = 0; y < h; y++) {
+                    for (let x = 0; x < w; x++) {
+                        const srcX = horizontal ? (w - 1 - x) : x;
+                        const srcY = vertical ? (h - 1 - y) : y;
+                        const srcIdx = (srcY * w + srcX) * 4;
+                        const dstIdx = (y * w + x) * 4;
+                        flippedData.data[dstIdx] = srcData.data[srcIdx];
+                        flippedData.data[dstIdx + 1] = srcData.data[srcIdx + 1];
+                        flippedData.data[dstIdx + 2] = srcData.data[srcIdx + 2];
+                        flippedData.data[dstIdx + 3] = srcData.data[srcIdx + 3];
+                    }
+                }
+
+                state.selection.floatingData = flippedData;
+
+                // Update selection pixels set
+                const newPixels = new Set();
+                state.selection.pixels.forEach(key => {
+                    const [px, py] = key.split(',').map(Number);
+                    const lx = px - bounds.x;
+                    const ly = py - bounds.y;
+                    const newLx = horizontal ? (bounds.width - 1 - lx) : lx;
+                    const newLy = vertical ? (bounds.height - 1 - ly) : ly;
+                    newPixels.add(`${bounds.x + newLx},${bounds.y + newLy}`);
+                });
+                state.selection.pixels = newPixels;
+
+                // Redraw on preview canvas
+                previewCtx.clearRect(0, 0, state.canvasWidth, state.canvasHeight);
+                previewCtx.putImageData(
+                    flippedData,
+                    bounds.x + state.selection.floatingOffset.x,
+                    bounds.y + state.selection.floatingOffset.y
+                );
+
+                drawSelection();
+                showToast(horizontal ? 'Flipped H!' : 'Flipped V!');
+                return;
+            }
+
+            // Non-floating selection - flip on canvas directly
             const srcData = ctx.getImageData(bounds.x, bounds.y, bounds.width, bounds.height);
 
             // Create array to store flipped pixel data
