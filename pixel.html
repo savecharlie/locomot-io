@@ -523,6 +523,27 @@
             opacity: 1;
         }
 
+        /* Debug overlay */
+        .debug-overlay {
+            position: fixed;
+            top: 100px;
+            left: 10px;
+            background: rgba(0, 0, 0, 0.85);
+            color: #0f0;
+            font-family: monospace;
+            font-size: 11px;
+            padding: 10px;
+            border-radius: 4px;
+            z-index: 999;
+            pointer-events: none;
+            white-space: pre;
+            display: none;
+        }
+
+        .debug-overlay.show {
+            display: block;
+        }
+
         /* Zoom indicator */
         .zoom-indicator {
             position: absolute;
@@ -1477,6 +1498,7 @@
 
     <!-- Toast -->
     <div class="toast" id="toast"></div>
+    <div class="debug-overlay" id="debugOverlay"></div>
 
     <script>
         // ===== STATE =====
@@ -1518,6 +1540,7 @@
             },
             clipboard: null, // ImageData for copy/paste
             lassoPixels: [], // Array of {x,y} for lasso drawing
+            debugMode: false, // Toggle with 'D' key
             lassoStart: null, // Starting pixel of lasso
             // Layers
             layers: [], // Array of layer objects: {id, name, canvas, ctx, visible, opacity, locked}
@@ -2617,6 +2640,9 @@
             // Update status
             document.getElementById('statusPos').textContent = `Pos: ${x}, ${y}`;
 
+            // Update debug overlay
+            updateDebugOverlay(e);
+
             // Update eraser cursor
             updateEraserCursor(e, x, y);
 
@@ -3170,6 +3196,7 @@
                 case 's': setTool('select'); break;
                 case 'q': setTool('lasso'); break;
                 case 'g': toggleGrid(); break;
+                case '`': toggleDebug(); break;
                 case '=':
                 case '+':
                     state.zoom = Math.min(32, state.zoom + 1);
@@ -3256,6 +3283,37 @@
             updateUndoRedoButtons();
             updateLayersPanel();
             autoSave();
+        }
+
+        // ===== DEBUG MODE =====
+        function toggleDebug() {
+            state.debugMode = !state.debugMode;
+            const overlay = document.getElementById('debugOverlay');
+            overlay.classList.toggle('show', state.debugMode);
+            if (state.debugMode) {
+                showToast('Debug ON (press ` to toggle)');
+            }
+        }
+
+        function updateDebugOverlay(e) {
+            if (!state.debugMode) return;
+
+            const rect = mainCanvas.getBoundingClientRect();
+            const offsetX = e.clientX - rect.left;
+            const offsetY = e.clientY - rect.top;
+            const calcX = Math.floor(offsetX / state.zoom);
+            const calcY = Math.floor(offsetY / state.zoom);
+
+            const overlay = document.getElementById('debugOverlay');
+            overlay.textContent =
+`Mouse: (${e.clientX.toFixed(1)}, ${e.clientY.toFixed(1)})
+Rect:  (${rect.left.toFixed(1)}, ${rect.top.toFixed(1)})
+       ${rect.width.toFixed(1)} x ${rect.height.toFixed(1)}
+Offset: (${offsetX.toFixed(1)}, ${offsetY.toFixed(1)})
+Zoom: ${state.zoom}
+Pan: (${state.panX}, ${state.panY})
+Calc: (${calcX}, ${calcY})
+Canvas: ${state.canvasWidth}x${state.canvasHeight}`;
         }
 
         function updateUndoRedoButtons() {
