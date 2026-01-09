@@ -1184,12 +1184,12 @@ function render() {
   const levelPixelW = w * TILE_W;
   const levelPixelH = h * TILE_H + TOP_PADDING + 10;
 
-  // Fill entire viewport
+  // Fill entire viewport with integer scale for crisp pixels
   const viewW = window.innerWidth;
   const viewH = window.innerHeight;
   const scaleX = viewW / levelPixelW;
   const scaleY = viewH / levelPixelH;
-  SCALE = Math.min(scaleX, scaleY);  // No floor - use exact scale for fullscreen
+  SCALE = Math.floor(Math.min(scaleX, scaleY));
   if (SCALE < 1) SCALE = 1;
 
   // Canvas fills the viewport
@@ -1200,8 +1200,8 @@ function render() {
   // Center the level in the viewport
   const scaledLevelW = levelPixelW * SCALE;
   const scaledLevelH = levelPixelH * SCALE;
-  const offsetX = (viewW - scaledLevelW) / 2;
-  const offsetY = (viewH - scaledLevelH) / 2;
+  const offsetX = Math.floor((viewW - scaledLevelW) / 2);
+  const offsetY = Math.floor((viewH - scaledLevelH) / 2);
 
   const now = performance.now();
   if (now - lastKeyFrameTime > 200) {
@@ -1211,14 +1211,14 @@ function render() {
 
   // Draw ice tiles across entire canvas (3 variants for visual variety)
   const floorVariants = [sprites['ice_floor_16x12'], sprites['ice_floor_16x12_v1'], sprites['ice_floor_16x12_v2']];
-  const tileW = TILE_W * SCALE;
-  const tileH = TILE_H * SCALE;
+  const tileW = Math.floor(TILE_W * SCALE);
+  const tileH = Math.floor(TILE_H * SCALE);
   const tilesX = Math.ceil(canvas.width / tileW) + 2;
   const tilesY = Math.ceil(canvas.height / tileH) + 4;
   for (let ty = -2; ty < tilesY; ty++) {
     for (let tx = -1; tx < tilesX; tx++) {
-      const px = tx * tileW;
-      const py = ty * tileH;
+      const px = Math.floor(tx * tileW);
+      const py = Math.floor(ty * tileH);
       // Pick variant based on position (deterministic pseudo-random)
       const variant = Math.abs((tx * 7 + ty * 13) % 3);
       const floorSprite = floorVariants[variant];
