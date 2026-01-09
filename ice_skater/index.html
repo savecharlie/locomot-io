@@ -18,6 +18,11 @@
       justify-content: center;
       font-family: sans-serif;
     }
+    #main-layout {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
     #header {
       color: #68BBC4;
       font-size: 24px;
@@ -25,6 +30,11 @@
       text-align: center;
       font-weight: bold;
       letter-spacing: 2px;
+    }
+    #game-area {
+      display: flex;
+      align-items: flex-start;
+      gap: 30px;
     }
     #game-container {
       background: transparent;
@@ -35,6 +45,35 @@
       image-rendering: pixelated;
       image-rendering: crisp-edges;
     }
+    #sidebar {
+      display: none;
+      flex-direction: column;
+      gap: 15px;
+      color: #8DCBCA;
+      font-size: 16px;
+      min-width: 140px;
+    }
+    #sidebar .info-row {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+    #sidebar .info-label {
+      color: #5A9199;
+      font-size: 12px;
+      text-transform: uppercase;
+    }
+    #sidebar .info-value {
+      color: #68BBC4;
+      font-size: 18px;
+      font-weight: bold;
+    }
+    #sidebar .btn-group {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      margin-top: 10px;
+    }
     #footer {
       color: #8DCBCA;
       font-size: 16px;
@@ -42,6 +81,8 @@
       display: flex;
       gap: 20px;
       align-items: center;
+      flex-wrap: wrap;
+      justify-content: center;
     }
     button {
       background: #2A474F;
@@ -57,21 +98,59 @@
     #keys { color: #B0D5CF; font-size: 16px; }
     #status { color: #A968C4; font-weight: bold; }
     #status.hint { color: #40ACBF; }
+
+    /* Desktop: show sidebar, hide footer info */
+    @media (min-width: 900px) {
+      #sidebar { display: flex; }
+      #footer .mobile-only { display: none; }
+    }
+    /* Mobile: hide sidebar */
+    @media (max-width: 899px) {
+      #sidebar { display: none; }
+    }
   </style>
 </head>
 <body>
-  <div id="header">Ice Skater</div>
-  <div id="game-container">
-    <canvas id="game"></canvas>
-  </div>
-  <div id="footer">
-    <button id="prev-btn">◀</button>
-    <span id="level-num">Level 1</span>
-    <button id="next-btn">▶</button>
-    <button id="restart-btn">Restart</button>
-    <button id="undo-btn">Undo</button>
-    <button id="hint-btn">Hint</button>
-    <span id="status"></span>
+  <div id="main-layout">
+    <div id="header">Ice Skater</div>
+    <div id="game-area">
+      <div id="game-container">
+        <canvas id="game"></canvas>
+      </div>
+      <div id="sidebar">
+        <div class="info-row">
+          <span class="info-label">Level</span>
+          <span class="info-value" id="sidebar-level">1 / 86</span>
+        </div>
+        <div class="info-row">
+          <span class="info-label">Par</span>
+          <span class="info-value" id="sidebar-par">-</span>
+        </div>
+        <div class="info-row">
+          <span class="info-label">Moves</span>
+          <span class="info-value" id="sidebar-moves">0</span>
+        </div>
+        <div class="info-row">
+          <span id="sidebar-status"></span>
+        </div>
+        <div class="btn-group">
+          <button id="sidebar-prev">◀ Prev</button>
+          <button id="sidebar-next">Next ▶</button>
+          <button id="sidebar-restart">Restart</button>
+          <button id="sidebar-undo">Undo</button>
+          <button id="sidebar-hint">Hint</button>
+        </div>
+      </div>
+    </div>
+    <div id="footer">
+      <button id="prev-btn" class="mobile-only">◀</button>
+      <span id="level-num" class="mobile-only">Level 1</span>
+      <button id="next-btn" class="mobile-only">▶</button>
+      <button id="restart-btn">Restart</button>
+      <button id="undo-btn">Undo</button>
+      <button id="hint-btn">Hint</button>
+      <span id="status" class="mobile-only"></span>
+    </div>
   </div>
 
   <script>
@@ -1666,6 +1745,7 @@ function handleInput(dir) {
       ramps: [...oldState.ramps.entries()]
     };
     history.push(JSON.parse(JSON.stringify(historyEntry)));
+    updateMoveCount();
 
     // Calculate animation distance
     const dx = newState.playerX - oldState.playerX;
@@ -1833,7 +1913,7 @@ canvas.addEventListener('touchend', e => {
 
 document.getElementById('restart-btn').onclick = restartLevel;
 
-document.getElementById('undo-btn').onclick = () => {
+function undo() {
   // Clear any animations
   animation = null;
   animating = false;
@@ -1851,24 +1931,37 @@ document.getElementById('undo-btn').onclick = () => {
     };
     isUnwinnable = false;
     document.getElementById('status').textContent = '';
+    document.getElementById('sidebar-status').textContent = '';
+    updateMoveCount();
     updateStatus();
   }
-};
+}
 
-document.getElementById('hint-btn').onclick = () => {
+document.getElementById('undo-btn').onclick = undo;
+
+function showHint() {
   const hint = getHint();
   const status = document.getElementById('status');
+  const sidebarStatus = document.getElementById('sidebar-status');
   if (hint) {
     const arrows = { up: '↑', down: '↓', left: '←', right: '→' };
-    status.textContent = `Hint: ${arrows[hint]}`;
+    const text = `Hint: ${arrows[hint]}`;
+    status.textContent = text;
     status.className = 'hint';
+    sidebarStatus.textContent = text;
+    sidebarStatus.style.color = '#40ACBF';
   } else if (gameState.won) {
     status.textContent = '';
+    sidebarStatus.textContent = '';
   } else {
     status.textContent = 'No solution!';
     status.className = '';
+    sidebarStatus.textContent = 'No solution!';
+    sidebarStatus.style.color = '#A968C4';
   }
-};
+}
+
+document.getElementById('hint-btn').onclick = showHint;
 
 function updateStatus() {
   const status = document.getElementById('status');
@@ -1912,9 +2005,20 @@ function loadLevel(index) {
   gameState = initGameState(level);
   history = [];
   isUnwinnable = false;
+  // Update footer (mobile)
   document.getElementById('level-num').textContent = `Level ${index + 1}/${allLevels.length}`;
   document.getElementById('status').textContent = '';
+  // Update sidebar (desktop)
+  document.getElementById('sidebar-level').textContent = `${index + 1} / ${allLevels.length}`;
+  document.getElementById('sidebar-par').textContent = lv.par || '-';
+  document.getElementById('sidebar-moves').textContent = '0';
+  document.getElementById('sidebar-status').textContent = '';
   render();
+}
+
+function updateMoveCount() {
+  const moves = history.length;
+  document.getElementById('sidebar-moves').textContent = moves;
 }
 
 function nextLevel() {
@@ -1954,9 +2058,16 @@ async function init() {
   loadLevel(Math.min(startLevel, allLevels.length - 1));
 }
 
-// Level navigation buttons
+// Level navigation buttons (mobile footer)
 document.getElementById('prev-btn')?.addEventListener('click', prevLevel);
 document.getElementById('next-btn')?.addEventListener('click', nextLevel);
+
+// Sidebar buttons (desktop)
+document.getElementById('sidebar-prev')?.addEventListener('click', prevLevel);
+document.getElementById('sidebar-next')?.addEventListener('click', nextLevel);
+document.getElementById('sidebar-restart')?.addEventListener('click', restartLevel);
+document.getElementById('sidebar-undo')?.addEventListener('click', undo);
+document.getElementById('sidebar-hint')?.addEventListener('click', showHint);
 
 init();
   </script>
