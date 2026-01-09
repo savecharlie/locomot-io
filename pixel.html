@@ -1780,6 +1780,13 @@
             if (window.supabase) {
                 supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
                 console.log('Supabase initialized');
+
+                // Test if Supabase works at all
+                (async () => {
+                    console.log('Testing Supabase connection...');
+                    const { data, error } = await supabaseClient.from('profiles').select('id').limit(1);
+                    console.log('Supabase test result:', { data, error });
+                })();
             } else {
                 console.error('Supabase SDK not loaded');
             }
@@ -1959,12 +1966,13 @@
                     updated_at: new Date().toISOString()
                 };
 
-                console.log('Upserting project:', tab.id, 'data size:', JSON.stringify(projectData).length);
+                console.log('Inserting project:', tab.id, 'data size:', JSON.stringify(projectData).length);
                 const { error } = await supabaseClient
                     .from('projects')
-                    .upsert(projectData);
+                    .insert(projectData)
+                    .single();
 
-                console.log('Upsert done, error:', error);
+                console.log('Insert done, error:', error);
                 if (error) throw error;
             } catch (e) {
                 console.error('saveProjectToCloud error:', e);
