@@ -1387,7 +1387,22 @@
                     <button id="invertSelection">Invert</button>
                 </div>
             </div>
-            <div class="modal-buttons">
+            <div class="form-group" style="border-top: 1px solid var(--bg-light); padding-top: 12px; margin-top: 8px;">
+                <label>Saved Palettes</label>
+                <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+                    <select id="savedPaletteSelect" style="flex: 1; min-width: 120px; background: var(--bg-light); color: var(--text); border: 1px solid var(--bg-light); border-radius: 4px; padding: 6px;">
+                        <option value="">-- Select --</option>
+                    </select>
+                    <button class="btn btn-secondary" id="loadSavedPalette" style="padding: 6px 12px;">Load</button>
+                    <button class="btn btn-secondary" id="deleteSavedPalette" style="padding: 6px 12px;">🗑️</button>
+                </div>
+                <div style="display: flex; gap: 8px; margin-top: 8px;">
+                    <input type="text" id="savePaletteName" placeholder="Palette name..." style="flex: 1; background: var(--bg-light); color: var(--text); border: 1px solid var(--bg-light); border-radius: 4px; padding: 6px;">
+                    <button class="btn btn-secondary" id="savePaletteBtn" style="padding: 6px 12px;">Save</button>
+                </div>
+            </div>
+            <div class="modal-buttons" style="gap: 8px;">
+                <button class="btn btn-secondary" id="downloadPalette" title="Download as .hex file">⬇️ Download</button>
                 <button class="btn btn-secondary" id="cancelPaletteGen">Cancel</button>
                 <button class="btn btn-primary" id="applyPalette">Apply Selected</button>
             </div>
@@ -2524,6 +2539,13 @@
             document.getElementById('selectAllColors').onclick = selectAllColors;
             document.getElementById('deselectAllColors').onclick = deselectAllColors;
             document.getElementById('invertSelection').onclick = invertColorSelection;
+
+            // Palette save/load/download
+            document.getElementById('downloadPalette').onclick = downloadPalette;
+            document.getElementById('savePaletteBtn').onclick = saveGeneratedPalette;
+            document.getElementById('loadSavedPalette').onclick = loadSavedPalette;
+            document.getElementById('deleteSavedPalette').onclick = deleteSavedPalette;
+            loadSavedPalettesList();
 
             // Palette select
             document.getElementById('paletteSelect').onchange = (e) => loadPalette(e.target.value);
@@ -3735,6 +3757,125 @@
 
             // Reset selection for next time
             state.selectedColors.clear();
+        }
+
+        // ===== PALETTE SAVE/LOAD/DOWNLOAD =====
+        function getSelectedPaletteColors() {
+            const colors = [];
+            state.generatedPalette.forEach((color, idx) => {
+                if (state.selectedColors.has(idx)) {
+                    colors.push(color);
+                }
+            });
+            return colors.length > 0 ? colors : state.generatedPalette;
+        }
+
+        function downloadPalette() {
+            const colors = getSelectedPaletteColors();
+            if (colors.length === 0) {
+                showToast('No colors to download!');
+                return;
+            }
+
+            // Create .hex format (one hex per line, no #)
+            const hexContent = colors.map(c => c.replace('#', '').toUpperCase()).join('\n');
+
+            const blob = new Blob([hexContent], { type: 'text/plain' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'palette.hex';
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+
+            showToast(`Downloaded ${colors.length} colors!`);
+        }
+
+        function getSavedPalettes() {
+            try {
+                return JSON.parse(localStorage.getItem('pixelArtSavedPalettes') || '{}');
+            } catch {
+                return {};
+            }
+        }
+
+        function saveSavedPalettes(palettes) {
+            localStorage.setItem('pixelArtSavedPalettes', JSON.stringify(palettes));
+        }
+
+        function loadSavedPalettesList() {
+            const select = document.getElementById('savedPaletteSelect');
+            const palettes = getSavedPalettes();
+
+            select.innerHTML = '<option value="">-- Select --</option>';
+            Object.keys(palettes).sort().forEach(name => {
+                const opt = document.createElement('option');
+                opt.value = name;
+                opt.textContent = `${name} (${palettes[name].length})`;
+                select.appendChild(opt);
+            });
+        }
+
+        function saveGeneratedPalette() {
+            const name = document.getElementById('savePaletteName').value.trim();
+            if (!name) {
+                showToast('Enter a palette name!');
+                return;
+            }
+
+            const colors = getSelectedPaletteColors();
+            if (colors.length === 0) {
+                showToast('No colors to save!');
+                return;
+            }
+
+            const palettes = getSavedPalettes();
+            palettes[name] = colors;
+            saveSavedPalettes(palettes);
+
+            document.getElementById('savePaletteName').value = '';
+            loadSavedPalettesList();
+            showToast(`Saved "${name}" (${colors.length} colors)`);
+        }
+
+        function loadSavedPalette() {
+            const name = document.getElementById('savedPaletteSelect').value;
+            if (!name) {
+                showToast('Select a palette first!');
+                return;
+            }
+
+            const palettes = getSavedPalettes();
+            const colors = palettes[name];
+            if (!colors) {
+                showToast('Palette not found!');
+                return;
+            }
+
+            // Load into the current palette directly
+            state.palette = colors;
+            state.currentColor = state.palette[0];
+            renderPalette();
+            document.getElementById('paletteSelect').value = 'custom';
+            document.getElementById('paletteGenModal').classList.remove('active');
+            showToast(`Loaded "${name}" (${colors.length} colors)`);
+        }
+
+        function deleteSavedPalette() {
+            const name = document.getElementById('savedPaletteSelect').value;
+            if (!name) {
+                showToast('Select a palette first!');
+                return;
+            }
+
+            const palettes = getSavedPalettes();
+            delete palettes[name];
+            saveSavedPalettes(palettes);
+
+            loadSavedPalettesList();
+            showToast(`Deleted "${name}"`);
         }
 
         // ===== SELECTION FUNCTIONS =====
