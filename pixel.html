@@ -1763,7 +1763,92 @@
             activeTabIndex: 0,  // Currently displayed tab
             nextTabId: 1,       // Counter for unique tab IDs
             tabLoading: false,  // Flag to prevent autoSave during async tab load
+            // Cloud sync
+            user: null,
+            syncStatus: 'idle',
+            lastSyncTime: null,
+            syncDebounceTimer: null,
         };
+
+        // ===== SUPABASE =====
+        const SUPABASE_URL = 'https://vwlbjjznvczfecjnrjen.supabase.co';
+        const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZ3bGJqanpudmN6ZmVjam5yamVuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njc5Nzc5OTIsImV4cCI6MjA4MzU1Mzk5Mn0.didh9h1rGEDEhzVlUBp7WhAxFMPsUTSvsuvIwa0aDro';
+        let supabase = null;
+
+        // Initialize Supabase when SDK loads (it's async)
+        function initSupabase() {
+            if (window.supabase) {
+                try {
+                    supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+                    console.log('Supabase initialized');
+                    setupAuthListener();
+                } catch (e) {
+                    console.error('Supabase init failed:', e);
+                }
+            }
+        }
+
+        // Check for Supabase SDK periodically until it loads
+        const supabaseCheck = setInterval(() => {
+            if (window.supabase) {
+                clearInterval(supabaseCheck);
+                initSupabase();
+            }
+        }, 100);
+
+        // Auth functions
+        async function signInWithGoogle() {
+            if (!supabase) {
+                showToast('Cloud sync loading...');
+                return;
+            }
+            const { error } = await supabase.auth.signInWithOAuth({
+                provider: 'google',
+                options: {
+                    redirectTo: window.location.origin + window.location.pathname
+                }
+            });
+            if (error) {
+                console.error('Sign in error:', error);
+                showToast('Sign in failed');
+            }
+        }
+
+        async function signOut() {
+            if (!supabase) return;
+            const { error } = await supabase.auth.signOut();
+            if (error) console.error('Sign out error:', error);
+            state.user = null;
+            updateAuthUI();
+            showToast('Signed out');
+        }
+
+        function updateAuthUI() {
+            const authBtn = document.getElementById('authBtn');
+            const authText = document.getElementById('authText');
+            const syncStatus = document.getElementById('syncStatus');
+            if (!authBtn) return;
+
+            if (state.user) {
+                const name = state.user.user_metadata?.full_name || state.user.email?.split('@')[0] || 'User';
+                authText.textContent = name;
+                authBtn.classList.add('signed-in');
+                syncStatus.classList.add('visible');
+            } else {
+                authText.textContent = 'Sign in';
+                authBtn.classList.remove('signed-in');
+                syncStatus.classList.remove('visible');
+            }
+        }
+
+        function setupAuthListener() {
+            if (!supabase) return;
+            supabase.auth.onAuthStateChange((event, session) => {
+                console.log('Auth state:', event);
+                state.user = session?.user || null;
+                updateAuthUI();
+            });
+        }
 
         // ===== PALETTES =====
         const PALETTES = {
@@ -2895,6 +2980,13 @@
             document.getElementById('gridBtn').onclick = toggleGrid;
             document.getElementById('saveBtn').onclick = exportPNG;
             document.getElementById('menuBtn').onclick = () => document.getElementById('menuModal').classList.add('active');
+            document.getElementById('authBtn').onclick = () => {
+                if (state.user) {
+                    signOut();
+                } else {
+                    signInWithGoogle();
+                }
+            };
 
             // Menu modal
             document.getElementById('closeMenuBtn').onclick = () => document.getElementById('menuModal').classList.remove('active');
