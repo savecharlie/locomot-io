@@ -1,0 +1,1964 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Ice Skater</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body {
+      height: 100%;
+      height: 100dvh;
+      overflow: hidden;
+      background: #1D2B30;
+      touch-action: none;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      font-family: sans-serif;
+    }
+    #header {
+      color: #68BBC4;
+      font-size: 24px;
+      margin-bottom: 20px;
+      text-align: center;
+      font-weight: bold;
+      letter-spacing: 2px;
+    }
+    #game-container {
+      background: transparent;
+      padding: 0;
+    }
+    canvas {
+      display: block;
+      image-rendering: pixelated;
+      image-rendering: crisp-edges;
+    }
+    #footer {
+      color: #8DCBCA;
+      font-size: 16px;
+      margin-top: 25px;
+      display: flex;
+      gap: 20px;
+      align-items: center;
+    }
+    button {
+      background: #2A474F;
+      color: #68BBC4;
+      border: 2px solid #3B8897;
+      padding: 8px 16px;
+      border-radius: 4px;
+      font-size: 14px;
+      cursor: pointer;
+    }
+    button:hover { background: #346672; }
+    button:active { background: #3B8897; }
+    #keys { color: #B0D5CF; font-size: 16px; }
+    #status { color: #A968C4; font-weight: bold; }
+    #status.hint { color: #40ACBF; }
+  </style>
+</head>
+<body>
+  <div id="header">Ice Skater</div>
+  <div id="game-container">
+    <canvas id="game"></canvas>
+  </div>
+  <div id="footer">
+    <button id="prev-btn">◀</button>
+    <span id="level-num">Level 1</span>
+    <button id="next-btn">▶</button>
+    <button id="restart-btn">Restart</button>
+    <button id="undo-btn">Undo</button>
+    <button id="hint-btn">Hint</button>
+    <span id="status"></span>
+  </div>
+
+  <script>
+// === ICE SKATER ENGINE v2 ===
+// Fixed: locked wall, height system, ramps, block stops
+
+const TILE_W = 16;  // Tile width
+const TILE_H = 12;  // Tile height (floor surface depth) - oblique angle
+const SCALE = 4;
+const TOP_PADDING = 20;  // Extra space for sprites extending above grid
+const WALL_H = 24;  // Wall/block height (14px top + 10px front)
+const DIRS = {
+  up: { dx: 0, dy: -1 },
+  down: { dx: 0, dy: 1 },
+  left: { dx: -1, dy: 0 },
+  right: { dx: 1, dy: 0 }
+};
+
+// Tile types:
+// . = ice floor, # = wall, S = start, P = goal (penguin)
+// B = ice block, H = hole (hazard), K = key, L = locked wall
+// T = sticky tile, 1-4 = crack variants (cosmetic floor)
+// Ramps: ^ = high end north, v = high end south, < = high end west, > = high end east
+
+const sprites = {};
+const spriteFiles = [
+  'ice_floor_16x12.png', 'ice_floor_16x12_v1.png', 'ice_floor_16x12_v2.png',
+  'ice_block_v3.png', 'block_base_16.png', 'wall_16x24.png',
+  'ice_hole_16x12.png', 'goal_penguin_16.png', 'sticky_tile_16x12.png',
+  'wall_keyhole_16x24.png',
+  'ice_crack_1.png', 'ice_crack_2.png', 'ice_crack_3.png', 'ice_crack_4.png',
+  'key_frame_1.png', 'key_frame_2.png', 'key_frame_3.png', 'key_frame_4.png',
+  'ramp_north_16x24.png', 'ramp_south_16x24.png', 'ramp_east_16x24.png', 'ramp_west_16x24.png',
+  'skater_16x24.png', 'skater_back_fixed_16x24.png',
+  'skater_side_16x24.png', 'skater_side_left_16x24.png',
+  'skater_side_standing_16x24.png', 'skater_side_left_standing_16x24.png',
+  'skater_side_skating_16x24.png', 'skater_side_left_skating_16x24.png',
+  'skater_sad_16x24.png', 'skater_back_sad_16x24.png',
+  'skater_side_sad_16x24.png', 'skater_side_left_sad_16x24.png',
+  'skater_front_sad_16x24.png', 'skater_side_standing_sad_16x24.png', 'skater_side_left_standing_sad_16x24.png',
+  'skater_front_standing_16x24.png', 'skater_back_standing_16x24.png',
+  'skater_front_skating_16x24.png', 'skater_back_skating_16x24.png',
+  'skater_front_behind_16.png', 'skater_back_behind_16.png',
+  'skater_side_behind_16.png', 'skater_side_left_behind_16.png',
+  'block_behind_16x5.png', 'wall_behind_16x5.png', 'wall_keyhole_behind_16x5.png',
+  'wall_keyhole_sink_frame_1.png', 'wall_keyhole_sink_frame_2.png',
+  'wall_keyhole_sink_frame_3.png', 'wall_keyhole_sink_frame_4.png',
+  'wall_keyhole_sink_frame_5.png', 'wall_keyhole_sink_frame_6.png',
+  'skater_fall_frame_1.png', 'skater_fall_frame_2.png', 'skater_fall_frame_3.png',
+  'skater_fall_frame_4.png', 'skater_fall_frame_5.png', 'skater_fall_frame_6.png',
+  'skater_shadow.png', 'key_shadow.png', 'penguin_shadow.png', 'block_shadow.png'
+];
+
+let level = null;
+let gameState = null;
+let history = [];
+let animating = false;
+let keyFrame = 0;
+let lastKeyFrameTime = 0;
+let debugMsg = '';
+let showDebugGrid = false;  // Toggle with 'G' key
+let isUnwinnable = false;
+let unwinnableFlashTime = 0;
+
+// Animation state
+const ANIM_SPEED = 8;  // Tiles per second
+let animation = null;  // { startTime, duration, player: {fromX, fromY, toX, toY}, blocks: [...] }
+let deathAnimation = null;  // { startTime, duration, x, y } - for fall into hole animation
+
+const canvas = document.getElementById('game');
+const ctx = canvas.getContext('2d');
+
+async function loadSprites() {
+  const cacheBust = Date.now();
+  console.log('LOADING SPRITES, cacheBust=' + cacheBust);
+  const promises = spriteFiles.map(file => {
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      img.onload = () => {
+        sprites[file.replace('.png', '')] = img;
+        if (file.includes('block')) console.log('LOADED: ' + file + '?v=' + cacheBust + ' size=' + img.width + 'x' + img.height);
+        resolve();
+      };
+      img.onerror = () => { console.log('FAILED: ' + file); resolve(); };
+      img.src = file + '?v=' + cacheBust;
+    });
+  });
+  await Promise.all(promises);
+  console.log('ALL SPRITES LOADED');
+}
+
+// Initialize game state
+function initGameState(lv) {
+  const state = {
+    width: lv.width,
+    height: lv.height,
+    grid: lv.grid.map(row => [...row]),
+    playerX: 0,
+    playerY: 0,
+    playerHeight: 0,  // 0 = ground, 1 = elevated (on blocks)
+    playerDir: 'down',
+    blocks: new Set(),
+    ramps: new Map(),  // position key -> ramp type (^, v, <, >)
+    keys: 0,
+    unlockedWalls: new Set(),
+    filledHoles: new Set(),
+    won: false,
+    dead: false
+  };
+
+  for (let y = 0; y < lv.height; y++) {
+    for (let x = 0; x < lv.width; x++) {
+      const c = lv.grid[y][x];
+      if (c === 'S') {
+        state.playerX = x;
+        state.playerY = y;
+      } else if (c === 'B') {
+        state.blocks.add(`${x},${y}`);
+      } else if (isRamp(c)) {
+        // Track ramps separately for pushing
+        state.ramps.set(`${x},${y}`, c);
+      }
+    }
+  }
+
+  // Also load blocks from level data (for blocks on top of other tiles like P)
+  if (lv.blocks) {
+    for (const [x, y] of lv.blocks) {
+      state.blocks.add(`${x},${y}`);
+    }
+  }
+
+  return state;
+}
+
+// Get base tile (ignoring blocks, but checking dynamic ramps)
+function getBaseTile(state, x, y) {
+  if (x < 0 || y < 0 || x >= state.width || y >= state.height) return '#';
+  // Check dynamic ramp position first
+  const ramp = state.ramps.get(`${x},${y}`);
+  if (ramp) return ramp;
+  // Grid ramps are only shown if still in ramps map (handles pushed ramps)
+  const gridTile = state.grid[y][x];
+  if (isRamp(gridTile) && !state.ramps.has(`${x},${y}`)) return '.';  // Ramp was pushed away
+  return gridTile;
+}
+
+// Get effective tile (accounts for blocks and filled holes)
+function getTile(state, x, y) {
+  if (x < 0 || y < 0 || x >= state.width || y >= state.height) return '#';
+  if (state.blocks.has(`${x},${y}`)) return 'B';
+  if (state.filledHoles.has(`${x},${y}`)) return '.';
+  const gridTile = state.grid[y][x];
+  // 'B' in grid is only for initial placement - blocks come from blocks Set
+  if (gridTile === 'B') return '.';
+  return gridTile;
+}
+
+// Check if tile is a ramp
+function isRamp(tile) {
+  return tile === '^' || tile === 'v' || tile === '<' || tile === '>';
+}
+
+// Get ramp direction info: which way you must move to go UP
+function getRampUpDir(tile) {
+  switch(tile) {
+    case '^': return { dx: 0, dy: -1 };  // Move north to go up
+    case 'v': return { dx: 0, dy: 1 };   // Move south to go up
+    case '<': return { dx: -1, dy: 0 };  // Move west to go up
+    case '>': return { dx: 1, dy: 0 };   // Move east to go up
+  }
+  return null;
+}
+
+// Check if a block at position is elevated (on wall, locked wall, or ramp)
+function isBlockElevatedAt(state, x, y) {
+  const baseTile = getBaseTile(state, x, y);
+  if (baseTile === '#') return true;
+  if (baseTile === 'L' && !state.unlockedWalls.has(`${x},${y}`)) return true;
+  if (isRamp(baseTile)) return true;
+  return false;
+}
+
+// Simulate player move
+function simulateMove(state, dir) {
+  const { dx, dy } = DIRS[dir];
+  let x = state.playerX;
+  let y = state.playerY;
+  let height = state.playerHeight;
+
+
+  // Clone state (deep copy grid to avoid mutation)
+  let newState = {
+    ...state,
+    grid: state.grid.map(row => [...row]),  // Deep copy!
+    blocks: new Set(state.blocks),
+    ramps: new Map(state.ramps),
+    unlockedWalls: new Set(state.unlockedWalls),
+    filledHoles: new Set(state.filledHoles),
+    playerDir: dir,
+    wentUpRamp: false,  // Reset each move
+    rampX: undefined,
+    rampY: undefined,
+    blockMoveInfo: null  // Clear previous block move info
+  };
+
+  // Slide until hitting something
+  for (let i = 0; i < 50; i++) {
+    const nx = x + dx;
+    const ny = y + dy;
+    const tile = getTile(newState, nx, ny);
+    const baseTile = getBaseTile(newState, nx, ny);
+
+    // --- GROUND LEVEL (height 0) ---
+    if (height === 0) {
+      // Wall - stop before
+      if (tile === '#') break;
+
+      // Locked wall - stop before, unlock if have key
+      if (tile === 'L' && !newState.unlockedWalls.has(`${nx},${ny}`)) {
+        console.log(`HIT LOCKED WALL at (${nx},${ny}), keys=${newState.keys}`);
+        if (newState.keys > 0) {
+          console.log(`UNLOCKING wall at (${nx},${ny})`);
+          newState.keys--;
+          newState.unlockedWalls.add(`${nx},${ny}`);
+          // Track for animation
+          if (!newState.newlyUnlocked) newState.newlyUnlocked = [];
+          newState.newlyUnlocked.push(`${nx},${ny}`);
+        }
+        break;  // Stop BEFORE the wall
+      }
+
+      // Block - try to push
+      if (tile === 'B') {
+        const pushResult = pushBlock(newState, nx, ny, dx, dy);
+        if (!pushResult) break;  // Can't push, stop
+        newState = pushResult;
+        x = nx;
+        y = ny;
+        // Check if we uncovered and landed on the goal (not if penguin is elevated on wall)
+        if (getBaseTile(newState, x, y) === 'P' && !level.penguinOnWall) {
+          newState.won = true;
+        }
+        break;  // Stop after pushing
+      }
+
+      // Ramp - go UP or push from the side
+      if (isRamp(baseTile)) {
+        const upDir = getRampUpDir(baseTile);
+        const match = upDir && upDir.dx === dx && upDir.dy === dy;
+        debugMsg = `RAMP ${baseTile} need(${upDir?.dx},${upDir?.dy}) got(${dx},${dy}) ${match?'GO':'STOP'}`;
+        if (match) {
+          // Going UP the ramp - ascend to height 1
+          x = nx;
+          y = ny;
+          height = 1;
+          newState.wentUpRamp = true;  // Track for animation
+          newState.rampX = nx;
+          newState.rampY = ny;
+          continue;  // Keep sliding at new height
+        } else {
+          // Try to push the ramp
+          const pushResult = pushRamp(newState, nx, ny, dx, dy);
+          if (pushResult) {
+            newState = pushResult;
+            x = nx;
+            y = ny;
+            break;  // Stop after pushing
+          }
+          // Can't push - ramp acts as wall
+          break;
+        }
+      }
+
+      // Hole - death!
+      if (tile === 'H') {
+        console.log(`DYING: sliding into hole at (${nx},${ny})`);
+        newState.dead = true;
+        newState.playerX = nx;
+        newState.playerY = ny;
+        return newState;
+      }
+
+      // Move to new position
+      x = nx;
+      y = ny;
+
+      // Collect key (continue sliding)
+      const gridChar = newState.grid[y]?.[x];
+      console.log(`SLIDE to (${x},${y}), gridChar='${gridChar}', tile='${tile}', baseTile='${baseTile}'`);
+      if (gridChar === 'K') {
+        console.log(`KEY PICKUP at (${x},${y}), keys: ${newState.keys} -> ${newState.keys + 1}`);
+        newState.keys++;
+        newState.grid[y] = [...newState.grid[y]];
+        newState.grid[y][x] = '.';
+        console.log(`After pickup, grid[${y}][${x}] = '${newState.grid[y][x]}'`);
+      }
+
+      // Goal - win! (but if penguin is on wall, need to be elevated)
+      if (baseTile === 'P') {
+        if (level.penguinOnWall) {
+          // Can't reach penguin on wall from ground - treat as wall, stop before it
+          x -= dx;
+          y -= dy;
+          break;
+        }
+        newState.won = true;
+        break;
+      }
+
+      // Sticky tile - stop
+      if (baseTile === 'T') break;
+      if (baseTile === 'L' && newState.unlockedWalls.has(`${x},${y}`)) break;
+
+      // Crack becomes hole - but only AFTER checking if we can continue
+      // If we stop here, we fall through. If we continue, we're safe.
+      if (baseTile >= '1' && baseTile <= '4') {
+        // Peek at next tile to see if we'll continue or stop
+        const peekX = x + dx;
+        const peekY = y + dy;
+        const peekTile = getTile(newState, peekX, peekY);
+        const peekBase = getBaseTile(newState, peekX, peekY);
+
+        console.log(`CRACK at (${x},${y}), peek (${peekX},${peekY}): tile=${peekTile}, base=${peekBase}`);
+
+        // Will we stop here? (wall, block we can't push, locked wall, ramp blocking)
+        const willStop = peekTile === '#' ||
+                        peekTile === 'B' ||  // Will try to push and stop
+                        (peekTile === 'L' && !newState.unlockedWalls.has(`${peekX},${peekY}`)) ||
+                        (isRamp(peekBase) && (() => {
+                          const upDir = getRampUpDir(peekBase);
+                          return !(upDir && upDir.dx === dx && upDir.dy === dy);
+                        })());
+
+        console.log(`willStop=${willStop}`);
+
+        if (willStop) {
+          // Stopping on crack = fall through
+          console.log('DYING: stopping on crack');
+          newState.grid[y] = [...newState.grid[y]];
+          newState.grid[y][x] = 'H';
+          newState.dead = true;
+          newState.playerX = x;
+          newState.playerY = y;
+          return newState;
+        }
+        // Otherwise, crack breaks but we slide over safely
+        console.log('SAFE: sliding over crack');
+        newState.grid[y] = [...newState.grid[y]];
+        newState.grid[y][x] = 'H';
+      }
+    }
+
+    // --- ELEVATED (height 1) ---
+    else {
+      // Wall - can slide onto it (1 tile) then stop
+      if (tile === '#') {
+        x = nx;
+        y = ny;
+        newState.lastElevatedX = x;
+        newState.lastElevatedY = y;
+        break;  // Stop on top of wall
+      }
+
+      // Locked wall - same behavior
+      if (tile === 'L' && !newState.unlockedWalls.has(`${nx},${ny}`)) {
+        x = nx;
+        y = ny;
+        newState.lastElevatedX = x;
+        newState.lastElevatedY = y;
+        break;
+      }
+
+      // Move to next position
+      x = nx;
+      y = ny;
+
+      // Check what we're over - blocks and ramps keep us elevated
+      const overBlock = newState.blocks.has(`${x},${y}`);
+      const overRamp = isRamp(baseTile);
+
+      if (overBlock) {
+        // Stay elevated over block, keep sliding
+        newState.lastElevatedX = x;
+        newState.lastElevatedY = y;
+      } else if (overRamp) {
+        const upDir = getRampUpDir(baseTile);
+        if (upDir && upDir.dx === -dx && upDir.dy === -dy) {
+          // Going DOWN the ramp - descend to height 0
+          height = 0;
+        } else {
+          // Stay elevated over ramp
+          newState.lastElevatedX = x;
+          newState.lastElevatedY = y;
+        }
+      } else if (baseTile === 'P' && level.penguinOnWall) {
+        // Penguin on wall - stay elevated
+        newState.lastElevatedX = x;
+        newState.lastElevatedY = y;
+      } else {
+        // Not on ramp or block - drop to ground
+        height = 0;
+        // Check if we dropped onto a hole - die!
+        if (baseTile === 'H' && !newState.filledHoles.has(`${x},${y}`)) {
+          newState.dead = true;
+          newState.playerX = x;
+          newState.playerY = y;
+          return newState;
+        }
+        // Check if we dropped onto a crack - break through and die!
+        if (baseTile >= '1' && baseTile <= '4') {
+          newState.grid[y] = [...newState.grid[y]];
+          newState.grid[y][x] = 'H';  // Crack becomes hole
+          newState.dead = true;
+          newState.playerX = x;
+          newState.playerY = y;
+          return newState;
+        }
+      }
+
+      // Check for goal (works from elevated too)
+      if (baseTile === 'P') {
+        newState.won = true;
+        break;
+      }
+    }
+  }
+
+  // Stay elevated for now - will drop at start of next move if not on block/ramp
+
+  // Check if we stopped on a pre-existing hole (NOT from a crack we just broke)
+  // Use original level.grid since newState.grid gets modified
+  const originalTile = level.grid[y]?.[x];
+  const currentTile = getTile(newState, x, y);
+  console.log(`POST-LOOP: pos=(${x},${y}), originalTile=${originalTile}, currentTile=${currentTile}, height=${height}`);
+  if (height === 0 && originalTile === 'H' && currentTile === 'H') {
+    // Only die if this was ALREADY a hole in the original level (not from a crack)
+    console.log('DYING: stopped on original hole');
+    newState.dead = true;
+    newState.playerX = x;
+    newState.playerY = y;
+    return newState;
+  }
+
+  // Check if anything changed (position, height, or state like unlocked walls)
+  const positionChanged = x !== state.playerX || y !== state.playerY || height !== state.playerHeight;
+  const stateChanged = newState.unlockedWalls.size !== state.unlockedWalls.size ||
+                       newState.keys !== state.keys ||
+                       newState.filledHoles.size !== state.filledHoles.size;
+  if (!positionChanged && !stateChanged) {
+    return null;
+  }
+
+  newState.playerX = x;
+  newState.playerY = y;
+  newState.playerHeight = height;
+  return newState;
+}
+
+// Push a block
+function pushBlock(state, bx, by, dx, dy) {
+  const newState = {
+    ...state,
+    blocks: new Set(state.blocks),
+    ramps: new Map(state.ramps),
+    unlockedWalls: new Set(state.unlockedWalls),
+    filledHoles: new Set(state.filledHoles),
+    grid: state.grid.map(row => [...row])
+  };
+
+  newState.blocks.delete(`${bx},${by}`);
+
+  let x = bx + dx;
+  let y = by + dy;
+  let blockHeight = 0;  // Track block elevation like player
+  let blockRampX, blockRampY;  // Where block went up ramp
+  let blockWentUpRamp = false;
+  let blockLastElevatedX, blockLastElevatedY;  // Last position where block was elevated
+  const startTile = getTile(newState, x, y);
+  const startBase = getBaseTile(newState, x, y);
+
+  // Helper to set block move info before returning
+  function finishAt(finalX, finalY) {
+    newState.blockMoveInfo = {
+      fromX: bx,
+      fromY: by,
+      toX: finalX,
+      toY: finalY,
+      wentUpRamp: blockWentUpRamp,
+      rampX: blockRampX,
+      rampY: blockRampY,
+      lastElevatedX: blockLastElevatedX,
+      lastElevatedY: blockLastElevatedY
+    };
+  }
+
+  // Can't push into wall, block, or locked wall immediately
+  if (blockHeight === 0) {
+    if (startTile === '#') return null;
+    if (startTile === 'B') return null;  // Another block
+    if (startTile === 'L' && !newState.unlockedWalls.has(`${x},${y}`)) return null;  // Locked wall
+  }
+
+  for (let i = 0; i < 50; i++) {
+    const tile = getTile(newState, x, y);
+    const baseTile = getBaseTile(newState, x, y);
+
+    // --- GROUND LEVEL (blockHeight 0) ---
+    if (blockHeight === 0) {
+      // Wall - stop at previous position
+      if (tile === '#') {
+        newState.blocks.add(`${x - dx},${y - dy}`);
+        finishAt(x - dx, y - dy);
+        return newState;
+      }
+
+      // Another block - stop at previous position
+      if (tile === 'B') {
+        newState.blocks.add(`${x - dx},${y - dy}`);
+        finishAt(x - dx, y - dy);
+        return newState;
+      }
+
+      // Locked wall - stop at previous position
+      if (tile === 'L' && !newState.unlockedWalls.has(`${x},${y}`)) {
+        newState.blocks.add(`${x - dx},${y - dy}`);
+        finishAt(x - dx, y - dy);
+        return newState;
+      }
+
+      // Hole - block fills it
+      if (tile === 'H') {
+        newState.filledHoles.add(`${x},${y}`);
+        finishAt(x, y);  // Block ends at hole
+        return newState;  // Block is gone
+      }
+
+      // Crack - block breaks it, and if stopping here, falls in and fills
+      if (baseTile >= '1' && baseTile <= '4') {
+        // Check if we'll stop here
+        const nx = x + dx;
+        const ny = y + dy;
+        const nextTile = getTile(newState, nx, ny);
+        const nextBase = getBaseTile(newState, nx, ny);
+        const willStop = nextTile === '#' || newState.blocks.has(`${nx},${ny}`) ||
+                        (nextTile === 'L' && !newState.unlockedWalls.has(`${nx},${ny}`)) ||
+                        (isRamp(nextBase) && (() => {
+                          const upDir = getRampUpDir(nextBase);
+                          return !(upDir && upDir.dx === dx && upDir.dy === dy);
+                        })()) || nextBase === 'T' || nextBase === 'P' ||
+                        (nextBase === 'L' && newState.unlockedWalls.has(`${nx},${ny}`));
+
+        if (willStop) {
+          // Block stops on crack - falls in, fills the hole
+          newState.grid[y] = [...newState.grid[y]];
+          newState.grid[y][x] = 'H';  // Crack becomes hole
+          newState.filledHoles.add(`${x},${y}`);  // But it's filled
+          finishAt(x, y);
+          return newState;  // Block is gone
+        } else {
+          // Sliding over crack - breaks it
+          newState.grid[y] = [...newState.grid[y]];
+          newState.grid[y][x] = 'H';  // Crack becomes hole
+        }
+      }
+
+      // Sticky tile - block stops here
+      if (baseTile === 'T') {
+        newState.blocks.add(`${x},${y}`);
+        finishAt(x, y);
+        return newState;
+      }
+
+      // Unlocked wall (sticky) - block stops here
+      if (baseTile === 'L' && newState.unlockedWalls.has(`${x},${y}`)) {
+        newState.blocks.add(`${x},${y}`);
+        finishAt(x, y);
+        return newState;
+      }
+
+      // Goal - block stops here (can't push onto goal)
+      if (baseTile === 'P') {
+        newState.blocks.add(`${x},${y}`);
+        finishAt(x, y);
+        return newState;
+      }
+
+      // Ramp - block goes up if moving in the right direction
+      if (isRamp(baseTile)) {
+        const upDir = getRampUpDir(baseTile);
+        if (upDir && upDir.dx === dx && upDir.dy === dy) {
+          // Going UP the ramp - block becomes elevated
+          blockHeight = 1;
+          blockWentUpRamp = true;
+          blockRampX = x;
+          blockRampY = y;
+        } else {
+          // Wrong direction - stop before ramp
+          newState.blocks.add(`${x - dx},${y - dy}`);
+          finishAt(x - dx, y - dy);
+          return newState;
+        }
+      }
+
+      // Check next position
+      const nx = x + dx;
+      const ny = y + dy;
+      const nextTile = getTile(newState, nx, ny);
+      const nextBase = getBaseTile(newState, nx, ny);
+
+      // If next is solid/stopping, stop here
+      // But if we're elevated (just went up ramp), we can pass over ground-level blocks
+      const nextBlockBlocks = (nextTile === 'B') && (blockHeight === 0 || isBlockElevatedAt(newState, nx, ny));
+      if (nextTile === '#' || nextBlockBlocks ||
+          (nextTile === 'L' && !newState.unlockedWalls.has(`${nx},${ny}`)) ||
+          nextBase === 'T' || nextBase === 'P' ||
+          (nextBase === 'L' && newState.unlockedWalls.has(`${nx},${ny}`))) {
+        newState.blocks.add(`${x},${y}`);
+        finishAt(x, y);
+        return newState;
+      }
+
+      // Ramp ahead - check if block can go up
+      if (isRamp(nextBase)) {
+        const upDir = getRampUpDir(nextBase);
+        if (!(upDir && upDir.dx === dx && upDir.dy === dy)) {
+          // Can't go up this ramp - stop here
+          newState.blocks.add(`${x},${y}`);
+          finishAt(x, y);
+          return newState;
+        }
+      }
+
+      x = nx;
+      y = ny;
+    }
+    // --- ELEVATED (blockHeight 1) ---
+    else {
+      // Wall - can slide onto it then stop (stays elevated on wall)
+      if (tile === '#') {
+        blockLastElevatedX = x;
+        blockLastElevatedY = y;
+        newState.blocks.add(`${x},${y}`);
+        finishAt(x, y);
+        return newState;
+      }
+
+      // Locked wall - same (stays elevated)
+      if (tile === 'L' && !newState.unlockedWalls.has(`${x},${y}`)) {
+        blockLastElevatedX = x;
+        blockLastElevatedY = y;
+        newState.blocks.add(`${x},${y}`);
+        finishAt(x, y);
+        return newState;
+      }
+
+      // Another block at this position - check elevation
+      if (tile === 'B') {
+        if (isBlockElevatedAt(newState, x, y)) {
+          // Both elevated - can't share space, stop at previous position
+          newState.blocks.add(`${x - dx},${y - dy}`);
+          finishAt(x - dx, y - dy);
+          return newState;
+        }
+        // Ground-level block - we're elevated over it, continue sliding
+        blockLastElevatedX = x;
+        blockLastElevatedY = y;
+      }
+
+      // Check what we're over - ramps keep us elevated
+      if (isRamp(baseTile)) {
+        const upDir = getRampUpDir(baseTile);
+        if (upDir && upDir.dx === -dx && upDir.dy === -dy) {
+          // Going DOWN the ramp - descend to ground
+          blockHeight = 0;
+        } else {
+          // Stay elevated over ramp
+          blockLastElevatedX = x;
+          blockLastElevatedY = y;
+        }
+      } else if (tile !== '#' && tile !== 'B' && !(tile === 'L' && !newState.unlockedWalls.has(`${x},${y}`))) {
+        // Not on ramp, wall, or block - drop to ground
+        blockHeight = 0;
+      }
+
+      // Move to next position
+      const nx = x + dx;
+      const ny = y + dy;
+      const nextTile = getTile(newState, nx, ny);
+
+      // If we dropped to ground, handle ground-level stopping
+      if (blockHeight === 0) {
+        // Ground level - stop BEFORE walls/blocks
+        if (nextTile === '#' || nextTile === 'B' ||
+            (nextTile === 'L' && !newState.unlockedWalls.has(`${nx},${ny}`))) {
+          newState.blocks.add(`${x},${y}`);
+          finishAt(x, y);
+          return newState;
+        }
+      } else {
+        // Still elevated - can stop ON TOP of walls
+        if (nextTile === '#' || (nextTile === 'L' && !newState.unlockedWalls.has(`${nx},${ny}`))) {
+          x = nx;
+          y = ny;
+          blockLastElevatedX = x;
+          blockLastElevatedY = y;
+          newState.blocks.add(`${x},${y}`);
+          finishAt(x, y);
+          return newState;
+        }
+
+        // If next position has an elevated block, stop here
+        if (nextTile === 'B' && isBlockElevatedAt(newState, nx, ny)) {
+          blockLastElevatedX = x;
+          blockLastElevatedY = y;
+          newState.blocks.add(`${x},${y}`);
+          finishAt(x, y);
+          return newState;
+        }
+      }
+
+      x = nx;
+      y = ny;
+    }
+  }
+
+  newState.blocks.add(`${x},${y}`);
+  finishAt(x, y);
+  return newState;
+}
+
+// Push a ramp (slides like a block but stays on ground)
+function pushRamp(state, rx, ry, dx, dy) {
+  const key = `${rx},${ry}`;
+  const rampType = state.ramps.get(key);
+  if (!rampType) return null;
+
+  const newState = {
+    ...state,
+    blocks: new Set(state.blocks),
+    ramps: new Map(state.ramps),
+    unlockedWalls: new Set(state.unlockedWalls),
+    filledHoles: new Set(state.filledHoles),
+    grid: state.grid.map(row => [...row])
+  };
+
+  newState.ramps.delete(key);
+
+  let x = rx + dx;
+  let y = ry + dy;
+  let rampHeight = 0;  // Track ramp elevation like blocks
+
+  // Track animation
+  const fromX = rx, fromY = ry;
+  let wentUpRamp = false;
+  let elevationRampX, elevationRampY;
+
+  // Slide until hitting obstacle
+  for (let i = 0; i < 50; i++) {
+    const tile = getTile(newState, x, y);
+    const baseTile = getBaseTile(newState, x, y);
+
+    // --- GROUND LEVEL ---
+    if (rampHeight === 0) {
+      // Stop at walls, blocks, locked walls
+      if (tile === '#' || tile === 'B' ||
+          (tile === 'L' && !newState.unlockedWalls.has(`${x},${y}`))) {
+        x -= dx;
+        y -= dy;
+        break;
+      }
+
+      // Other ramp - try to go UP it!
+      if (isRamp(baseTile)) {
+        const upDir = getRampUpDir(baseTile);
+        if (upDir && upDir.dx === dx && upDir.dy === dy) {
+          // Going UP - ramp becomes elevated
+          rampHeight = 1;
+          wentUpRamp = true;
+          elevationRampX = x;
+          elevationRampY = y;
+          // Continue sliding elevated
+        } else {
+          // Wrong direction - stop before ramp
+          x -= dx;
+          y -= dy;
+          break;
+        }
+      }
+
+      // Hole - ramp falls in and fills it
+      if (baseTile === 'H' && !newState.filledHoles.has(`${x},${y}`)) {
+        newState.filledHoles.add(`${x},${y}`);
+        newState.rampMoveInfo = { fromX, fromY, toX: x, toY: y, fell: true };
+        return newState;
+      }
+
+      // Crack - ramp breaks it, and if stopping here, falls in and fills
+      if (baseTile >= '1' && baseTile <= '4') {
+        // Check if we'll stop here
+        const nx = x + dx;
+        const ny = y + dy;
+        const nextTile = getTile(newState, nx, ny);
+        const nextBase = getBaseTile(newState, nx, ny);
+        const willStop = nextTile === '#' || nextTile === 'B' ||
+                        (nextTile === 'L' && !newState.unlockedWalls.has(`${nx},${ny}`)) ||
+                        (isRamp(nextBase) && (() => {
+                          const upDir = getRampUpDir(nextBase);
+                          return !(upDir && upDir.dx === dx && upDir.dy === dy);
+                        })()) || nextBase === 'P';
+
+        if (willStop) {
+          // Ramp stops on crack - falls in, fills the hole
+          newState.grid[y] = [...newState.grid[y]];
+          newState.grid[y][x] = 'H';  // Crack becomes hole
+          newState.filledHoles.add(`${x},${y}`);  // But it's filled
+          newState.rampMoveInfo = { fromX, fromY, toX: x, toY: y, fell: true };
+          return newState;
+        } else {
+          // Sliding over crack - breaks it
+          newState.grid[y] = [...newState.grid[y]];
+          newState.grid[y][x] = 'H';  // Crack becomes hole
+        }
+      }
+
+      // Check next position
+      const nx = x + dx;
+      const ny = y + dy;
+      const nextTile = getTile(newState, nx, ny);
+      const nextBase = getBaseTile(newState, nx, ny);
+
+      // Stop before obstacles
+      if (nextTile === '#' || nextTile === 'B' ||
+          (nextTile === 'L' && !newState.unlockedWalls.has(`${nx},${ny}`)) ||
+          nextBase === 'P') {
+        break;
+      }
+
+      // Ramp ahead - check if we can go up
+      if (isRamp(nextBase)) {
+        const upDir = getRampUpDir(nextBase);
+        if (!(upDir && upDir.dx === dx && upDir.dy === dy)) {
+          // Can't go up - stop here
+          break;
+        }
+      }
+
+      x = nx;
+      y = ny;
+    }
+    // --- ELEVATED ---
+    else {
+      // Wall - slide onto it and stop (elevated on wall)
+      if (tile === '#' || (tile === 'L' && !newState.unlockedWalls.has(`${x},${y}`))) {
+        break;
+      }
+
+      // Check what we're over
+      const overRamp = isRamp(baseTile);
+      if (overRamp) {
+        const upDir = getRampUpDir(baseTile);
+        if (upDir && upDir.dx === -dx && upDir.dy === -dy) {
+          // Going DOWN - descend
+          rampHeight = 0;
+        }
+      } else if (tile !== '#' && tile !== 'B') {
+        // Not on wall/block/ramp - drop to ground
+        rampHeight = 0;
+      }
+
+      // Check next position
+      const nx = x + dx;
+      const ny = y + dy;
+      const nextTile = getTile(newState, nx, ny);
+
+      if (rampHeight === 0) {
+        // Ground level now - stop before walls
+        if (nextTile === '#' || nextTile === 'B' ||
+            (nextTile === 'L' && !newState.unlockedWalls.has(`${nx},${ny}`))) {
+          break;
+        }
+      } else {
+        // Still elevated - can land on walls
+        if (nextTile === '#' || (nextTile === 'L' && !newState.unlockedWalls.has(`${nx},${ny}`))) {
+          x = nx;
+          y = ny;
+          break;
+        }
+      }
+
+      x = nx;
+      y = ny;
+    }
+  }
+
+  // If ramp didn't move, push failed - treat as wall
+  if (x === rx && y === ry) {
+    return null;
+  }
+
+  newState.ramps.set(`${x},${y}`, rampType);
+  newState.rampMoveInfo = { fromX, fromY, toX: x, toY: y, rampType, wentUpRamp, elevationRampX, elevationRampY };
+  return newState;
+}
+
+// === SOLVER ===
+// BFS solver to find solution from current state
+
+function stateKey(s) {
+  // Create unique key for state (for visited set)
+  const blocks = [...s.blocks].sort().join(';');
+  const ramps = [...s.ramps.entries()].sort().map(([k,v]) => `${k}:${v}`).join(';');
+  const unlocked = [...s.unlockedWalls].sort().join(';');
+  const filled = [...s.filledHoles].sort().join(';');
+  const cracked = [...(s.crackedTiles || [])].sort().join(';');
+  return `${s.playerX},${s.playerY},${s.playerHeight},${s.keys},${blocks},${ramps},${unlocked},${filled},${cracked}`;
+}
+
+function cloneState(s) {
+  return {
+    ...s,
+    grid: s.grid.map(row => [...row]),
+    blocks: new Set(s.blocks),
+    ramps: new Map(s.ramps),
+    unlockedWalls: new Set(s.unlockedWalls),
+    filledHoles: new Set(s.filledHoles),
+    crackedTiles: new Set(s.crackedTiles || [])
+  };
+}
+
+function findGoal(state) {
+  for (let y = 0; y < state.height; y++) {
+    for (let x = 0; x < state.width; x++) {
+      if (state.grid[y][x] === 'P') return { x, y };
+    }
+  }
+  return null;
+}
+
+function solverSimulateMove(state, dir) {
+  // Simplified simulation for solver - returns new state or null if invalid/death
+  const result = simulateMove(cloneState(state), dir);
+  if (!result || result.dead) return null;
+  // Track cracked tiles
+  if (!result.crackedTiles) result.crackedTiles = new Set(state.crackedTiles || []);
+  return result;
+}
+
+function solveFromState(state, maxMoves = 50, maxStates = 50000, maxMs = 2000) {
+  const goal = findGoal(state);
+  if (!goal) return null;
+
+  const startTime = performance.now();
+  const visited = new Set();
+  const queue = [{ state: cloneState(state), moves: [], depth: 0 }];
+  let expanded = 0;
+
+  while (queue.length > 0) {
+    if (performance.now() - startTime > maxMs) return null;
+    if (expanded > maxStates) return null;
+
+    const { state: current, moves, depth } = queue.shift();
+    expanded++;
+
+    if (depth > maxMoves) continue;
+
+    // Win check
+    if (current.playerX === goal.x && current.playerY === goal.y) {
+      return { moves, expanded };
+    }
+
+    const key = stateKey(current);
+    if (visited.has(key)) continue;
+    visited.add(key);
+
+    // Try each direction
+    for (const dir of ['up', 'down', 'left', 'right']) {
+      const newState = solverSimulateMove(current, dir);
+      if (newState && !visited.has(stateKey(newState))) {
+        queue.push({ state: newState, moves: [...moves, dir], depth: depth + 1 });
+      }
+    }
+  }
+
+  return null; // No solution found
+}
+
+function getHint() {
+  if (!gameState || gameState.won || gameState.dead) return null;
+  const solution = solveFromState(gameState);
+  if (solution && solution.moves.length > 0) {
+    return solution.moves[0];
+  }
+  return null;
+}
+
+function isLevelWinnable() {
+  // Check the current effective state (targetState during animation)
+  const checkState = animation ? animation.targetState : gameState;
+  if (!checkState || checkState.won) return true;
+  if (checkState.dead) return false;
+  return solveFromState(checkState) !== null;
+}
+
+// Render
+const ICE_PADDING = 4;  // Extra ice tiles around the level
+
+function render() {
+  if (!level || !gameState) return;
+
+  // Use animation target state if animating (so changes appear immediately)
+  const renderState = animation ? animation.targetState : gameState;
+
+  const w = level.width;
+  const h = level.height;
+  const totalW = w + ICE_PADDING * 2;
+  const totalH = h + ICE_PADDING * 2;
+  canvas.width = totalW * TILE_W * SCALE;
+  canvas.height = TOP_PADDING * SCALE + totalH * TILE_H * SCALE + 10 * SCALE;
+  ctx.imageSmoothingEnabled = false;
+
+  const offsetX = ICE_PADDING * TILE_W * SCALE;
+  const offsetY = ICE_PADDING * TILE_H * SCALE;
+
+  const now = performance.now();
+  if (now - lastKeyFrameTime > 200) {
+    keyFrame = (keyFrame + 1) % 4;
+    lastKeyFrameTime = now;
+  }
+
+  // Draw ice tiles across entire canvas (3 variants for visual variety)
+  const floorVariants = [sprites['ice_floor_16x12'], sprites['ice_floor_16x12_v1'], sprites['ice_floor_16x12_v2']];
+  for (let ty = -3; ty < totalH + 1; ty++) {
+    for (let tx = -1; tx < totalW + 1; tx++) {
+      const px = tx * TILE_W * SCALE;
+      const py = TOP_PADDING * SCALE + ty * TILE_H * SCALE;
+      // Pick variant based on position (deterministic pseudo-random)
+      // Use Math.abs to avoid negative modulo giving invalid indices
+      const variant = Math.abs((tx * 7 + ty * 13) % 3);
+      const floorSprite = floorVariants[variant];
+      if (floorSprite) {
+        ctx.drawImage(floorSprite, px, py - (TILE_H / 2) * SCALE, TILE_W * SCALE, TILE_H * SCALE);
+      }
+    }
+  }
+
+  // Floor pass - level elements
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      const tile = renderState.grid[y][x];
+      const px = offsetX + x * TILE_W * SCALE;
+      const py = offsetY + TOP_PADDING * SCALE + y * TILE_H * SCALE;
+
+      // Crack variants (floor overlays, centered on grid)
+      if (tile >= '1' && tile <= '4') {
+        drawSprite(`ice_crack_${tile}`, px, py - TILE_H * SCALE);
+      }
+
+      // Sticky (floor overlay, centered on grid)
+      if (tile === 'T' || (tile === 'L' && renderState.unlockedWalls.has(`${x},${y}`))) {
+        drawSprite('sticky_tile_16x12', px, py - TILE_H * SCALE);
+      }
+
+      // Goal rendered in objects pass for proper z-sorting
+
+      // Keys - just draw shadow here, key sprite in objects pass for z-sorting
+      if (tile === 'K') {
+        const keyShadow = sprites['key_shadow'];
+        if (keyShadow) {
+          const shadowX = px + (TILE_W * SCALE - keyShadow.width * SCALE) / 2;
+          const shadowY = py - TILE_H * SCALE;  // Half tile up from tile position
+          ctx.drawImage(keyShadow, shadowX, shadowY, keyShadow.width * SCALE, keyShadow.height * SCALE);
+        }
+      }
+
+      // Ramps rendered in objects pass (y-sorted with walls)
+    }
+  }
+
+  // Debug grid overlay (toggle with 'G' key)
+  if (showDebugGrid) {
+    ctx.strokeStyle = 'red';
+    ctx.lineWidth = 1;
+    for (let y = 0; y < h; y++) {
+      for (let x = 0; x < w; x++) {
+        const px = offsetX + x * TILE_W * SCALE;
+        const py = offsetY + TOP_PADDING * SCALE + y * TILE_H * SCALE - TILE_H * SCALE;
+        ctx.strokeRect(px, py, TILE_W * SCALE, TILE_H * SCALE);
+      }
+    }
+  }
+
+  // Second pass: draw holes on top of all floor tiles
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      const tile = renderState.grid[y][x];
+      if (tile === 'H' && !renderState.filledHoles.has(`${x},${y}`)) {
+        const px = offsetX + x * TILE_W * SCALE;
+        const py = offsetY + TOP_PADDING * SCALE + (y - 0.5) * TILE_H * SCALE;
+        const holeSprite = sprites['ice_hole_16x12'];
+        if (holeSprite) {
+          ctx.drawImage(holeSprite, px, py - (TILE_H / 2) * SCALE, TILE_W * SCALE, TILE_H * SCALE);
+        }
+      }
+    }
+  }
+
+  // Animation progress
+  let animProgress = 0;
+  if (animation) {
+    const elapsed = now - animation.startTime;
+    animProgress = Math.min(1, elapsed / animation.duration);
+    // Ease out
+    animProgress = 1 - Math.pow(1 - animProgress, 2);
+
+    if (elapsed >= animation.duration) {
+      // Animation complete
+      const targetState = animation.targetState;
+      if (targetState.dead && !deathAnimation) {
+        // Start death animation (falling into hole)
+        deathAnimation = {
+          startTime: now,
+          duration: 600,  // 600ms fall animation
+          x: targetState.playerX,
+          y: targetState.playerY
+        };
+        // Keep gameState not-dead until death animation finishes
+        gameState = { ...targetState, dead: false, newlyUnlocked: null, blockMoveInfo: null };
+      } else {
+        gameState = { ...targetState, newlyUnlocked: null, blockMoveInfo: null };
+      }
+      animation = null;
+      animating = false;
+      animProgress = 1;
+    }
+  }
+
+  // Death animation (falling into hole)
+  let deathAnimProgress = 0;
+  if (deathAnimation) {
+    const elapsed = now - deathAnimation.startTime;
+    deathAnimProgress = Math.min(1, elapsed / deathAnimation.duration);
+
+    if (elapsed >= deathAnimation.duration) {
+      // Death animation complete - now actually die
+      gameState.dead = true;
+      deathAnimation = null;
+    }
+  }
+
+  // Player position first (needed for dynamic layering)
+  let playerX, playerY, playerHeight;
+  if (animation) {
+    const p = animation.player;
+    playerX = p.fromX + (p.toX - p.fromX) * animProgress;
+    playerY = p.fromY + (p.toY - p.fromY) * animProgress;
+
+    // Calculate height based on ramp position
+    if (p.wentUpRamp && p.rampX !== undefined) {
+      const totalDist = Math.abs(p.toX - p.fromX) + Math.abs(p.toY - p.fromY);
+      const distToRamp = Math.abs(p.rampX - p.fromX) + Math.abs(p.rampY - p.fromY);
+      const rampProgress = distToRamp / totalDist;
+
+      // Calculate drop point - after last elevated position (block/ramp)
+      let dropDist = distToRamp + 1;  // Default: 1 tile after ramp
+      if (p.lastElevatedX !== undefined) {
+        dropDist = Math.abs(p.lastElevatedX - p.fromX) + Math.abs(p.lastElevatedY - p.fromY) + 1;
+      }
+      const dropProgress = dropDist / totalDist;
+
+      // Before ramp: height 0, on ramp to drop point: height 1, after: final height
+      if (animProgress < rampProgress) {
+        playerHeight = 0;
+      } else if (animProgress < dropProgress) {
+        playerHeight = 1;
+      } else {
+        playerHeight = p.toHeight;
+      }
+    } else {
+      playerHeight = p.fromHeight + (p.toHeight - p.fromHeight) * animProgress;
+    }
+  } else {
+    playerX = gameState.playerX;
+    playerY = gameState.playerY;
+    playerHeight = gameState.playerHeight;
+  }
+
+  // Simple y-sorting - everything together, no special cases
+  const objects = [];
+
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      const tile = level.grid[y][x];
+      if (tile === '#') {
+        objects.push({ type: 'wall', x, y, sortY: y, sprite: 'wall_16x24' });
+      }
+      if (tile === 'L') {
+        const key = `${x},${y}`;
+        const isUnlocked = renderState.unlockedWalls.has(key);
+        const isNewlyUnlocked = animation && animation.targetState.newlyUnlocked?.includes(key);
+
+        if (!isUnlocked) {
+          // Still locked - show full keyhole wall
+          objects.push({ type: 'wall', x, y, sortY: y, sprite: 'wall_keyhole_16x24' });
+        } else if (isNewlyUnlocked && animation) {
+          // Currently unlocking - show sink animation
+          const sinkFrame = Math.min(6, Math.floor(animProgress * 6) + 1);
+          objects.push({ type: 'wall', x, y, sortY: y, sprite: `wall_keyhole_sink_frame_${sinkFrame}` });
+        }
+        // else: fully unlocked, don't render wall (sticky floor shows instead)
+      }
+      // Ramps from dynamic state (can be pushed)
+      const rampType = renderState.ramps.get(`${x},${y}`);
+      if (rampType === '^') objects.push({ type: 'ramp', x, y, sortY: y, sprite: 'ramp_north_16x24' });
+      if (rampType === 'v') objects.push({ type: 'ramp', x, y, sortY: y, sprite: 'ramp_south_16x24' });
+      if (rampType === '<') objects.push({ type: 'ramp', x, y, sortY: y, sprite: 'ramp_west_16x24' });
+      if (rampType === '>') objects.push({ type: 'ramp', x, y, sortY: y, sprite: 'ramp_east_16x24' });
+      // Check grid directly for penguin (blocks can be on same tile)
+      if (renderState.grid[y][x] === 'P') {
+        // If penguin is on a wall, draw wall underneath and elevate penguin
+        if (level.penguinOnWall) {
+          objects.push({ type: 'wall', x, y, sortY: y, sprite: 'wall_16x24' });
+          objects.push({ type: 'penguin', x, y, sortY: y + 0.01, elevated: true, sprite: 'goal_penguin_16' });
+        } else {
+          objects.push({ type: 'penguin', x, y, sortY: y + 0.01, sprite: 'goal_penguin_16' });
+        }
+      }
+      // Keys from renderState (can be picked up)
+      if (renderState.grid[y][x] === 'K') {
+        objects.push({ type: 'key', x, y, sortY: y, sprite: 'key_frame_1' });
+      }
+    }
+  }
+
+  // Blocks
+  const animatingBlockPositions = new Set();
+  if (animation) {
+    for (const block of animation.blocks) {
+      const x = block.fromX + (block.toX - block.fromX) * animProgress;
+      const y = block.fromY + (block.toY - block.fromY) * animProgress;
+
+      // Calculate block height based on ramp position (like player)
+      let blockHeight = 0;
+      if (block.wentUpRamp && block.rampX !== undefined) {
+        const totalDist = Math.abs(block.toX - block.fromX) + Math.abs(block.toY - block.fromY);
+        const distToRamp = Math.abs(block.rampX - block.fromX) + Math.abs(block.rampY - block.fromY);
+        const rampProgress = totalDist > 0 ? distToRamp / totalDist : 0;
+
+        // Calculate drop point - after last elevated position
+        let dropDist = distToRamp + 1;  // Default: 1 tile after ramp
+        if (block.lastElevatedX !== undefined) {
+          dropDist = Math.abs(block.lastElevatedX - block.fromX) + Math.abs(block.lastElevatedY - block.fromY) + 1;
+        }
+        const dropProgress = totalDist > 0 ? dropDist / totalDist : 1;
+
+        // Before ramp: height 0, ramp to drop: height 1, after drop: height 0
+        if (animProgress < rampProgress) {
+          blockHeight = 0;
+        } else if (animProgress < dropProgress) {
+          blockHeight = 1;
+        } else {
+          blockHeight = 0;
+        }
+      }
+
+      objects.push({ type: 'block', x, y, sortY: y, height: blockHeight, sprite: 'ice_block_v3' });
+      animatingBlockPositions.add(`${block.toX},${block.toY}`);
+    }
+  }
+
+  for (const key of renderState.blocks) {
+    if (!animatingBlockPositions.has(key)) {
+      const [bx, by] = key.split(',').map(Number);
+      objects.push({ type: 'block', x: bx, y: by, sortY: by, height: 0, sprite: 'ice_block_v3' });
+    }
+  }
+
+  // Player (or death animation)
+  const playerDir = renderState.playerDir;
+  let playerSpriteName;
+  let effectivePlayerX = playerX;
+  let effectivePlayerY = playerY;
+
+  if (deathAnimation) {
+    // During death animation, shrink standing sprite into skates
+    effectivePlayerX = deathAnimation.x;
+    effectivePlayerY = deathAnimation.y;
+    // Use standing sprite based on direction player was facing
+    playerSpriteName = playerDir === 'up' ? 'skater_back_standing_16x24' : 'skater_front_standing_16x24';
+  } else {
+    const isMoving = animation !== null;
+    playerSpriteName = getPlayerSprite(playerDir, isUnwinnable, isMoving);
+  }
+
+  objects.push({
+    type: 'player',
+    x: effectivePlayerX,
+    y: effectivePlayerY,
+    sortY: effectivePlayerY,
+    sortPriority: 0,  // Player draws before penguin on same tile
+    height: deathAnimation ? 0 : playerHeight,
+    sprite: playerSpriteName
+  });
+
+  // Sort by Y, then X, then priority (penguin in front of player on same tile)
+  objects.sort((a, b) => a.sortY - b.sortY || a.x - b.x || (a.sortPriority || 0) - (b.sortPriority || 0));
+
+  // Find player
+  const playerObj = objects.find(o => o.type === 'player');
+  const playerPx = offsetX + playerObj.x * TILE_W * SCALE;
+  const playerPy = offsetY + TOP_PADDING * SCALE + playerObj.y * TILE_H * SCALE;
+  const playerSprite = sprites[playerObj.sprite];
+  let playerSpriteY = playerPy - playerSprite.height * SCALE - (TILE_H / 2) * SCALE;
+  if (playerObj.height > 0) {
+    playerSpriteY -= playerObj.height * 10 * SCALE;
+  }
+
+  // Draw player shadow (on ground, not affected by elevation)
+  if (!deathAnimation || deathAnimProgress < 0.8) {  // Fade shadow during fall
+    const skaterShadow = sprites['skater_shadow'];
+    if (skaterShadow) {
+      const shadowX = playerPx + (TILE_W * SCALE - skaterShadow.width * SCALE) / 2;
+      const shadowY = playerPy - TILE_H * SCALE;  // Half tile up
+      const shadowAlpha = deathAnimation ? (1 - deathAnimProgress) : 1;
+      ctx.globalAlpha = shadowAlpha * 0.7;
+      ctx.drawImage(skaterShadow, shadowX, shadowY, skaterShadow.width * SCALE, skaterShadow.height * SCALE);
+      ctx.globalAlpha = 1;
+    }
+  }
+
+  // FIRST: Calculate transparency for each object (recalculated every frame)
+  const transparentObjects = [];
+  const opaqueObjects = [];
+
+  for (const obj of objects) {
+    if (obj.type === 'player') continue;
+
+    // Check if something important is behind this object (1 tile behind only)
+    let makeTransparent = false;
+    if (obj.type === 'wall' || obj.type === 'block') {
+      const checkY = Math.floor(obj.y) - 1;
+      if (checkY >= 0) {
+        const checkTile = renderState.grid[checkY]?.[Math.floor(obj.x)];
+        const levelTile = level.grid[checkY]?.[Math.floor(obj.x)];
+        if (checkTile === 'K' || checkTile === 'H' || (checkTile >= '1' && checkTile <= '4')) {
+          makeTransparent = true;
+        }
+        if (levelTile === 'L' || levelTile === 'T' || levelTile === 'P') {
+          makeTransparent = true;
+        }
+        // Check for blocks behind
+        if (renderState.blocks.has(`${Math.floor(obj.x)},${checkY}`)) {
+          makeTransparent = true;
+        }
+      }
+
+      // Check if player is 1 tile behind this object
+      const playerTileX = Math.floor(playerObj.x);
+      const playerTileY = Math.floor(playerObj.y);
+      const objTileX = Math.floor(obj.x);
+      const objTileY = Math.floor(obj.y);
+      if (playerTileX === objTileX && playerTileY === objTileY - 1) {
+        makeTransparent = true;
+      }
+    }
+    // Front walls only transparent if something important is DIRECTLY behind (1 tile up)
+    if (obj.type === 'wall' && obj.y === h - 1 && obj.x > 0 && obj.x < w - 1) {
+      const behindY = Math.floor(obj.y) - 1;
+      const behindX = Math.floor(obj.x);
+      if (behindY >= 0) {
+        // Check if player is directly behind
+        const playerTileX = Math.floor(playerObj.x);
+        const playerTileY = Math.floor(playerObj.y);
+        if (playerTileX === behindX && playerTileY === behindY) {
+          makeTransparent = true;
+        }
+        // Check for important tiles directly behind
+        const checkTile = renderState.grid[behindY]?.[behindX];
+        const levelTile = level.grid[behindY]?.[behindX];
+        if (checkTile === 'K' || checkTile === 'H' || (checkTile >= '1' && checkTile <= '4')) {
+          makeTransparent = true;
+        }
+        if (levelTile === 'L' || levelTile === 'T' || levelTile === 'P') {
+          makeTransparent = true;
+        }
+        // Check for blocks directly behind
+        if (renderState.blocks.has(`${behindX},${behindY}`)) {
+          makeTransparent = true;
+        }
+      }
+    }
+    // Penguin draws after player when won (so penguin is in front)
+    if (obj.type === 'penguin' && gameState.won) {
+      makeTransparent = true;
+    }
+
+    obj.transparent = makeTransparent;
+    if (makeTransparent) {
+      transparentObjects.push(obj);
+    } else {
+      opaqueObjects.push(obj);
+    }
+  }
+
+  // Find OPAQUE objects that occlude player (for leg clipping)
+  // Transparent objects don't clip - player draws fully behind them
+  const occludingObjects = opaqueObjects.filter(o => {
+    if (o.sortY <= playerObj.y) return false;  // Must be in front (higher Y)
+    if (o.sortY > playerObj.y + 2) return false;  // Not too far away
+    // Check X overlap (within ~1 tile)
+    if (Math.abs(o.x - playerObj.x) >= 1) return false;
+
+    // Ramps only occlude if their tall side faces the camera
+    if (o.type === 'ramp') {
+      return o.sprite === 'ramp_north_16x24';  // Only north ramps occlude
+    }
+
+    return true;  // Opaque walls and blocks occlude
+  });
+
+  // Helper function to draw an object
+  function drawObject(obj) {
+    const px = offsetX + obj.x * TILE_W * SCALE;
+    const py = offsetY + TOP_PADDING * SCALE + obj.y * TILE_H * SCALE;
+    const sprite = sprites[obj.sprite];
+
+    if (sprite) {
+      let spriteY = py - sprite.height * SCALE;
+
+      // Draw shadows and position sprites by type
+      if (obj.type === 'penguin') {
+        const shadow = sprites['penguin_shadow'];
+        if (shadow) {
+          const shadowX = px + (TILE_W * SCALE - shadow.width * SCALE) / 2;
+          const shadowY = py - TILE_H * SCALE;
+          ctx.globalAlpha = 0.5;
+          ctx.drawImage(shadow, shadowX, shadowY, shadow.width * SCALE, shadow.height * SCALE);
+          ctx.globalAlpha = 1;
+        }
+        spriteY = py - TILE_H * 1.5 * SCALE;
+        // Elevate penguin if on a wall
+        if (obj.elevated) {
+          spriteY -= TILE_H * SCALE;  // Full tile up
+        }
+        // Bounce animation when won
+        if (gameState.won) {
+          const bounce = Math.abs(Math.sin(now / 150)) * 8 * SCALE;
+          spriteY -= bounce;
+        }
+      } else if (obj.type === 'block') {
+        const shadow = sprites['block_shadow'];
+        if (shadow) {
+          const shadowX = px + (TILE_W * SCALE - shadow.width * SCALE) / 2;
+          const shadowY = py - TILE_H * SCALE;
+          ctx.globalAlpha = 0.4;
+          ctx.drawImage(shadow, shadowX, shadowY, shadow.width * SCALE, shadow.height * SCALE);
+          ctx.globalAlpha = 1;
+        }
+        // Apply height offset for elevated blocks (like player)
+        if (obj.height > 0) {
+          spriteY -= obj.height * 10 * SCALE;
+        }
+      } else if (obj.type === 'key') {
+        spriteY = py - (TILE_H / 2) * SCALE - sprite.height * SCALE;
+      }
+
+      if (obj.transparent && obj.type !== 'penguin') {
+        ctx.globalAlpha = 0.65;
+      }
+      ctx.drawImage(sprite, px, spriteY, sprite.width * SCALE, sprite.height * SCALE);
+      ctx.globalAlpha = 1.0;
+    }
+  }
+
+  // Draw opaque objects first
+  for (const obj of opaqueObjects) {
+    drawObject(obj);
+  }
+
+  // Draw player - with clipping if something is actually occluding her
+  // Calculate shrink factor for death animation (shrinks into skates)
+  const shrinkScale = deathAnimation ? (1 - deathAnimProgress) : 1;
+  const drawnWidth = playerSprite.width * SCALE * shrinkScale;
+  const drawnHeight = playerSprite.height * SCALE * shrinkScale;
+  // Keep bottom (skates) in place by adjusting Y as height shrinks
+  const shrinkPlayerY = playerSpriteY + (playerSprite.height * SCALE - drawnHeight);
+  // Center horizontally as width shrinks
+  const shrinkPlayerX = playerPx + (playerSprite.width * SCALE - drawnWidth) / 2;
+
+  // Don't draw player after death (she disappeared into the hole)
+  if (!gameState.dead) {
+    if (occludingObjects.length > 0 && !deathAnimation) {
+      // Find where the occluding objects visually start (their top edge)
+      let occludeTop = canvas.height;
+      for (const occ of occludingObjects) {
+        const occPy = offsetY + TOP_PADDING * SCALE + occ.y * TILE_H * SCALE;
+        const occSprite = sprites[occ.sprite];
+        if (occSprite) {
+          occludeTop = Math.min(occludeTop, occPy - occSprite.height * SCALE);
+        }
+      }
+
+      // Draw only the part of player ABOVE the occluding objects (her head)
+      ctx.save();
+      ctx.beginPath();
+      ctx.rect(0, 0, canvas.width, occludeTop);
+      ctx.clip();
+      ctx.drawImage(playerSprite, playerPx, playerSpriteY, playerSprite.width * SCALE, playerSprite.height * SCALE);
+      ctx.restore();
+    } else if (shrinkScale > 0.01) {
+      // Draw player (shrinking during death animation)
+      ctx.drawImage(playerSprite, shrinkPlayerX, shrinkPlayerY, drawnWidth, drawnHeight);
+    }
+  }
+
+  // Draw transparent objects on top (after player) so player shows through
+  for (const obj of transparentObjects) {
+    drawObject(obj);
+  }
+
+  if (gameState.won) {
+    ctx.fillStyle = 'rgba(29, 43, 48, 0.8)';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.fillStyle = '#68BBC4';
+    ctx.font = `${24 * SCALE}px sans-serif`;
+    ctx.textAlign = 'center';
+    ctx.fillText('You Win!', canvas.width / 2, canvas.height / 2);
+    ctx.font = `${12 * SCALE}px sans-serif`;
+    ctx.fillText('Tap to continue', canvas.width / 2, canvas.height / 2 + 30 * SCALE);
+  } else if (isUnwinnable && !gameState.dead && !deathAnimation && !(animation?.targetState?.dead)) {
+    // Unwinnable - just show text, sad face sprite is enough visual
+    ctx.fillStyle = '#A968C4';
+    ctx.font = `bold ${20 * SCALE}px sans-serif`;
+    ctx.textAlign = 'center';
+    ctx.fillText('Unwinnable!', canvas.width / 2, canvas.height / 2 - 15 * SCALE);
+    ctx.font = `${14 * SCALE}px sans-serif`;
+    ctx.fillText('Restart?', canvas.width / 2, canvas.height / 2 + 15 * SCALE);
+  }
+
+  requestAnimationFrame(render);
+}
+
+function drawSprite(name, x, y) {
+  const sprite = sprites[name];
+  if (sprite) {
+    ctx.drawImage(sprite, x, y, sprite.width * SCALE, sprite.height * SCALE);
+  }
+}
+
+function getPlayerSprite(dir, sad = false, isMoving = false) {
+  if (sad) {
+    switch (dir) {
+      case 'up': return 'skater_back_standing_16x24';  // can't see face from back
+      case 'down': return 'skater_front_sad_16x24';
+      case 'left': return 'skater_side_standing_sad_16x24';
+      case 'right': return 'skater_side_left_standing_sad_16x24';
+      default: return 'skater_front_sad_16x24';
+    }
+  }
+  // Use skating vs standing sprites for all directions based on movement
+  switch (dir) {
+    case 'up': return isMoving ? 'skater_back_skating_16x24' : 'skater_back_standing_16x24';
+    case 'down': return isMoving ? 'skater_front_skating_16x24' : 'skater_front_standing_16x24';
+    case 'left': return isMoving ? 'skater_side_skating_16x24' : 'skater_side_standing_16x24';
+    case 'right': return isMoving ? 'skater_side_left_skating_16x24' : 'skater_side_left_standing_16x24';
+    default: return isMoving ? 'skater_front_skating_16x24' : 'skater_front_standing_16x24';
+  }
+}
+
+function getPlayerSpriteBehind(dir) {
+  switch (dir) {
+    case 'up': return 'skater_back_behind_16';
+    case 'down': return 'skater_front_behind_16';
+    case 'left': return 'skater_side_left_behind_16';
+    case 'right': return 'skater_side_behind_16';
+    default: return 'skater_front_behind_16';
+  }
+}
+
+function handleInput(dir) {
+  if (animating || deathAnimation || gameState.won || gameState.dead) return;
+
+  const oldState = gameState;
+  const newState = simulateMove(gameState, dir);
+  if (newState) {
+    // Save for undo - convert Sets/Maps to arrays for JSON serialization
+    const historyEntry = {
+      ...oldState,
+      blocks: [...oldState.blocks],
+      unlockedWalls: [...oldState.unlockedWalls],
+      filledHoles: [...oldState.filledHoles],
+      ramps: [...oldState.ramps.entries()]
+    };
+    history.push(JSON.parse(JSON.stringify(historyEntry)));
+
+    // Calculate animation distance
+    const dx = newState.playerX - oldState.playerX;
+    const dy = newState.playerY - oldState.playerY;
+    const dist = Math.abs(dx) + Math.abs(dy);
+
+    if (dist > 0) {
+      // Find moved blocks - use blockMoveInfo if available
+      const movedBlocks = [];
+      if (newState.blockMoveInfo) {
+        const info = newState.blockMoveInfo;
+        movedBlocks.push({
+          fromX: info.fromX,
+          fromY: info.fromY,
+          toX: info.toX,
+          toY: info.toY,
+          wentUpRamp: info.wentUpRamp,
+          rampX: info.rampX,
+          rampY: info.rampY,
+          lastElevatedX: info.lastElevatedX,
+          lastElevatedY: info.lastElevatedY
+        });
+      } else {
+        // Fallback: detect moved blocks from position changes
+        const oldBlocks = new Map();
+        for (const key of oldState.blocks) {
+          const [x, y] = key.split(',').map(Number);
+          oldBlocks.set(key, { x, y });
+        }
+        for (const key of newState.blocks) {
+          const [x, y] = key.split(',').map(Number);
+          for (const [oldKey, oldPos] of oldBlocks) {
+            if (!newState.blocks.has(oldKey) && !movedBlocks.some(b => b.fromX === oldPos.x && b.fromY === oldPos.y)) {
+              movedBlocks.push({ fromX: oldPos.x, fromY: oldPos.y, toX: x, toY: y });
+              break;
+            }
+          }
+        }
+      }
+
+      // Start animation
+      animating = true;
+      animation = {
+        startTime: performance.now(),
+        duration: (dist / ANIM_SPEED) * 1000,
+        player: {
+          fromX: oldState.playerX,
+          fromY: oldState.playerY,
+          toX: newState.playerX,
+          toY: newState.playerY,
+          fromHeight: oldState.playerHeight,
+          toHeight: newState.playerHeight,
+          wentUpRamp: newState.wentUpRamp,
+          rampX: newState.rampX,
+          rampY: newState.rampY,
+          lastElevatedX: newState.lastElevatedX,
+          lastElevatedY: newState.lastElevatedY
+        },
+        blocks: movedBlocks,
+        targetState: newState
+      };
+      console.log('Animation height:', oldState.playerHeight, '->', newState.playerHeight);
+      console.log('Animation pos:', oldState.playerX+','+oldState.playerY, '->', newState.playerX+','+newState.playerY);
+      console.log('Animation targetState.keys:', newState.keys);
+      // Debug: check if key was picked up in this move
+      for (let gy = 0; gy < newState.height; gy++) {
+        for (let gx = 0; gx < newState.width; gx++) {
+          if (newState.grid[gy][gx] === 'K') {
+            console.log(`Key still in targetState.grid at (${gx},${gy})`);
+          }
+        }
+      }
+    } else if (newState.newlyUnlocked && newState.newlyUnlocked.length > 0) {
+      // No movement but wall was unlocked - create short animation for sink effect
+      animating = true;
+      animation = {
+        startTime: performance.now(),
+        duration: 300,  // Short animation for wall sink
+        player: {
+          fromX: oldState.playerX,
+          fromY: oldState.playerY,
+          toX: newState.playerX,
+          toY: newState.playerY,
+          fromHeight: oldState.playerHeight,
+          toHeight: newState.playerHeight
+        },
+        blocks: [],
+        targetState: newState
+      };
+    } else {
+      gameState = newState;
+    }
+    updateStatus();
+  }
+}
+
+function restartLevel() {
+  animation = null;
+  animating = false;
+  deathAnimation = null;
+  gameState = initGameState(level);
+  history = [];
+  isUnwinnable = false;
+  document.getElementById('status').textContent = '';
+}
+
+document.addEventListener('keydown', e => {
+  // Advance when won
+  if (gameState.won && (e.key === 'Enter' || e.key === ' ')) {
+    nextLevel();
+    return;
+  }
+  // Restart when unwinnable
+  if (isUnwinnable && e.key === ' ') {
+    restartLevel();
+    return;
+  }
+  switch (e.key) {
+    case 'ArrowUp': case 'w': handleInput('up'); break;
+    case 'ArrowDown': case 's': handleInput('down'); break;
+    case 'ArrowLeft': case 'a': handleInput('left'); break;
+    case 'ArrowRight': case 'd': handleInput('right'); break;
+    case 'g': case 'G': showDebugGrid = !showDebugGrid; break;
+  }
+});
+
+let touchStart = null;
+canvas.addEventListener('touchstart', e => {
+  touchStart = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+});
+
+// Click to advance on desktop, or restart when unwinnable
+canvas.addEventListener('click', () => {
+  if (gameState.won) {
+    nextLevel();
+  } else if (isUnwinnable) {
+    restartLevel();
+  }
+});
+canvas.addEventListener('touchend', e => {
+  if (!touchStart) return;
+  const dx = e.changedTouches[0].clientX - touchStart.x;
+  const dy = e.changedTouches[0].clientY - touchStart.y;
+
+  // Tap to advance when won, or restart when unwinnable
+  if (Math.abs(dx) < 30 && Math.abs(dy) < 30) {
+    if (gameState.won) {
+      nextLevel();
+      touchStart = null;
+      return;
+    } else if (isUnwinnable) {
+      restartLevel();
+      touchStart = null;
+      return;
+    }
+  }
+
+  if (Math.abs(dx) > Math.abs(dy) && Math.abs(dx) > 30) {
+    handleInput(dx > 0 ? 'right' : 'left');
+  } else if (Math.abs(dy) > 30) {
+    handleInput(dy > 0 ? 'down' : 'up');
+  }
+  touchStart = null;
+});
+
+document.getElementById('restart-btn').onclick = restartLevel;
+
+document.getElementById('undo-btn').onclick = () => {
+  // Clear any animations
+  animation = null;
+  animating = false;
+  deathAnimation = null;
+
+  if (history.length > 0) {
+    const prev = history.pop();
+    gameState = {
+      ...prev,
+      blocks: new Set(prev.blocks),
+      unlockedWalls: new Set(prev.unlockedWalls),
+      filledHoles: new Set(prev.filledHoles),
+      ramps: new Map(prev.ramps),
+      dead: false  // Ensure not dead after undo
+    };
+    isUnwinnable = false;
+    document.getElementById('status').textContent = '';
+    updateStatus();
+  }
+};
+
+document.getElementById('hint-btn').onclick = () => {
+  const hint = getHint();
+  const status = document.getElementById('status');
+  if (hint) {
+    const arrows = { up: '↑', down: '↓', left: '←', right: '→' };
+    status.textContent = `Hint: ${arrows[hint]}`;
+    status.className = 'hint';
+  } else if (gameState.won) {
+    status.textContent = '';
+  } else {
+    status.textContent = 'No solution!';
+    status.className = '';
+  }
+};
+
+function updateStatus() {
+  const status = document.getElementById('status');
+  if (gameState.won || gameState.dead) {
+    status.textContent = '';
+    isUnwinnable = false;
+    return;
+  }
+  // Check in background (async-ish via setTimeout to not block)
+  setTimeout(() => {
+    const wasUnwinnable = isUnwinnable;
+    isUnwinnable = !isLevelWinnable();
+    if (isUnwinnable) {
+      if (!wasUnwinnable) {
+        unwinnableFlashTime = performance.now();
+      }
+      status.textContent = '';  // Message shown on canvas now
+      status.className = '';
+    } else {
+      status.textContent = '';
+    }
+  }, 50);
+}
+
+let allLevels = [];
+let currentLevelIndex = 0;
+
+function loadLevel(index) {
+  if (index < 0 || index >= allLevels.length) return;
+  currentLevelIndex = index;
+  const lv = allLevels[index];
+  level = {
+    width: lv.width,
+    height: lv.height,
+    grid: lv.grid.map(row => row.split('')),
+    penguinOnWall: lv.penguinOnWall || false
+  };
+  animation = null;
+  animating = false;
+  deathAnimation = null;
+  gameState = initGameState(level);
+  history = [];
+  isUnwinnable = false;
+  document.getElementById('level-num').textContent = `Level ${index + 1}/${allLevels.length}`;
+  document.getElementById('status').textContent = '';
+  render();
+}
+
+function nextLevel() {
+  if (currentLevelIndex < allLevels.length - 1) {
+    loadLevel(currentLevelIndex + 1);
+  }
+}
+
+function prevLevel() {
+  if (currentLevelIndex > 0) {
+    loadLevel(currentLevelIndex - 1);
+  }
+}
+
+async function init() {
+  await loadSprites();
+
+  // Load levels from JSON
+  try {
+    const response = await fetch('levels.json?v=' + Date.now());
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    const data = await response.json();
+    allLevels = data.levels;
+    console.log(`Loaded ${allLevels.length} levels`);
+  } catch (e) {
+    console.error('Failed to load levels.json:', e);
+    allLevels = [{
+      width: 7,
+      height: 7,
+      grid: ['#######', '#..P..#', '#.....#', '#..B..#', '#.....#', '#S....#', '#######']
+    }];
+  }
+
+  // Check URL for level skip (e.g., ?level=9)
+  const urlParams = new URLSearchParams(window.location.search);
+  const startLevel = parseInt(urlParams.get('level')) || 0;
+  loadLevel(Math.min(startLevel, allLevels.length - 1));
+}
+
+// Level navigation buttons
+document.getElementById('prev-btn')?.addEventListener('click', prevLevel);
+document.getElementById('next-btn')?.addEventListener('click', nextLevel);
+
+init();
+  </script>
+</body>
+</html>
