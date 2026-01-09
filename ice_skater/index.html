@@ -346,6 +346,11 @@ function isBlockElevatedAt(state, x, y) {
   return false;
 }
 
+// Check if position is a border (test chamber) wall - can't land on these even when elevated
+function isBorderWall(state, x, y) {
+  return x === 0 || x === state.width - 1 || y === 0 || y === state.height - 1;
+}
+
 // Simulate player move
 function simulateMove(state, dir) {
   const { dx, dy } = DIRS[dir];
@@ -518,13 +523,16 @@ function simulateMove(state, dir) {
 
     // --- ELEVATED (height 1) ---
     else {
-      // Wall - can slide onto it (1 tile) then stop
+      // Wall - can slide onto it (1 tile) then stop, BUT NOT border walls
       if (tile === '#') {
+        if (isBorderWall(newState, nx, ny)) {
+          break;  // Stop BEFORE border wall
+        }
         x = nx;
         y = ny;
         newState.lastElevatedX = x;
         newState.lastElevatedY = y;
-        break;  // Stop on top of wall
+        break;  // Stop on top of interior wall
       }
 
       // Locked wall - same behavior
@@ -801,8 +809,14 @@ function pushBlock(state, bx, by, dx, dy) {
     }
     // --- ELEVATED (blockHeight 1) ---
     else {
-      // Wall - can slide onto it then stop (stays elevated on wall)
+      // Wall - can slide onto it then stop, BUT NOT border walls
       if (tile === '#') {
+        if (isBorderWall(newState, x, y)) {
+          // Stop BEFORE border wall
+          newState.blocks.add(`${x - dx},${y - dy}`);
+          finishAt(x - dx, y - dy);
+          return newState;
+        }
         blockLastElevatedX = x;
         blockLastElevatedY = y;
         newState.blocks.add(`${x},${y}`);
@@ -863,8 +877,14 @@ function pushBlock(state, bx, by, dx, dy) {
           return newState;
         }
       } else {
-        // Still elevated - can stop ON TOP of walls
+        // Still elevated - can stop ON TOP of walls, BUT NOT border walls
         if (nextTile === '#' || (nextTile === 'L' && !newState.unlockedWalls.has(`${nx},${ny}`))) {
+          if (isBorderWall(newState, nx, ny)) {
+            // Stop BEFORE border wall
+            newState.blocks.add(`${x},${y}`);
+            finishAt(x, y);
+            return newState;
+          }
           x = nx;
           y = ny;
           blockLastElevatedX = x;
@@ -1045,10 +1065,12 @@ function pushRamp(state, rx, ry, dx, dy) {
           break;
         }
       } else {
-        // Still elevated - can land on walls
+        // Still elevated - can land on walls, BUT NOT border walls
         if (nextTile === '#' || (nextTile === 'L' && !newState.unlockedWalls.has(`${nx},${ny}`))) {
-          x = nx;
-          y = ny;
+          if (!isBorderWall(newState, nx, ny)) {
+            x = nx;
+            y = ny;
+          }
           break;
         }
       }
