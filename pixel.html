@@ -371,6 +371,47 @@
             margin-top: 6px;
         }
 
+        .dither-patterns {
+            margin-top: 10px;
+            padding-top: 8px;
+            border-top: 1px solid var(--bg-light);
+        }
+
+        .dither-pattern-label {
+            font-size: 10px;
+            color: var(--text-dim);
+            margin-bottom: 6px;
+        }
+
+        .dither-pattern-btns {
+            display: flex;
+            gap: 6px;
+            justify-content: center;
+        }
+
+        .dither-pattern-btn {
+            width: 32px;
+            height: 32px;
+            border: 2px solid var(--bg-light);
+            border-radius: 6px;
+            background: var(--bg-dark);
+            color: var(--text-main);
+            font-size: 16px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .dither-pattern-btn:hover {
+            border-color: var(--text-dim);
+        }
+
+        .dither-pattern-btn.active {
+            border-color: var(--accent);
+            background: var(--accent);
+        }
+
         /* Bottom Bar (Mobile) */
         .bottom-bar {
             display: flex;
@@ -1313,6 +1354,16 @@
                     </div>
                 </div>
                 <div class="dither-hint">Click slot, pick color from palette</div>
+                <div class="dither-patterns">
+                    <div class="dither-pattern-label">Pattern</div>
+                    <div class="dither-pattern-btns">
+                        <button class="dither-pattern-btn active" data-pattern="bayer" title="Bayer (smooth)">▦</button>
+                        <button class="dither-pattern-btn" data-pattern="checker" title="Checkerboard">▣</button>
+                        <button class="dither-pattern-btn" data-pattern="hlines" title="Horizontal">≡</button>
+                        <button class="dither-pattern-btn" data-pattern="vlines" title="Vertical">|||</button>
+                        <button class="dither-pattern-btn" data-pattern="noise" title="Noise">░</button>
+                    </div>
+                </div>
             </div>
             <div class="palette-grid" id="paletteGrid"></div>
             <div class="palette-header">
@@ -1609,6 +1660,7 @@
             // Dither gradient colors (3-color support)
             ditherColors: ['#000000', null, '#ffffff'], // [start, middle (optional), end]
             ditherActiveSlot: 1, // Which slot is selected (1, 2, or 3)
+            ditherPattern: 'bayer', // 'bayer', 'checker', 'hlines', 'vlines', 'noise'
             palette: [],
             pinchStartDist: 0,
             pinchStartZoom: 1,
@@ -1640,6 +1692,7 @@
             tabs: [],           // Array of tab objects
             activeTabIndex: 0,  // Currently displayed tab
             nextTabId: 1,       // Counter for unique tab IDs
+            tabLoading: false,  // Flag to prevent autoSave during async tab load
         };
 
         // ===== PALETTES =====
@@ -2632,17 +2685,39 @@
             return t > threshold ? color2 : color1;
         }
 
+        // Get dither threshold based on pattern type
+        function getDitherThreshold(x, y, pattern) {
+            switch(pattern) {
+                case 'bayer':
+                    // Bayer 4x4 ordered dither - smooth gradients
+                    const bayer = [
+                        [0/16, 8/16, 2/16, 10/16],
+                        [12/16, 4/16, 14/16, 6/16],
+                        [3/16, 11/16, 1/16, 9/16],
+                        [15/16, 7/16, 13/16, 5/16]
+                    ];
+                    return bayer[y % 4][x % 4];
+                case 'checker':
+                    // Checkerboard pattern - classic 50% dither look
+                    return (x + y) % 2 === 0 ? 0.25 : 0.75;
+                case 'hlines':
+                    // Horizontal lines - good for sky, metal
+                    return y % 2 === 0 ? 0.25 : 0.75;
+                case 'vlines':
+                    // Vertical lines - good for rain, waterfalls
+                    return x % 2 === 0 ? 0.25 : 0.75;
+                case 'noise':
+                    // Pseudo-random noise - organic textures
+                    const n = Math.sin(x * 12.9898 + y * 78.233) * 43758.5453;
+                    return n - Math.floor(n);
+                default:
+                    return 0.5;
+            }
+        }
+
         // Calculate dithered color with 3 colors (start, middle optional, end)
         function ditherPixel3(t, color1, color2, color3, x, y) {
-            // Bayer 4x4 dither matrix (normalized to 0-1)
-            const bayer = [
-                [0/16, 8/16, 2/16, 10/16],
-                [12/16, 4/16, 14/16, 6/16],
-                [3/16, 11/16, 1/16, 9/16],
-                [15/16, 7/16, 13/16, 5/16]
-            ];
-
-            const threshold = bayer[y % 4][x % 4];
+            const threshold = getDitherThreshold(x, y, state.ditherPattern);
 
             // If no middle color, just use 2-color dither
             if (!color2) {
@@ -2717,6 +2792,17 @@
                     if (slot.dataset.slot === '2') {
                         clearDitherSlot(2);
                     }
+                };
+            });
+
+            // Dither pattern buttons
+            document.querySelectorAll('.dither-pattern-btn').forEach(btn => {
+                btn.onclick = () => {
+                    state.ditherPattern = btn.dataset.pattern;
+                    // Update active state
+                    document.querySelectorAll('.dither-pattern-btn').forEach(b => {
+                        b.classList.toggle('active', b === btn);
+                    });
                 };
             });
 
@@ -3772,6 +3858,11 @@ Canvas: ${state.canvasWidth}x${state.canvasHeight}`;
         }
 
         function autoSave() {
+            // Don't save while tab is loading - images may not be fully loaded yet
+            if (state.tabLoading) {
+                console.log('AutoSave blocked - tab loading in progress');
+                return;
+            }
             try {
                 // Save current tab state first
                 if (state.tabs.length > 0) {
@@ -5209,6 +5300,9 @@ Canvas: ${state.canvasWidth}x${state.canvasHeight}`;
         function loadTabState(tabIndex) {
             const tab = state.tabs[tabIndex];
 
+            // Block autoSave until all images are loaded
+            state.tabLoading = true;
+
             // DEBUG: Check what we're loading
             const layerInfo = tab.layers ? tab.layers.map(l => l.image ? l.image.length : 0).join(',') : 'none';
             console.log('LOAD tab', tabIndex, '- layers:', tab.layers ? tab.layers.length : 0, '- sizes:', layerInfo);
@@ -5235,9 +5329,13 @@ Canvas: ${state.canvasWidth}x${state.canvasHeight}`;
             selectionCanvas.width = state.canvasWidth;
             selectionCanvas.height = state.canvasHeight;
 
-            // Restore layers
+            // Restore layers - with proper image load tracking
             state.layers = [];
             if (tab.layers && tab.layers.length > 0) {
+                // Count how many images need to load
+                const imagesToLoad = tab.layers.filter(l => l.image).length;
+                let imagesLoaded = 0;
+
                 tab.layers.forEach(layerData => {
                     const canvas = document.createElement('canvas');
                     canvas.width = state.canvasWidth;
@@ -5261,18 +5359,29 @@ Canvas: ${state.canvasWidth}x${state.canvasHeight}`;
                         img.onload = () => {
                             ctx.drawImage(img, 0, 0);
                             compositeAndRender();
-                            // Save after image loads to preserve content
-                            setTimeout(() => autoSave(), 100);
+                            imagesLoaded++;
+                            // Only autoSave when ALL images are loaded
+                            if (imagesLoaded === imagesToLoad) {
+                                console.log('All', imagesToLoad, 'images loaded for tab', tabIndex);
+                                state.tabLoading = false;
+                                setTimeout(() => autoSave(), 100);
+                            }
                         };
                         img.src = layerData.image;
                     }
 
                     state.layers.push(layer);
                 });
+
+                // If no images to load, unblock immediately
+                if (imagesToLoad === 0) {
+                    state.tabLoading = false;
+                }
             } else {
                 // Create default layer if none exist
                 const layer = createLayer('Layer 1');
                 state.layers.push(layer);
+                state.tabLoading = false;
             }
 
             // Update UI
