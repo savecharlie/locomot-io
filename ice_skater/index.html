@@ -1661,12 +1661,10 @@ function render() {
       //   ctx.globalAlpha = 0.65;
       // }
 
-      // Double-tall walls (test chamber borders): draw sprite twice stacked
+      // Double-tall walls (test chamber borders): scale sprite 2x height
       if (obj.doubleTall) {
-        // Draw bottom wall
-        ctx.drawImage(sprite, px, spriteY, sprite.width * SCALE, sprite.height * SCALE);
-        // Draw top wall (offset up by wall height)
-        ctx.drawImage(sprite, px, spriteY - WALL_H * SCALE, sprite.width * SCALE, sprite.height * SCALE);
+        const doubleHeight = sprite.height * SCALE * 2;
+        ctx.drawImage(sprite, px, spriteY - sprite.height * SCALE, sprite.width * SCALE, doubleHeight);
       } else {
         ctx.drawImage(sprite, px, spriteY, sprite.width * SCALE, sprite.height * SCALE);
       }
