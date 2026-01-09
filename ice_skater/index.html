@@ -1371,11 +1371,13 @@ function render() {
       // Check grid directly for penguin (blocks can be on same tile)
       if (renderState.grid[y][x] === 'P') {
         // If penguin is on a wall, draw wall underneath and elevate penguin
+        // Penguin only draws in front of player on win (sortY + 0.01)
+        const penguinSortY = gameState.won ? y + 0.01 : y - 0.01;
         if (level.penguinOnWall) {
           objects.push({ type: 'wall', x, y, sortY: y, sprite: 'wall_16x24' });
-          objects.push({ type: 'penguin', x, y, sortY: y + 0.01, elevated: true, sprite: 'goal_penguin_16' });
+          objects.push({ type: 'penguin', x, y, sortY: penguinSortY, elevated: true, sprite: 'goal_penguin_16' });
         } else {
-          objects.push({ type: 'penguin', x, y, sortY: y + 0.01, sprite: 'goal_penguin_16' });
+          objects.push({ type: 'penguin', x, y, sortY: penguinSortY, sprite: 'goal_penguin_16' });
         }
       }
       // Keys from renderState (can be picked up)
@@ -1617,33 +1619,34 @@ function render() {
         spriteY = py - (TILE_H / 2) * SCALE - sprite.height * SCALE;
       }
 
-      if (obj.transparent && obj.type !== 'penguin') {
-        ctx.globalAlpha = 0.65;
-      }
+      // TEMP DISABLED for wall testing
+      // if (obj.transparent && obj.type !== 'penguin') {
+      //   ctx.globalAlpha = 0.65;
+      // }
       ctx.drawImage(sprite, px, spriteY, sprite.width * SCALE, sprite.height * SCALE);
       ctx.globalAlpha = 1.0;
     }
   }
 
-  // Draw opaque objects first
-  for (const obj of opaqueObjects) {
-    drawObject(obj);
-  }
+  // Draw all non-player objects in sort order, with player inserted at correct position
+  const allObjects = [...opaqueObjects, ...transparentObjects].sort((a, b) =>
+    a.sortY - b.sortY || a.x - b.x
+  );
 
-  // Draw player - with clipping if something is actually occluding her
-  // Calculate shrink factor for death animation (shrinks into skates)
+  // Calculate player draw parameters
   const shrinkScale = deathAnimation ? (1 - deathAnimProgress) : 1;
   const drawnWidth = playerSprite.width * SCALE * shrinkScale;
   const drawnHeight = playerSprite.height * SCALE * shrinkScale;
-  // Keep bottom (skates) in place by adjusting Y as height shrinks
   const shrinkPlayerY = playerSpriteY + (playerSprite.height * SCALE - drawnHeight);
-  // Center horizontally as width shrinks
   const shrinkPlayerX = playerPx + (playerSprite.width * SCALE - drawnWidth) / 2;
 
-  // Don't draw player after death (she disappeared into the hole)
-  if (!gameState.dead) {
+  let playerDrawn = false;
+
+  function drawPlayer() {
+    if (playerDrawn || gameState.dead) return;
+    playerDrawn = true;
+
     if (occludingObjects.length > 0 && !deathAnimation) {
-      // Find where the occluding objects visually start (their top edge)
       let occludeTop = canvas.height;
       for (const occ of occludingObjects) {
         const occPy = offsetY + TOP_PADDING * SCALE + occ.y * TILE_H * SCALE;
@@ -1652,8 +1655,6 @@ function render() {
           occludeTop = Math.min(occludeTop, occPy - occSprite.height * SCALE);
         }
       }
-
-      // Draw only the part of player ABOVE the occluding objects (her head)
       ctx.save();
       ctx.beginPath();
       ctx.rect(0, 0, canvas.width, occludeTop);
@@ -1661,15 +1662,20 @@ function render() {
       ctx.drawImage(playerSprite, playerPx, playerSpriteY, playerSprite.width * SCALE, playerSprite.height * SCALE);
       ctx.restore();
     } else if (shrinkScale > 0.01) {
-      // Draw player (shrinking during death animation)
       ctx.drawImage(playerSprite, shrinkPlayerX, shrinkPlayerY, drawnWidth, drawnHeight);
     }
   }
 
-  // Draw transparent objects on top (after player) so player shows through
-  for (const obj of transparentObjects) {
+  // Draw objects in sort order, inserting player at correct position
+  for (const obj of allObjects) {
+    // Draw player before objects that are in front of her (higher sortY)
+    if (!playerDrawn && obj.sortY > playerObj.sortY) {
+      drawPlayer();
+    }
     drawObject(obj);
   }
+  // Draw player if not yet drawn (player is in front of everything)
+  drawPlayer();
 
   if (gameState.won) {
     ctx.fillStyle = 'rgba(29, 43, 48, 0.8)';
