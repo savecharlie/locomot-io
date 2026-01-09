@@ -1902,6 +1902,12 @@
                 return;
             }
 
+            // Don't sync while tab is loading - would save incomplete canvas data
+            if (state.tabLoading) {
+                console.log('Sync skipped - tab loading in progress');
+                return;
+            }
+
             console.log('Starting sync...');
             updateSyncStatus('syncing');
             try {
@@ -2062,8 +2068,9 @@
                     showToast('Synced with cloud');
                 }
 
-                // Now sync local tabs to cloud
-                await syncToCloud();
+                // DON'T sync back immediately - images load async and we'd
+                // overwrite cloud data with empty canvases. Let auto-save
+                // handle syncing after user makes changes.
 
             } catch (error) {
                 console.error('Merge error:', error);
