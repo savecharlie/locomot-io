@@ -3371,17 +3371,17 @@
                     hueOffset = distFromMid * hueShiftAmount * 2;
                 }
 
-                // Temperature shift: lights toward yellow (60), darks toward blue (240)
+                // Temperature shift: lights toward yellow/orange, darks toward blue
                 // t=0 is darkest, t=1 is lightest
-                const tempAmount = tempShift / 100; // Normalize to 0-0.4
+                const tempAmount = tempShift / 40; // Normalize to 0-1.0 for full effect
                 if (t < 0.5) {
                     // Dark colors - shift toward blue (240)
                     const darkness = (0.5 - t) * 2; // 0 to 1, stronger for darker
-                    hueOffset += hueShiftToward(baseHue, 240, darkness * tempAmount);
+                    hueOffset += hueShiftToward(baseHue, 220, darkness * tempAmount);
                 } else {
-                    // Light colors - shift toward yellow/orange (45)
+                    // Light colors - shift toward yellow/orange (40)
                     const lightness = (t - 0.5) * 2; // 0 to 1, stronger for lighter
-                    hueOffset += hueShiftToward(baseHue, 45, lightness * tempAmount);
+                    hueOffset += hueShiftToward(baseHue, 40, lightness * tempAmount);
                 }
 
                 const hue = (baseHue + hueOffset + 360) % 360;
