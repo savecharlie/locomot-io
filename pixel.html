@@ -1839,8 +1839,8 @@
                 state.user = session?.user || null;
                 updateAuthUI();
 
-                if (event === 'SIGNED_IN' && state.user) {
-                    // Merge cloud data with local data
+                // Merge on sign-in or when loading page with existing session
+                if ((event === 'SIGNED_IN' || event === 'INITIAL_SESSION') && state.user) {
                     await mergeWithCloud();
                 }
             });
