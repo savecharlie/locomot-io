@@ -2006,12 +2006,30 @@
                 if (error) throw error;
 
                 if (cloudProjects && cloudProjects.length > 0) {
-                    // Get existing local tab IDs
-                    const localIds = new Set(state.tabs.map(t => String(t.id)));
+                    // Build map of local tabs by ID
+                    const localTabsById = {};
+                    state.tabs.forEach(t => { localTabsById[String(t.id)] = t; });
 
-                    // Add cloud projects that aren't already local
+                    // Merge cloud projects with local
                     for (const proj of cloudProjects) {
-                        if (!localIds.has(proj.id)) {
+                        const existingTab = localTabsById[proj.id];
+                        if (existingTab) {
+                            // Update existing tab with cloud data (cloud wins for now)
+                            console.log('Updating local tab with cloud data:', proj.id);
+                            existingTab.name = proj.name;
+                            existingTab.canvasWidth = proj.canvas_width;
+                            existingTab.canvasHeight = proj.canvas_height;
+                            existingTab.layers = proj.data?.layers || [];
+                            existingTab.currentLayerIndex = proj.data?.currentLayerIndex || 0;
+                            existingTab.nextLayerId = proj.data?.nextLayerId || 1;
+                            existingTab.palette = proj.data?.palette || [...PALETTES.pico8];
+                            existingTab.currentColor = proj.data?.currentColor || '#000000';
+                            existingTab.zoom = proj.data?.zoom || 8;
+                            existingTab.panX = proj.data?.panX || 0;
+                            existingTab.panY = proj.data?.panY || 0;
+                        } else {
+                            // Add new tab from cloud
+                            console.log('Adding cloud tab:', proj.id);
                             const tab = {
                                 id: proj.id,
                                 name: proj.name,
@@ -2031,6 +2049,9 @@
                             state.tabs.push(tab);
                         }
                     }
+
+                    // Reload current tab to show updated data
+                    loadTabState(state.activeTabIndex);
                     renderTabBar();
                     showToast('Synced with cloud');
                 }
