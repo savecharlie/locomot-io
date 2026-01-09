@@ -4409,14 +4409,28 @@ Canvas: ${state.canvasWidth}x${state.canvasHeight}`;
                     const width = Math.min(img.width, 256);
                     const height = Math.min(img.height, 256);
 
-                    state.undoStack = [];
-                    state.redoStack = [];
+                    // Save current tab first
+                    if (state.tabs.length > 0) {
+                        saveCurrentTabState();
+                    }
+
+                    // Create new tab for the imported image
+                    const fileName = file.name.replace(/\.[^/.]+$/, '') || 'Imported';
+                    const tab = createTabObject(width, height, fileName);
+                    state.tabs.push(tab);
+                    state.activeTabIndex = state.tabs.length - 1;
+
+                    // Initialize canvas for new tab
+                    state.canvasWidth = width;
+                    state.canvasHeight = height;
                     state.layers = [];
                     state.currentLayerIndex = 0;
                     state.nextLayerId = 1;
-
-                    state.canvasWidth = width;
-                    state.canvasHeight = height;
+                    state.undoStack = [];
+                    state.redoStack = [];
+                    state.zoom = 8;
+                    state.panX = 0;
+                    state.panY = 0;
 
                     mainCanvas.width = width;
                     mainCanvas.height = height;
@@ -4438,14 +4452,17 @@ Canvas: ${state.canvasWidth}x${state.canvasHeight}`;
                     layer.ctx.drawImage(img, 0, 0, width, height);
                     state.layers.push(layer);
 
+                    // Update UI
+                    document.getElementById('projectName').textContent = tab.name;
                     compositeAndRender();
                     updateCanvasSize();
                     drawGrid();
                     updateLayersPanel();
+                    renderTabBar();
                     saveState();
                     autoSave();
 
-                    showToast(`Imported ${width}x${height}`);
+                    showToast(`Imported ${width}x${height} in new tab`);
                     URL.revokeObjectURL(img.src);
                 };
                 img.src = URL.createObjectURL(file);
