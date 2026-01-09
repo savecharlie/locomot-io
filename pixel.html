@@ -329,7 +329,7 @@
             align-items: center;
             padding: 8px 12px;
             gap: 8px;
-            overflow: hidden;
+            touch-action: pan-x;
         }
 
         @media (min-width: 768px) {
@@ -357,11 +357,14 @@
             display: flex;
             gap: 4px;
             flex-wrap: nowrap;
-            overflow-x: auto;
+            overflow-x: scroll;
+            overflow-y: hidden;
             flex: 1;
             min-width: 0;
             touch-action: pan-x;
             -webkit-overflow-scrolling: touch;
+            overscroll-behavior-x: contain;
+            scroll-behavior: smooth;
         }
 
         .mobile-palette-color {
@@ -370,6 +373,7 @@
             border-radius: 6px;
             border: 2px solid transparent;
             flex-shrink: 0;
+            touch-action: pan-x;
         }
 
         .mobile-palette-color.active {
