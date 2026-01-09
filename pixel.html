@@ -2723,6 +2723,9 @@
                 clearTimeout(touchState.drawDelayTimer);
                 touchState.drawDelayTimer = null;
             }
+
+            // If there's a pending draw that never started (quick tap), execute it now
+            const pendingTap = touchState.pendingDrawStart;
             touchState.pendingDrawStart = null;
 
             if (e.touches.length === 0) {
@@ -2739,6 +2742,13 @@
                 if (touchState.longPressTriggered) {
                     touchState.longPressTriggered = false;
                     state.isDrawing = false;
+                    return;
+                }
+
+                // Handle quick tap - draw wasn't started yet but we have pending coords
+                if (pendingTap && !state.isDrawing) {
+                    handleToolStart(pendingTap.x, pendingTap.y);
+                    handleToolEnd(pendingTap.x, pendingTap.y);
                     return;
                 }
 
