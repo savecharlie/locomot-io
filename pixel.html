@@ -5496,14 +5496,17 @@ Canvas: ${state.canvasWidth}x${state.canvasHeight}`;
 
         function renderTabBar() {
             const container = document.getElementById('tabsContainer');
+            if (!container) return;
 
-            // Build new tabs in a fragment first to avoid flash
-            const fragment = document.createDocumentFragment();
+            console.log('renderTabBar called, tabs:', state.tabs.length, 'active:', state.activeTabIndex);
+
+            // Clear and rebuild
+            container.innerHTML = '';
 
             state.tabs.forEach((tab, i) => {
                 const tabEl = document.createElement('div');
                 const isActive = i === state.activeTabIndex;
-                tabEl.className = 'tab' + (isActive ? ' active' : '');
+                tabEl.className = isActive ? 'tab active' : 'tab';
                 tabEl.onclick = () => switchToTab(i);
 
                 const nameSpan = document.createElement('span');
@@ -5520,21 +5523,19 @@ Canvas: ${state.canvasWidth}x${state.canvasHeight}`;
 
                 tabEl.appendChild(nameSpan);
                 tabEl.appendChild(closeBtn);
-                fragment.appendChild(tabEl);
+                container.appendChild(tabEl);
             });
 
-            // Replace all at once - atomic operation
-            container.innerHTML = '';
-            container.appendChild(fragment);
+            // Force layout recalculation
+            void container.offsetWidth;
 
-            // Force reflow to ensure tabs render immediately
-            container.offsetHeight;
-
-            // Scroll active tab into view
-            const activeTab = container.querySelector('.tab.active');
-            if (activeTab) {
-                activeTab.scrollIntoView({ behavior: 'instant', inline: 'nearest', block: 'nearest' });
-            }
+            // Scroll active tab into view after a microtask
+            requestAnimationFrame(() => {
+                const activeTab = container.querySelector('.tab.active');
+                if (activeTab) {
+                    activeTab.scrollIntoView({ behavior: 'instant', inline: 'nearest', block: 'nearest' });
+                }
+            });
         }
 
         // Tab event handlers
