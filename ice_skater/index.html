@@ -159,8 +159,9 @@
 
 const TILE_W = 16;  // Tile width
 const TILE_H = 12;  // Tile height (floor surface depth) - oblique angle
-const SCALE = 4;
+let SCALE = 4;  // Dynamic - calculated per level to fit viewport
 const TOP_PADDING = 20;  // Extra space for sprites extending above grid
+const ICE_MARGIN_PX = 2;  // Pixels of ice visible outside chamber walls
 const WALL_H = 24;  // Wall/block height (14px top + 10px front)
 const DIRS = {
   up: { dx: 0, dy: -1 },
@@ -1156,7 +1157,7 @@ function isLevelWinnable() {
 }
 
 // Render
-const ICE_PADDING = 4;  // Extra ice tiles around the level
+const ICE_PADDING = 1;  // Minimal padding in tiles for ice draw loop
 
 function render() {
   if (!level || !gameState) return;
@@ -1166,14 +1167,28 @@ function render() {
 
   const w = level.width;
   const h = level.height;
-  const totalW = w + ICE_PADDING * 2;
-  const totalH = h + ICE_PADDING * 2;
-  canvas.width = totalW * TILE_W * SCALE;
-  canvas.height = TOP_PADDING * SCALE + totalH * TILE_H * SCALE + 10 * SCALE;
+
+  // Calculate scale to fit puzzle with ICE_MARGIN_PX pixels of ice visible
+  // Level size in base pixels (before scale)
+  const levelPixelW = w * TILE_W + ICE_MARGIN_PX * 2;
+  const levelPixelH = h * TILE_H + TOP_PADDING + ICE_MARGIN_PX * 2 + 10;
+
+  // Fit to viewport
+  const viewW = window.innerWidth;
+  const viewH = window.innerHeight;
+  const scaleX = viewW / levelPixelW;
+  const scaleY = viewH / levelPixelH;
+  SCALE = Math.floor(Math.min(scaleX, scaleY));
+  if (SCALE < 1) SCALE = 1;
+
+  // Canvas sized exactly to fit level + margin
+  canvas.width = levelPixelW * SCALE;
+  canvas.height = levelPixelH * SCALE;
   ctx.imageSmoothingEnabled = false;
 
-  const offsetX = ICE_PADDING * TILE_W * SCALE;
-  const offsetY = ICE_PADDING * TILE_H * SCALE;
+  // Offset positions level content with ice margin
+  const offsetX = ICE_MARGIN_PX * SCALE;
+  const offsetY = ICE_MARGIN_PX * SCALE;
 
   const now = performance.now();
   if (now - lastKeyFrameTime > 200) {
@@ -1183,8 +1198,10 @@ function render() {
 
   // Draw ice tiles across entire canvas (3 variants for visual variety)
   const floorVariants = [sprites['ice_floor_16x12'], sprites['ice_floor_16x12_v1'], sprites['ice_floor_16x12_v2']];
-  for (let ty = -3; ty < totalH + 1; ty++) {
-    for (let tx = -1; tx < totalW + 1; tx++) {
+  const tilesX = Math.ceil(canvas.width / (TILE_W * SCALE)) + 2;
+  const tilesY = Math.ceil(canvas.height / (TILE_H * SCALE)) + 4;
+  for (let ty = -3; ty < tilesY; ty++) {
+    for (let tx = -1; tx < tilesX; tx++) {
       const px = tx * TILE_W * SCALE;
       const py = TOP_PADDING * SCALE + ty * TILE_H * SCALE;
       // Pick variant based on position (deterministic pseudo-random)
