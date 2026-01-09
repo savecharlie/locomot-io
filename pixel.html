@@ -57,9 +57,6 @@
         ]
     }
     </script>
-
-    <!-- Supabase SDK -->
-    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <style>
         * {
             margin: 0;
@@ -147,61 +144,6 @@
 
         .action-btn:disabled {
             opacity: 0.3;
-        }
-
-        .auth-btn {
-            padding: 6px 12px;
-            background: var(--accent);
-            border: none;
-            border-radius: 8px;
-            color: white;
-            font-size: 12px;
-            cursor: pointer;
-            white-space: nowrap;
-        }
-
-        .auth-btn:hover {
-            opacity: 0.9;
-        }
-
-        .auth-btn.signed-in {
-            background: var(--bg-light);
-            color: var(--text);
-        }
-
-        .sync-status {
-            display: none;
-            align-items: center;
-            padding: 0 8px;
-            font-size: 16px;
-        }
-
-        .sync-status.visible {
-            display: flex;
-        }
-
-        .sync-icon {
-            opacity: 0.5;
-        }
-
-        .sync-status.syncing .sync-icon {
-            animation: pulse 1s infinite;
-            opacity: 1;
-        }
-
-        .sync-status.synced .sync-icon {
-            color: #4ade80;
-            opacity: 1;
-        }
-
-        .sync-status.error .sync-icon {
-            color: var(--accent);
-            opacity: 1;
-        }
-
-        @keyframes pulse {
-            0%, 100% { opacity: 0.5; }
-            50% { opacity: 1; }
         }
 
         /* Main Canvas Area */
@@ -1337,12 +1279,6 @@
             <button class="action-btn" id="redoBtn" title="Redo (Ctrl+Y)">↪</button>
             <button class="action-btn" id="gridBtn" title="Toggle Grid (G)">▦</button>
             <button class="action-btn" id="saveBtn" title="Export PNG">💾</button>
-            <div class="sync-status" id="syncStatus" title="Cloud sync status">
-                <span class="sync-icon" id="syncIcon">☁</span>
-            </div>
-            <button class="auth-btn" id="authBtn" title="Sign in to sync">
-                <span class="auth-text" id="authText">Sign in</span>
-            </button>
         </div>
     </div>
 
@@ -1764,251 +1700,7 @@
             activeTabIndex: 0,  // Currently displayed tab
             nextTabId: 1,       // Counter for unique tab IDs
             tabLoading: false,  // Flag to prevent autoSave during async tab load
-            // Cloud sync
-            user: null,              // Supabase user object
-            syncStatus: 'idle',      // 'idle', 'syncing', 'synced', 'error', 'offline'
-            lastSyncTime: null,
-            syncDebounceTimer: null,
         };
-
-        // ===== SUPABASE =====
-        const SUPABASE_URL = 'https://vwlbjjznvczfecjnrjen.supabase.co';
-        const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZ3bGJqanpudmN6ZmVjam5yamVuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njc5Nzc5OTIsImV4cCI6MjA4MzU1Mzk5Mn0.didh9h1rGEDEhzVlUBp7WhAxFMPsUTSvsuvIwa0aDro';
-        let supabase = null;
-        try {
-            supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-        } catch (e) {
-            console.error('Supabase init failed:', e);
-        }
-
-        // ===== AUTH FUNCTIONS =====
-        async function signInWithGoogle() {
-            if (!supabase) {
-                showToast('Cloud sync not available');
-                return;
-            }
-            const { error } = await supabase.auth.signInWithOAuth({
-                provider: 'google',
-                options: {
-                    redirectTo: window.location.origin + window.location.pathname
-                }
-            });
-            if (error) {
-                console.error('Sign in error:', error);
-                showToast('Sign in failed');
-            }
-        }
-
-        async function signOut() {
-            if (!supabase) return;
-            const { error } = await supabase.auth.signOut();
-            if (error) {
-                console.error('Sign out error:', error);
-            }
-            state.user = null;
-            updateAuthUI();
-            showToast('Signed out');
-        }
-
-        function updateAuthUI() {
-            const authBtn = document.getElementById('authBtn');
-            const authText = document.getElementById('authText');
-            const syncStatus = document.getElementById('syncStatus');
-
-            if (state.user) {
-                const name = state.user.user_metadata?.full_name || state.user.email?.split('@')[0] || 'User';
-                authText.textContent = name;
-                authBtn.classList.add('signed-in');
-                authBtn.title = 'Click to sign out';
-                syncStatus.classList.add('visible');
-            } else {
-                authText.textContent = 'Sign in';
-                authBtn.classList.remove('signed-in');
-                authBtn.title = 'Sign in to sync';
-                syncStatus.classList.remove('visible');
-            }
-        }
-
-        function updateSyncStatus(status) {
-            state.syncStatus = status;
-            const syncStatus = document.getElementById('syncStatus');
-            const syncIcon = document.getElementById('syncIcon');
-
-            syncStatus.classList.remove('syncing', 'synced', 'error');
-
-            switch(status) {
-                case 'syncing':
-                    syncStatus.classList.add('syncing');
-                    syncStatus.title = 'Syncing...';
-                    break;
-                case 'synced':
-                    syncStatus.classList.add('synced');
-                    syncStatus.title = 'Synced ' + new Date().toLocaleTimeString();
-                    break;
-                case 'error':
-                    syncStatus.classList.add('error');
-                    syncStatus.title = 'Sync failed - click to retry';
-                    break;
-                default:
-                    syncStatus.title = 'Cloud sync';
-            }
-        }
-
-        // ===== CLOUD SYNC FUNCTIONS =====
-        function debouncedCloudSync() {
-            if (state.syncDebounceTimer) {
-                clearTimeout(state.syncDebounceTimer);
-            }
-            state.syncDebounceTimer = setTimeout(() => {
-                syncToCloud();
-            }, 2000); // Wait 2 seconds after last change
-        }
-
-        async function syncToCloud() {
-            if (!state.user) return;
-
-            updateSyncStatus('syncing');
-
-            try {
-                // Save each tab as a project
-                for (const tab of state.tabs) {
-                    await saveProjectToCloud(tab);
-                }
-
-                // Save workspace state
-                await saveWorkspaceToCloud();
-
-                state.lastSyncTime = new Date();
-                updateSyncStatus('synced');
-            } catch (error) {
-                console.error('Sync error:', error);
-                updateSyncStatus('error');
-            }
-        }
-
-        async function saveProjectToCloud(tab) {
-            const projectData = {
-                id: tab.id,
-                user_id: state.user.id,
-                name: tab.name,
-                canvas_width: tab.canvasWidth,
-                canvas_height: tab.canvasHeight,
-                data: {
-                    layers: tab.layers,
-                    currentLayerIndex: tab.currentLayerIndex,
-                    nextLayerId: tab.nextLayerId,
-                    palette: tab.palette,
-                    currentColor: tab.currentColor,
-                    zoom: tab.zoom,
-                    panX: tab.panX,
-                    panY: tab.panY
-                },
-                updated_at: new Date().toISOString()
-            };
-
-            const { error } = await supabase
-                .from('projects')
-                .upsert(projectData, { onConflict: 'id' });
-
-            if (error) throw error;
-        }
-
-        async function saveWorkspaceToCloud() {
-            const workspaceData = {
-                user_id: state.user.id,
-                open_project_ids: state.tabs.map(t => t.id),
-                active_project_id: state.tabs[state.activeTabIndex]?.id,
-                updated_at: new Date().toISOString()
-            };
-
-            const { error } = await supabase
-                .from('workspaces')
-                .upsert(workspaceData, { onConflict: 'user_id' });
-
-            if (error) throw error;
-        }
-
-        async function loadFromCloud() {
-            if (!state.user) return false;
-
-            try {
-                // Load workspace to get open projects
-                const { data: workspace, error: wsError } = await supabase
-                    .from('workspaces')
-                    .select('*')
-                    .eq('user_id', state.user.id)
-                    .single();
-
-                if (wsError && wsError.code !== 'PGRST116') throw wsError; // PGRST116 = no rows
-
-                if (!workspace || !workspace.open_project_ids?.length) {
-                    return false; // No cloud data
-                }
-
-                // Load projects
-                const { data: projects, error: projError } = await supabase
-                    .from('projects')
-                    .select('*')
-                    .eq('user_id', state.user.id)
-                    .in('id', workspace.open_project_ids);
-
-                if (projError) throw projError;
-
-                if (projects && projects.length > 0) {
-                    // Convert cloud format to local format
-                    state.tabs = projects.map(proj => ({
-                        id: proj.id,
-                        name: proj.name,
-                        canvasWidth: proj.canvas_width,
-                        canvasHeight: proj.canvas_height,
-                        layers: proj.data?.layers || [],
-                        currentLayerIndex: proj.data?.currentLayerIndex || 0,
-                        nextLayerId: proj.data?.nextLayerId || 1,
-                        palette: proj.data?.palette || [...PALETTES.pico8],
-                        currentColor: proj.data?.currentColor || '#000000',
-                        undoStack: [],
-                        redoStack: [],
-                        zoom: proj.data?.zoom || 8,
-                        panX: proj.data?.panX || 0,
-                        panY: proj.data?.panY || 0
-                    }));
-
-                    // Set active tab
-                    const activeIdx = state.tabs.findIndex(t => t.id === workspace.active_project_id);
-                    state.activeTabIndex = activeIdx >= 0 ? activeIdx : 0;
-                    state.nextTabId = Math.max(...state.tabs.map(t => typeof t.id === 'number' ? t.id : 0)) + 1;
-
-                    return true; // Cloud data loaded
-                }
-
-                return false;
-            } catch (error) {
-                console.error('Load from cloud error:', error);
-                return false;
-            }
-        }
-
-        // Initialize auth state listener
-        if (supabase) {
-            supabase.auth.onAuthStateChange(async (event, session) => {
-                console.log('Auth state changed:', event);
-                state.user = session?.user || null;
-                updateAuthUI();
-
-                if (event === 'SIGNED_IN' && state.user) {
-                    // Try to load from cloud
-                    const hasCloudData = await loadFromCloud();
-                    if (hasCloudData) {
-                        loadTabState(state.activeTabIndex);
-                        renderTabBar();
-                        showToast('Loaded from cloud');
-                    } else {
-                        // No cloud data, sync current local data
-                        syncToCloud();
-                    }
-                }
-            });
-        }
 
         // ===== PALETTES =====
         const PALETTES = {
@@ -3141,15 +2833,6 @@
             document.getElementById('saveBtn').onclick = exportPNG;
             document.getElementById('menuBtn').onclick = () => document.getElementById('menuModal').classList.add('active');
 
-            // Auth button
-            document.getElementById('authBtn').onclick = () => {
-                if (state.user) {
-                    signOut();
-                } else {
-                    signInWithGoogle();
-                }
-            };
-
             // Menu modal
             document.getElementById('closeMenuBtn').onclick = () => document.getElementById('menuModal').classList.remove('active');
             document.getElementById('newCanvasBtn').onclick = () => {
@@ -4216,11 +3899,6 @@ Canvas: ${state.canvasWidth}x${state.canvasHeight}`;
                     nextTabId: state.nextTabId
                 };
                 localStorage.setItem('pixelArtAutoSave', JSON.stringify(data));
-
-                // Cloud sync if logged in
-                if (state.user) {
-                    debouncedCloudSync();
-                }
             } catch (e) {
                 console.warn('AutoSave failed:', e);
             }
