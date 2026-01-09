@@ -2005,17 +2005,23 @@
 
                 if (error) throw error;
 
+                console.log('Cloud projects:', cloudProjects?.length || 0);
                 if (cloudProjects && cloudProjects.length > 0) {
                     // Build map of local tabs by ID
                     const localTabsById = {};
                     state.tabs.forEach(t => { localTabsById[String(t.id)] = t; });
+                    console.log('Local tab IDs:', Object.keys(localTabsById));
+                    console.log('Cloud project IDs:', cloudProjects.map(p => p.id));
 
                     // Merge cloud projects with local
                     for (const proj of cloudProjects) {
+                        const cloudLayerSizes = proj.data?.layers?.map(l => l.image?.length || 0) || [];
+                        console.log('Cloud proj', proj.id.slice(0,8), 'layers:', proj.data?.layers?.length, 'sizes:', cloudLayerSizes);
+
                         const existingTab = localTabsById[proj.id];
                         if (existingTab) {
                             // Update existing tab with cloud data (cloud wins for now)
-                            console.log('Updating local tab with cloud data:', proj.id);
+                            console.log('Updating local tab with cloud data:', proj.id.slice(0,8));
                             existingTab.name = proj.name;
                             existingTab.canvasWidth = proj.canvas_width;
                             existingTab.canvasHeight = proj.canvas_height;
