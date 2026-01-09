@@ -190,7 +190,7 @@ const DIRS = {
 const sprites = {};
 const spriteFiles = [
   'ice_floor_16x12.png', 'ice_floor_16x12_v1.png', 'ice_floor_16x12_v2.png',
-  'ice_block_v3.png', 'block_base_16.png', 'wall_16x24.png',
+  'ice_block_v3.png', 'block_base_16.png', 'wall_16x24.png', 'wall_color_16x24.png',
   'ice_hole_16x12.png', 'goal_penguin_16.png', 'sticky_tile_16x12.png',
   'wall_keyhole_16x24.png',
   'ice_crack_1.png', 'ice_crack_2.png', 'ice_crack_3.png', 'ice_crack_4.png',
@@ -1376,7 +1376,13 @@ function render() {
     for (let x = 0; x < w; x++) {
       const tile = level.grid[y][x];
       if (tile === '#') {
-        objects.push({ type: 'wall', x, y, sortY: y, sprite: 'wall_16x24' });
+        // Border walls (test chamber) are double-tall
+        const isBorder = (x === 0 || x === w - 1 || y === 0 || y === h - 1);
+        if (isBorder) {
+          objects.push({ type: 'wall', x, y, sortY: y, sprite: 'wall_color_16x24', doubleTall: true });
+        } else {
+          objects.push({ type: 'wall', x, y, sortY: y, sprite: 'wall_16x24' });
+        }
       }
       if (tile === 'L') {
         const key = `${x},${y}`;
@@ -1654,7 +1660,16 @@ function render() {
       // if (obj.transparent && obj.type !== 'penguin') {
       //   ctx.globalAlpha = 0.65;
       // }
-      ctx.drawImage(sprite, px, spriteY, sprite.width * SCALE, sprite.height * SCALE);
+
+      // Double-tall walls (test chamber borders): draw sprite twice stacked
+      if (obj.doubleTall) {
+        // Draw bottom wall
+        ctx.drawImage(sprite, px, spriteY, sprite.width * SCALE, sprite.height * SCALE);
+        // Draw top wall (offset up by wall height)
+        ctx.drawImage(sprite, px, spriteY - WALL_H * SCALE, sprite.width * SCALE, sprite.height * SCALE);
+      } else {
+        ctx.drawImage(sprite, px, spriteY, sprite.width * SCALE, sprite.height * SCALE);
+      }
       ctx.globalAlpha = 1.0;
     }
   }
