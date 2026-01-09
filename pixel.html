@@ -1774,10 +1774,19 @@
         // ===== SUPABASE =====
         const SUPABASE_URL = 'https://vwlbjjznvczfecjnrjen.supabase.co';
         const SUPABASE_ANON_KEY = 'sb_publishable_6Xcdo0j-YU6ke5BOmd6JsA_cPl4IcJ4';
-        const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+        let supabase = null;
+        try {
+            supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+        } catch (e) {
+            console.error('Supabase init failed:', e);
+        }
 
         // ===== AUTH FUNCTIONS =====
         async function signInWithGoogle() {
+            if (!supabase) {
+                showToast('Cloud sync not available');
+                return;
+            }
             const { error } = await supabase.auth.signInWithOAuth({
                 provider: 'google',
                 options: {
@@ -1791,6 +1800,7 @@
         }
 
         async function signOut() {
+            if (!supabase) return;
             const { error } = await supabase.auth.signOut();
             if (error) {
                 console.error('Sign out error:', error);
@@ -1979,24 +1989,26 @@
         }
 
         // Initialize auth state listener
-        supabase.auth.onAuthStateChange(async (event, session) => {
-            console.log('Auth state changed:', event);
-            state.user = session?.user || null;
-            updateAuthUI();
+        if (supabase) {
+            supabase.auth.onAuthStateChange(async (event, session) => {
+                console.log('Auth state changed:', event);
+                state.user = session?.user || null;
+                updateAuthUI();
 
-            if (event === 'SIGNED_IN' && state.user) {
-                // Try to load from cloud
-                const hasCloudData = await loadFromCloud();
-                if (hasCloudData) {
-                    loadTabState(state.activeTabIndex);
-                    renderTabBar();
-                    showToast('Loaded from cloud');
-                } else {
-                    // No cloud data, sync current local data
-                    syncToCloud();
+                if (event === 'SIGNED_IN' && state.user) {
+                    // Try to load from cloud
+                    const hasCloudData = await loadFromCloud();
+                    if (hasCloudData) {
+                        loadTabState(state.activeTabIndex);
+                        renderTabBar();
+                        showToast('Loaded from cloud');
+                    } else {
+                        // No cloud data, sync current local data
+                        syncToCloud();
+                    }
                 }
-            }
-        });
+            });
+        }
 
         // ===== PALETTES =====
         const PALETTES = {
