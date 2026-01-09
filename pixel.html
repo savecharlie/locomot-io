@@ -754,6 +754,44 @@
             transform: scale(0.95);
         }
 
+        /* Mobile floating undo/redo */
+        .mobile-undo-float {
+            position: fixed;
+            top: 70px;
+            right: 8px;
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+            z-index: 50;
+        }
+
+        @media (min-width: 768px) {
+            .mobile-undo-float {
+                display: none;
+            }
+        }
+
+        .mobile-undo-float button {
+            width: 44px;
+            height: 44px;
+            background: var(--bg-medium);
+            border: 1px solid var(--bg-light);
+            border-radius: 10px;
+            color: var(--text);
+            font-size: 20px;
+            cursor: pointer;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+        }
+
+        .mobile-undo-float button:disabled {
+            opacity: 0.3;
+        }
+
+        .mobile-undo-float button:active:not(:disabled) {
+            background: var(--accent);
+            transform: scale(0.95);
+        }
+
         /* Lasso start indicator */
         .lasso-start {
             position: absolute;
@@ -1144,6 +1182,12 @@
             <button class="sel-action" data-action="fliph" title="Flip Horizontal">↔️</button>
             <button class="sel-action" data-action="flipv" title="Flip Vertical">↕️</button>
             <button class="sel-action" data-action="deselect" title="Deselect">✖️</button>
+        </div>
+
+        <!-- Mobile Floating Undo/Redo -->
+        <div class="mobile-undo-float">
+            <button id="mobileUndoBtn" title="Undo">↩</button>
+            <button id="mobileRedoBtn" title="Redo">↪</button>
         </div>
 
         <!-- Desktop Side Palette -->
@@ -2342,6 +2386,8 @@
             // Top bar actions
             document.getElementById('undoBtn').onclick = undo;
             document.getElementById('redoBtn').onclick = redo;
+            document.getElementById('mobileUndoBtn').onclick = undo;
+            document.getElementById('mobileRedoBtn').onclick = redo;
             document.getElementById('gridBtn').onclick = toggleGrid;
             document.getElementById('saveBtn').onclick = exportPNG;
             document.getElementById('menuBtn').onclick = () => document.getElementById('menuModal').classList.add('active');
@@ -3182,8 +3228,12 @@
         }
 
         function updateUndoRedoButtons() {
-            document.getElementById('undoBtn').disabled = state.undoStack.length <= 1;
-            document.getElementById('redoBtn').disabled = state.redoStack.length === 0;
+            const canUndo = state.undoStack.length > 1;
+            const canRedo = state.redoStack.length > 0;
+            document.getElementById('undoBtn').disabled = !canUndo;
+            document.getElementById('redoBtn').disabled = !canRedo;
+            document.getElementById('mobileUndoBtn').disabled = !canUndo;
+            document.getElementById('mobileRedoBtn').disabled = !canRedo;
         }
 
         // ===== GRID TOGGLE =====
@@ -3626,15 +3676,19 @@
 
                 // Temperature shift: lights toward yellow/orange, darks toward blue
                 // t=0 is darkest, t=1 is lightest
-                const tempAmount = tempShift / 40; // Normalize to 0-1.0 for full effect
+                // Use a gentler curve (squared) and cap max shift at 30 degrees
+                const tempAmount = tempShift / 40; // Normalize to 0-1.0
+                const maxTempShift = 30; // Cap the maximum hue shift
                 if (t < 0.5) {
-                    // Dark colors - shift toward blue (240)
-                    const darkness = (0.5 - t) * 2; // 0 to 1, stronger for darker
-                    hueOffset += hueShiftToward(baseHue, 220, darkness * tempAmount);
+                    // Dark colors - shift toward blue (220)
+                    const darkness = Math.pow((0.5 - t) * 2, 1.5); // Gentler curve
+                    const shift = hueShiftToward(baseHue, 220, darkness * tempAmount);
+                    hueOffset += Math.max(-maxTempShift, Math.min(maxTempShift, shift));
                 } else {
                     // Light colors - shift toward yellow/orange (40)
-                    const lightness = (t - 0.5) * 2; // 0 to 1, stronger for lighter
-                    hueOffset += hueShiftToward(baseHue, 40, lightness * tempAmount);
+                    const bright = Math.pow((t - 0.5) * 2, 1.5); // Gentler curve
+                    const shift = hueShiftToward(baseHue, 40, bright * tempAmount);
+                    hueOffset += Math.max(-maxTempShift, Math.min(maxTempShift, shift));
                 }
 
                 const hue = (baseHue + hueOffset + 360) % 360;
