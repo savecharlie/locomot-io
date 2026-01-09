@@ -57,6 +57,8 @@
         ]
     }
     </script>
+    <!-- Supabase SDK - loaded async to not block rendering -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2" async></script>
     <style>
         * {
             margin: 0;
@@ -144,6 +146,61 @@
 
         .action-btn:disabled {
             opacity: 0.3;
+        }
+
+        .auth-btn {
+            padding: 6px 12px;
+            background: var(--accent);
+            border: none;
+            border-radius: 8px;
+            color: white;
+            font-size: 12px;
+            cursor: pointer;
+            white-space: nowrap;
+        }
+
+        .auth-btn:hover {
+            opacity: 0.9;
+        }
+
+        .auth-btn.signed-in {
+            background: var(--bg-light);
+            color: var(--text);
+        }
+
+        .sync-status {
+            display: none;
+            align-items: center;
+            padding: 0 8px;
+            font-size: 16px;
+        }
+
+        .sync-status.visible {
+            display: flex;
+        }
+
+        .sync-icon {
+            opacity: 0.5;
+        }
+
+        .sync-status.syncing .sync-icon {
+            animation: pulse 1s infinite;
+            opacity: 1;
+        }
+
+        .sync-status.synced .sync-icon {
+            color: #4ade80;
+            opacity: 1;
+        }
+
+        .sync-status.error .sync-icon {
+            color: var(--accent);
+            opacity: 1;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 0.5; }
+            50% { opacity: 1; }
         }
 
         /* Main Canvas Area */
@@ -1279,6 +1336,12 @@
             <button class="action-btn" id="redoBtn" title="Redo (Ctrl+Y)">↪</button>
             <button class="action-btn" id="gridBtn" title="Toggle Grid (G)">▦</button>
             <button class="action-btn" id="saveBtn" title="Export PNG">💾</button>
+            <div class="sync-status" id="syncStatus" title="Cloud sync status">
+                <span class="sync-icon" id="syncIcon">☁</span>
+            </div>
+            <button class="auth-btn" id="authBtn" title="Sign in to sync">
+                <span class="auth-text" id="authText">Sign in</span>
+            </button>
         </div>
     </div>
 
