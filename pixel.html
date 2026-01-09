@@ -4080,18 +4080,30 @@
         const currentColorBtn = document.getElementById('currentColor');
         const mobileCurrentColorBtn = document.getElementById('mobileCurrentColor');
 
-        // Use both click and touchend for better mobile support
-        currentColorBtn.addEventListener('click', openColorEditor);
-        currentColorBtn.addEventListener('touchend', (e) => {
-            e.preventDefault();
-            openColorEditor();
-        });
+        console.log('Setting up color editor click handlers', currentColorBtn, mobileCurrentColorBtn);
 
-        mobileCurrentColorBtn.addEventListener('click', openColorEditor);
-        mobileCurrentColorBtn.addEventListener('touchend', (e) => {
-            e.preventDefault();
-            openColorEditor();
-        });
+        // Use both click and touchend for better mobile support
+        if (currentColorBtn) {
+            currentColorBtn.addEventListener('click', (e) => {
+                console.log('currentColor clicked!');
+                openColorEditor();
+            });
+            currentColorBtn.addEventListener('touchend', (e) => {
+                e.preventDefault();
+                openColorEditor();
+            });
+        }
+
+        if (mobileCurrentColorBtn) {
+            mobileCurrentColorBtn.addEventListener('click', (e) => {
+                console.log('mobileCurrentColor clicked!');
+                openColorEditor();
+            });
+            mobileCurrentColorBtn.addEventListener('touchend', (e) => {
+                e.preventDefault();
+                openColorEditor();
+            });
+        }
 
         // ===== LAYERS PANEL =====
         function updateLayersPanel() {
