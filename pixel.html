@@ -1965,13 +1965,12 @@
                     updated_at: new Date().toISOString()
                 };
 
-                console.log('Inserting project:', tab.id, 'data size:', JSON.stringify(projectData).length);
+                console.log('Upserting project:', tab.id, 'data size:', JSON.stringify(projectData).length);
                 const { error } = await supabaseClient
                     .from('projects')
-                    .insert(projectData)
-                    .single();
+                    .upsert(projectData);
 
-                console.log('Insert done, error:', error);
+                console.log('Upsert done, error:', error);
                 if (error) throw error;
             } catch (e) {
                 console.error('saveProjectToCloud error:', e);
