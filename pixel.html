@@ -1169,12 +1169,14 @@
 
         .tabs-container {
             display: flex;
+            flex-direction: row;
             flex: 1;
             overflow-x: auto;
             gap: 8px;
             padding: 4px 8px;
             min-width: 0;
             touch-action: pan-x;
+            align-items: center;
         }
 
         .tabs-container::-webkit-scrollbar {
@@ -1187,7 +1189,7 @@
         }
 
         .tab {
-            display: flex;
+            display: inline-flex;
             align-items: center;
             gap: 8px;
             padding: 10px 14px;
@@ -1201,6 +1203,8 @@
             min-width: 80px;
             max-width: 160px;
             flex-shrink: 0;
+            flex-grow: 0;
+            position: relative;
         }
 
         .tab:hover {
@@ -1208,9 +1212,10 @@
         }
 
         .tab.active {
-            background: var(--accent);
-            border-color: var(--accent);
-            color: white;
+            background: var(--accent) !important;
+            border-color: var(--accent) !important;
+            color: white !important;
+            z-index: 1;
         }
 
         .tab-name {
@@ -5491,9 +5496,13 @@ Canvas: ${state.canvasWidth}x${state.canvasHeight}`;
             const container = document.getElementById('tabsContainer');
             container.innerHTML = '';
 
+            console.log('renderTabBar: tabs=' + state.tabs.length + ', activeIndex=' + state.activeTabIndex);
+
             state.tabs.forEach((tab, i) => {
                 const tabEl = document.createElement('div');
-                tabEl.className = 'tab' + (i === state.activeTabIndex ? ' active' : '');
+                const isActive = i === state.activeTabIndex;
+                tabEl.className = 'tab' + (isActive ? ' active' : '');
+                console.log('Tab ' + i + ': active=' + isActive + ', class=' + tabEl.className);
                 tabEl.onclick = () => switchToTab(i);
 
                 const nameSpan = document.createElement('span');
