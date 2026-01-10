@@ -2146,15 +2146,27 @@ function handleInput(dir) {
         }
       }
 
-      // Add trail points for each tile crossed
-      const dirX = dx === 0 ? 0 : dx / Math.abs(dx);
-      const dirY = dy === 0 ? 0 : dy / Math.abs(dy);
-      for (let i = 0; i < dist; i++) {
-        const tileX = oldState.playerX + dirX * i;
-        const tileY = oldState.playerY + dirY * i;
-        // Random pixel position within 16x12 tile, aligned to grid
-        const pixelX = Math.floor(Math.random() * 16);
-        const pixelY = Math.floor(Math.random() * 12);
+      // Add trail pixel at each pixel position crossed
+      // Skate blade offset within tile (center-ish)
+      const bladeOffsetX = 8;
+      const bladeOffsetY = 6;
+      // Start and end in absolute pixel coordinates
+      const startPixelX = oldState.playerX * 16 + bladeOffsetX;
+      const startPixelY = oldState.playerY * 12 + bladeOffsetY;
+      const endPixelX = newState.playerX * 16 + bladeOffsetX;
+      const endPixelY = newState.playerY * 12 + bladeOffsetY;
+      // Number of pixels to draw
+      const pixelDist = Math.abs(endPixelX - startPixelX) + Math.abs(endPixelY - startPixelY);
+      const pixelDirX = endPixelX === startPixelX ? 0 : (endPixelX - startPixelX) / Math.abs(endPixelX - startPixelX);
+      const pixelDirY = endPixelY === startPixelY ? 0 : (endPixelY - startPixelY) / Math.abs(endPixelY - startPixelY);
+      for (let i = 0; i < pixelDist; i++) {
+        const absX = startPixelX + pixelDirX * i;
+        const absY = startPixelY + pixelDirY * i;
+        // Convert to tile + pixel offset
+        const tileX = Math.floor(absX / 16);
+        const tileY = Math.floor(absY / 12);
+        const pixelX = absX % 16;
+        const pixelY = absY % 12;
         trailPoints.push({ tileX, tileY, pixelX, pixelY });
       }
 
