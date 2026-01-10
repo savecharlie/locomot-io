@@ -368,6 +368,11 @@ let showDebugGrid = false;  // Toggle with 'G' key
 let isUnwinnable = false;
 let unwinnableFlashTime = 0;
 
+// Hint display state
+let hintArrow = null;  // 'up', 'down', 'left', 'right', or null
+let hintShowTime = 0;
+const HINT_DISPLAY_MS = 2000;  // Show hint for 2 seconds
+
 // Settings (persisted in localStorage)
 const settings = {
   hintsEnabled: true,
@@ -1964,7 +1969,44 @@ function render() {
     ctx.font = `${12 * SCALE}px sans-serif`;
     ctx.fillText('Tap to continue', canvas.width / 2, canvas.height / 2 + 30 * SCALE);
   }
-  // Unwinnable overlay removed - let players figure it out
+
+  // Draw hint arrow next to player
+  if (hintArrow && !gameState.won && !gameState.dead) {
+    const elapsed = performance.now() - hintShowTime;
+    if (elapsed < HINT_DISPLAY_MS) {
+      // Calculate player screen position
+      const px = effectivePlayerX * TILE_W * SCALE + ICE_MARGIN_PX * SCALE;
+      const py = (TOP_PADDING + effectivePlayerY * TILE_H) * SCALE;
+
+      // Arrow offset based on direction
+      const arrowOffset = 20 * SCALE;
+      let ax = px + 8 * SCALE;  // Center on tile
+      let ay = py;
+
+      // Position arrow in the direction of hint
+      if (hintArrow === 'up') { ay -= arrowOffset; }
+      else if (hintArrow === 'down') { ay += arrowOffset + 16 * SCALE; }
+      else if (hintArrow === 'left') { ax -= arrowOffset; ay += 8 * SCALE; }
+      else if (hintArrow === 'right') { ax += arrowOffset + 8 * SCALE; ay += 8 * SCALE; }
+
+      // Draw pixel arrow
+      ctx.fillStyle = '#b0d5cf';
+      ctx.font = `bold ${16 * SCALE}px monospace`;
+      ctx.textAlign = 'center';
+      const arrows = { up: '▲', down: '▼', left: '◀', right: '▶' };
+      ctx.fillText(arrows[hintArrow], ax, ay);
+    } else {
+      hintArrow = null;  // Clear after timeout
+    }
+  }
+
+  // Draw START OVER text when unwinnable
+  if (isUnwinnable && !gameState.won && !gameState.dead && settings.showUnwinnable) {
+    ctx.fillStyle = '#696d75';
+    ctx.font = `bold ${10 * SCALE}px monospace`;
+    ctx.textAlign = 'center';
+    ctx.fillText('START OVER', canvas.width / 2, 20 * SCALE);
+  }
 
   requestAnimationFrame(render);
 }
@@ -2008,6 +2050,10 @@ function getPlayerSpriteBehind(dir) {
 
 function handleInput(dir) {
   if (animating || deathAnimation || gameState.won || gameState.dead) return;
+
+  // Clear hint arrow on any move
+  hintArrow = null;
+  isUnwinnable = false;
 
   const oldState = gameState;
   const newState = simulateMove(gameState, dir);
@@ -2207,24 +2253,17 @@ document.getElementById('undo-btn').onclick = undo;
 function showHint() {
   if (!settings.hintsEnabled) return;  // Hints disabled
   const hint = getHint();
-  const status = document.getElementById('status');
-  const sidebarStatus = document.getElementById('sidebar-status');
   if (hint) {
-    const arrows = { up: '↑', down: '↓', left: '←', right: '→' };
-    const text = `Hint: ${arrows[hint]}`;
-    status.textContent = text;
-    status.className = 'hint';
-    sidebarStatus.textContent = text;
-    sidebarStatus.style.color = '#40ACBF';
-  } else if (settings.showUnwinnable && !gameState.won) {
-    // Show "no solution" only if setting enabled
-    status.textContent = 'No solution!';
-    status.className = '';
-    sidebarStatus.textContent = 'No solution!';
-    sidebarStatus.style.color = '#A968C4';
-  } else {
-    status.textContent = '';
-    sidebarStatus.textContent = '';
+    // Show arrow on canvas
+    hintArrow = hint;
+    hintShowTime = performance.now();
+    isUnwinnable = false;
+  } else if (!gameState.won) {
+    // No solution - show START OVER if setting enabled
+    hintArrow = null;
+    if (settings.showUnwinnable) {
+      isUnwinnable = true;
+    }
   }
 }
 
