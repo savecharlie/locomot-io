@@ -1503,15 +1503,19 @@ function render() {
   ];
   const tileW = TILE_W * SCALE;
   const tileH = TILE_H * SCALE;
-  // Calculate floor tile offset to align with level grid
-  const floorOffsetX = offsetX % tileW;
-  const floorOffsetY = (offsetY + TOP_PADDING * SCALE) % tileH;
-  const tilesX = Math.ceil(canvas.width / tileW) + 2;
-  const tilesY = Math.ceil(canvas.height / tileH) + 4;
-  for (let ty = -2; ty < tilesY; ty++) {
-    for (let tx = -1; tx < tilesX; tx++) {
-      const px = floorOffsetX + tx * tileW;
-      const py = floorOffsetY + ty * tileH;
+  // Calculate floor grid start position aligned with level grid
+  // Level tile (0,0) is at (offsetX, offsetY + TOP_PADDING * SCALE)
+  const levelGridX = offsetX;
+  const levelGridY = offsetY + TOP_PADDING * SCALE;
+  // Find floor start position <= 0 that aligns with level grid
+  const floorStartX = levelGridX - Math.ceil(levelGridX / tileW) * tileW;
+  const floorStartY = levelGridY - Math.ceil(levelGridY / tileH) * tileH;
+  const tilesX = Math.ceil((canvas.width - floorStartX) / tileW) + 1;
+  const tilesY = Math.ceil((canvas.height - floorStartY) / tileH) + 1;
+  for (let ty = 0; ty < tilesY; ty++) {
+    for (let tx = 0; tx < tilesX; tx++) {
+      const px = floorStartX + tx * tileW;
+      const py = floorStartY + ty * tileH;
       // Pick variant based on position (deterministic pseudo-random)
       const variant = Math.abs((tx * 7 + ty * 13) % 12);
       const floorSprite = floorVariants[variant];
