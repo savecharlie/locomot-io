@@ -471,8 +471,9 @@ async function loadSprites() {
         console.log('FAILED: ' + file);
         resolve();
       };
-      // Always use local files (GitHub Pages) - no cloud override
-      img.src = file + '?v=' + cacheBust;
+      // Floor tiles always local (so git push updates them), others from cloud
+      const isFloorTile = file.startsWith('ice_floor_16x12_v');
+      img.src = (!isFloorTile && cloudUrls[file]) || (file + '?v=' + cacheBust);
     });
   });
   await Promise.all(promises);
