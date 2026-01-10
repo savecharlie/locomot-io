@@ -471,8 +471,9 @@ async function loadSprites() {
         console.log('FAILED: ' + file);
         resolve();
       };
-      // Use cloud URL if available, otherwise local file
-      img.src = cloudUrls[file] || (file + '?v=' + cacheBust);
+      // Floor tiles always local (git push updates them), others from cloud
+      const forceLocal = file.startsWith('ice_floor_16x12_v');
+      img.src = (!forceLocal && cloudUrls[file]) || (file + '?v=' + cacheBust);
     });
   });
   await Promise.all(promises);
