@@ -175,24 +175,38 @@
       padding: 8px 12px !important;
       font-size: 16px !important;
     }
-    /* Mobile floating settings button */
-    #mobile-settings {
+    /* Mobile floating buttons - pixel style */
+    .mobile-float-btn {
       display: none;
       position: fixed;
-      top: 10px;
-      right: 10px;
       z-index: 50;
-      background: rgba(42, 71, 79, 0.8);
-      border: 2px solid #3B8897;
-      color: #68BBC4;
-      width: 40px;
-      height: 40px;
-      border-radius: 8px;
-      font-size: 20px;
+      background: #2A1A3A;
+      border: 3px solid #A968C4;
+      color: #E8B4F8;
+      padding: 8px 12px;
+      font-family: monospace;
+      font-size: 12px;
+      font-weight: bold;
+      letter-spacing: 1px;
+      text-transform: uppercase;
       cursor: pointer;
+      image-rendering: pixelated;
+      box-shadow:
+        0 4px 0 #1A0A2A,
+        inset 0 -2px 0 rgba(0,0,0,0.3),
+        inset 0 2px 0 rgba(255,255,255,0.1);
     }
+    .mobile-float-btn:active {
+      transform: translateY(2px);
+      box-shadow:
+        0 2px 0 #1A0A2A,
+        inset 0 -2px 0 rgba(0,0,0,0.3);
+    }
+    #mobile-settings { top: 10px; right: 10px; }
+    #mobile-hint { bottom: 60px; right: 10px; }
+    #mobile-undo { bottom: 10px; right: 10px; }
     @media (max-width: 899px) {
-      #mobile-settings { display: block; }
+      .mobile-float-btn { display: block; }
     }
 
     /* Desktop: show sidebar, hide footer info */
@@ -262,8 +276,10 @@
     </div>
   </div>
 
-  <!-- Mobile floating settings button -->
-  <button id="mobile-settings">⚙</button>
+  <!-- Mobile floating buttons -->
+  <button id="mobile-settings" class="mobile-float-btn">SET</button>
+  <button id="mobile-hint" class="mobile-float-btn">HINT</button>
+  <button id="mobile-undo" class="mobile-float-btn">UNDO</button>
 
   <!-- Settings Modal -->
   <div id="settings-overlay">
@@ -2305,6 +2321,8 @@ document.getElementById('sidebar-hint')?.addEventListener('click', showHint);
 document.getElementById('settings-btn')?.addEventListener('click', openSettings);
 document.getElementById('sidebar-settings')?.addEventListener('click', openSettings);
 document.getElementById('mobile-settings')?.addEventListener('click', openSettings);
+document.getElementById('mobile-hint')?.addEventListener('click', showHint);
+document.getElementById('mobile-undo')?.addEventListener('click', undo);
 document.getElementById('settings-close')?.addEventListener('click', closeSettings);
 document.getElementById('settings-overlay')?.addEventListener('click', (e) => {
   if (e.target.id === 'settings-overlay') closeSettings();
