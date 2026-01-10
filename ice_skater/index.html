@@ -207,6 +207,7 @@
     #mobile-settings { top: 12px; right: 12px; }
     #mobile-hint { bottom: 56px; right: 12px; }
     #mobile-undo { bottom: 12px; right: 12px; }
+    #mobile-restart { bottom: 12px; left: 12px; }
     @media (max-width: 899px) {
       .mobile-float-btn { display: block; }
     }
@@ -282,6 +283,7 @@
   <button id="mobile-settings" class="mobile-float-btn">SET</button>
   <button id="mobile-hint" class="mobile-float-btn">HINT</button>
   <button id="mobile-undo" class="mobile-float-btn">UNDO</button>
+  <button id="mobile-restart" class="mobile-float-btn">RST</button>
 
   <!-- Settings Modal -->
   <div id="settings-overlay">
@@ -2364,6 +2366,7 @@ document.getElementById('sidebar-settings')?.addEventListener('click', openSetti
 document.getElementById('mobile-settings')?.addEventListener('click', openSettings);
 document.getElementById('mobile-hint')?.addEventListener('click', showHint);
 document.getElementById('mobile-undo')?.addEventListener('click', undo);
+document.getElementById('mobile-restart')?.addEventListener('click', restartLevel);
 document.getElementById('settings-close')?.addEventListener('click', closeSettings);
 document.getElementById('settings-overlay')?.addEventListener('click', (e) => {
   if (e.target.id === 'settings-overlay') closeSettings();
