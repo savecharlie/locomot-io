@@ -2220,7 +2220,7 @@ function restartLevel() {
   deathAnimation = null;
   gameState = initGameState(level);
   history = [];
-  trailPoints = [];
+  // trailPoints persists - players see their shame
   isUnwinnable = false;
   document.getElementById('status').textContent = '';
 }
