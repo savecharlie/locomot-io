@@ -375,6 +375,9 @@ let hintArrow = null;  // 'up', 'down', 'left', 'right', or null
 let hintShowTime = 0;
 const HINT_DISPLAY_MS = 2000;  // Show hint for 2 seconds
 
+// Trail - pixels left behind as skater moves
+let trailPoints = [];  // [{tileX, tileY, pixelX, pixelY}, ...]
+
 // Settings (persisted in localStorage)
 const settings = {
   hintsEnabled: true,
@@ -1499,6 +1502,14 @@ function render() {
     }
   }
 
+  // Draw trail pixels (subtle #CFDFE2 marks left by skater)
+  ctx.fillStyle = '#CFDFE2';
+  for (const p of trailPoints) {
+    const px = offsetX + p.tileX * TILE_W * SCALE + p.pixelX * SCALE;
+    const py = offsetY + TOP_PADDING * SCALE + p.tileY * TILE_H * SCALE + p.pixelY * SCALE;
+    ctx.fillRect(px, py, SCALE, SCALE);
+  }
+
   // Floor pass - level elements
   for (let y = 0; y < h; y++) {
     for (let x = 0; x < w; x++) {
@@ -2135,6 +2146,18 @@ function handleInput(dir) {
         }
       }
 
+      // Add trail points for each tile crossed
+      const dirX = dx === 0 ? 0 : dx / Math.abs(dx);
+      const dirY = dy === 0 ? 0 : dy / Math.abs(dy);
+      for (let i = 0; i < dist; i++) {
+        const tileX = oldState.playerX + dirX * i;
+        const tileY = oldState.playerY + dirY * i;
+        // Random pixel position within 16x12 tile, aligned to grid
+        const pixelX = Math.floor(Math.random() * 16);
+        const pixelY = Math.floor(Math.random() * 12);
+        trailPoints.push({ tileX, tileY, pixelX, pixelY });
+      }
+
       // Start animation
       animating = true;
       animation = {
@@ -2197,6 +2220,7 @@ function restartLevel() {
   deathAnimation = null;
   gameState = initGameState(level);
   history = [];
+  trailPoints = [];
   isUnwinnable = false;
   document.getElementById('status').textContent = '';
 }
@@ -2320,6 +2344,7 @@ function loadLevel(index) {
   deathAnimation = null;
   gameState = initGameState(level);
   history = [];
+  trailPoints = [];
   isUnwinnable = false;
   // Update footer (mobile)
   document.getElementById('level-num').textContent = `Level ${index + 1}/${allLevels.length}`;
