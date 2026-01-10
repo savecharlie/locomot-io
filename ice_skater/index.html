@@ -1502,8 +1502,8 @@ function render() {
     }
   }
 
-  // Draw trail pixels (subtle #CFDFE2 marks left by skater)
-  ctx.fillStyle = '#CFDFE2';
+  // Draw trail pixels (skate marks on ice)
+  ctx.fillStyle = '#B0CBD5';  // Darker shade so line is visible
   for (const p of trailPoints) {
     const px = offsetX + p.tileX * TILE_W * SCALE + p.pixelX * SCALE;
     const py = offsetY + TOP_PADDING * SCALE + p.tileY * TILE_H * SCALE + p.pixelY * SCALE;
