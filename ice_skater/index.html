@@ -2016,14 +2016,10 @@ function showHint() {
     status.className = 'hint';
     sidebarStatus.textContent = text;
     sidebarStatus.style.color = '#40ACBF';
-  } else if (gameState.won) {
+  } else {
+    // No hint available (won or stuck) - say nothing
     status.textContent = '';
     sidebarStatus.textContent = '';
-  } else {
-    status.textContent = 'No solution!';
-    status.className = '';
-    sidebarStatus.textContent = 'No solution!';
-    sidebarStatus.style.color = '#A968C4';
   }
 }
 
