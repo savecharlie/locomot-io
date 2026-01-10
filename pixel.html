@@ -4576,9 +4576,7 @@ Canvas: ${state.canvasWidth}x${state.canvasHeight}`;
                 }
             }
 
-            // Show debug info directly in red
-            const authH = await getAuthHeader();
-            document.getElementById('assetsList').innerHTML = `<div style="text-align:center;padding:20px;color:#e94560">Auth: ${authH ? 'HAS TOKEN' : 'NO TOKEN'}<br>Client: ${supabaseClient ? 'YES' : 'NO'}</div>`;
+            document.getElementById('assetsList').innerHTML = '<div style="text-align:center;padding:20px;color:#e94560">Sign in to access cloud assets, or use local server from home</div>';
         }
 
         let assetsSource = 'local'; // 'cloud' or 'local'
