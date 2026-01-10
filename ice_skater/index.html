@@ -1989,8 +1989,8 @@ function render() {
       else if (hintArrow === 'left') { ax -= arrowOffset; ay += 8 * SCALE; }
       else if (hintArrow === 'right') { ax += arrowOffset + 8 * SCALE; ay += 8 * SCALE; }
 
-      // Draw pixel arrow
-      ctx.fillStyle = '#b0d5cf';
+      // Draw pixel arrow - yellow from palette
+      ctx.fillStyle = '#fac982';
       ctx.font = `bold ${16 * SCALE}px monospace`;
       ctx.textAlign = 'center';
       const arrows = { up: '▲', down: '▼', left: '◀', right: '▶' };
