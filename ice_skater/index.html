@@ -1521,7 +1521,7 @@ function render() {
     playerSpriteName = playerDir === 'up' ? 'skater_back_standing_16x24' : 'skater_front_standing_16x24';
   } else {
     const isMoving = animation !== null;
-    playerSpriteName = getPlayerSprite(playerDir, isUnwinnable, isMoving);
+    playerSpriteName = getPlayerSprite(playerDir, false, isMoving);  // No sad sprite hint
   }
 
   objects.push({
@@ -1764,15 +1764,8 @@ function render() {
     ctx.fillText('You Win!', canvas.width / 2, canvas.height / 2);
     ctx.font = `${12 * SCALE}px sans-serif`;
     ctx.fillText('Tap to continue', canvas.width / 2, canvas.height / 2 + 30 * SCALE);
-  } else if (isUnwinnable && !gameState.dead && !deathAnimation && !(animation?.targetState?.dead)) {
-    // Unwinnable - just show text, sad face sprite is enough visual
-    ctx.fillStyle = '#A968C4';
-    ctx.font = `bold ${20 * SCALE}px sans-serif`;
-    ctx.textAlign = 'center';
-    ctx.fillText('Unwinnable!', canvas.width / 2, canvas.height / 2 - 15 * SCALE);
-    ctx.font = `${14 * SCALE}px sans-serif`;
-    ctx.fillText('Restart?', canvas.width / 2, canvas.height / 2 + 15 * SCALE);
   }
+  // Unwinnable overlay removed - let players figure it out
 
   requestAnimationFrame(render);
 }
@@ -1942,11 +1935,6 @@ document.addEventListener('keydown', e => {
     nextLevel();
     return;
   }
-  // Restart when unwinnable
-  if (isUnwinnable && e.key === ' ') {
-    restartLevel();
-    return;
-  }
   switch (e.key) {
     case 'ArrowUp': case 'w': handleInput('up'); break;
     case 'ArrowDown': case 's': handleInput('down'); break;
@@ -1961,12 +1949,10 @@ canvas.addEventListener('touchstart', e => {
   touchStart = { x: e.touches[0].clientX, y: e.touches[0].clientY };
 });
 
-// Click to advance on desktop, or restart when unwinnable
+// Click to advance on desktop
 canvas.addEventListener('click', () => {
   if (gameState.won) {
     nextLevel();
-  } else if (isUnwinnable) {
-    restartLevel();
   }
 });
 canvas.addEventListener('touchend', e => {
@@ -1974,14 +1960,10 @@ canvas.addEventListener('touchend', e => {
   const dx = e.changedTouches[0].clientX - touchStart.x;
   const dy = e.changedTouches[0].clientY - touchStart.y;
 
-  // Tap to advance when won, or restart when unwinnable
+  // Tap to advance when won
   if (Math.abs(dx) < 30 && Math.abs(dy) < 30) {
     if (gameState.won) {
       nextLevel();
-      touchStart = null;
-      return;
-    } else if (isUnwinnable) {
-      restartLevel();
       touchStart = null;
       return;
     }
@@ -2048,26 +2030,9 @@ function showHint() {
 document.getElementById('hint-btn').onclick = showHint;
 
 function updateStatus() {
+  // Winnability check removed - let players figure it out themselves
   const status = document.getElementById('status');
-  if (gameState.won || gameState.dead) {
-    status.textContent = '';
-    isUnwinnable = false;
-    return;
-  }
-  // Check in background (async-ish via setTimeout to not block)
-  setTimeout(() => {
-    const wasUnwinnable = isUnwinnable;
-    isUnwinnable = !isLevelWinnable();
-    if (isUnwinnable) {
-      if (!wasUnwinnable) {
-        unwinnableFlashTime = performance.now();
-      }
-      status.textContent = '';  // Message shown on canvas now
-      status.className = '';
-    } else {
-      status.textContent = '';
-    }
-  }, 50);
+  status.textContent = '';
 }
 
 let allLevels = [];
