@@ -99,6 +99,102 @@
     #status { color: #A968C4; font-weight: bold; }
     #status.hint { color: #40ACBF; }
 
+    /* Settings modal */
+    #settings-overlay {
+      display: none;
+      position: fixed;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(29, 43, 48, 0.9);
+      z-index: 100;
+      justify-content: center;
+      align-items: center;
+    }
+    #settings-overlay.visible { display: flex; }
+    #settings-panel {
+      background: #1D2B30;
+      border: 2px solid #3B8897;
+      border-radius: 8px;
+      padding: 24px;
+      min-width: 280px;
+      max-width: 90vw;
+    }
+    #settings-panel h2 {
+      color: #68BBC4;
+      font-size: 20px;
+      margin-bottom: 20px;
+      text-align: center;
+      letter-spacing: 1px;
+    }
+    .setting-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 12px 0;
+      border-bottom: 1px solid #2A474F;
+    }
+    .setting-row:last-of-type { border-bottom: none; }
+    .setting-label {
+      color: #8DCBCA;
+      font-size: 14px;
+    }
+    .setting-desc {
+      color: #5A9199;
+      font-size: 11px;
+      margin-top: 2px;
+    }
+    /* Toggle switch */
+    .toggle {
+      position: relative;
+      width: 44px;
+      height: 24px;
+      background: #2A474F;
+      border-radius: 12px;
+      cursor: pointer;
+      border: 2px solid #3B8897;
+      transition: background 0.2s;
+    }
+    .toggle.on { background: #3B8897; }
+    .toggle::after {
+      content: '';
+      position: absolute;
+      top: 2px;
+      left: 2px;
+      width: 16px;
+      height: 16px;
+      background: #68BBC4;
+      border-radius: 50%;
+      transition: left 0.2s;
+    }
+    .toggle.on::after { left: 22px; }
+    #settings-close {
+      margin-top: 20px;
+      width: 100%;
+    }
+    /* Settings button - gear icon */
+    .settings-btn {
+      padding: 8px 12px !important;
+      font-size: 16px !important;
+    }
+    /* Mobile floating settings button */
+    #mobile-settings {
+      display: none;
+      position: fixed;
+      top: 10px;
+      right: 10px;
+      z-index: 50;
+      background: rgba(42, 71, 79, 0.8);
+      border: 2px solid #3B8897;
+      color: #68BBC4;
+      width: 40px;
+      height: 40px;
+      border-radius: 8px;
+      font-size: 20px;
+      cursor: pointer;
+    }
+    @media (max-width: 899px) {
+      #mobile-settings { display: block; }
+    }
+
     /* Desktop: show sidebar, hide footer info */
     @media (min-width: 900px) {
       #sidebar { display: flex; }
@@ -150,6 +246,7 @@
           <button id="sidebar-restart">Restart</button>
           <button id="sidebar-undo">Undo</button>
           <button id="sidebar-hint">Hint</button>
+          <button id="sidebar-settings">⚙ Settings</button>
         </div>
       </div>
     </div>
@@ -160,7 +257,33 @@
       <button id="restart-btn">Restart</button>
       <button id="undo-btn">Undo</button>
       <button id="hint-btn">Hint</button>
+      <button id="settings-btn" class="settings-btn">⚙</button>
       <span id="status" class="mobile-only"></span>
+    </div>
+  </div>
+
+  <!-- Mobile floating settings button -->
+  <button id="mobile-settings">⚙</button>
+
+  <!-- Settings Modal -->
+  <div id="settings-overlay">
+    <div id="settings-panel">
+      <h2>Settings</h2>
+      <div class="setting-row">
+        <div>
+          <div class="setting-label">Hints</div>
+          <div class="setting-desc">Show direction when stuck</div>
+        </div>
+        <div id="toggle-hints" class="toggle on"></div>
+      </div>
+      <div class="setting-row">
+        <div>
+          <div class="setting-label">Show Unwinnable</div>
+          <div class="setting-desc">Warn when no solution exists</div>
+        </div>
+        <div id="toggle-unwinnable" class="toggle"></div>
+      </div>
+      <button id="settings-close">Done</button>
     </div>
   </div>
 
@@ -226,6 +349,44 @@ let debugMsg = '';
 let showDebugGrid = false;  // Toggle with 'G' key
 let isUnwinnable = false;
 let unwinnableFlashTime = 0;
+
+// Settings (persisted in localStorage)
+const settings = {
+  hintsEnabled: true,
+  showUnwinnable: false
+};
+
+function loadSettings() {
+  const saved = localStorage.getItem('iceSkaterSettings');
+  if (saved) {
+    try {
+      const parsed = JSON.parse(saved);
+      if (typeof parsed.hintsEnabled === 'boolean') settings.hintsEnabled = parsed.hintsEnabled;
+      if (typeof parsed.showUnwinnable === 'boolean') settings.showUnwinnable = parsed.showUnwinnable;
+    } catch (e) {}
+  }
+  updateSettingsUI();
+}
+
+function saveSettings() {
+  localStorage.setItem('iceSkaterSettings', JSON.stringify(settings));
+  updateSettingsUI();
+}
+
+function updateSettingsUI() {
+  const hintsToggle = document.getElementById('toggle-hints');
+  const unwinnableToggle = document.getElementById('toggle-unwinnable');
+  if (hintsToggle) hintsToggle.classList.toggle('on', settings.hintsEnabled);
+  if (unwinnableToggle) unwinnableToggle.classList.toggle('on', settings.showUnwinnable);
+}
+
+function openSettings() {
+  document.getElementById('settings-overlay').classList.add('visible');
+}
+
+function closeSettings() {
+  document.getElementById('settings-overlay').classList.remove('visible');
+}
 
 // Animation state
 const ANIM_SPEED = 8;  // Tiles per second
@@ -2006,6 +2167,7 @@ function undo() {
 document.getElementById('undo-btn').onclick = undo;
 
 function showHint() {
+  if (!settings.hintsEnabled) return;  // Hints disabled
   const hint = getHint();
   const status = document.getElementById('status');
   const sidebarStatus = document.getElementById('sidebar-status');
@@ -2016,8 +2178,13 @@ function showHint() {
     status.className = 'hint';
     sidebarStatus.textContent = text;
     sidebarStatus.style.color = '#40ACBF';
+  } else if (settings.showUnwinnable && !gameState.won) {
+    // Show "no solution" only if setting enabled
+    status.textContent = 'No solution!';
+    status.className = '';
+    sidebarStatus.textContent = 'No solution!';
+    sidebarStatus.style.color = '#A968C4';
   } else {
-    // No hint available (won or stuck) - say nothing
     status.textContent = '';
     sidebarStatus.textContent = '';
   }
@@ -2114,6 +2281,24 @@ document.getElementById('sidebar-restart')?.addEventListener('click', restartLev
 document.getElementById('sidebar-undo')?.addEventListener('click', undo);
 document.getElementById('sidebar-hint')?.addEventListener('click', showHint);
 
+// Settings event listeners
+document.getElementById('settings-btn')?.addEventListener('click', openSettings);
+document.getElementById('sidebar-settings')?.addEventListener('click', openSettings);
+document.getElementById('mobile-settings')?.addEventListener('click', openSettings);
+document.getElementById('settings-close')?.addEventListener('click', closeSettings);
+document.getElementById('settings-overlay')?.addEventListener('click', (e) => {
+  if (e.target.id === 'settings-overlay') closeSettings();
+});
+document.getElementById('toggle-hints')?.addEventListener('click', () => {
+  settings.hintsEnabled = !settings.hintsEnabled;
+  saveSettings();
+});
+document.getElementById('toggle-unwinnable')?.addEventListener('click', () => {
+  settings.showUnwinnable = !settings.showUnwinnable;
+  saveSettings();
+});
+
+loadSettings();
 init();
   </script>
 </body>
