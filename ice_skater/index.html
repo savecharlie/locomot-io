@@ -1501,14 +1501,17 @@ function render() {
     sprites['ice_floor_16x12_v7'], sprites['ice_floor_16x12_v8'], sprites['ice_floor_16x12_v9'],
     sprites['ice_floor_16x12_v10'], sprites['ice_floor_16x12_v11'], sprites['ice_floor_16x12_v12']
   ];
-  const tileW = Math.floor(TILE_W * SCALE);
-  const tileH = Math.floor(TILE_H * SCALE);
+  const tileW = TILE_W * SCALE;
+  const tileH = TILE_H * SCALE;
+  // Calculate floor tile offset to align with level grid
+  const floorOffsetX = offsetX % tileW;
+  const floorOffsetY = (offsetY + TOP_PADDING * SCALE) % tileH;
   const tilesX = Math.ceil(canvas.width / tileW) + 2;
   const tilesY = Math.ceil(canvas.height / tileH) + 4;
   for (let ty = -2; ty < tilesY; ty++) {
     for (let tx = -1; tx < tilesX; tx++) {
-      const px = Math.floor(tx * tileW);
-      const py = Math.floor(ty * tileH);
+      const px = floorOffsetX + tx * tileW;
+      const py = floorOffsetY + ty * tileH;
       // Pick variant based on position (deterministic pseudo-random)
       const variant = Math.abs((tx * 7 + ty * 13) % 12);
       const floorSprite = floorVariants[variant];
