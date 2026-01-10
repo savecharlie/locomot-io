@@ -752,9 +752,15 @@ function pushBlock(state, bx, by, dx, dy) {
       }
 
       // Goal - block stops here (can't push onto goal)
+      // If penguinOnWall, block stops BEFORE penguin (penguin is on elevated platform)
       if (baseTile === 'P') {
-        newState.blocks.add(`${x},${y}`);
-        finishAt(x, y);
+        if (level.penguinOnWall) {
+          newState.blocks.add(`${x - dx},${y - dy}`);
+          finishAt(x - dx, y - dy);
+        } else {
+          newState.blocks.add(`${x},${y}`);
+          finishAt(x, y);
+        }
         return newState;
       }
 
