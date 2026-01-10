@@ -4738,9 +4738,9 @@ Canvas: ${state.canvasWidth}x${state.canvasHeight}`;
             const exportCanvas = flattenForExport();
 
             // Try cloud first if logged in via Edge Function
-            if (state.user && supabaseClient) {
+            const authHeader = await getAuthHeader();
+            if (authHeader && supabaseClient) {
                 try {
-                    const authHeader = await getAuthHeader();
                     const blob = await new Promise(resolve => exportCanvas.toBlob(resolve, 'image/png'));
 
                     const formData = new FormData();

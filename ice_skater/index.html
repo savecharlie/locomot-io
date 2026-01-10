@@ -426,10 +426,10 @@ const GAME_ASSETS_URL = 'https://vwlbjjznvczfecjnrjen.supabase.co/functions/v1/g
 async function loadSprites() {
   console.log('LOADING SPRITES from cloud...');
 
-  // Try to get signed URLs from cloud
+  // Try to get signed URLs from cloud (cache-bust to always get fresh URLs)
   let cloudUrls = {};
   try {
-    const resp = await fetch(`${GAME_ASSETS_URL}?action=game-urls`);
+    const resp = await fetch(`${GAME_ASSETS_URL}?action=game-urls&_=${Date.now()}`);
     if (resp.ok) {
       const data = await resp.json();
       cloudUrls = data.urls || {};
