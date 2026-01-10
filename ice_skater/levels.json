@@ -3,50 +3,54 @@
     {
       "grid": [
         "######",
-        "#...##",
-        "##...#",
-        "#K#.##",
-        "#...##",
+        "#....#",
+        "#K...#",
+        "#.#..#",
+        "##..##",
+        "#....#",
+        "#.#.B#",
+        "#.#.H#",
         "#..#.#",
-        "##.LP#",
         "#...##",
-        "#H...#",
-        "#B.#.#",
+        "#.#..#",
         "#....#",
         "##...#",
-        "#...##",
-        "#...##",
-        "#S...#",
+        "##.###",
+        "#S.LP#",
         "######"
       ],
       "width": 6,
       "height": 16,
-      "par": 22,
+      "par": 26,
       "solution": [
-        "up",
         "right",
         "up",
         "left",
         "up",
-        "right",
-        "up",
-        "left",
-        "up",
-        "down",
         "right",
         "down",
         "left",
         "up",
+        "left",
+        "down",
+        "up",
+        "right",
+        "down",
+        "left",
+        "down",
         "right",
         "up",
         "left",
-        "up",
+        "down",
         "right",
-        "up",
-        "up",
+        "down",
+        "left",
+        "down",
+        "right",
+        "right",
         "right"
       ],
-      "quality": 405,
+      "quality": 458,
       "mechanics": [
         "hole",
         "block",
@@ -54,84 +58,317 @@
         "locked"
       ],
       "events": [
-        "KEY_COLLECTED",
-        "HOLE_FILLED",
         "LOCK_OPENED",
-        "BLOCK_PUSHED"
+        "KEY_COLLECTED",
+        "BLOCK_PUSHED",
+        "HOLE_FILLED"
       ]
     },
     {
       "grid": [
         "######",
-        "#..LP#",
-        "#.####",
-        "#.##.#",
+        "#..###",
         "#....#",
-        "#....#",
-        "#S...#",
-        "##...#",
+        "#HK.##",
+        "#B...#",
         "#.#..#",
-        "#K..##",
-        "#....#",
-        "##...#",
         "#....#",
         "#...##",
+        "#..#.#",
+        "##...#",
+        "#....#",
+        "#S#..#",
+        "#.#.##",
+        "#..#.#",
+        "#..LP#",
         "######"
       ],
       "width": 6,
-      "height": 15,
-      "par": 22,
+      "height": 16,
+      "par": 21,
       "solution": [
+        "up",
+        "right",
+        "down",
+        "left",
+        "up",
+        "left",
+        "up",
+        "left",
+        "up",
+        "up",
         "right",
         "down",
         "left",
         "down",
-        "left",
-        "up",
-        "right",
-        "up",
-        "left",
-        "up",
-        "down",
         "right",
         "down",
         "left",
         "down",
-        "right",
-        "up",
-        "left",
-        "up",
         "right",
         "right",
         "right"
       ],
-      "quality": 356,
+      "quality": 380,
       "mechanics": [
+        "hole",
+        "block",
         "key",
         "locked"
       ],
       "events": [
         "LOCK_OPENED",
-        "KEY_COLLECTED"
+        "KEY_COLLECTED",
+        "BLOCK_PUSHED",
+        "HOLE_FILLED"
       ]
     },
     {
       "grid": [
         "######",
-        "####.#",
-        "#.K..#",
+        "##...#",
+        "#K...#",
+        "#.##.#",
+        "###..#",
+        "#....#",
+        "#....#",
         "#.#..#",
         "##...#",
         "#...##",
-        "#.##.#",
-        "#S#.##",
+        "#S...#",
+        "##B..#",
+        "##H..#",
+        "#.#.##",
+        "#..LP#",
+        "######"
+      ],
+      "width": 6,
+      "height": 16,
+      "par": 20,
+      "solution": [
+        "up",
+        "right",
+        "up",
+        "right",
+        "up",
+        "left",
+        "down",
+        "left",
+        "right",
+        "down",
+        "left",
+        "down",
+        "right",
+        "up",
+        "left",
+        "up",
+        "right",
+        "down",
+        "down",
+        "right"
+      ],
+      "quality": 373,
+      "mechanics": [
+        "hole",
+        "block",
+        "key",
+        "locked"
+      ],
+      "events": [
+        "LOCK_OPENED",
+        "BLOCK_PUSHED",
+        "KEY_COLLECTED",
+        "HOLE_FILLED"
+      ]
+    },
+    {
+      "grid": [
+        "######",
+        "#.#..#",
+        "#.H.##",
+        "#.B..#",
+        "#.K..#",
         "#....#",
+        "##...#",
         "#..#.#",
+        "#...##",
+        "##...#",
+        "#S#..#",
+        "#...##",
+        "#..###",
+        "#..LP#",
+        "##..##",
+        "######"
+      ],
+      "width": 6,
+      "height": 16,
+      "par": 19,
+      "solution": [
+        "down",
+        "right",
+        "up",
+        "right",
+        "up",
+        "left",
+        "up",
+        "right",
+        "up",
+        "down",
+        "right",
+        "down",
+        "left",
+        "down",
+        "left",
+        "down",
+        "right",
+        "right",
+        "right"
+      ],
+      "quality": 354,
+      "mechanics": [
+        "hole",
+        "block",
+        "key",
+        "locked"
+      ],
+      "events": [
+        "LOCK_OPENED",
+        "BLOCK_PUSHED",
+        "KEY_COLLECTED",
+        "HOLE_FILLED"
+      ]
+    },
+    {
+      "grid": [
+        "######",
+        "###.##",
+        "#....#",
+        "#...H#",
+        "###.B#",
+        "#....#",
+        "#.K#.#",
+        "##.#.#",
+        "#....#",
+        "###..#",
         "#..#.#",
+        "#....#",
+        "#S..##",
+        "#..#.#",
+        "##.LP#",
+        "######"
+      ],
+      "width": 6,
+      "height": 16,
+      "par": 19,
+      "solution": [
+        "right",
+        "up",
+        "right",
+        "up",
+        "left",
+        "down",
+        "left",
+        "down",
+        "right",
+        "up",
+        "right",
+        "down",
+        "left",
+        "up",
+        "right",
+        "down",
+        "right",
+        "right",
+        "right"
+      ],
+      "quality": 354,
+      "mechanics": [
+        "hole",
+        "block",
+        "key",
+        "locked"
+      ],
+      "events": [
+        "LOCK_OPENED",
+        "KEY_COLLECTED",
+        "BLOCK_PUSHED",
+        "HOLE_FILLED"
+      ]
+    },
+    {
+      "grid": [
+        "######",
+        "#..###",
+        "#..LP#",
+        "#S##.#",
+        "#...##",
+        "#...##",
+        "##...#",
+        "###..#",
+        "#K...#",
+        "#.#..#",
+        "#....#",
+        "#...##",
+        "##...#",
+        "#.#B.#",
+        "#..H##",
+        "######"
+      ],
+      "width": 6,
+      "height": 16,
+      "par": 19,
+      "solution": [
+        "down",
+        "right",
+        "down",
+        "right",
+        "up",
+        "left",
+        "up",
+        "left",
+        "up",
+        "down",
+        "right",
+        "up",
+        "left",
+        "up",
+        "right",
+        "down",
+        "right",
+        "right",
+        "right"
+      ],
+      "quality": 352,
+      "mechanics": [
+        "hole",
+        "block",
+        "key",
+        "locked"
+      ],
+      "events": [
+        "LOCK_OPENED",
+        "KEY_COLLECTED",
+        "BLOCK_PUSHED",
+        "HOLE_FILLED"
+      ]
+    },
+    {
+      "grid": [
+        "######",
+        "##...#",
+        "#.#H.#",
+        "#..B.#",
+        "#...##",
+        "#....#",
+        "#.#..#",
+        "#....#",
+        "###..#",
+        "#K...#",
+        "##...#",
         "##...#",
         "#...##",
-        "#B####",
-        "#H.LP#",
+        "#..LP#",
+        "#S..##",
         "######"
       ],
       "width": 6,
@@ -142,22 +379,22 @@
         "right",
         "up",
         "left",
-        "right",
-        "down",
-        "left",
-        "down",
-        "left",
         "down",
         "right",
         "down",
         "left",
+        "up",
+        "left",
+        "right",
         "down",
+        "left",
         "down",
         "right",
-        "right",
+        "up",
+        "up",
         "right"
       ],
-      "quality": 333,
+      "quality": 341,
       "mechanics": [
         "hole",
         "block",
@@ -165,54 +402,55 @@
         "locked"
       ],
       "events": [
-        "BLOCK_PUSHED",
-        "HOLE_FILLED",
         "LOCK_OPENED",
-        "KEY_COLLECTED"
+        "KEY_COLLECTED",
+        "BLOCK_PUSHED",
+        "HOLE_FILLED"
       ]
     },
     {
       "grid": [
         "######",
-        "###.##",
-        "##.LP#",
+        "#..LP#",
         "#..#.#",
-        "#...##",
-        "#.#.##",
-        "##..H#",
-        "#.#.B#",
-        "#S...#",
+        "##..##",
+        "##...#",
+        "##...#",
+        "#..#.#",
         "##.#.#",
+        "#.##.#",
+        "#K..H#",
+        "#..#B#",
+        "##...#",
         "#....#",
-        "#.K.##",
-        "###..#",
-        "#....#",
-        "#....#",
+        "#S..##",
+        "#...##",
         "######"
       ],
       "width": 6,
       "height": 16,
-      "par": 17,
+      "par": 18,
       "solution": [
+        "up",
         "right",
+        "up",
         "down",
         "left",
         "down",
         "right",
         "up",
-        "right",
-        "up",
         "left",
         "up",
         "left",
-        "up",
         "right",
+        "up",
+        "left",
         "up",
         "right",
         "right",
         "right"
       ],
-      "quality": 328,
+      "quality": 341,
       "mechanics": [
         "hole",
         "block",
@@ -220,54 +458,111 @@
         "locked"
       ],
       "events": [
-        "BLOCK_PUSHED",
-        "HOLE_FILLED",
         "LOCK_OPENED",
-        "KEY_COLLECTED"
+        "KEY_COLLECTED",
+        "BLOCK_PUSHED",
+        "HOLE_FILLED"
+      ]
+    },
+    {
+      "grid": [
+        "######",
+        "#..LP#",
+        "#..###",
+        "##...#",
+        "#...##",
+        "#....#",
+        "#....#",
+        "#....#",
+        "#S...#",
+        "#....#",
+        "###..#",
+        "#K..H#",
+        "#...B#",
+        "##...#",
+        "#....#",
+        "######"
+      ],
+      "width": 6,
+      "height": 16,
+      "par": 18,
+      "solution": [
+        "up",
+        "right",
+        "down",
+        "right",
+        "up",
+        "left",
+        "up",
+        "right",
+        "up",
+        "left",
+        "up",
+        "right",
+        "up",
+        "left",
+        "up",
+        "right",
+        "right",
+        "right"
+      ],
+      "quality": 338,
+      "mechanics": [
+        "hole",
+        "block",
+        "key",
+        "locked"
+      ],
+      "events": [
+        "LOCK_OPENED",
+        "KEY_COLLECTED",
+        "BLOCK_PUSHED",
+        "HOLE_FILLED"
       ]
     },
     {
       "grid": [
         "######",
         "#.#..#",
-        "###LP#",
+        "###..#",
+        "#....#",
         "#...##",
         "#....#",
-        "###..#",
-        "#...H#",
-        "#.#.B#",
-        "##...#",
-        "#S.#.#",
-        "#.#..#",
-        "####.#",
-        "##...#",
         "#....#",
-        "#K#..#",
+        "##KH.#",
+        "#..B##",
+        "##...#",
+        "#...##",
+        "#..LP#",
+        "#...##",
+        "#....#",
+        "#S#..#",
         "######"
       ],
       "width": 6,
       "height": 16,
-      "par": 17,
+      "par": 18,
       "solution": [
+        "up",
         "right",
+        "up",
         "up",
         "right",
         "down",
         "left",
-        "up",
-        "left",
+        "down",
+        "right",
         "down",
         "left",
-        "down",
         "up",
         "right",
         "up",
         "left",
-        "up",
-        "up",
+        "down",
+        "down",
         "right"
       ],
-      "quality": 327,
+      "quality": 337,
       "mechanics": [
         "hole",
         "block",
@@ -275,8 +570,58 @@
         "locked"
       ],
       "events": [
+        "LOCK_OPENED",
+        "KEY_COLLECTED",
         "BLOCK_PUSHED",
-        "HOLE_FILLED",
+        "HOLE_FILLED"
+      ]
+    },
+    {
+      "grid": [
+        "######",
+        "#K...#",
+        "#....#",
+        "#....#",
+        "##...#",
+        "#....#",
+        "#....#",
+        "#...##",
+        "##...#",
+        "#....#",
+        "#...##",
+        "#.##.#",
+        "#S.#.#",
+        "#..LP#",
+        "######"
+      ],
+      "width": 6,
+      "height": 15,
+      "par": 17,
+      "solution": [
+        "up",
+        "right",
+        "up",
+        "left",
+        "up",
+        "left",
+        "right",
+        "down",
+        "left",
+        "down",
+        "right",
+        "down",
+        "left",
+        "down",
+        "right",
+        "right",
+        "right"
+      ],
+      "quality": 282,
+      "mechanics": [
+        "key",
+        "locked"
+      ],
+      "events": [
         "LOCK_OPENED",
         "KEY_COLLECTED"
       ]
@@ -285,265 +630,88 @@
       "grid": [
         "######",
         "#..LP#",
-        "#.#.##",
+        "#.#..#",
+        "#S##.#",
         "#...##",
         "##...#",
-        "##...#",
+        "#K#..#",
         "#....#",
-        "#.#..#",
-        "#S.B##",
-        "##.H.#",
         "#....#",
-        "#..###",
-        "#..#.#",
-        "#..#.#",
-        "#K...#",
+        "#....#",
+        "#....#",
+        "#....#",
+        "#....#",
+        "#....#",
         "######"
       ],
       "width": 6,
-      "height": 16,
-      "par": 17,
+      "height": 15,
+      "par": 15,
       "solution": [
-        "up",
+        "down",
         "right",
         "down",
         "left",
-        "down",
-        "down",
-        "left",
-        "down",
         "up",
+        "down",
         "right",
         "up",
         "left",
         "up",
+        "left",
+        "up",
         "right",
-        "up",
-        "up",
+        "right",
         "right"
       ],
-      "quality": 323,
+      "quality": 251,
       "mechanics": [
-        "hole",
-        "block",
         "key",
         "locked"
       ],
       "events": [
-        "KEY_COLLECTED",
-        "HOLE_FILLED",
         "LOCK_OPENED",
-        "BLOCK_PUSHED"
+        "KEY_COLLECTED"
       ]
     },
     {
       "grid": [
         "######",
         "#....#",
-        "##...#",
-        "#.##.#",
-        "#S#LP#",
-        "#...##",
-        "##...#",
-        "#K...#",
-        "#.#..#",
+        "##K..#",
         "#....#",
-        "#...H#",
-        "##..B#",
-        "#....#",
-        "##...#",
-        "#....#",
-        "######"
-      ],
-      "width": 6,
-      "height": 16,
-      "par": 17,
-      "solution": [
-        "down",
-        "right",
-        "down",
-        "right",
-        "up",
-        "up",
-        "left",
-        "down",
-        "left",
-        "right",
-        "up",
-        "left",
-        "up",
-        "right",
-        "up",
-        "up",
-        "right"
-      ],
-      "quality": 322,
-      "mechanics": [
-        "hole",
-        "block",
-        "key",
-        "locked"
-      ],
-      "events": [
-        "KEY_COLLECTED",
-        "HOLE_FILLED",
-        "LOCK_OPENED",
-        "BLOCK_PUSHED"
-      ]
-    },
-    {
-      "grid": [
-        "######",
-        "##.LP#",
-        "##..##",
-        "#.#..#",
-        "#.#..#",
-        "#....#",
-        "#S...#",
-        "#..#.#",
-        "#....#",
-        "#...##",
-        "#...##",
-        "##...#",
-        "#.#..#",
-        "#.##.#",
-        "#KHB.#",
-        "######"
-      ],
-      "width": 6,
-      "height": 16,
-      "par": 17,
-      "solution": [
-        "down",
-        "right",
-        "down",
-        "right",
-        "down",
-        "left",
-        "left",
-        "right",
-        "up",
-        "left",
-        "up",
-        "right",
-        "up",
-        "left",
-        "up",
-        "up",
-        "right"
-      ],
-      "quality": 322,
-      "mechanics": [
-        "hole",
-        "block",
-        "key",
-        "locked"
-      ],
-      "events": [
-        "KEY_COLLECTED",
-        "HOLE_FILLED",
-        "LOCK_OPENED",
-        "BLOCK_PUSHED"
-      ]
-    },
-    {
-      "grid": [
-        "######",
-        "##.LP#",
-        "#...##",
-        "#S#..#",
-        "#.#.##",
-        "##...#",
-        "#...##",
-        "#....#",
-        "#K#.H#",
-        "##..B#",
-        "##.#.#",
         "#....#",
         "#....#",
         "##...#",
-        "#...##",
-        "######"
-      ],
-      "width": 6,
-      "height": 16,
-      "par": 17,
-      "solution": [
-        "up",
-        "right",
-        "down",
-        "left",
-        "down",
-        "right",
-        "up",
-        "right",
-        "up",
-        "up",
-        "left",
-        "down",
-        "up",
-        "right",
-        "up",
-        "up",
-        "right"
-      ],
-      "quality": 321,
-      "mechanics": [
-        "hole",
-        "block",
-        "key",
-        "locked"
-      ],
-      "events": [
-        "KEY_COLLECTED",
-        "HOLE_FILLED",
-        "LOCK_OPENED",
-        "BLOCK_PUSHED"
-      ]
-    },
-    {
-      "grid": [
-        "######",
-        "#K...#",
-        "##...#",
-        "#....#",
-        "#....#",
-        "#..#.#",
-        "#....#",
-        "#...##",
-        "#.##.#",
-        "#....#",
         "##...#",
         "#S..##",
-        "###LP#",
-        "#...##",
+        "#....#",
+        "##...#",
+        "#.#.##",
+        "#..LP#",
+        "#.#..#",
         "######"
       ],
       "width": 6,
       "height": 15,
-      "par": 19,
+      "par": 14,
       "solution": [
+        "down",
+        "right",
+        "down",
+        "left",
+        "up",
+        "down",
         "right",
         "up",
         "left",
         "up",
-        "right",
-        "up",
-        "left",
-        "right",
-        "down",
-        "left",
-        "down",
-        "right",
-        "down",
-        "left",
-        "down",
         "right",
         "down",
         "down",
         "right"
       ],
-      "quality": 316,
+      "quality": 242,
       "mechanics": [
         "key",
         "locked"
@@ -556,300 +724,41 @@
     {
       "grid": [
         "######",
-        "#....#",
-        "###LP#",
+        "#..#.#",
+        "#.#..#",
+        "#..#.#",
+        "#.#LP#",
         "#...##",
         "#.#..#",
-        "##.#.#",
         "#....#",
-        "#S.#.#",
-        "#.#.B#",
-        "#...H#",
-        "#...##",
-        "##...#",
-        "#....#",
-        "#.K..#",
-        "#....#",
-        "######"
-      ],
-      "width": 6,
-      "height": 16,
-      "par": 16,
-      "solution": [
-        "up",
-        "right",
-        "down",
-        "left",
-        "down",
-        "right",
-        "up",
-        "left",
-        "down",
-        "up",
-        "right",
-        "up",
-        "left",
-        "up",
-        "up",
-        "right"
-      ],
-      "quality": 315,
-      "mechanics": [
-        "hole",
-        "block",
-        "key",
-        "locked"
-      ],
-      "events": [
-        "KEY_COLLECTED",
-        "HOLE_FILLED",
-        "LOCK_OPENED",
-        "BLOCK_PUSHED"
-      ]
-    },
-    {
-      "grid": [
-        "######",
-        "#.#LP#",
-        "#S#.##",
-        "#....#",
-        "#....#",
-        "#...##",
-        "##H..#",
-        "##B..#",
-        "#....#",
-        "#...##",
-        "##...#",
-        "#K.#.#",
-        "#...##",
-        "#...##",
-        "#....#",
-        "######"
-      ],
-      "width": 6,
-      "height": 16,
-      "par": 16,
-      "solution": [
-        "down",
-        "right",
-        "down",
-        "left",
-        "up",
-        "down",
-        "left",
-        "up",
-        "right",
-        "up",
-        "left",
-        "down",
-        "right",
-        "up",
-        "up",
-        "right"
-      ],
-      "quality": 313,
-      "mechanics": [
-        "hole",
-        "block",
-        "key",
-        "locked"
-      ],
-      "events": [
-        "KEY_COLLECTED",
-        "HOLE_FILLED",
-        "LOCK_OPENED",
-        "BLOCK_PUSHED"
-      ]
-    },
-    {
-      "grid": [
-        "######",
-        "#..###",
-        "###.##",
-        "#..LP#",
-        "#..#.#",
-        "##..##",
-        "#S#..#",
-        "#....#",
-        "#...##",
-        "##...#",
-        "#....#",
-        "#....#",
-        "#.K#.#",
-        "#....#",
-        "######"
-      ],
-      "width": 6,
-      "height": 15,
-      "par": 17,
-      "solution": [
-        "down",
-        "right",
-        "down",
-        "right",
-        "up",
-        "left",
-        "down",
-        "up",
-        "left",
-        "down",
-        "right",
-        "up",
-        "left",
-        "up",
-        "right",
-        "right",
-        "right"
-      ],
-      "quality": 284,
-      "mechanics": [
-        "key",
-        "locked"
-      ],
-      "events": [
-        "LOCK_OPENED",
-        "KEY_COLLECTED"
-      ]
-    },
-    {
-      "grid": [
-        "######",
-        "#S#..#",
-        "#....#",
-        "#..#.#",
-        "##...#",
-        "#K#..#",
-        "#..#.#",
-        "#....#",
-        "#....#",
-        "##...#",
-        "#...##",
-        "#...##",
-        "#..LP#",
-        "####.#",
-        "######"
-      ],
-      "width": 6,
-      "height": 15,
-      "par": 17,
-      "solution": [
-        "down",
-        "right",
-        "up",
-        "right",
-        "down",
-        "left",
-        "up",
-        "left",
-        "up",
-        "down",
-        "right",
-        "down",
-        "left",
-        "down",
-        "right",
-        "right",
-        "right"
-      ],
-      "quality": 281,
-      "mechanics": [
-        "key",
-        "locked"
-      ],
-      "events": [
-        "LOCK_OPENED",
-        "KEY_COLLECTED"
-      ]
-    },
-    {
-      "grid": [
-        "######",
-        "##.#.#",
-        "#..LP#",
-        "#.##.#",
-        "#...##",
-        "#....#",
-        "#..#.#",
-        "#S#..#",
-        "#....#",
-        "#....#",
-        "##...#",
-        "#...##",
-        "#K...#",
-        "#....#",
-        "######"
-      ],
-      "width": 6,
-      "height": 15,
-      "par": 16,
-      "solution": [
-        "down",
-        "right",
-        "down",
-        "left",
-        "down",
-        "left",
-        "up",
-        "right",
-        "up",
-        "right",
-        "up",
-        "left",
-        "up",
-        "right",
-        "right",
-        "right"
-      ],
-      "quality": 268,
-      "mechanics": [
-        "key",
-        "locked"
-      ],
-      "events": [
-        "LOCK_OPENED",
-        "KEY_COLLECTED"
-      ]
-    },
-    {
-      "grid": [
-        "######",
-        "#K...#",
-        "##...#",
         "#S...#",
-        "#...##",
-        "##...#",
         "#....#",
-        "#....#",
-        "#.##.#",
+        "##K.##",
         "##...#",
+        "#.#..#",
         "#....#",
-        "##...#",
-        "#...##",
-        "#..LP#",
         "######"
       ],
       "width": 6,
       "height": 15,
-      "par": 16,
+      "par": 14,
       "solution": [
         "right",
         "up",
         "left",
-        "right",
         "down",
+        "right",
+        "up",
         "left",
-        "down",
+        "up",
         "right",
-        "down",
-        "right",
-        "down",
+        "up",
         "left",
-        "down",
-        "right",
-        "right",
+        "up",
+        "up",
         "right"
       ],
-      "quality": 267,
+      "quality": 241,
       "mechanics": [
         "key",
         "locked"
@@ -862,40 +771,133 @@
     {
       "grid": [
         "######",
+        "#.#.##",
+        "#....#",
+        "#..#.#",
+        "#S#.##",
+        "#.#LP#",
+        "#...##",
+        "#..###",
+        "#...##",
+        "##...#",
+        "#..###",
+        "##...#",
+        "#K..##",
+        "#..#.#",
+        "######"
+      ],
+      "width": 6,
+      "height": 15,
+      "par": 14,
+      "solution": [
+        "down",
+        "right",
+        "down",
+        "left",
+        "down",
+        "left",
+        "up",
+        "down",
+        "right",
+        "up",
+        "right",
+        "up",
+        "up",
+        "right"
+      ],
+      "quality": 241,
+      "mechanics": [
+        "key",
+        "locked"
+      ],
+      "events": [
+        "LOCK_OPENED",
+        "KEY_COLLECTED"
+      ]
+    },
+    {
+      "grid": [
+        "######",
+        "##.#.#",
+        "#....#",
+        "#....#",
+        "#....#",
+        "#....#",
+        "#.KLP#",
+        "##..##",
+        "#.#..#",
+        "#....#",
+        "#S#..#",
+        "#....#",
+        "#....#",
+        "#..###",
+        "######"
+      ],
+      "width": 6,
+      "height": 15,
+      "par": 14,
+      "solution": [
+        "down",
+        "right",
+        "up",
+        "right",
+        "up",
+        "left",
+        "up",
+        "left",
+        "up",
+        "down",
+        "right",
+        "up",
+        "up",
+        "right"
+      ],
+      "quality": 240,
+      "mechanics": [
+        "key",
+        "locked"
+      ],
+      "events": [
+        "LOCK_OPENED",
+        "KEY_COLLECTED"
+      ]
+    },
+    {
+      "grid": [
+        "######",
+        "#....#",
+        "#....#",
+        "#....#",
+        "#..S.#",
+        "#.#..#",
+        "#..^.#",
         "#....#",
         "#.^..#",
         "#....#",
-        "#<...#",
-        "#....#",
-        "##P..#",
-        "#....#",
-        "#.#.B#",
-        "#..S.#",
+        "#..P.#",
+        "#B.^.#",
         "#....#",
         "#....#",
-        "#....#",
-        "##..##",
         "######"
       ],
       "width": 6,
       "height": 15,
-      "par": 13,
+      "par": 12,
       "solution": [
+        "left",
+        "down",
+        "up",
         "right",
-        "up",
+        "down",
         "left",
         "up",
-        "left",
         "down",
         "right",
-        "up",
-        "left",
         "down",
         "left",
-        "down",
-        "right"
+        "up"
       ],
-      "quality": 260,
+      "quality": 240,
       "mechanics": [
         "ramp",
         "penguin_on_wall"
@@ -909,213 +911,29 @@
     {
       "grid": [
         "######",
-        "#...##",
-        "#..LP#",
-        "#...##",
-        "#S.#.#",
-        "#....#",
-        "##...#",
-        "#....#",
-        "#....#",
-        "#.#..#",
-        "#..###",
-        "#....#",
-        "#K...#",
-        "#.#..#",
-        "######"
-      ],
-      "width": 6,
-      "height": 15,
-      "par": 15,
-      "solution": [
-        "right",
-        "down",
-        "left",
-        "down",
-        "up",
-        "right",
-        "down",
-        "left",
-        "up",
-        "left",
-        "up",
-        "right",
-        "down",
-        "down",
-        "right"
-      ],
-      "quality": 256,
-      "mechanics": [
-        "key",
-        "locked"
-      ],
-      "events": [
-        "LOCK_OPENED",
-        "KEY_COLLECTED"
-      ]
-    },
-    {
-      "grid": [
-        "######",
-        "#S...#",
-        "##...#",
-        "#.##.#",
-        "##...#",
-        "#....#",
-        "#.#..#",
-        "#K#.##",
-        "###LP#",
-        "#....#",
-        "#....#",
-        "#....#",
-        "#.#..#",
-        "#....#",
-        "######"
-      ],
-      "width": 6,
-      "height": 15,
-      "par": 15,
-      "solution": [
-        "right",
-        "down",
-        "left",
-        "up",
-        "left",
-        "down",
-        "left",
-        "down",
-        "up",
-        "right",
-        "down",
-        "left",
-        "down",
-        "down",
-        "right"
-      ],
-      "quality": 256,
-      "mechanics": [
-        "key",
-        "locked"
-      ],
-      "events": [
-        "LOCK_OPENED",
-        "KEY_COLLECTED"
-      ]
-    },
-    {
-      "grid": [
-        "######",
-        "#..#.#",
-        "#....#",
-        "#..P.#",
-        "#...##",
-        "##.#.#",
-        "#....#",
-        "######",
-        "#.^..#",
-        "#....#",
-        "#.#..#",
-        "#S...#",
+        "#S#..#",
         "#....#",
         "##..##",
-        "######"
-      ],
-      "width": 6,
-      "height": 15,
-      "par": 12,
-      "solution": [
-        "up",
-        "right",
-        "down",
-        "right",
-        "up",
-        "left",
-        "left",
-        "up",
-        "left",
-        "down",
-        "right",
-        "up"
-      ],
-      "quality": 241,
-      "mechanics": [
-        "ramp",
-        "barrier"
-      ],
-      "events": [
-        "RAMP_USED"
-      ]
-    },
-    {
-      "grid": [
-        "######",
-        "#....#",
-        "##..P#",
-        "#....#",
-        "#...##",
-        "#....#",
-        "#....#",
-        "######",
-        "#..^.#",
-        "#.#..#",
-        "#....#",
-        "##..S#",
+        "#..LP#",
         "#....#",
         "#..#.#",
-        "######"
-      ],
-      "width": 6,
-      "height": 15,
-      "par": 12,
-      "solution": [
-        "up",
-        "left",
-        "down",
-        "left",
-        "down",
-        "right",
-        "up",
-        "left",
-        "up",
-        "up",
-        "right",
-        "up"
-      ],
-      "quality": 240,
-      "mechanics": [
-        "ramp",
-        "barrier"
-      ],
-      "events": [
-        "RAMP_USED"
-      ]
-    },
-    {
-      "grid": [
-        "######",
-        "#.#..#",
-        "#S.#.#",
-        "#T##P#",
-        "#.#..#",
-        "#T#..#",
-        "#...##",
-        "#...T#",
-        "##.#.#",
-        "#..#.#",
-        "##.#.#",
+        "#K..##",
+        "#....#",
+        "##...#",
         "##...#",
         "#....#",
-        "#...##",
+        "##...#",
+        "#.#.##",
         "######"
       ],
       "width": 6,
       "height": 15,
-      "par": 15,
+      "par": 14,
       "solution": [
         "down",
-        "down",
-        "down",
         "right",
+        "up",
+        "left",
         "down",
         "left",
         "down",
@@ -1124,33 +942,34 @@
         "left",
         "up",
         "right",
-        "up",
         "right",
-        "up"
+        "right"
       ],
-      "quality": 230,
+      "quality": 235,
       "mechanics": [
-        "sticky"
+        "key",
+        "locked"
       ],
       "events": [
-        "STICKY_STOPPED"
+        "LOCK_OPENED",
+        "KEY_COLLECTED"
       ]
     },
     {
       "grid": [
         "#####",
-        "#...#",
-        "#S..#",
-        "#.#.#",
-        "###.#",
-        "##..#",
-        "##..#",
-        "#...#",
         "#..##",
-        "#..P#",
-        "#.###",
-        "#.B.#",
         "#...#",
+        "#...#",
+        "##..#",
+        "#...#",
+        "#B#.#",
+        "#S..#",
+        "#...#",
+        "##.##",
+        "#...#",
+        "#...#",
+        "#..P#",
         "#####"
       ],
       "width": 5,
@@ -1158,21 +977,21 @@
       "par": 14,
       "solution": [
         "right",
-        "down",
-        "left",
-        "down",
-        "right",
         "up",
         "left",
-        "down",
-        "left",
-        "up",
         "up",
         "right",
+        "down",
+        "left",
+        "down",
+        "up",
+        "right",
+        "down",
+        "left",
         "down",
         "right"
       ],
-      "quality": 220,
+      "quality": 226,
       "mechanics": [
         "block"
       ],
@@ -1182,405 +1001,152 @@
     },
     {
       "grid": [
-        "#####",
-        "#...#",
-        "#...#",
-        "#...#",
-        "#SB.#",
-        "#..##",
-        "#.#.#",
-        "#..P#",
-        "#...#",
-        "#..##",
-        "#...#",
-        "#...#",
-        "#...#",
-        "#####"
+        "######",
+        "#....#",
+        "#...##",
+        "#..LP#",
+        "#...##",
+        "##...#",
+        "#....#",
+        "#....#",
+        "#....#",
+        "#S.#.#",
+        "##..##",
+        "#...##",
+        "##...#",
+        "#K..##",
+        "######"
       ],
-      "width": 5,
-      "height": 14,
+      "width": 6,
+      "height": 15,
       "par": 13,
       "solution": [
-        "up",
         "right",
         "down",
         "left",
+        "right",
+        "up",
+        "left",
         "up",
         "left",
         "down",
-        "down",
         "right",
-        "down",
-        "left",
+        "up",
         "up",
         "right"
       ],
-      "quality": 206,
+      "quality": 226,
       "mechanics": [
-        "block"
+        "key",
+        "locked"
       ],
       "events": [
-        "BLOCK_PUSHED"
+        "LOCK_OPENED",
+        "KEY_COLLECTED"
+      ]
+    },
+    {
+      "grid": [
+        "######",
+        "#SB.##",
+        "#....#",
+        "#...^#",
+        "#..#.#",
+        "#....#",
+        "#..P.#",
+        "##.^.#",
+        "#....#",
+        "#....#",
+        "#....#",
+        "#....#",
+        "#<...#",
+        "#....#",
+        "######"
+      ],
+      "width": 6,
+      "height": 15,
+      "par": 10,
+      "solution": [
+        "down",
+        "right",
+        "up",
+        "right",
+        "down",
+        "down",
+        "left",
+        "down",
+        "right",
+        "up"
+      ],
+      "quality": 200,
+      "mechanics": [
+        "ramp",
+        "penguin_on_wall"
+      ],
+      "penguinOnWall": true,
+      "events": [
+        "RAMP_USED"
       ]
     },
     {
       "grid": [
         "#####",
-        "#.#.#",
         "#...#",
-        "#...#",
-        "#...#",
-        "#.#P#",
+        "#..P#",
         "#...#",
         "#.###",
-        "#..##",
-        "#SB.#",
-        "#.#.#",
+        "#.H##",
+        "##B.#",
+        "#S..#",
+        "#...#",
+        "##..#",
         "#...#",
         "#..##",
+        "##..#",
         "#####"
       ],
       "width": 5,
       "height": 14,
-      "par": 13,
+      "par": 11,
       "solution": [
-        "down",
-        "right",
-        "up",
-        "right",
-        "up",
-        "left",
         "right",
         "down",
         "left",
+        "down",
+        "right",
         "up",
+        "up",
+        "left",
         "up",
         "right",
         "down"
       ],
-      "quality": 206,
+      "quality": 195,
       "mechanics": [
+        "hole",
         "block"
       ],
       "events": [
-        "BLOCK_PUSHED"
+        "BLOCK_PUSHED",
+        "HOLE_FILLED"
       ]
     },
     {
       "grid": [
         "######",
-        "#..###",
-        "#T..##",
-        "##...#",
+        "#....#",
+        "#.#..#",
+        "#....#",
         "#...P#",
-        "#...##",
-        "#...##",
-        "###.##",
-        "#.T..#",
-        "#....#",
-        "#T...#",
-        "#...##",
-        "#S####",
-        "##.#.#",
-        "######"
-      ],
-      "width": 6,
-      "height": 15,
-      "par": 13,
-      "solution": [
-        "up",
-        "up",
-        "right",
-        "down",
-        "right",
-        "up",
-        "left",
-        "up",
-        "right",
-        "down",
-        "left",
-        "up",
-        "right"
-      ],
-      "quality": 205,
-      "mechanics": [
-        "sticky"
-      ],
-      "events": [
-        "STICKY_STOPPED"
-      ]
-    },
-    {
-      "grid": [
-        "#####",
-        "###.#",
-        "#..##",
-        "#..P#",
-        "#...#",
-        "#...#",
-        "##.##",
-        "#...#",
-        "#.#B#",
-        "#S#.#",
-        "#...#",
-        "#...#",
-        "#...#",
-        "#####"
-      ],
-      "width": 5,
-      "height": 14,
-      "par": 12,
-      "solution": [
-        "down",
-        "right",
-        "up",
-        "down",
-        "left",
-        "up",
-        "right",
-        "up",
-        "left",
-        "down",
-        "right",
-        "up"
-      ],
-      "quality": 195,
-      "mechanics": [
-        "block"
-      ],
-      "events": [
-        "BLOCK_PUSHED"
-      ]
-    },
-    {
-      "grid": [
-        "#####",
-        "#..##",
-        "#...#",
-        "##.B#",
-        "#...#",
-        "#..##",
-        "#..##",
-        "#...#",
-        "#.#P#",
-        "#.#.#",
-        "#..##",
-        "##..#",
-        "#S..#",
-        "#####"
-      ],
-      "width": 5,
-      "height": 14,
-      "par": 12,
-      "solution": [
-        "right",
-        "up",
-        "left",
-        "up",
-        "left",
-        "up",
-        "right",
-        "up",
-        "left",
-        "down",
-        "right",
-        "down"
-      ],
-      "quality": 195,
-      "mechanics": [
-        "block"
-      ],
-      "events": [
-        "BLOCK_PUSHED"
-      ]
-    },
-    {
-      "grid": [
-        "######",
-        "#...##",
-        "##.#.#",
-        "##.TT#",
-        "#....#",
-        "#...##",
-        "#....#",
-        "##..P#",
-        "##..##",
         "#.#..#",
+        "#....#",
+        "######",
+        "#.^..#",
+        "#.#.S#",
+        "#....#",
         "#....#",
         "#..#.#",
-        "#...##",
-        "#ST..#",
-        "######"
-      ],
-      "width": 6,
-      "height": 15,
-      "par": 12,
-      "solution": [
-        "right",
-        "up",
-        "right",
-        "up",
-        "left",
-        "up",
-        "right",
-        "down",
-        "left",
-        "down",
-        "right",
-        "down"
-      ],
-      "quality": 195,
-      "mechanics": [
-        "sticky"
-      ],
-      "events": [
-        "STICKY_STOPPED"
-      ]
-    },
-    {
-      "grid": [
-        "#####",
-        "#S..#",
-        "#.B.#",
-        "#..##",
-        "#.#.#",
-        "#..##",
-        "#...#",
-        "#...#",
-        "#...#",
-        "#.#.#",
-        "##..#",
-        "##.##",
-        "#..P#",
-        "#####"
-      ],
-      "width": 5,
-      "height": 14,
-      "par": 12,
-      "solution": [
-        "right",
-        "down",
-        "left",
-        "up",
-        "left",
-        "down",
-        "down",
-        "right",
-        "down",
-        "left",
-        "down",
-        "right"
-      ],
-      "quality": 190,
-      "mechanics": [
-        "block"
-      ],
-      "events": [
-        "BLOCK_PUSHED"
-      ]
-    },
-    {
-      "grid": [
-        "######",
-        "##...#",
         "#....#",
-        "#..###",
-        "#...##",
-        "#.T..#",
-        "#...##",
-        "#S#.P#",
-        "##...#",
-        "#T...#",
-        "#...T#",
-        "#...##",
-        "#....#",
-        "#....#",
-        "######"
-      ],
-      "width": 6,
-      "height": 15,
-      "par": 12,
-      "solution": [
-        "up",
-        "right",
-        "up",
-        "left",
-        "down",
-        "down",
-        "right",
-        "down",
-        "left",
-        "up",
-        "right",
-        "up"
-      ],
-      "quality": 190,
-      "mechanics": [
-        "sticky"
-      ],
-      "events": [
-        "STICKY_STOPPED"
-      ]
-    },
-    {
-      "grid": [
-        "######",
-        "#....#",
-        "##..##",
-        "#.#..#",
-        "#S...#",
-        "#...##",
-        "#.#TT#",
-        "#T...#",
-        "#...##",
-        "###.##",
-        "#...##",
-        "#..#P#",
-        "##...#",
-        "#...##",
-        "######"
-      ],
-      "width": 6,
-      "height": 15,
-      "par": 12,
-      "solution": [
-        "down",
-        "down",
-        "right",
-        "down",
-        "left",
-        "down",
-        "right",
-        "down",
-        "right",
-        "up",
-        "right",
-        "up"
-      ],
-      "quality": 190,
-      "mechanics": [
-        "sticky"
-      ],
-      "events": [
-        "STICKY_STOPPED"
-      ]
-    },
-    {
-      "grid": [
-        "######",
-        "##...#",
-        "#....#",
-        "#.#..#",
-        "#....#",
-        "#.P..#",
-        "#.#..#",
-        "######",
-        "#..^.#",
-        "#.S..#",
-        "#....#",
-        "##...#",
-        "#..#.#",
-        "##.#.#",
         "######"
       ],
       "width": 6,
@@ -1588,16 +1154,16 @@
       "par": 9,
       "solution": [
         "up",
+        "left",
         "right",
         "down",
+        "left",
+        "up",
+        "up",
         "right",
-        "up",
-        "left",
-        "left",
-        "up",
-        "up"
+        "down"
       ],
-      "quality": 190,
+      "quality": 195,
       "mechanics": [
         "ramp",
         "barrier"
@@ -1608,205 +1174,40 @@
     },
     {
       "grid": [
-        "#####",
-        "#..##",
-        "#...#",
-        "#..P#",
-        "##.##",
-        "#...#",
-        "#...#",
-        "#S..#",
-        "##..#",
-        "#...#",
-        "#..##",
-        "#B..#",
-        "#...#",
-        "#####"
-      ],
-      "width": 5,
-      "height": 14,
-      "par": 11,
-      "solution": [
-        "right",
-        "down",
-        "left",
-        "down",
-        "right",
-        "down",
-        "left",
-        "up",
-        "left",
-        "down",
-        "right"
-      ],
-      "quality": 180,
-      "mechanics": [
-        "block"
-      ],
-      "events": [
-        "BLOCK_PUSHED"
-      ]
-    },
-    {
-      "grid": [
-        "#####",
-        "#...#",
-        "#B#.#",
-        "#S..#",
-        "##.##",
-        "##.P#",
-        "##..#",
-        "#.#.#",
-        "##.##",
-        "#.#.#",
-        "#...#",
-        "#...#",
-        "#...#",
-        "#####"
-      ],
-      "width": 5,
-      "height": 14,
-      "par": 11,
-      "solution": [
-        "right",
-        "up",
-        "left",
-        "down",
-        "up",
-        "right",
-        "down",
-        "left",
-        "down",
-        "right",
-        "up"
-      ],
-      "quality": 180,
-      "mechanics": [
-        "block"
-      ],
-      "events": [
-        "BLOCK_PUSHED"
-      ]
-    },
-    {
-      "grid": [
-        "#####",
-        "#...#",
-        "##..#",
-        "#S###",
-        "#...#",
-        "#...#",
-        "###.#",
-        "#...#",
-        "#..##",
-        "#..P#",
-        "#..H#",
-        "#..B#",
-        "##..#",
-        "#####"
-      ],
-      "width": 5,
-      "height": 14,
-      "par": 10,
-      "solution": [
-        "down",
-        "right",
-        "down",
-        "left",
-        "down",
-        "right",
-        "down",
-        "right",
-        "up",
-        "up"
-      ],
-      "quality": 180,
-      "mechanics": [
-        "hole",
-        "block"
-      ],
-      "events": [
-        "HOLE_FILLED",
-        "BLOCK_PUSHED"
-      ]
-    },
-    {
-      "grid": [
-        "#####",
-        "#..##",
-        "#..P#",
-        "#...#",
-        "#.#.#",
-        "#...#",
-        "#.###",
-        "#.#.#",
-        "#.H.#",
-        "##B.#",
-        "#..##",
-        "#S#.#",
-        "#...#",
-        "#####"
-      ],
-      "width": 5,
-      "height": 14,
-      "par": 10,
-      "solution": [
-        "up",
-        "right",
-        "up",
-        "up",
-        "left",
-        "up",
-        "right",
-        "down",
-        "right",
-        "up"
-      ],
-      "quality": 180,
-      "mechanics": [
-        "hole",
-        "block"
-      ],
-      "events": [
-        "HOLE_FILLED",
-        "BLOCK_PUSHED"
-      ]
-    },
-    {
-      "grid": [
         "######",
-        "##...#",
+        "#..#.#",
         "#....#",
-        "#....#",
+        "#..TP#",
         "#...##",
-        "#S...#",
-        "#T..##",
+        "#.#.##",
         "#....#",
         "##.#.#",
+        "#..T.#",
+        "#T#..#",
         "#...##",
-        "#...T#",
-        "##..P#",
-        "#T..##",
-        "###..#",
+        "#S.#.#",
+        "#...##",
+        "##...#",
         "######"
       ],
       "width": 6,
       "height": 15,
-      "par": 11,
+      "par": 12,
       "solution": [
         "up",
+        "up",
+        "right",
         "right",
         "up",
         "left",
+        "up",
+        "right",
         "down",
         "right",
         "up",
-        "left",
-        "down",
-        "right",
-        "down"
+        "right"
       ],
-      "quality": 180,
+      "quality": 185,
       "mechanics": [
         "sticky"
       ],
@@ -1818,18 +1219,263 @@
       "grid": [
         "######",
         "#....#",
-        "#S...#",
-        "#T...#",
+        "##...#",
+        "#....#",
+        "#..P##",
+        "#....#",
         "#.#..#",
-        "##..##",
-        "#..#.#",
+        "######",
+        "#.^..#",
+        "#....#",
         "#.####",
         "#....#",
-        "##...#",
-        "##..T#",
-        "#..#P#",
+        "#...S#",
+        "#...##",
+        "######"
+      ],
+      "width": 6,
+      "height": 15,
+      "par": 8,
+      "solution": [
+        "left",
+        "up",
+        "right",
+        "down",
+        "right",
+        "up",
+        "left",
+        "up"
+      ],
+      "quality": 185,
+      "mechanics": [
+        "ramp",
+        "barrier"
+      ],
+      "events": [
+        "RAMP_USED"
+      ]
+    },
+    {
+      "grid": [
+        "#####",
+        "#...#",
+        "#.#.#",
+        "#...#",
+        "#SB.#",
+        "#.#.#",
+        "#...#",
+        "##.##",
+        "#..P#",
+        "#...#",
+        "#...#",
+        "#..##",
+        "#...#",
+        "#####"
+      ],
+      "width": 5,
+      "height": 14,
+      "par": 11,
+      "solution": [
+        "right",
+        "up",
+        "right",
+        "down",
+        "left",
+        "down",
+        "right",
+        "down",
+        "left",
+        "up",
+        "right"
+      ],
+      "quality": 180,
+      "mechanics": [
+        "block"
+      ],
+      "events": [
+        "BLOCK_PUSHED"
+      ]
+    },
+    {
+      "grid": [
+        "#####",
+        "##..#",
+        "#..B#",
+        "#..H#",
+        "#.#P#",
+        "#..##",
+        "#...#",
+        "#...#",
+        "#...#",
+        "#...#",
+        "##..#",
+        "#...#",
+        "#S#.#",
+        "#####"
+      ],
+      "width": 5,
+      "height": 14,
+      "par": 10,
+      "solution": [
+        "up",
+        "right",
+        "up",
+        "left",
+        "up",
+        "right",
+        "up",
+        "right",
+        "down",
+        "down"
+      ],
+      "quality": 180,
+      "mechanics": [
+        "hole",
+        "block"
+      ],
+      "events": [
+        "BLOCK_PUSHED",
+        "HOLE_FILLED"
+      ]
+    },
+    {
+      "grid": [
+        "#####",
+        "#..##",
+        "#...#",
+        "#...#",
+        "#H#P#",
+        "#B#.#",
+        "#..##",
+        "#...#",
+        "##..#",
+        "#...#",
+        "#...#",
+        "#S#.#",
+        "#...#",
+        "#####"
+      ],
+      "width": 5,
+      "height": 14,
+      "par": 10,
+      "solution": [
+        "up",
+        "right",
+        "up",
+        "left",
+        "up",
+        "up",
+        "right",
+        "down",
+        "right",
+        "down"
+      ],
+      "quality": 180,
+      "mechanics": [
+        "hole",
+        "block"
+      ],
+      "events": [
+        "BLOCK_PUSHED",
+        "HOLE_FILLED"
+      ]
+    },
+    {
+      "grid": [
+        "######",
         "#....#",
-        "#..T.#",
+        "#P..##",
+        "#....#",
+        "#.#..#",
+        "#....#",
+        "#....#",
+        "######",
+        "#..^.#",
+        "#....#",
+        "#..#.#",
+        "#..#.#",
+        "#.S.##",
+        "#.#..#",
+        "######"
+      ],
+      "width": 6,
+      "height": 15,
+      "par": 8,
+      "solution": [
+        "up",
+        "right",
+        "down",
+        "right",
+        "up",
+        "up",
+        "left",
+        "up"
+      ],
+      "quality": 180,
+      "mechanics": [
+        "ramp",
+        "barrier"
+      ],
+      "events": [
+        "RAMP_USED"
+      ]
+    },
+    {
+      "grid": [
+        "######",
+        "#....#",
+        "#....#",
+        "#....#",
+        "#...P#",
+        "###..#",
+        "#....#",
+        "######",
+        "#..^.#",
+        "#..#.#",
+        "#..#.#",
+        "#....#",
+        "#....#",
+        "#...S#",
+        "######"
+      ],
+      "width": 6,
+      "height": 15,
+      "par": 8,
+      "solution": [
+        "left",
+        "up",
+        "right",
+        "left",
+        "down",
+        "right",
+        "up",
+        "up"
+      ],
+      "quality": 180,
+      "mechanics": [
+        "ramp",
+        "barrier"
+      ],
+      "events": [
+        "RAMP_USED"
+      ]
+    },
+    {
+      "grid": [
+        "######",
+        "#S...#",
+        "#.#..#",
+        "#...##",
+        "#.#..#",
+        "##..T#",
+        "#..#.#",
+        "#.#..#",
+        "#....#",
+        "#..###",
+        "#..#.#",
+        "#...T#",
+        "#...P#",
+        "#.T..#",
         "######"
       ],
       "width": 6,
@@ -1845,8 +1491,8 @@
         "left",
         "down",
         "right",
-        "down",
-        "down"
+        "right",
+        "up"
       ],
       "quality": 175,
       "mechanics": [
@@ -1859,71 +1505,28 @@
     {
       "grid": [
         "######",
+        "#....#",
+        "#....#",
         "#..#.#",
-        "#S..##",
-        "###..#",
+        "#....#",
+        "#..P##",
         "#.#..#",
-        "#...T#",
-        "#..#.#",
-        "#..#.#",
-        "#...T#",
-        "#.#..#",
+        "######",
+        "#.^..#",
+        "#S...#",
+        "#....#",
+        "#..###",
+        "#....#",
         "##...#",
-        "#...##",
-        "#.#.P#",
-        "#T...#",
         "######"
       ],
       "width": 6,
       "height": 15,
-      "par": 11,
-      "solution": [
-        "right",
-        "down",
-        "right",
-        "down",
-        "down",
-        "left",
-        "down",
-        "left",
-        "down",
-        "right",
-        "up"
-      ],
-      "quality": 175,
-      "mechanics": [
-        "sticky"
-      ],
-      "events": [
-        "STICKY_STOPPED"
-      ]
-    },
-    {
-      "grid": [
-        "#####",
-        "#.#.#",
-        "#.###",
-        "#.#P#",
-        "##..#",
-        "##..#",
-        "#..##",
-        "##..#",
-        "#S#.#",
-        "#...#",
-        "#...#",
-        "#B.##",
-        "#H..#",
-        "#####"
-      ],
-      "width": 5,
-      "height": 14,
-      "par": 9,
+      "par": 7,
       "solution": [
         "down",
         "right",
-        "up",
-        "right",
-        "up",
+        "down",
         "left",
         "up",
         "right",
@@ -1931,234 +1534,67 @@
       ],
       "quality": 170,
       "mechanics": [
-        "hole",
-        "block"
+        "ramp",
+        "barrier"
       ],
       "events": [
-        "HOLE_FILLED",
-        "BLOCK_PUSHED"
+        "RAMP_USED"
       ]
     },
     {
       "grid": [
-        "#####",
-        "#.#.#",
-        "#H..#",
-        "#B.##",
-        "#...#",
-        "#S#.#",
-        "##..#",
-        "#...#",
-        "#..##",
-        "#...#",
-        "#.#P#",
-        "#...#",
-        "##..#",
-        "#####"
+        "######",
+        "#...##",
+        "#...##",
+        "#....#",
+        "#.P..#",
+        "#....#",
+        "#....#",
+        "######",
+        "#..^.#",
+        "#....#",
+        "#...S#",
+        "##.#.#",
+        "#.#..#",
+        "#..#.#",
+        "######"
       ],
-      "width": 5,
-      "height": 14,
-      "par": 9,
+      "width": 6,
+      "height": 15,
+      "par": 7,
       "solution": [
         "up",
-        "right",
-        "down",
-        "right",
-        "down",
         "left",
         "down",
+        "left",
+        "up",
         "right",
         "up"
       ],
       "quality": 170,
       "mechanics": [
-        "hole",
-        "block"
+        "ramp",
+        "barrier"
       ],
       "events": [
-        "HOLE_FILLED",
-        "BLOCK_PUSHED"
+        "RAMP_USED"
       ]
     },
     {
       "grid": [
         "#####",
+        "#...#",
+        "#B..#",
         "#..##",
         "#...#",
-        "##..#",
         "#...#",
+        "##..#",
         "#S..#",
-        "##B.#",
-        "#.H##",
-        "##..#",
-        "#.#.#",
-        "#...#",
-        "#...#",
-        "#..P#",
-        "#####"
-      ],
-      "width": 5,
-      "height": 14,
-      "par": 9,
-      "solution": [
-        "right",
-        "up",
-        "left",
-        "up",
-        "right",
-        "down",
-        "down",
-        "right",
-        "down"
-      ],
-      "quality": 165,
-      "mechanics": [
-        "hole",
-        "block"
-      ],
-      "events": [
-        "HOLE_FILLED",
-        "BLOCK_PUSHED"
-      ]
-    },
-    {
-      "grid": [
-        "#####",
-        "#...#",
-        "#.#P#",
         "#..##",
+        "#...#",
         "##.##",
-        "#...#",
-        "#...#",
-        "#.H.#",
-        "#.B.#",
-        "#S..#",
-        "##..#",
-        "#..##",
-        "#...#",
-        "#####"
-      ],
-      "width": 5,
-      "height": 14,
-      "par": 9,
-      "solution": [
-        "right",
-        "down",
-        "left",
-        "up",
-        "up",
-        "left",
-        "up",
-        "right",
-        "down"
-      ],
-      "quality": 165,
-      "mechanics": [
-        "hole",
-        "block"
-      ],
-      "events": [
-        "HOLE_FILLED",
-        "BLOCK_PUSHED"
-      ]
-    },
-    {
-      "grid": [
-        "#####",
-        "#...#",
-        "#S..#",
-        "#.#.#",
-        "#.#B#",
-        "#..H#",
-        "##..#",
-        "#..##",
-        "#.#.#",
         "#..P#",
         "#...#",
-        "#...#",
-        "##..#",
-        "#####"
-      ],
-      "width": 5,
-      "height": 14,
-      "par": 9,
-      "solution": [
-        "right",
-        "down",
-        "down",
-        "left",
-        "down",
-        "left",
-        "down",
-        "right",
-        "up"
-      ],
-      "quality": 165,
-      "mechanics": [
-        "hole",
-        "block"
-      ],
-      "events": [
-        "HOLE_FILLED",
-        "BLOCK_PUSHED"
-      ]
-    },
-    {
-      "grid": [
-        "#####",
-        "##..#",
-        "#S..#",
-        "##.##",
-        "#..##",
-        "#...#",
-        "##.##",
-        "#..##",
-        "#.#.#",
-        "#.BH#",
-        "##.P#",
-        "#...#",
-        "##..#",
-        "#####"
-      ],
-      "width": 5,
-      "height": 14,
-      "par": 9,
-      "solution": [
-        "right",
-        "up",
-        "left",
-        "down",
-        "left",
-        "down",
-        "right",
-        "right",
-        "down"
-      ],
-      "quality": 165,
-      "mechanics": [
-        "hole",
-        "block"
-      ],
-      "events": [
-        "HOLE_FILLED",
-        "BLOCK_PUSHED"
-      ]
-    },
-    {
-      "grid": [
-        "#####",
-        "#1..#",
-        "#1..#",
-        "#...#",
-        "#S..#",
-        "#.#.#",
-        "#..3#",
-        "##..#",
-        "#...#",
-        "#..##",
-        "##.P#",
-        "#...#",
-        "#..##",
         "#####"
       ],
       "width": 5,
@@ -2166,274 +1602,38 @@
       "par": 10,
       "solution": [
         "right",
-        "down",
-        "left",
-        "down",
-        "right",
-        "down",
+        "up",
         "left",
         "up",
+        "right",
+        "up",
+        "left",
+        "down",
         "right",
         "up"
       ],
       "quality": 165,
       "mechanics": [
-        "crack"
+        "block"
       ],
       "events": [
-        "CRACK_BROKEN"
-      ]
-    },
-    {
-      "grid": [
-        "######",
-        "#.#..#",
-        "#....#",
-        "#.#..#",
-        "#....#",
-        "#P...#",
-        "#..#.#",
-        "######",
-        "#.^..#",
-        "#....#",
-        "#..S##",
-        "#...##",
-        "##...#",
-        "#....#",
-        "######"
-      ],
-      "width": 6,
-      "height": 15,
-      "par": 7,
-      "solution": [
-        "up",
-        "left",
-        "right",
-        "down",
-        "left",
-        "up",
-        "up"
-      ],
-      "quality": 165,
-      "mechanics": [
-        "ramp",
-        "barrier"
-      ],
-      "events": [
-        "RAMP_USED"
-      ]
-    },
-    {
-      "grid": [
-        "######",
-        "#...##",
-        "##...#",
-        "#...P#",
-        "#....#",
-        "#....#",
-        "#....#",
-        "######",
-        "#..^.#",
-        "#.#..#",
-        "#...S#",
-        "#.#..#",
-        "#.#..#",
-        "#....#",
-        "######"
-      ],
-      "width": 6,
-      "height": 15,
-      "par": 7,
-      "solution": [
-        "up",
-        "left",
-        "down",
-        "left",
-        "up",
-        "up",
-        "right"
-      ],
-      "quality": 165,
-      "mechanics": [
-        "ramp",
-        "barrier"
-      ],
-      "events": [
-        "RAMP_USED"
-      ]
-    },
-    {
-      "grid": [
-        "######",
-        "#....#",
-        "#.^..#",
-        "#..#.#",
-        "#....#",
-        "#.v..#",
-        "#..P.#",
-        "#..^.#",
-        "#....#",
-        "#...##",
-        "#....#",
-        "#....#",
-        "#....#",
-        "#.S..#",
-        "######"
-      ],
-      "width": 6,
-      "height": 15,
-      "par": 8,
-      "solution": [
-        "up",
-        "up",
-        "down",
-        "left",
-        "down",
-        "right",
-        "right",
-        "up"
-      ],
-      "quality": 160,
-      "mechanics": [
-        "ramp",
-        "penguin_on_wall"
-      ],
-      "penguinOnWall": true,
-      "events": [
-        "RAMP_USED"
+        "BLOCK_PUSHED"
       ]
     },
     {
       "grid": [
         "#####",
+        "##..#",
+        "#S..#",
+        "##..#",
         "#...#",
+        "#...#",
+        "#...#",
+        "#..##",
+        "##B.#",
+        "#.H.#",
+        "#..##",
         "#.#P#",
-        "#..##",
-        "##..#",
-        "##..#",
-        "#...#",
-        "#.#.#",
-        "#2.##",
-        "#..4#",
-        "#.4.#",
-        "#S.##",
-        "#####",
-        "#####"
-      ],
-      "width": 5,
-      "height": 14,
-      "par": 9,
-      "solution": [
-        "up",
-        "right",
-        "up",
-        "left",
-        "up",
-        "left",
-        "up",
-        "right",
-        "down"
-      ],
-      "quality": 150,
-      "mechanics": [
-        "crack"
-      ],
-      "events": [
-        "CRACK_BROKEN"
-      ]
-    },
-    {
-      "grid": [
-        "#####",
-        "#S..#",
-        "#..1#",
-        "##..#",
-        "#...#",
-        "#.2##",
-        "#...#",
-        "#...#",
-        "#...#",
-        "##..#",
-        "#1.##",
-        "#...#",
-        "##.P#",
-        "#####"
-      ],
-      "width": 5,
-      "height": 14,
-      "par": 9,
-      "solution": [
-        "right",
-        "down",
-        "left",
-        "down",
-        "right",
-        "down",
-        "left",
-        "down",
-        "right"
-      ],
-      "quality": 150,
-      "mechanics": [
-        "crack"
-      ],
-      "events": [
-        "CRACK_BROKEN"
-      ]
-    },
-    {
-      "grid": [
-        "#####",
-        "#.1.#",
-        "#.###",
-        "##.P#",
-        "#...#",
-        "#.###",
-        "#..##",
-        "#..2#",
-        "##.##",
-        "#...#",
-        "#S1.#",
-        "#...#",
-        "##..#",
-        "#####"
-      ],
-      "width": 5,
-      "height": 14,
-      "par": 9,
-      "solution": [
-        "up",
-        "right",
-        "down",
-        "left",
-        "up",
-        "left",
-        "up",
-        "right",
-        "up"
-      ],
-      "quality": 150,
-      "mechanics": [
-        "crack"
-      ],
-      "events": [
-        "CRACK_BROKEN"
-      ]
-    },
-    {
-      "grid": [
-        "#####",
-        "#...#",
-        "##.P#",
-        "#...#",
-        "#.###",
-        "#...#",
-        "##.##",
-        "#.44#",
-        "#S.1#",
-        "#...#",
-        "##..#",
-        "#.###",
         "#...#",
         "#####"
       ],
@@ -2441,474 +1641,20 @@
       "height": 14,
       "par": 9,
       "solution": [
+        "right",
+        "up",
+        "left",
         "down",
-        "right",
-        "down",
-        "left",
-        "up",
-        "left",
-        "up",
-        "right",
-        "up"
-      ],
-      "quality": 150,
-      "mechanics": [
-        "crack"
-      ],
-      "events": [
-        "CRACK_BROKEN"
-      ]
-    },
-    {
-      "grid": [
-        "#####",
-        "#..##",
-        "#...#",
-        "#...#",
-        "##2.#",
-        "#.4.#",
-        "#S..#",
-        "##.##",
-        "##..#",
-        "##..#",
-        "#..P#",
-        "#..2#",
-        "#.#.#",
-        "#####"
-      ],
-      "width": 5,
-      "height": 14,
-      "par": 9,
-      "solution": [
-        "right",
-        "up",
-        "left",
-        "up",
-        "right",
         "down",
         "left",
-        "up",
-        "right"
-      ],
-      "quality": 150,
-      "mechanics": [
-        "crack"
-      ],
-      "events": [
-        "CRACK_BROKEN"
-      ]
-    },
-    {
-      "grid": [
-        "#####",
-        "#..##",
-        "#4.P#",
-        "#...#",
-        "#.###",
-        "#.2.#",
-        "#...#",
-        "#..2#",
-        "##..#",
-        "#...#",
-        "#S.##",
-        "#.###",
-        "#...#",
-        "#####"
-      ],
-      "width": 5,
-      "height": 14,
-      "par": 9,
-      "solution": [
-        "up",
-        "right",
-        "up",
-        "left",
-        "up",
-        "right",
         "down",
         "right",
         "up"
       ],
-      "quality": 150,
+      "quality": 165,
       "mechanics": [
-        "crack"
-      ],
-      "events": [
-        "CRACK_BROKEN"
-      ]
-    },
-    {
-      "grid": [
-        "#####",
-        "#...#",
-        "#..P#",
-        "#...#",
-        "##.1#",
-        "#..##",
-        "#..##",
-        "#...#",
-        "#2..#",
-        "##..#",
-        "#S.4#",
-        "#...#",
-        "#...#",
-        "#####"
-      ],
-      "width": 5,
-      "height": 14,
-      "par": 9,
-      "solution": [
-        "down",
-        "right",
-        "up",
-        "left",
-        "up",
-        "right",
-        "up",
-        "right",
-        "down"
-      ],
-      "quality": 150,
-      "mechanics": [
-        "crack"
-      ],
-      "events": [
-        "CRACK_BROKEN"
-      ]
-    },
-    {
-      "grid": [
-        "######",
-        "#P...#",
-        "#....#",
-        "#....#",
-        "#..#.#",
-        "##..##",
-        "#....#",
-        "######",
-        "#.^..#",
-        "#....#",
-        "#...##",
-        "#..S.#",
-        "#..#.#",
-        "##...#",
-        "######"
-      ],
-      "width": 6,
-      "height": 15,
-      "par": 6,
-      "solution": [
-        "left",
-        "down",
-        "right",
-        "up",
-        "up",
-        "left"
-      ],
-      "quality": 150,
-      "mechanics": [
-        "ramp",
-        "barrier"
-      ],
-      "events": [
-        "RAMP_USED"
-      ]
-    },
-    {
-      "grid": [
-        "######",
-        "#....#",
-        "#..#.#",
-        "#...P#",
-        "#..#.#",
-        "##...#",
-        "#....#",
-        "######",
-        "#.^..#",
-        "#....#",
-        "#S...#",
-        "#.#..#",
-        "##...#",
-        "#.#..#",
-        "######"
-      ],
-      "width": 6,
-      "height": 15,
-      "par": 6,
-      "solution": [
-        "up",
-        "right",
-        "down",
-        "right",
-        "up",
-        "up"
-      ],
-      "quality": 150,
-      "mechanics": [
-        "ramp",
-        "barrier"
-      ],
-      "events": [
-        "RAMP_USED"
-      ]
-    },
-    {
-      "grid": [
-        "######",
-        "#....#",
-        "#....#",
-        "#....#",
-        "#..#.#",
-        "#v..<#",
-        "##P..#",
-        "#....#",
-        "#....#",
-        "#....#",
-        "#....#",
-        "#....#",
-        "#....#",
-        "#S.###",
-        "######"
-      ],
-      "width": 6,
-      "height": 15,
-      "par": 7,
-      "solution": [
-        "up",
-        "right",
-        "up",
-        "up",
-        "left",
-        "down",
-        "right"
-      ],
-      "quality": 140,
-      "mechanics": [
-        "ramp",
-        "penguin_on_wall"
-      ],
-      "penguinOnWall": true,
-      "events": [
-        "RAMP_USED"
-      ]
-    },
-    {
-      "grid": [
-        "######",
-        "#....#",
-        "#.#..#",
-        "#....#",
-        "#....#",
-        "#.P.<#",
-        "#.#..#",
-        "#.^..#",
-        "#^...#",
-        "#....#",
-        "#....#",
-        "#S...#",
-        "#....#",
-        "#....#",
-        "######"
-      ],
-      "width": 6,
-      "height": 15,
-      "par": 7,
-      "solution": [
-        "up",
-        "down",
-        "right",
-        "down",
-        "left",
-        "up",
-        "up"
-      ],
-      "quality": 140,
-      "mechanics": [
-        "ramp",
-        "penguin_on_wall"
-      ],
-      "penguinOnWall": true,
-      "events": [
-        "RAMP_USED"
-      ]
-    },
-    {
-      "grid": [
-        "######",
-        "#..#.#",
-        "#....#",
-        "#....#",
-        "#..###",
-        "#....#",
-        "#P...#",
-        "######",
-        "#..^.#",
-        "##...#",
-        "#.#..#",
-        "#....#",
-        "#S..##",
-        "#....#",
-        "######"
-      ],
-      "width": 6,
-      "height": 15,
-      "par": 5,
-      "solution": [
-        "right",
-        "up",
-        "up",
-        "down",
-        "left"
-      ],
-      "quality": 135,
-      "mechanics": [
-        "ramp",
-        "barrier"
-      ],
-      "events": [
-        "RAMP_USED"
-      ]
-    },
-    {
-      "grid": [
-        "#####",
-        "#...#",
-        "#..P#",
-        "##..#",
-        "##.##",
-        "#...#",
-        "#...#",
-        "#S..#",
-        "##..#",
-        "#...#",
-        "#...#",
-        "#..##",
-        "#####"
-      ],
-      "width": 5,
-      "height": 13,
-      "par": 8,
-      "solution": [
-        "right",
-        "down",
-        "left",
-        "down",
-        "right",
-        "up",
-        "right",
-        "down"
-      ],
-      "quality": 115,
-      "mechanics": [],
-      "events": []
-    },
-    {
-      "grid": [
-        "#####",
-        "##..#",
-        "#...#",
-        "#...#",
-        "#.#P#",
-        "#.###",
-        "#...#",
-        "#..##",
-        "##..#",
-        "##..#",
-        "###.#",
-        "#S..#",
-        "#####"
-      ],
-      "width": 5,
-      "height": 13,
-      "par": 8,
-      "solution": [
-        "right",
-        "up",
-        "left",
-        "up",
-        "left",
-        "up",
-        "right",
-        "down"
-      ],
-      "quality": 115,
-      "mechanics": [],
-      "events": []
-    },
-    {
-      "grid": [
-        "#########",
-        "#..#....#",
-        "#......P#",
-        "#.......#",
-        "#......##",
-        "#.......#",
-        "#.......#",
-        "#.......#",
-        "#.......#",
-        "#.......#",
-        "#.......#",
-        "#..v....#",
-        "#.>B<...#",
-        "#..^....#",
-        "#S......#",
-        "#.......#",
-        "#.......#",
-        "#########"
-      ],
-      "width": 9,
-      "height": 18,
-      "par": 8,
-      "solution": [
-        "up",
-        "right",
-        "down",
-        "right",
-        "up",
-        "up",
-        "right",
-        "up"
-      ],
-      "quality": 110,
-      "mechanics": [
-        "four_ramp_block"
-      ],
-      "events": []
-    },
-    {
-      "grid": [
-        "#########",
-        "#.......#",
-        "#.......#",
-        "#.......#",
-        "#.......#",
-        "#......P#",
-        "#.......#",
-        "#.......#",
-        "#.......#",
-        "#H.HHHHH#",
-        "#H.HHHHH#",
-        "#.......#",
-        "#.......#",
-        "#B.#.#..#",
-        "#.......#",
-        "#.......#",
-        "#S......#",
-        "#########"
-      ],
-      "width": 9,
-      "height": 18,
-      "par": 5,
-      "solution": [
-        "up",
-        "right",
-        "up",
-        "right",
-        "down"
-      ],
-      "quality": 110,
-      "mechanics": [
-        "chasm"
+        "hole",
+        "block"
       ],
       "events": [
         "BLOCK_PUSHED",
@@ -2919,21 +1665,145 @@
       "grid": [
         "#####",
         "#..P#",
-        "#.#.#",
+        "#..##",
+        "#...#",
+        "##..#",
+        "#..H#",
+        "#.#B#",
+        "#...#",
+        "#...#",
+        "#S#.#",
+        "#...#",
+        "#...#",
+        "#..##",
+        "#####"
+      ],
+      "width": 5,
+      "height": 14,
+      "par": 9,
+      "solution": [
+        "down",
+        "right",
+        "up",
+        "right",
+        "up",
+        "up",
+        "left",
+        "up",
+        "right"
+      ],
+      "quality": 165,
+      "mechanics": [
+        "hole",
+        "block"
+      ],
+      "events": [
+        "BLOCK_PUSHED",
+        "HOLE_FILLED"
+      ]
+    },
+    {
+      "grid": [
+        "#####",
+        "#..##",
+        "#...#",
+        "##..#",
+        "#...#",
+        "#...#",
+        "#...#",
+        "##.B#",
+        "#..H#",
+        "#..P#",
         "#..##",
         "##..#",
-        "#...#",
         "#S..#",
+        "#####"
+      ],
+      "width": 5,
+      "height": 14,
+      "par": 9,
+      "solution": [
+        "right",
+        "up",
+        "left",
+        "up",
+        "left",
+        "down",
+        "right",
+        "down",
+        "down"
+      ],
+      "quality": 165,
+      "mechanics": [
+        "hole",
+        "block"
+      ],
+      "events": [
+        "BLOCK_PUSHED",
+        "HOLE_FILLED"
+      ]
+    },
+    {
+      "grid": [
+        "#####",
+        "#..##",
         "#...#",
         "##..#",
+        "#S..#",
         "#...#",
+        "#.B##",
+        "##H.#",
+        "#...#",
+        "###.#",
+        "#..P#",
         "#...#",
         "#.#.#",
         "#####"
       ],
       "width": 5,
-      "height": 13,
-      "par": 7,
+      "height": 14,
+      "par": 9,
+      "solution": [
+        "right",
+        "up",
+        "left",
+        "up",
+        "right",
+        "down",
+        "down",
+        "right",
+        "down"
+      ],
+      "quality": 165,
+      "mechanics": [
+        "hole",
+        "block"
+      ],
+      "events": [
+        "BLOCK_PUSHED",
+        "HOLE_FILLED"
+      ]
+    },
+    {
+      "grid": [
+        "#####",
+        "#.BH#",
+        "#..P#",
+        "#...#",
+        "#.#.#",
+        "#..##",
+        "##..#",
+        "#...#",
+        "#...#",
+        "#S..#",
+        "#...#",
+        "#.#.#",
+        "#.#.#",
+        "#####"
+      ],
+      "width": 5,
+      "height": 14,
+      "par": 9,
       "solution": [
         "right",
         "up",
@@ -2941,33 +1811,1287 @@
         "up",
         "left",
         "up",
+        "right",
+        "right",
+        "down"
+      ],
+      "quality": 165,
+      "mechanics": [
+        "hole",
+        "block"
+      ],
+      "events": [
+        "BLOCK_PUSHED",
+        "HOLE_FILLED"
+      ]
+    },
+    {
+      "grid": [
+        "######",
+        "#...##",
+        "#...P#",
+        "#....#",
+        "#T...#",
+        "#T##.#",
+        "##...#",
+        "#T.#.#",
+        "#...##",
+        "###..#",
+        "#....#",
+        "#....#",
+        "#....#",
+        "#S...#",
+        "######"
+      ],
+      "width": 6,
+      "height": 15,
+      "par": 10,
+      "solution": [
+        "right",
+        "up",
+        "left",
+        "up",
+        "left",
+        "up",
+        "right",
+        "up",
+        "right",
+        "up"
+      ],
+      "quality": 165,
+      "mechanics": [
+        "sticky"
+      ],
+      "events": [
+        "STICKY_STOPPED"
+      ]
+    },
+    {
+      "grid": [
+        "#####",
+        "#...#",
+        "#...#",
+        "#...#",
+        "#..##",
+        "#..P#",
+        "#.#.#",
+        "#..##",
+        "#S..#",
+        "#...#",
+        "#...#",
+        "#B..#",
+        "#...#",
+        "#####"
+      ],
+      "width": 5,
+      "height": 14,
+      "par": 10,
+      "solution": [
+        "right",
+        "down",
+        "left",
+        "up",
+        "up",
+        "right",
+        "up",
+        "left",
+        "down",
         "right"
       ],
-      "quality": 100,
+      "quality": 160,
+      "mechanics": [
+        "block"
+      ],
+      "events": [
+        "BLOCK_PUSHED"
+      ]
+    },
+    {
+      "grid": [
+        "#####",
+        "#..##",
+        "#...#",
+        "#...#",
+        "##.B#",
+        "#..P#",
+        "##..#",
+        "#...#",
+        "#..##",
+        "##..#",
+        "#...#",
+        "#.###",
+        "#S..#",
+        "#####"
+      ],
+      "width": 5,
+      "height": 14,
+      "par": 10,
+      "solution": [
+        "up",
+        "right",
+        "up",
+        "left",
+        "up",
+        "left",
+        "down",
+        "right",
+        "down",
+        "down"
+      ],
+      "quality": 160,
+      "mechanics": [
+        "block"
+      ],
+      "events": [
+        "BLOCK_PUSHED"
+      ]
+    },
+    {
+      "grid": [
+        "######",
+        "#...P#",
+        "#...##",
+        "#...##",
+        "#....#",
+        "##...#",
+        "#..###",
+        "#....#",
+        "#....#",
+        "#....#",
+        "#T#.##",
+        "###.T#",
+        "#ST..#",
+        "#.#..#",
+        "######"
+      ],
+      "width": 6,
+      "height": 15,
+      "par": 10,
+      "solution": [
+        "right",
+        "right",
+        "up",
+        "left",
+        "up",
+        "left",
+        "up",
+        "right",
+        "up",
+        "right"
+      ],
+      "quality": 160,
+      "mechanics": [
+        "sticky"
+      ],
+      "events": [
+        "STICKY_STOPPED"
+      ]
+    },
+    {
+      "grid": [
+        "######",
+        "##T..#",
+        "#....#",
+        "#...P#",
+        "#..#.#",
+        "##..##",
+        "#..T.#",
+        "#...##",
+        "###..#",
+        "#..#.#",
+        "#....#",
+        "#S#..#",
+        "#T...#",
+        "#..#.#",
+        "######"
+      ],
+      "width": 6,
+      "height": 15,
+      "par": 10,
+      "solution": [
+        "down",
+        "right",
+        "up",
+        "left",
+        "up",
+        "up",
+        "left",
+        "up",
+        "right",
+        "down"
+      ],
+      "quality": 160,
+      "mechanics": [
+        "sticky"
+      ],
+      "events": [
+        "STICKY_STOPPED"
+      ]
+    },
+    {
+      "grid": [
+        "######",
+        "#....#",
+        "#.##P#",
+        "#...##",
+        "##...#",
+        "#.#.##",
+        "###..#",
+        "#....#",
+        "#.####",
+        "#T...#",
+        "#....#",
+        "#..#.#",
+        "#.#..#",
+        "#ST.T#",
+        "######"
+      ],
+      "width": 6,
+      "height": 15,
+      "par": 10,
+      "solution": [
+        "up",
+        "up",
+        "right",
+        "up",
+        "left",
+        "up",
+        "left",
+        "up",
+        "right",
+        "down"
+      ],
+      "quality": 160,
+      "mechanics": [
+        "sticky"
+      ],
+      "events": [
+        "STICKY_STOPPED"
+      ]
+    },
+    {
+      "grid": [
+        "######",
+        "#..###",
+        "#....#",
+        "#....#",
+        "#....#",
+        "#P...#",
+        "##...#",
+        "######",
+        "#.^..#",
+        "#...S#",
+        "#.#..#",
+        "#....#",
+        "#.#..#",
+        "#....#",
+        "######"
+      ],
+      "width": 6,
+      "height": 15,
+      "par": 7,
+      "solution": [
+        "up",
+        "left",
+        "down",
+        "left",
+        "up",
+        "up",
+        "up"
+      ],
+      "quality": 160,
+      "mechanics": [
+        "ramp",
+        "barrier"
+      ],
+      "events": [
+        "RAMP_USED"
+      ]
+    },
+    {
+      "grid": [
+        "######",
+        "#....#",
+        "#....#",
+        "#..#.#",
+        "#.#.S#",
+        "#....#",
+        "#.#^.#",
+        "#....#",
+        "#.P..#",
+        "#....#",
+        "#.^..#",
+        "#^...#",
+        "#.B..#",
+        "#....#",
+        "######"
+      ],
+      "width": 6,
+      "height": 15,
+      "par": 8,
+      "solution": [
+        "up",
+        "left",
+        "down",
+        "right",
+        "down",
+        "left",
+        "up",
+        "up"
+      ],
+      "quality": 160,
+      "mechanics": [
+        "ramp",
+        "penguin_on_wall"
+      ],
+      "penguinOnWall": true,
+      "events": [
+        "BLOCK_PUSHED",
+        "RAMP_USED"
+      ]
+    },
+    {
+      "grid": [
+        "######",
+        "##.T##",
+        "#S##.#",
+        "#..#.#",
+        "#..###",
+        "##...#",
+        "#.#..#",
+        "#....#",
+        "#.#.##",
+        "#....#",
+        "#....#",
+        "#.#..#",
+        "#T#..#",
+        "#..TP#",
+        "######"
+      ],
+      "width": 6,
+      "height": 15,
+      "par": 10,
+      "solution": [
+        "down",
+        "right",
+        "down",
+        "right",
+        "down",
+        "left",
+        "down",
+        "down",
+        "right",
+        "right"
+      ],
+      "quality": 155,
+      "mechanics": [
+        "sticky"
+      ],
+      "events": [
+        "STICKY_STOPPED"
+      ]
+    },
+    {
+      "grid": [
+        "#####",
+        "#...#",
+        "#S#.#",
+        "##..#",
+        "#.B.#",
+        "#...#",
+        "#...#",
+        "#...#",
+        "#..##",
+        "#...#",
+        "#.#.#",
+        "###P#",
+        "##..#",
+        "#####"
+      ],
+      "width": 5,
+      "height": 14,
+      "par": 9,
+      "solution": [
+        "up",
+        "right",
+        "down",
+        "left",
+        "up",
+        "right",
+        "down",
+        "right",
+        "down"
+      ],
+      "quality": 150,
+      "mechanics": [
+        "block"
+      ],
+      "events": [
+        "BLOCK_PUSHED"
+      ]
+    },
+    {
+      "grid": [
+        "#####",
+        "#S.##",
+        "#.#.#",
+        "#.#.#",
+        "#.#.#",
+        "#...#",
+        "###.#",
+        "##.3#",
+        "#...#",
+        "#..##",
+        "##1P#",
+        "#2..#",
+        "#...#",
+        "#####"
+      ],
+      "width": 5,
+      "height": 14,
+      "par": 9,
+      "solution": [
+        "down",
+        "right",
+        "down",
+        "left",
+        "down",
+        "right",
+        "down",
+        "right",
+        "up"
+      ],
+      "quality": 150,
+      "mechanics": [
+        "crack"
+      ],
+      "events": [
+        "CRACK_BROKEN"
+      ]
+    },
+    {
+      "grid": [
+        "#####",
+        "#..P#",
+        "##..#",
+        "#..##",
+        "#...#",
+        "#43.#",
+        "#..##",
+        "#.#.#",
+        "#...#",
+        "##..#",
+        "#S..#",
+        "##3.#",
+        "##..#",
+        "#####"
+      ],
+      "width": 5,
+      "height": 14,
+      "par": 9,
+      "solution": [
+        "right",
+        "down",
+        "left",
+        "up",
+        "left",
+        "up",
+        "right",
+        "up",
+        "right"
+      ],
+      "quality": 150,
+      "mechanics": [
+        "crack"
+      ],
+      "events": [
+        "CRACK_BROKEN"
+      ]
+    },
+    {
+      "grid": [
+        "#####",
+        "#.#.#",
+        "#S.##",
+        "#.#P#",
+        "#...#",
+        "#..4#",
+        "#..##",
+        "#3..#",
+        "#...#",
+        "##.2#",
+        "#...#",
+        "#..##",
+        "##..#",
+        "#####"
+      ],
+      "width": 5,
+      "height": 14,
+      "par": 9,
+      "solution": [
+        "down",
+        "right",
+        "down",
+        "left",
+        "down",
+        "right",
+        "up",
+        "right",
+        "up"
+      ],
+      "quality": 150,
+      "mechanics": [
+        "crack"
+      ],
+      "events": [
+        "CRACK_BROKEN"
+      ]
+    },
+    {
+      "grid": [
+        "######",
+        "#S...#",
+        "#..T##",
+        "#..#.#",
+        "#....#",
+        "##...#",
+        "#...##",
+        "#..###",
+        "#..#.#",
+        "#...P#",
+        "#T...#",
+        "#T...#",
+        "#..#.#",
+        "#..#.#",
+        "######"
+      ],
+      "width": 6,
+      "height": 15,
+      "par": 9,
+      "solution": [
+        "down",
+        "right",
+        "down",
+        "left",
+        "down",
+        "left",
+        "up",
+        "right",
+        "up"
+      ],
+      "quality": 150,
+      "mechanics": [
+        "sticky"
+      ],
+      "events": [
+        "STICKY_STOPPED"
+      ]
+    },
+    {
+      "grid": [
+        "######",
+        "#....#",
+        "#....#",
+        "###..#",
+        "#....#",
+        "#...P#",
+        "##...#",
+        "######",
+        "#..^.#",
+        "##...#",
+        "#....#",
+        "#..#.#",
+        "#..#.#",
+        "#.S..#",
+        "######"
+      ],
+      "width": 6,
+      "height": 15,
+      "par": 6,
+      "solution": [
+        "up",
+        "right",
+        "down",
+        "right",
+        "up",
+        "up"
+      ],
+      "quality": 150,
+      "mechanics": [
+        "ramp",
+        "barrier"
+      ],
+      "events": [
+        "RAMP_USED"
+      ]
+    },
+    {
+      "grid": [
+        "#####",
+        "#..##",
+        "#...#",
+        "#..P#",
+        "#...#",
+        "#.#.#",
+        "#..##",
+        "##..#",
+        "#S..#",
+        "#...#",
+        "#...#",
+        "#...#",
+        "#####"
+      ],
+      "width": 5,
+      "height": 13,
+      "par": 10,
+      "solution": [
+        "right",
+        "up",
+        "left",
+        "up",
+        "left",
+        "up",
+        "right",
+        "down",
+        "right",
+        "up"
+      ],
+      "quality": 145,
       "mechanics": [],
       "events": []
     },
     {
       "grid": [
         "#####",
-        "#.#.#",
+        "#...#",
         "#.#.#",
         "#..##",
+        "#.B.#",
+        "#S..#",
+        "#.###",
+        "#...#",
+        "#.#.#",
+        "##.P#",
+        "#...#",
+        "##..#",
+        "##..#",
+        "#####"
+      ],
+      "width": 5,
+      "height": 14,
+      "par": 9,
+      "solution": [
+        "right",
+        "up",
+        "left",
+        "up",
+        "left",
+        "down",
+        "down",
+        "right",
+        "down"
+      ],
+      "quality": 145,
+      "mechanics": [
+        "block"
+      ],
+      "events": [
+        "BLOCK_PUSHED"
+      ]
+    },
+    {
+      "grid": [
+        "#####",
+        "#...#",
+        "#.#B#",
+        "#..P#",
+        "#...#",
+        "#...#",
+        "#.#.#",
+        "#..##",
+        "##..#",
+        "#S..#",
+        "#..##",
+        "#.#.#",
+        "#...#",
+        "#####"
+      ],
+      "width": 5,
+      "height": 14,
+      "par": 9,
+      "solution": [
+        "right",
+        "up",
+        "left",
+        "up",
+        "left",
+        "up",
+        "right",
+        "down",
+        "down"
+      ],
+      "quality": 145,
+      "mechanics": [
+        "block"
+      ],
+      "events": [
+        "BLOCK_PUSHED"
+      ]
+    },
+    {
+      "grid": [
+        "######",
+        "#....#",
+        "#..#.#",
+        "#....#",
+        "#....#",
+        "#....#",
+        "##..B#",
+        "#....#",
+        "#.P.##",
+        "#.^..#",
+        "#....#",
+        "##..^#",
+        "#....#",
+        "#..S^#",
+        "######"
+      ],
+      "width": 6,
+      "height": 15,
+      "par": 7,
+      "solution": [
+        "left",
+        "up",
+        "right",
+        "up",
+        "down",
+        "left",
+        "up"
+      ],
+      "quality": 140,
+      "mechanics": [
+        "ramp",
+        "penguin_on_wall"
+      ],
+      "penguinOnWall": true,
+      "events": [
+        "RAMP_USED"
+      ]
+    },
+    {
+      "grid": [
+        "######",
+        "#....#",
+        "#....#",
+        "#...<#",
+        "#....#",
+        "#..###",
+        "##P..#",
+        "#<...#",
+        "#.>..#",
+        "#....#",
+        "#....#",
+        "#...##",
+        "#S...#",
+        "#....#",
+        "######"
+      ],
+      "width": 6,
+      "height": 15,
+      "par": 7,
+      "solution": [
+        "up",
+        "right",
+        "left",
+        "up",
+        "left",
+        "up",
+        "right"
+      ],
+      "quality": 140,
+      "mechanics": [
+        "ramp",
+        "penguin_on_wall"
+      ],
+      "penguinOnWall": true,
+      "events": [
+        "RAMP_USED"
+      ]
+    },
+    {
+      "grid": [
+        "#####",
+        "#.1.#",
+        "#.#.#",
+        "#S..#",
+        "#4..#",
+        "#...#",
+        "#...#",
+        "##.4#",
+        "#...#",
+        "#..##",
+        "##..#",
+        "#..P#",
+        "#...#",
+        "#####"
+      ],
+      "width": 5,
+      "height": 14,
+      "par": 8,
+      "solution": [
+        "right",
+        "down",
+        "left",
+        "down",
+        "right",
+        "down",
+        "right",
+        "up"
+      ],
+      "quality": 136,
+      "mechanics": [
+        "crack"
+      ],
+      "events": [
+        "CRACK_BROKEN"
+      ]
+    },
+    {
+      "grid": [
+        "#####",
+        "#..1#",
+        "#S4.#",
+        "#.#.#",
+        "##..#",
+        "#..##",
+        "#.#.#",
+        "#...#",
+        "###.#",
+        "#..P#",
+        "#.###",
+        "##.2#",
+        "#...#",
+        "#####"
+      ],
+      "width": 5,
+      "height": 14,
+      "par": 8,
+      "solution": [
+        "right",
+        "down",
+        "left",
+        "down",
+        "left",
+        "down",
+        "right",
+        "down"
+      ],
+      "quality": 135,
+      "mechanics": [
+        "crack"
+      ],
+      "events": [
+        "CRACK_BROKEN"
+      ]
+    },
+    {
+      "grid": [
+        "#####",
+        "#...#",
+        "##.P#",
+        "##.2#",
+        "#..##",
+        "#.3.#",
+        "##..#",
+        "#S..#",
+        "##..#",
+        "#.2.#",
+        "#...#",
+        "#...#",
+        "#...#",
+        "#####"
+      ],
+      "width": 5,
+      "height": 14,
+      "par": 8,
+      "solution": [
+        "right",
+        "up",
+        "left",
+        "up",
+        "right",
+        "up",
+        "right",
+        "down"
+      ],
+      "quality": 135,
+      "mechanics": [
+        "crack"
+      ],
+      "events": [
+        "CRACK_BROKEN"
+      ]
+    },
+    {
+      "grid": [
+        "#####",
+        "##.4#",
+        "#...#",
+        "#S..#",
+        "##..#",
+        "#..##",
+        "#2###",
         "#...#",
         "##.P#",
         "#..##",
+        "#.4.#",
+        "#.#.#",
+        "#...#",
+        "#####"
+      ],
+      "width": 5,
+      "height": 14,
+      "par": 8,
+      "solution": [
+        "right",
+        "down",
+        "left",
+        "down",
+        "left",
+        "down",
+        "right",
+        "down"
+      ],
+      "quality": 135,
+      "mechanics": [
+        "crack"
+      ],
+      "events": [
+        "CRACK_BROKEN"
+      ]
+    },
+    {
+      "grid": [
+        "#####",
+        "#.3.#",
+        "#..P#",
+        "#.#.#",
+        "#..3#",
+        "##2##",
         "##..#",
-        "##..#",
+        "#.#.#",
         "#S..#",
+        "##.##",
+        "##..#",
+        "#.#.#",
+        "#.#.#",
+        "#####"
+      ],
+      "width": 5,
+      "height": 14,
+      "par": 8,
+      "solution": [
+        "right",
+        "up",
+        "left",
+        "up",
+        "left",
+        "up",
+        "right",
+        "down"
+      ],
+      "quality": 135,
+      "mechanics": [
+        "crack"
+      ],
+      "events": [
+        "CRACK_BROKEN"
+      ]
+    },
+    {
+      "grid": [
+        "#########",
+        "#.......#",
+        "#S......#",
+        "#.......#",
+        "#.......#",
+        "#.......#",
+        "#.......#",
+        "#..v....#",
+        "#.>B<...#",
+        "#..^...##",
+        "#.......#",
+        "#.......#",
+        "#.......#",
+        "#.......#",
+        "#....#..#",
+        "#.......#",
+        "#....#.P#",
+        "#########"
+      ],
+      "width": 9,
+      "height": 18,
+      "par": 10,
+      "solution": [
+        "down",
+        "right",
+        "up",
+        "up",
+        "left",
+        "up",
+        "right",
+        "right",
+        "down",
+        "right"
+      ],
+      "quality": 135,
+      "mechanics": [
+        "four_ramp_block"
+      ],
+      "events": []
+    },
+    {
+      "grid": [
+        "#####",
+        "###.#",
+        "#...#",
+        "#...#",
+        "##.P#",
+        "#..##",
+        "#..##",
+        "#...#",
+        "#...#",
+        "###.#",
+        "#...#",
+        "#S.##",
+        "#####"
+      ],
+      "width": 5,
+      "height": 13,
+      "par": 9,
+      "solution": [
+        "up",
+        "right",
+        "up",
+        "left",
+        "up",
+        "right",
+        "up",
+        "right",
+        "down"
+      ],
+      "quality": 130,
+      "mechanics": [],
+      "events": []
+    },
+    {
+      "grid": [
+        "#####",
+        "##..#",
         "#...#",
         "#..##",
+        "#...#",
+        "##..#",
+        "#...#",
+        "#S..#",
+        "##.##",
+        "#...#",
+        "#...#",
+        "#..P#",
+        "#####"
+      ],
+      "width": 5,
+      "height": 13,
+      "par": 9,
+      "solution": [
+        "right",
+        "up",
+        "left",
+        "up",
+        "right",
+        "up",
+        "left",
+        "down",
+        "right"
+      ],
+      "quality": 130,
+      "mechanics": [],
+      "events": []
+    },
+    {
+      "grid": [
+        "######",
+        "#....#",
+        "#....#",
+        "#....#",
+        "#...##",
+        "#.#<.#",
+        "#.P#.#",
+        "#..#.#",
+        "#....#",
+        "#....#",
+        "#....#",
+        "#.S.B#",
+        "#....#",
+        "#...v#",
+        "######"
+      ],
+      "width": 6,
+      "height": 15,
+      "par": 6,
+      "solution": [
+        "right",
+        "up",
+        "right",
+        "up",
+        "left",
+        "down"
+      ],
+      "quality": 120,
+      "mechanics": [
+        "ramp",
+        "penguin_on_wall"
+      ],
+      "penguinOnWall": true,
+      "events": [
+        "RAMP_USED"
+      ]
+    },
+    {
+      "grid": [
+        "#####",
+        "#...#",
+        "#..##",
+        "##..#",
+        "#...#",
+        "#S#.#",
+        "#...#",
+        "#...#",
+        "##..#",
+        "#...#",
+        "#..##",
+        "##.P#",
+        "#####"
+      ],
+      "width": 5,
+      "height": 13,
+      "par": 8,
+      "solution": [
+        "up",
+        "right",
+        "down",
+        "left",
+        "down",
+        "right",
+        "down",
+        "right"
+      ],
+      "quality": 115,
+      "mechanics": [],
+      "events": []
+    },
+    {
+      "grid": [
+        "#########",
+        "#.......#",
+        "#.......#",
+        "#.......#",
+        "#.......#",
+        "#.......#",
+        "#S......#",
+        "##......#",
+        "#......##",
+        "#.......#",
+        "#.......#",
+        "#.>H....#",
+        "#.......#",
+        "#......P#",
+        "#.......#",
+        "#...#...#",
+        "#.......#",
+        "#########"
+      ],
+      "width": 9,
+      "height": 18,
+      "par": 8,
+      "solution": [
+        "right",
+        "down",
+        "left",
+        "down",
+        "left",
+        "down",
+        "right",
+        "up"
+      ],
+      "quality": 115,
+      "mechanics": [
+        "ramp_jump"
+      ],
+      "events": []
+    },
+    {
+      "grid": [
+        "#########",
+        "##...B..#",
+        "#....#..#",
+        "#S...B#.#",
+        "#.......#",
+        "#......P#",
+        "#.......#",
+        "#.......#",
+        "#.......#",
+        "#.......#",
+        "#.......#",
+        "#.......#",
+        "#......##",
+        "#.......#",
+        "#.......#",
+        "#.......#",
+        "#.......#",
+        "#########"
+      ],
+      "width": 9,
+      "height": 18,
+      "par": 7,
+      "solution": [
+        "right",
+        "up",
+        "right",
+        "right",
+        "down",
+        "right",
+        "down"
+      ],
+      "quality": 115,
+      "mechanics": [
+        "block_stack"
+      ],
+      "events": [
+        "BLOCK_PUSHED"
+      ]
+    },
+    {
+      "grid": [
+        "#####",
+        "##.##",
+        "##..#",
+        "##..#",
+        "#...#",
+        "#...#",
+        "#..##",
+        "#...#",
+        "#.#P#",
+        "#...#",
+        "#.#.#",
+        "#S#.#",
         "#####"
       ],
       "width": 5,
       "height": 13,
       "par": 7,
       "solution": [
-        "down",
+        "up",
         "right",
         "up",
         "left",
@@ -2981,51 +3105,19 @@
     },
     {
       "grid": [
-        "#####",
-        "#..##",
-        "###.#",
-        "#S.##",
-        "##.##",
-        "#...#",
-        "#.#.#",
-        "#...#",
-        "#..##",
-        "##..#",
-        "#...#",
-        "#..P#",
-        "#####"
-      ],
-      "width": 5,
-      "height": 13,
-      "par": 7,
-      "solution": [
-        "right",
-        "down",
-        "left",
-        "down",
-        "right",
-        "down",
-        "right"
-      ],
-      "quality": 100,
-      "mechanics": [],
-      "events": []
-    },
-    {
-      "grid": [
         "######",
-        "#...##",
+        "##..##",
         "#....#",
-        "#...^#",
         "#....#",
-        "#...<#",
-        "#...##",
-        "#.P<.#",
-        "#B...#",
-        "#...##",
-        "#...##",
-        "#...##",
-        "#...S#",
+        "#....#",
+        "#....#",
+        "#....#",
+        "#.v..#",
+        "#.P.B#",
+        "#....#",
+        "#..#.#",
+        "#....#",
+        "##..S#",
         "#....#",
         "######"
       ],
@@ -3033,11 +3125,11 @@
       "height": 15,
       "par": 5,
       "solution": [
+        "up",
         "left",
         "up",
-        "right",
-        "up",
-        "left"
+        "left",
+        "down"
       ],
       "quality": 100,
       "mechanics": [
@@ -3052,75 +3144,113 @@
     },
     {
       "grid": [
-        "######",
-        "#>...#",
-        "#....#",
-        "#....#",
-        "#....#",
-        "#.v..#",
-        "#.P>.#",
-        "#....#",
-        "#....#",
-        "#....#",
-        "#..#.#",
-        "#..#.#",
-        "#S.#.#",
-        "#....#",
-        "######"
-      ],
-      "width": 6,
-      "height": 15,
-      "par": 5,
-      "solution": [
-        "up",
-        "right",
-        "up",
-        "left",
-        "down"
-      ],
-      "quality": 100,
-      "mechanics": [
-        "ramp",
-        "penguin_on_wall"
-      ],
-      "penguinOnWall": true,
-      "events": [
-        "RAMP_USED"
-      ]
-    },
-    {
-      "grid": [
         "#########",
-        "#.......#",
-        "#.......#",
-        "#......P#",
-        "#.>BHH..#",
-        "#.......#",
-        "#.......#",
+        "#S......#",
+        "#....#..#",
         "#......##",
         "#.......#",
         "#.......#",
-        "##......#",
         "#.......#",
-        "#S......#",
+        "#.#.B...#",
+        "#...#<..#",
+        "#...#B<.#",
         "#.......#",
         "#.......#",
-        "#...#...#",
-        "#...#...#",
+        "#.......#",
+        "#.......#",
+        "#......P#",
+        "#.......#",
+        "#.#.....#",
         "#########"
       ],
       "width": 9,
       "height": 18,
       "par": 6,
       "solution": [
+        "right",
+        "down",
+        "left",
         "down",
         "right",
+        "down"
+      ],
+      "quality": 85,
+      "mechanics": [
+        "staircase"
+      ],
+      "events": []
+    },
+    {
+      "grid": [
+        "#########",
+        "#.....#.#",
+        "#.......#",
+        "##......#",
+        "#.B.....#",
+        "#.#<....#",
+        "#.#B<...#",
+        "#.......#",
+        "#S......#",
+        "#......##",
+        "#.......#",
+        "#.......#",
+        "#.......#",
+        "#.......#",
+        "#.......#",
+        "#.......#",
+        "#.#....P#",
+        "#########"
+      ],
+      "width": 9,
+      "height": 18,
+      "par": 5,
+      "solution": [
         "up",
+        "right",
+        "right",
+        "down",
+        "right"
+      ],
+      "quality": 85,
+      "mechanics": [
+        "staircase"
+      ],
+      "events": [
+        "BLOCK_PUSHED"
+      ]
+    },
+    {
+      "grid": [
+        "#########",
+        "#.......#",
+        "#..#...P#",
+        "#..#....#",
+        "#.......#",
+        "#......##",
+        "#.......#",
+        "##......#",
+        "#.......#",
+        "#.H.....#",
+        "#.H.....#",
+        "#SB.....#",
+        "#.^.....#",
+        "#.......#",
+        "#.......#",
+        "#.......#",
+        "#.......#",
+        "#########"
+      ],
+      "width": 9,
+      "height": 18,
+      "par": 5,
+      "solution": [
+        "right",
+        "right",
         "up",
         "right",
         "down"
       ],
-      "quality": 100,
+      "quality": 85,
       "mechanics": [
         "ramp_jump"
       ],
@@ -3131,61 +3261,22 @@
     {
       "grid": [
         "#########",
-        "#S#.....#",
+        "#...HH#.#",
+        "#...HH..#",
+        "#...HH..#",
+        "#...HH..#",
+        "#...HH..#",
+        "#...HH..#",
+        "#...HH..#",
+        "#...HH..#",
+        "#..BHH..#",
         "#.......#",
-        "#.......#",
-        "##......#",
-        "#.......#",
-        "#.......#",
-        "#.......#",
-        "#.......#",
-        "#......##",
-        "#.......#",
-        "#.......#",
-        "#.......#",
-        "#...B...#",
-        "#...#..P#",
-        "#...B...#",
-        "#.......#",
-        "#########"
-      ],
-      "width": 9,
-      "height": 18,
-      "par": 7,
-      "solution": [
-        "down",
-        "right",
-        "up",
-        "left",
-        "down",
-        "right",
-        "up"
-      ],
-      "quality": 100,
-      "mechanics": [
-        "block_stack"
-      ],
-      "events": []
-    },
-    {
-      "grid": [
-        "#########",
-        "#.#.....#",
-        "#.......#",
-        "#.......#",
-        "#......P#",
-        "#......##",
-        "#....#..#",
-        "#..H....#",
-        "#.#^....#",
-        "#.......#",
-        "#.......#",
-        "#.......#",
-        "#.......#",
-        "#S......#",
-        "#.......#",
-        "#.......#",
-        "#.......#",
+        "##..HH..#",
+        "#S.#HH..#",
+        "#...HH..#",
+        "#...HH..#",
+        "#...HH.P#",
+        "#...HH..#",
         "#########"
       ],
       "width": 9,
@@ -3195,47 +3286,9 @@
         "right",
         "up",
         "left",
-        "up",
+        "down",
         "right",
         "down"
-      ],
-      "quality": 85,
-      "mechanics": [
-        "ramp_jump"
-      ],
-      "events": []
-    },
-    {
-      "grid": [
-        "#########",
-        "#...#...#",
-        "#.......#",
-        "#S......#",
-        "#.......#",
-        "#.......#",
-        "#B......#",
-        "#.......#",
-        "#.......#",
-        "#HHHH.HH#",
-        "#HHHH.HH#",
-        "#......P#",
-        "#.......#",
-        "#.......#",
-        "#.......#",
-        "#.......#",
-        "#.......#",
-        "#########"
-      ],
-      "width": 9,
-      "height": 18,
-      "par": 6,
-      "solution": [
-        "right",
-        "up",
-        "left",
-        "down",
-        "right",
-        "up"
       ],
       "quality": 85,
       "mechanics": [
@@ -3246,36 +3299,296 @@
     {
       "grid": [
         "#########",
-        "#.......#",
+        "#..B....#",
+        "#..#....#",
+        "#..B...P#",
+        "#.....###",
         "#.......#",
         "#.......#",
         "#.......#",
         "#.......#",
         "#.#.....#",
+        "#S......#",
         "#.......#",
-        "#......##",
         "#.......#",
         "#.......#",
-        "#.....B.#",
-        "#.....#.#",
-        "#.....BP#",
         "#.......#",
-        "##......#",
-        "#S....#.#",
+        "#.......#",
+        "#.......#",
         "#########"
       ],
       "width": 9,
       "height": 18,
-      "par": 6,
+      "par": 5,
       "solution": [
-        "right",
         "up",
-        "left",
+        "right",
+        "right",
+        "down",
+        "right"
+      ],
+      "quality": 85,
+      "mechanics": [
+        "block_stack"
+      ],
+      "events": [
+        "BLOCK_PUSHED"
+      ]
+    },
+    {
+      "grid": [
+        "#########",
+        "#.......#",
+        "#.......#",
+        "#S......#",
+        "#.......#",
+        "#.......#",
+        "#......##",
+        "#.......#",
+        "#.#.v...#",
+        "#..>B<..#",
+        "#...^...#",
+        "##.....P#",
+        "#.......#",
+        "#....#..#",
+        "#.......#",
+        "#.......#",
+        "#.......#",
+        "#########"
+      ],
+      "width": 9,
+      "height": 18,
+      "par": 5,
+      "solution": [
+        "down",
+        "right",
         "down",
         "right",
         "up"
       ],
-      "quality": 85,
+      "quality": 70,
+      "mechanics": [
+        "four_ramp_block"
+      ],
+      "events": []
+    },
+    {
+      "grid": [
+        "#########",
+        "#....#..#",
+        "#.......#",
+        "#......P#",
+        "#.......#",
+        "#.......#",
+        "#S.#....#",
+        "#....v..#",
+        "#...>B<.#",
+        "#....^..#",
+        "#.......#",
+        "#.......#",
+        "#.......#",
+        "#.......#",
+        "#.......#",
+        "#.......#",
+        "#......##",
+        "#########"
+      ],
+      "width": 9,
+      "height": 18,
+      "par": 5,
+      "solution": [
+        "down",
+        "right",
+        "up",
+        "right",
+        "up"
+      ],
+      "quality": 70,
+      "mechanics": [
+        "four_ramp_block"
+      ],
+      "events": []
+    },
+    {
+      "grid": [
+        "#########",
+        "#.......#",
+        "#.......#",
+        "#.#....P#",
+        "#.......#",
+        "##......#",
+        "#...#...#",
+        "#.......#",
+        "#.......#",
+        "#..B...##",
+        "#..#<...#",
+        "#..#B<..#",
+        "#S......#",
+        "#.......#",
+        "#.......#",
+        "#.......#",
+        "#.......#",
+        "#########"
+      ],
+      "width": 9,
+      "height": 18,
+      "par": 5,
+      "solution": [
+        "up",
+        "right",
+        "up",
+        "right",
+        "down"
+      ],
+      "quality": 70,
+      "mechanics": [
+        "staircase"
+      ],
+      "events": []
+    },
+    {
+      "grid": [
+        "#########",
+        "#.......#",
+        "#......P#",
+        "#.......#",
+        "#.......#",
+        "#.......#",
+        "#.#.....#",
+        "#.......#",
+        "##......#",
+        "#S.>H...#",
+        "#.......#",
+        "#.......#",
+        "#.#.....#",
+        "#.......#",
+        "#.......#",
+        "#.......#",
+        "#.....#.#",
+        "#########"
+      ],
+      "width": 9,
+      "height": 18,
+      "par": 5,
+      "solution": [
+        "down",
+        "right",
+        "up",
+        "right",
+        "down"
+      ],
+      "quality": 70,
+      "mechanics": [
+        "ramp_jump"
+      ],
+      "events": []
+    },
+    {
+      "grid": [
+        "#########",
+        "#......##",
+        "#.......#",
+        "#.......#",
+        "#.......#",
+        "#.......#",
+        "#.......#",
+        "#.......#",
+        "#S......#",
+        "#HHHHH.H#",
+        "#HHHHH.H#",
+        "#.B.....#",
+        "#.......#",
+        "#.......#",
+        "#......P#",
+        "#.......#",
+        "#.......#",
+        "#########"
+      ],
+      "width": 9,
+      "height": 18,
+      "par": 5,
+      "solution": [
+        "up",
+        "right",
+        "down",
+        "right",
+        "up"
+      ],
+      "quality": 70,
+      "mechanics": [
+        "chasm"
+      ],
+      "events": []
+    },
+    {
+      "grid": [
+        "#########",
+        "#...HH..#",
+        "##..HH..#",
+        "#...HH..#",
+        "#...HH..#",
+        "#...HH..#",
+        "#...HH..#",
+        "#...HH..#",
+        "#...HH..#",
+        "##..HH..#",
+        "#......B#",
+        "#...HH..#",
+        "#...HH..#",
+        "#S..HH..#",
+        "#...HH.P#",
+        "#...HH..#",
+        "#...HH..#",
+        "#########"
+      ],
+      "width": 9,
+      "height": 18,
+      "par": 5,
+      "solution": [
+        "up",
+        "right",
+        "down",
+        "right",
+        "up"
+      ],
+      "quality": 70,
+      "mechanics": [
+        "chasm"
+      ],
+      "events": []
+    },
+    {
+      "grid": [
+        "#########",
+        "#...#...#",
+        "#......##",
+        "#.......#",
+        "#.......#",
+        "#.......#",
+        "#......P#",
+        "#.......#",
+        "#.......#",
+        "#.......#",
+        "#.......#",
+        "#..#..B.#",
+        "#.....#.#",
+        "#S....B.#",
+        "##......#",
+        "#.......#",
+        "#.......#",
+        "#########"
+      ],
+      "width": 9,
+      "height": 18,
+      "par": 5,
+      "solution": [
+        "up",
+        "right",
+        "down",
+        "right",
+        "up"
+      ],
+      "quality": 70,
       "mechanics": [
         "block_stack"
       ],
@@ -3285,371 +3598,38 @@
       "grid": [
         "######",
         "#....#",
-        "#...^#",
-        "#....#",
-        "#...S#",
-        "#....#",
-        "#.#>.#",
-        "#....#",
-        "#.P<.#",
-        "#....#",
-        "#...##",
-        "#....#",
-        "#....#",
-        "#....#",
-        "######"
-      ],
-      "width": 6,
-      "height": 15,
-      "par": 4,
-      "solution": [
-        "up",
-        "down",
-        "down",
-        "left"
-      ],
-      "quality": 80,
-      "mechanics": [
-        "ramp",
-        "penguin_on_wall"
-      ],
-      "penguinOnWall": true,
-      "events": [
-        "RAMP_USED"
-      ]
-    },
-    {
-      "grid": [
-        "######",
-        "#.#..#",
-        "#.S..#",
-        "#..>.#",
-        "#....#",
-        "#....#",
-        "#....#",
-        "#....#",
-        "#.P..#",
         "#.^#.#",
         "#....#",
         "#....#",
+        "#.P..#",
+        "#.^..#",
+        "#..#.#",
+        "#.B..#",
+        "#.#..#",
         "#....#",
-        "#>...#",
+        "#...v#",
+        "#..S.#",
+        "#....#",
         "######"
       ],
       "width": 6,
       "height": 15,
-      "par": 4,
+      "par": 3,
       "solution": [
-        "right",
-        "down",
+        "up",
         "left",
         "up"
       ],
-      "quality": 80,
+      "quality": 60,
       "mechanics": [
         "ramp",
         "penguin_on_wall"
       ],
       "penguinOnWall": true,
       "events": [
+        "BLOCK_PUSHED",
         "RAMP_USED"
       ]
-    },
-    {
-      "grid": [
-        "#########",
-        "#...#...#",
-        "#S.v....#",
-        "#.>B<...#",
-        "#..^..#.#",
-        "#.......#",
-        "#.......#",
-        "#.......#",
-        "#......P#",
-        "#.......#",
-        "#.......#",
-        "#...#...#",
-        "#.......#",
-        "#.......#",
-        "#.......#",
-        "#.......#",
-        "#.....#.#",
-        "#########"
-      ],
-      "width": 9,
-      "height": 18,
-      "par": 5,
-      "solution": [
-        "down",
-        "right",
-        "up",
-        "right",
-        "down"
-      ],
-      "quality": 70,
-      "mechanics": [
-        "four_ramp_block"
-      ],
-      "events": []
-    },
-    {
-      "grid": [
-        "#########",
-        "#.......#",
-        "#.......#",
-        "#.......#",
-        "#.......#",
-        "#.......#",
-        "#.......#",
-        "#...v..P#",
-        "##..Bv..#",
-        "#...##B.#",
-        "#.....###",
-        "#S......#",
-        "#.......#",
-        "#.......#",
-        "#.......#",
-        "#.......#",
-        "##......#",
-        "#########"
-      ],
-      "width": 9,
-      "height": 18,
-      "par": 5,
-      "solution": [
-        "up",
-        "right",
-        "up",
-        "right",
-        "down"
-      ],
-      "quality": 70,
-      "mechanics": [
-        "staircase"
-      ],
-      "events": []
-    },
-    {
-      "grid": [
-        "#########",
-        "#......##",
-        "#.......#",
-        "#.......#",
-        "#.......#",
-        "#.......#",
-        "#.......#",
-        "#.......#",
-        "#....#..#",
-        "#.....#.#",
-        "#.......#",
-        "#......P#",
-        "#...B...#",
-        "#S..#<..#",
-        "#...#B<.#",
-        "#.......#",
-        "#.....#.#",
-        "#########"
-      ],
-      "width": 9,
-      "height": 18,
-      "par": 5,
-      "solution": [
-        "up",
-        "right",
-        "down",
-        "right",
-        "down"
-      ],
-      "quality": 70,
-      "mechanics": [
-        "staircase"
-      ],
-      "events": []
-    },
-    {
-      "grid": [
-        "#########",
-        "#......##",
-        "#.B.....#",
-        "#.#<....#",
-        "#.#B<...#",
-        "#S#.....#",
-        "#.......#",
-        "#.....#.#",
-        "#.......#",
-        "#.......#",
-        "#......P#",
-        "#.......#",
-        "#.......#",
-        "#......##",
-        "#.......#",
-        "#.......#",
-        "#.......#",
-        "#########"
-      ],
-      "width": 9,
-      "height": 18,
-      "par": 5,
-      "solution": [
-        "up",
-        "right",
-        "down",
-        "right",
-        "down"
-      ],
-      "quality": 70,
-      "mechanics": [
-        "staircase"
-      ],
-      "events": []
-    },
-    {
-      "grid": [
-        "#########",
-        "#.......#",
-        "#.......#",
-        "#.......#",
-        "#.......#",
-        "#.......#",
-        "#.......#",
-        "#.......#",
-        "#.H.....#",
-        "#.H#...P#",
-        "#.B....##",
-        "#.^.....#",
-        "##......#",
-        "#....#..#",
-        "#S......#",
-        "#.......#",
-        "#.......#",
-        "#########"
-      ],
-      "width": 9,
-      "height": 18,
-      "par": 5,
-      "solution": [
-        "up",
-        "right",
-        "up",
-        "right",
-        "down"
-      ],
-      "quality": 70,
-      "mechanics": [
-        "ramp_jump"
-      ],
-      "events": []
-    },
-    {
-      "grid": [
-        "#########",
-        "#......##",
-        "#.......#",
-        "#.B.....#",
-        "#.......#",
-        "#..#....#",
-        "#.....#.#",
-        "#.......#",
-        "#......P#",
-        "#SHHH.HH#",
-        "#.HHH.HH#",
-        "#.......#",
-        "#.......#",
-        "#.......#",
-        "#..#....#",
-        "#.......#",
-        "#.......#",
-        "#########"
-      ],
-      "width": 9,
-      "height": 18,
-      "par": 5,
-      "solution": [
-        "up",
-        "right",
-        "down",
-        "right",
-        "down"
-      ],
-      "quality": 70,
-      "mechanics": [
-        "chasm"
-      ],
-      "events": []
-    },
-    {
-      "grid": [
-        "#########",
-        "#.......#",
-        "#.......#",
-        "#.......#",
-        "#......##",
-        "#..#....#",
-        "#.......#",
-        "#.......#",
-        "#.......#",
-        "#S..B...#",
-        "#...#...#",
-        "##..B...#",
-        "#......P#",
-        "#.......#",
-        "#.......#",
-        "#...#...#",
-        "#.......#",
-        "#########"
-      ],
-      "width": 9,
-      "height": 18,
-      "par": 5,
-      "solution": [
-        "down",
-        "right",
-        "up",
-        "right",
-        "down"
-      ],
-      "quality": 70,
-      "mechanics": [
-        "block_stack"
-      ],
-      "events": []
-    },
-    {
-      "grid": [
-        "#########",
-        "#.......#",
-        "#.......#",
-        "#.......#",
-        "#...#...#",
-        "#.......#",
-        "#.......#",
-        "#.......#",
-        "#.......#",
-        "#.......#",
-        "#.......#",
-        "#...#...#",
-        "#.......#",
-        "#...v...#",
-        "##.>B<.P#",
-        "#...^..##",
-        "#S......#",
-        "#########"
-      ],
-      "width": 9,
-      "height": 18,
-      "par": 5,
-      "solution": [
-        "up",
-        "right",
-        "right",
-        "up",
-        "right"
-      ],
-      "quality": 65,
-      "mechanics": [
-        "four_ramp_block"
-      ],
-      "events": []
     }
   ]
 }
