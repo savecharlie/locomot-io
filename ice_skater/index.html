@@ -1591,6 +1591,8 @@ function render() {
         const pixelX = ((absX % 16) + 16) % 16;  // Handle negative
         const pixelY = ((absY % 12) + 12) % 12;
         trailPoints.push({ tileX, tileY, pixelX, pixelY });
+        // Keep trail max 100 pixels long
+        if (trailPoints.length > 100) trailPoints.shift();
       }
       t.lastDrawnIndex = currentPixelIndex - 1;
     }
@@ -1622,6 +1624,7 @@ function render() {
           const pixelX = ((absX % 16) + 16) % 16;
           const pixelY = ((absY % 12) + 12) % 12;
           trailPoints.push({ tileX, tileY, pixelX, pixelY });
+          if (trailPoints.length > 100) trailPoints.shift();
         }
       }
       animation = null;
