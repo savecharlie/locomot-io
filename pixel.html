@@ -1911,7 +1911,11 @@
             const message = args.map(a => typeof a === 'object' ? JSON.stringify(a) : String(a)).join(' ');
             fetch(PIXEL_LOGS_URL, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: {
+                    'Content-Type': 'application/json',
+                    'apikey': SUPABASE_ANON_KEY,
+                    'Authorization': `Bearer ${SUPABASE_ANON_KEY}`
+                },
                 body: JSON.stringify({ level, message })
             }).catch(() => {});
         }
