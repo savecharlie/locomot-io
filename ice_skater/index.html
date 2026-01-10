@@ -378,6 +378,22 @@ const HINT_DISPLAY_MS = 2000;  // Show hint for 2 seconds
 // Trail - pixels left behind as skater moves
 let trailPoints = [];  // [{tileX, tileY, pixelX, pixelY}, ...]
 
+// Snow particles
+const snowflakes = [];
+const SNOWFLAKE_COUNT = 40;
+function initSnow() {
+  snowflakes.length = 0;
+  for (let i = 0; i < SNOWFLAKE_COUNT; i++) {
+    snowflakes.push({
+      x: Math.random() * canvas.width,
+      y: Math.random() * canvas.height,
+      speed: 0.3 + Math.random() * 0.7,  // 0.3-1.0 pixels per frame
+      sway: Math.random() * Math.PI * 2,  // phase offset for sine wave
+      size: Math.random() < 0.7 ? 1 : 2   // mostly 1px, some 2px
+    });
+  }
+}
+
 // Settings (persisted in localStorage)
 const settings = {
   hintsEnabled: true,
@@ -2078,6 +2094,26 @@ function render() {
     ctx.fillText('START OVER', canvas.width / 2, 20 * SCALE);
   }
 
+  // Snow animation
+  ctx.fillStyle = '#CFDFE2';  // Light color
+  for (const flake of snowflakes) {
+    // Update position
+    flake.y += flake.speed * SCALE;
+    flake.x += Math.sin(now / 1000 + flake.sway) * 0.3 * SCALE;  // Gentle sway
+
+    // Reset when falls off screen
+    if (flake.y > canvas.height) {
+      flake.y = -flake.size * SCALE;
+      flake.x = Math.random() * canvas.width;
+    }
+    // Wrap horizontally
+    if (flake.x < 0) flake.x = canvas.width;
+    if (flake.x > canvas.width) flake.x = 0;
+
+    // Draw pixel-aligned
+    ctx.fillRect(Math.floor(flake.x), Math.floor(flake.y), flake.size * SCALE, flake.size * SCALE);
+  }
+
   requestAnimationFrame(render);
 }
 
@@ -2431,6 +2467,7 @@ async function init() {
   // Check URL for level skip (e.g., ?level=9)
   const urlParams = new URLSearchParams(window.location.search);
   const startLevel = parseInt(urlParams.get('level')) || 0;
+  initSnow();  // Initialize snow particles
   loadLevel(Math.min(startLevel, allLevels.length - 1));
 }
 
