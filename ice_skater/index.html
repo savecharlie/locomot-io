@@ -175,36 +175,38 @@
       padding: 8px 12px !important;
       font-size: 16px !important;
     }
-    /* Mobile floating buttons - pixel style */
+    /* Mobile floating buttons - 16-bit pixel style */
     .mobile-float-btn {
       display: none;
       position: fixed;
       z-index: 50;
-      background: #2A1A3A;
-      border: 3px solid #A968C4;
-      color: #E8B4F8;
-      padding: 8px 12px;
+      background: #2a374f;
+      color: #b0d5cf;
+      padding: 6px 10px;
       font-family: monospace;
-      font-size: 12px;
+      font-size: 10px;
       font-weight: bold;
-      letter-spacing: 1px;
+      letter-spacing: 0px;
       text-transform: uppercase;
       cursor: pointer;
-      image-rendering: pixelated;
+      border: none;
+      border-radius: 0;
+      /* Pixel border - light top/left, dark bottom/right */
       box-shadow:
-        0 4px 0 #1A0A2A,
-        inset 0 -2px 0 rgba(0,0,0,0.3),
-        inset 0 2px 0 rgba(255,255,255,0.1);
+        inset 2px 2px 0 #696d75,
+        inset -2px -2px 0 #1d2b30,
+        0 0 0 2px #304d78;
     }
     .mobile-float-btn:active {
-      transform: translateY(2px);
+      /* Pressed - invert the inset */
       box-shadow:
-        0 2px 0 #1A0A2A,
-        inset 0 -2px 0 rgba(0,0,0,0.3);
+        inset -2px -2px 0 #696d75,
+        inset 2px 2px 0 #1d2b30,
+        0 0 0 2px #304d78;
     }
-    #mobile-settings { top: 10px; right: 10px; }
-    #mobile-hint { bottom: 60px; right: 10px; }
-    #mobile-undo { bottom: 10px; right: 10px; }
+    #mobile-settings { top: 12px; right: 12px; }
+    #mobile-hint { bottom: 56px; right: 12px; }
+    #mobile-undo { bottom: 12px; right: 12px; }
     @media (max-width: 899px) {
       .mobile-float-btn { display: block; }
     }
