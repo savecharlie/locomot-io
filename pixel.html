@@ -6107,6 +6107,9 @@ Canvas: ${state.canvasWidth}x${state.canvasHeight}`;
                 return;
             }
 
+            // Get tab ID before removing (for deletion from server)
+            const closedTabId = state.tabs[index].id;
+
             // If closing active tab, switch first
             if (index === state.activeTabIndex) {
                 const newIndex = index > 0 ? index - 1 : 0;
@@ -6120,6 +6123,20 @@ Canvas: ${state.canvasWidth}x${state.canvasHeight}`;
                 if (state.activeTabIndex > index) {
                     state.activeTabIndex--;
                 }
+            }
+
+            // Delete from local server
+            if (localServerAvailable && closedTabId) {
+                fetch(`${LOCAL_SAVE_SERVER}/projects/${closedTabId}`, { method: 'DELETE' })
+                    .then(() => console.log('Deleted from local server:', closedTabId))
+                    .catch(e => console.warn('Local delete failed:', e));
+            }
+
+            // Delete from cloud
+            if (state.user && supabaseClient && closedTabId) {
+                supabaseClient.from('projects').delete().eq('id', closedTabId)
+                    .then(() => console.log('Deleted from cloud:', closedTabId))
+                    .catch(e => console.warn('Cloud delete failed:', e));
             }
 
             renderTabBar();
