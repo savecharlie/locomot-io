@@ -4358,6 +4358,9 @@ Canvas: ${state.canvasWidth}x${state.canvasHeight}`;
 
         // ===== FILE OPERATIONS =====
         function exportPNG() {
+            // Force save before export (page might reload after share sheet)
+            autoSave();
+
             // Flatten all visible layers for export
             const exportCanvas = flattenForExport();
             exportCanvas.toBlob(async (blob) => {
