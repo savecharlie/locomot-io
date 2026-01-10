@@ -4527,8 +4527,12 @@ Canvas: ${state.canvasWidth}x${state.canvasHeight}`;
         const GAME_ASSETS_FUNCTION = `${SUPABASE_URL}/functions/v1/game-assets`;
 
         async function getAuthHeader() {
-            if (!supabaseClient) return null;
-            const { data: { session } } = await supabaseClient.auth.getSession();
+            if (!supabaseClient) {
+                console.log('getAuthHeader: no supabaseClient');
+                return null;
+            }
+            const { data: { session }, error } = await supabaseClient.auth.getSession();
+            console.log('getAuthHeader: session?', !!session, 'token?', !!session?.access_token, 'error?', error?.message || 'none');
             return session?.access_token ? `Bearer ${session.access_token}` : null;
         }
 
@@ -4545,10 +4549,11 @@ Canvas: ${state.canvasWidth}x${state.canvasHeight}`;
                     const resp = await fetch(`${GAME_ASSETS_FUNCTION}?action=list`, {
                         headers: { 'Authorization': authHeader }
                     });
-                    console.log('Edge function response:', resp.status);
-                    if (!resp.ok) throw new Error(await resp.text());
+                    const respText = await resp.text();
+                    console.log('Edge function response:', resp.status, respText);
+                    if (!resp.ok) throw new Error(respText);
 
-                    cachedAssets = await resp.json();
+                    cachedAssets = JSON.parse(respText);
                     await renderAssetsList(cachedAssets, 'cloud');
                     return;
                 } catch (e) {

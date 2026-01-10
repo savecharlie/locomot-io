@@ -38,7 +38,16 @@ Deno.serve(async (req) => {
       .auth.getUser(token)
 
     if (authError || !user || user.id !== ALLOWED_USER_ID) {
-      return new Response(JSON.stringify({ error: 'Unauthorized' }), {
+      return new Response(JSON.stringify({
+        error: 'Unauthorized',
+        debug: {
+          authError: authError?.message || null,
+          hasUser: !!user,
+          userId: user?.id || null,
+          expectedId: ALLOWED_USER_ID,
+          match: user?.id === ALLOWED_USER_ID
+        }
+      }), {
         status: 403,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' }
       })
