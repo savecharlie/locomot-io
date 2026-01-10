@@ -1475,8 +1475,8 @@ function render() {
     lastKeyFrameTime = now;
   }
 
-  // Draw ice tiles across entire canvas (3 variants for visual variety)
-  const floorVariants = [sprites['ice_floor_16x12'], sprites['ice_floor_16x12_v1'], sprites['ice_floor_16x12_v2']];
+  // Draw ice tiles across entire canvas (using v1 only for now - experiment)
+  const floorSprite = sprites['ice_floor_16x12_v1'];
   const tileW = Math.floor(TILE_W * SCALE);
   const tileH = Math.floor(TILE_H * SCALE);
   const tilesX = Math.ceil(canvas.width / tileW) + 2;
@@ -1485,9 +1485,6 @@ function render() {
     for (let tx = -1; tx < tilesX; tx++) {
       const px = Math.floor(tx * tileW);
       const py = Math.floor(ty * tileH);
-      // Pick variant based on position (deterministic pseudo-random)
-      const variant = Math.abs((tx * 7 + ty * 13) % 3);
-      const floorSprite = floorVariants[variant];
       if (floorSprite) {
         ctx.drawImage(floorSprite, px, py, tileW, tileH);
       }
