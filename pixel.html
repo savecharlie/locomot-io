@@ -4504,23 +4504,30 @@ Canvas: ${state.canvasWidth}x${state.canvasHeight}`;
 
         // ===== GAME ASSETS =====
         let cachedAssets = [];
-        const ASSETS_BUCKET = 'Game assets';
-        const ASSETS_PATH = 'admin/assets';
+        const GAME_ASSETS_FUNCTION = `${SUPABASE_URL}/functions/v1/game-assets`;
+
+        async function getAuthHeader() {
+            if (!supabaseClient) return null;
+            const { data: { session } } = await supabaseClient.auth.getSession();
+            return session?.access_token ? `Bearer ${session.access_token}` : null;
+        }
 
         async function showGameAssets() {
             document.getElementById('gameAssetsModal').classList.add('active');
             document.getElementById('assetsList').innerHTML = '<div style="text-align:center;padding:20px;color:var(--text-dim)">Loading...</div>';
 
-            // Try cloud first if logged in, fall back to local server
+            // Try cloud first if logged in
             if (state.user && supabaseClient) {
                 try {
-                    const { data, error } = await supabaseClient.storage.from(ASSETS_BUCKET).list(ASSETS_PATH, { limit: 500 });
-                    if (error) throw error;
-                    cachedAssets = data.filter(f => f.name.endsWith('.png')).map(f => ({
-                        name: f.name,
-                        size: f.metadata?.size || 0,
-                        updated_at: new Date(f.updated_at).getTime() / 1000
-                    }));
+                    const authHeader = await getAuthHeader();
+                    if (!authHeader) throw new Error('No auth');
+
+                    const resp = await fetch(`${GAME_ASSETS_FUNCTION}?action=list`, {
+                        headers: { 'Authorization': authHeader }
+                    });
+                    if (!resp.ok) throw new Error(await resp.text());
+
+                    cachedAssets = await resp.json();
                     await renderAssetsList(cachedAssets, 'cloud');
                     return;
                 } catch (e) {
@@ -4558,23 +4565,18 @@ Canvas: ${state.canvasWidth}x${state.canvasHeight}`;
                 return;
             }
 
-            // For cloud, get signed URLs for thumbnails
+            // For cloud, get signed URLs for thumbnails via Edge Function
             let urlMap = {};
             if (source === 'cloud' && supabaseClient) {
                 try {
-                    // Get signed URLs for all assets (batch) - include full path
-                    const { data, error } = await supabaseClient.storage
-                        .from(ASSETS_BUCKET)
-                        .createSignedUrls(assets.map(a => `${ASSETS_PATH}/${a.name}`), 300); // 5 min validity
-
-                    if (!error && data) {
-                        data.forEach(item => {
-                            if (item.signedUrl) {
-                                // Extract just the filename for the map key
-                                const filename = item.path.split('/').pop();
-                                urlMap[filename] = item.signedUrl;
-                            }
-                        });
+                    const authHeader = await getAuthHeader();
+                    const files = assets.map(a => a.name).join(',');
+                    const resp = await fetch(`${GAME_ASSETS_FUNCTION}?action=urls&files=${encodeURIComponent(files)}`, {
+                        headers: { 'Authorization': authHeader }
+                    });
+                    if (resp.ok) {
+                        const data = await resp.json();
+                        urlMap = data.urls || {};
                     }
                 } catch (e) {
                     console.warn('Failed to get signed URLs:', e);
@@ -4613,15 +4615,16 @@ Canvas: ${state.canvasWidth}x${state.canvasHeight}`;
 
             let assetUrl;
 
-            // For cloud source, get a signed URL (private bucket)
+            // For cloud source, get a signed URL via Edge Function
             if (assetsSource === 'cloud' && supabaseClient) {
                 try {
-                    const { data, error } = await supabaseClient.storage
-                        .from(ASSETS_BUCKET)
-                        .createSignedUrl(`${ASSETS_PATH}/${name}`, 60); // 60 seconds validity
-
-                    if (error) throw error;
-                    assetUrl = data.signedUrl;
+                    const authHeader = await getAuthHeader();
+                    const resp = await fetch(`${GAME_ASSETS_FUNCTION}?action=url&file=${encodeURIComponent(name)}`, {
+                        headers: { 'Authorization': authHeader }
+                    });
+                    if (!resp.ok) throw new Error('Failed to get URL');
+                    const data = await resp.json();
+                    assetUrl = data.url;
                 } catch (e) {
                     showToast('Failed to get asset URL: ' + e.message);
                     return;
@@ -4705,21 +4708,23 @@ Canvas: ${state.canvasWidth}x${state.canvasHeight}`;
             // Flatten and export
             const exportCanvas = flattenForExport();
 
-            // Try cloud first if logged in
+            // Try cloud first if logged in via Edge Function
             if (state.user && supabaseClient) {
                 try {
-                    // Convert canvas to blob
+                    const authHeader = await getAuthHeader();
                     const blob = await new Promise(resolve => exportCanvas.toBlob(resolve, 'image/png'));
 
-                    // Upload to Supabase storage (upsert to overwrite)
-                    const { data, error } = await supabaseClient.storage
-                        .from(ASSETS_BUCKET)
-                        .upload(`${ASSETS_PATH}/${finalName}`, blob, {
-                            contentType: 'image/png',
-                            upsert: true
-                        });
+                    const formData = new FormData();
+                    formData.append('file', blob);
+                    formData.append('filename', finalName);
 
-                    if (error) throw error;
+                    const resp = await fetch(GAME_ASSETS_FUNCTION, {
+                        method: 'POST',
+                        headers: { 'Authorization': authHeader },
+                        body: formData
+                    });
+
+                    if (!resp.ok) throw new Error(await resp.text());
 
                     showToast('Saved to cloud: ' + finalName);
                     if (document.getElementById('gameAssetsModal').classList.contains('active')) {
