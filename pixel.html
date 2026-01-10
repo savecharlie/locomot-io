@@ -1903,6 +1903,22 @@
         const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZ3bGJqanpudmN6ZmVjam5yamVuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njc5Nzc5OTIsImV4cCI6MjA4MzU1Mzk5Mn0.didh9h1rGEDEhzVlUBp7WhAxFMPsUTSvsuvIwa0aDro';
         let supabaseClient = null;
 
+        // Remote console logging
+        const PIXEL_LOGS_URL = `${SUPABASE_URL}/functions/v1/pixel-logs`;
+        const originalConsole = { log: console.log, warn: console.warn, error: console.error };
+        function remoteLog(level, ...args) {
+            originalConsole[level](...args);
+            const message = args.map(a => typeof a === 'object' ? JSON.stringify(a) : String(a)).join(' ');
+            fetch(PIXEL_LOGS_URL, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ level, message })
+            }).catch(() => {});
+        }
+        console.log = (...args) => remoteLog('log', ...args);
+        console.warn = (...args) => remoteLog('warn', ...args);
+        console.error = (...args) => remoteLog('error', ...args);
+
         // Initialize Supabase (SDK loaded synchronously in head)
         try {
             if (window.supabase) {
