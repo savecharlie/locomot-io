@@ -1579,6 +1579,22 @@ function render() {
     // Ease out
     animProgress = 1 - Math.pow(1 - animProgress, 2);
 
+    // Progressive trail drawing - add pixels as skater passes through
+    if (animation.trail) {
+      const t = animation.trail;
+      const currentPixelIndex = Math.floor(animProgress * t.pixelDist);
+      for (let i = t.lastDrawnIndex + 1; i < currentPixelIndex; i++) {
+        const absX = t.startPixelX + t.pixelDirX * i;
+        const absY = t.startPixelY + t.pixelDirY * i;
+        const tileX = Math.floor(absX / 16);
+        const tileY = Math.floor(absY / 12);
+        const pixelX = ((absX % 16) + 16) % 16;  // Handle negative
+        const pixelY = ((absY % 12) + 12) % 12;
+        trailPoints.push({ tileX, tileY, pixelX, pixelY });
+      }
+      t.lastDrawnIndex = currentPixelIndex - 1;
+    }
+
     if (elapsed >= animation.duration) {
       // Animation complete
       const targetState = animation.targetState;
@@ -1594,6 +1610,19 @@ function render() {
         gameState = { ...targetState, dead: false, newlyUnlocked: null, blockMoveInfo: null };
       } else {
         gameState = { ...targetState, newlyUnlocked: null, blockMoveInfo: null };
+      }
+      // Add any remaining trail pixels
+      if (animation.trail) {
+        const t = animation.trail;
+        for (let i = t.lastDrawnIndex + 1; i < t.pixelDist; i++) {
+          const absX = t.startPixelX + t.pixelDirX * i;
+          const absY = t.startPixelY + t.pixelDirY * i;
+          const tileX = Math.floor(absX / 16);
+          const tileY = Math.floor(absY / 12);
+          const pixelX = ((absX % 16) + 16) % 16;
+          const pixelY = ((absY % 12) + 12) % 12;
+          trailPoints.push({ tileX, tileY, pixelX, pixelY });
+        }
       }
       animation = null;
       animating = false;
@@ -2146,29 +2175,19 @@ function handleInput(dir) {
         }
       }
 
-      // Add trail pixel at each pixel position crossed
-      // Skate blade offset within tile
-      const bladeOffsetX = 0;
+      // Trail info for progressive drawing during animation
+      const bladeOffsetX = 8;
       const bladeOffsetY = -6;
-      // Start and end in absolute pixel coordinates
-      const startPixelX = oldState.playerX * 16 + bladeOffsetX;
-      const startPixelY = oldState.playerY * 12 + bladeOffsetY;
-      const endPixelX = newState.playerX * 16 + bladeOffsetX;
-      const endPixelY = newState.playerY * 12 + bladeOffsetY;
-      // Number of pixels to draw
-      const pixelDist = Math.abs(endPixelX - startPixelX) + Math.abs(endPixelY - startPixelY);
-      const pixelDirX = endPixelX === startPixelX ? 0 : (endPixelX - startPixelX) / Math.abs(endPixelX - startPixelX);
-      const pixelDirY = endPixelY === startPixelY ? 0 : (endPixelY - startPixelY) / Math.abs(endPixelY - startPixelY);
-      for (let i = 0; i < pixelDist; i++) {
-        const absX = startPixelX + pixelDirX * i;
-        const absY = startPixelY + pixelDirY * i;
-        // Convert to tile + pixel offset
-        const tileX = Math.floor(absX / 16);
-        const tileY = Math.floor(absY / 12);
-        const pixelX = absX % 16;
-        const pixelY = absY % 12;
-        trailPoints.push({ tileX, tileY, pixelX, pixelY });
-      }
+      const trailInfo = {
+        startPixelX: oldState.playerX * 16 + bladeOffsetX,
+        startPixelY: oldState.playerY * 12 + bladeOffsetY,
+        endPixelX: newState.playerX * 16 + bladeOffsetX,
+        endPixelY: newState.playerY * 12 + bladeOffsetY,
+        lastDrawnIndex: -1
+      };
+      trailInfo.pixelDist = Math.abs(trailInfo.endPixelX - trailInfo.startPixelX) + Math.abs(trailInfo.endPixelY - trailInfo.startPixelY);
+      trailInfo.pixelDirX = trailInfo.endPixelX === trailInfo.startPixelX ? 0 : (trailInfo.endPixelX - trailInfo.startPixelX) / Math.abs(trailInfo.endPixelX - trailInfo.startPixelX);
+      trailInfo.pixelDirY = trailInfo.endPixelY === trailInfo.startPixelY ? 0 : (trailInfo.endPixelY - trailInfo.startPixelY) / Math.abs(trailInfo.endPixelY - trailInfo.startPixelY);
 
       // Start animation
       animating = true;
@@ -2189,7 +2208,8 @@ function handleInput(dir) {
           lastElevatedY: newState.lastElevatedY
         },
         blocks: movedBlocks,
-        targetState: newState
+        targetState: newState,
+        trail: trailInfo
       };
       console.log('Animation height:', oldState.playerHeight, '->', newState.playerHeight);
       console.log('Animation pos:', oldState.playerX+','+oldState.playerY, '->', newState.playerX+','+newState.playerY);
