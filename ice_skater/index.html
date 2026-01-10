@@ -1527,7 +1527,7 @@ function render() {
   }
 
   // Draw trail pixels (skate marks on ice)
-  ctx.fillStyle = '#BFD5DB';  // Middle color between light and medium
+  ctx.fillStyle = '#CFDFE2';  // Light color (was medium, too dark)
   for (const p of trailPoints) {
     const px = offsetX + p.tileX * TILE_W * SCALE + p.pixelX * SCALE;
     const py = offsetY + TOP_PADDING * SCALE + p.tileY * TILE_H * SCALE + p.pixelY * SCALE;
