@@ -1499,6 +1499,7 @@
                 <button class="btn btn-secondary" style="width:100%; margin-bottom: 8px;" id="exportPngBtn">Export PNG</button>
                 <button class="btn btn-secondary" style="width:100%; margin-bottom: 8px;" id="importImageBtn">Import Image</button>
                 <button class="btn btn-secondary" style="width:100%; margin-bottom: 8px;" id="paletteGenMenuBtn">Palette Generator</button>
+                <button class="btn btn-secondary" style="width:100%; margin-bottom: 8px; background: #2d5a3d;" id="gameAssetsBtn">Game Assets</button>
             </div>
             <div class="modal-buttons">
                 <button class="btn btn-primary" id="closeMenuBtn">Close</button>
@@ -1699,6 +1700,21 @@
             <div class="modal-buttons">
                 <button class="btn btn-secondary" id="cancelColorEditor">Cancel</button>
                 <button class="btn btn-primary" id="applyColorEditor">Apply</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Game Assets Modal -->
+    <div class="modal-overlay" id="gameAssetsModal">
+        <div class="modal" style="max-width: 500px; max-height: 80vh;">
+            <h2>Game Assets</h2>
+            <div style="display: flex; gap: 8px; margin-bottom: 12px;">
+                <input type="text" id="assetSearch" placeholder="Search assets..." style="flex: 1; padding: 8px; background: var(--bg-dark); border: 1px solid var(--bg-light); color: var(--text); border-radius: 4px;">
+                <button class="btn btn-primary" id="saveAsAssetBtn" style="white-space: nowrap;">Save Current</button>
+            </div>
+            <div id="assetsList" style="max-height: 50vh; overflow-y: auto; display: grid; grid-template-columns: repeat(auto-fill, minmax(80px, 1fr)); gap: 8px; padding: 4px;"></div>
+            <div class="modal-buttons" style="margin-top: 12px;">
+                <button class="btn btn-secondary" id="closeAssetsBtn">Close</button>
             </div>
         </div>
     </div>
@@ -3451,6 +3467,19 @@
                 document.getElementById('menuModal').classList.remove('active');
                 importImage();
             };
+            document.getElementById('gameAssetsBtn').onclick = () => {
+                document.getElementById('menuModal').classList.remove('active');
+                showGameAssets();
+            };
+            document.getElementById('closeAssetsBtn').onclick = () => {
+                document.getElementById('gameAssetsModal').classList.remove('active');
+            };
+            document.getElementById('saveAsAssetBtn').onclick = saveAsAsset;
+            document.getElementById('assetSearch').oninput = (e) => {
+                const q = e.target.value.toLowerCase();
+                const filtered = cachedAssets.filter(a => a.name.toLowerCase().includes(q));
+                renderAssetsList(filtered);
+            };
 
             // New canvas modal
             document.getElementById('cancelNewCanvas').onclick = () => document.getElementById('newCanvasModal').classList.remove('active');
@@ -4471,6 +4500,148 @@ Canvas: ${state.canvasWidth}x${state.canvasHeight}`;
                 img.src = URL.createObjectURL(file);
             };
             input.click();
+        }
+
+        // ===== GAME ASSETS =====
+        let cachedAssets = [];
+
+        async function showGameAssets() {
+            if (!localServerAvailable) {
+                showToast('Local server not available');
+                return;
+            }
+
+            document.getElementById('gameAssetsModal').classList.add('active');
+            document.getElementById('assetsList').innerHTML = '<div style="text-align:center;padding:20px;color:var(--text-dim)">Loading...</div>';
+
+            try {
+                const resp = await fetch(`${LOCAL_SAVE_SERVER}/assets`);
+                cachedAssets = await resp.json();
+                renderAssetsList(cachedAssets);
+            } catch (e) {
+                document.getElementById('assetsList').innerHTML = '<div style="text-align:center;padding:20px;color:#e94560">Failed to load assets</div>';
+            }
+        }
+
+        function renderAssetsList(assets) {
+            const list = document.getElementById('assetsList');
+            if (assets.length === 0) {
+                list.innerHTML = '<div style="text-align:center;padding:20px;color:var(--text-dim)">No assets found</div>';
+                return;
+            }
+
+            list.innerHTML = assets.map(a => `
+                <div class="asset-item" data-name="${a.name}" style="background:var(--bg-medium);border-radius:4px;padding:4px;cursor:pointer;text-align:center;" onclick="loadAsset('${a.name}')">
+                    <img src="${LOCAL_SAVE_SERVER}/assets/${a.name}" style="max-width:100%;image-rendering:pixelated;background:#222;">
+                    <div style="font-size:9px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-top:2px;">${a.name.replace('.png','')}</div>
+                </div>
+            `).join('');
+        }
+
+        async function loadAsset(name) {
+            document.getElementById('gameAssetsModal').classList.remove('active');
+            showToast('Loading ' + name + '...');
+
+            const img = new Image();
+            img.crossOrigin = 'anonymous';
+            img.onload = () => {
+                // Save current tab first
+                if (state.tabs.length > 0) {
+                    saveCurrentTabState();
+                }
+
+                const width = img.width;
+                const height = img.height;
+
+                // Create a new tab
+                const tab = createTabObject(width, height, name.replace('.png', ''));
+                state.tabs.push(tab);
+                state.activeTabIndex = state.tabs.length - 1;
+
+                // Initialize canvas
+                state.canvasWidth = width;
+                state.canvasHeight = height;
+                state.layers = [];
+                state.currentLayerIndex = 0;
+                state.nextLayerId = 1;
+                state.undoStack = [];
+                state.redoStack = [];
+                state.zoom = Math.max(4, Math.floor(200 / Math.max(width, height)));
+                state.panX = 0;
+                state.panY = 0;
+
+                // Resize canvases
+                mainCanvas.width = width;
+                mainCanvas.height = height;
+                gridCanvas.width = width;
+                gridCanvas.height = height;
+                previewCanvas.width = width;
+                previewCanvas.height = height;
+                selectionCanvas.width = width;
+                selectionCanvas.height = height;
+
+                // Create layer with the image
+                const layer = createLayer('Layer 1');
+                layer.ctx.imageSmoothingEnabled = false;
+                layer.ctx.drawImage(img, 0, 0);
+                state.layers.push(layer);
+
+                // Update UI
+                document.getElementById('projectName').textContent = tab.name;
+                compositeAndRender();
+                updateCanvasSize();
+                drawGrid();
+                updateLayersPanel();
+                renderTabBar();
+                saveState();
+                autoSave();
+
+                showToast('Loaded ' + name);
+            };
+            img.onerror = () => showToast('Failed to load asset');
+            img.src = `${LOCAL_SAVE_SERVER}/assets/${name}`;
+        }
+
+        async function saveAsAsset() {
+            if (!localServerAvailable) {
+                showToast('Local server not available');
+                return;
+            }
+
+            // Get current tab name as default filename
+            const currentTab = state.tabs[state.activeTabIndex];
+            let filename = currentTab?.name || 'sprite';
+            filename = filename.replace(/[^a-zA-Z0-9_-]/g, '_');
+            if (!filename.endsWith('.png')) filename += '.png';
+
+            const newName = prompt('Save as:', filename);
+            if (!newName) return;
+
+            const finalName = newName.endsWith('.png') ? newName : newName + '.png';
+
+            // Flatten and export
+            const exportCanvas = flattenForExport();
+            const dataUrl = exportCanvas.toDataURL('image/png');
+
+            try {
+                const resp = await fetch(`${LOCAL_SAVE_SERVER}/assets/${finalName}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ image: dataUrl })
+                });
+                const result = await resp.json();
+                if (result.success) {
+                    showToast('Saved ' + finalName);
+                    // Refresh list if modal still open
+                    if (document.getElementById('gameAssetsModal').classList.contains('active')) {
+                        showGameAssets();
+                    }
+                } else {
+                    showToast('Save failed: ' + (result.error || 'Unknown error'));
+                }
+            } catch (e) {
+                showToast('Save failed: ' + e.message);
+            }
         }
 
         function createNewCanvas() {
