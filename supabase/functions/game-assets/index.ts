@@ -6,7 +6,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!
 const SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
-const ALLOWED_USER_ID = 'd7bed83c-44a0-4a4f-925f-efc384ea1e50' // Ivy's user ID
+const ALLOWED_USER_ID = '9735b162-0ee4-4a35-ab48-80ba9ee2ab1f' // Ivy's user ID (savecharlie@gmail.com)
 const BUCKET = 'Game assets'
 const PATH = 'admin/assets'
 
@@ -32,12 +32,10 @@ Deno.serve(async (req) => {
       })
     }
 
-    // Create client with user's token to verify identity
-    const userClient = createClient(SUPABASE_URL, Deno.env.get('SUPABASE_ANON_KEY')!, {
-      global: { headers: { Authorization: authHeader } }
-    })
-
-    const { data: { user }, error: authError } = await userClient.auth.getUser()
+    // Verify user identity using the admin client with the user's token
+    const token = authHeader.replace('Bearer ', '')
+    const { data: { user }, error: authError } = await createClient(SUPABASE_URL, SERVICE_ROLE_KEY)
+      .auth.getUser(token)
 
     if (authError || !user || user.id !== ALLOWED_USER_ID) {
       return new Response(JSON.stringify({ error: 'Unauthorized' }), {

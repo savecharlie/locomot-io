@@ -4516,13 +4516,11 @@ Canvas: ${state.canvasWidth}x${state.canvasHeight}`;
             document.getElementById('gameAssetsModal').classList.add('active');
             document.getElementById('assetsList').innerHTML = '<div style="text-align:center;padding:20px;color:var(--text-dim)">Loading...</div>';
 
-            // Try cloud first if logged in
-            console.log('showGameAssets - state.user:', state.user?.email, 'supabaseClient:', !!supabaseClient);
-            if (state.user && supabaseClient) {
+            // Try cloud first if logged in - check session directly, don't rely on state.user
+            const authHeader = await getAuthHeader();
+            console.log('showGameAssets - authHeader:', authHeader ? 'got token' : 'no token', 'supabaseClient:', !!supabaseClient);
+            if (authHeader && supabaseClient) {
                 try {
-                    const authHeader = await getAuthHeader();
-                    console.log('authHeader:', authHeader ? 'got token' : 'no token');
-                    if (!authHeader) throw new Error('No auth');
 
                     const resp = await fetch(`${GAME_ASSETS_FUNCTION}?action=list`, {
                         headers: { 'Authorization': authHeader }
