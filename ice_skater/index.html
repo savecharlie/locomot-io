@@ -471,8 +471,8 @@ async function loadSprites() {
         console.log('FAILED: ' + file);
         resolve();
       };
-      // Use cloud URL if available, otherwise local file
-      img.src = cloudUrls[file] || (file + '?v=' + cacheBust);
+      // Always use local files (GitHub Pages) - no cloud override
+      img.src = file + '?v=' + cacheBust;
     });
   });
   await Promise.all(promises);
