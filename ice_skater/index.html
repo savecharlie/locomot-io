@@ -828,11 +828,16 @@ function pushBlock(state, bx, by, dx, dy) {
     };
   }
 
-  // Can't push into wall, block, or locked wall immediately
+  // Can't push into wall, block, locked wall, or ramp (wrong direction) immediately
   if (blockHeight === 0) {
     if (startTile === '#') return null;
     if (startTile === 'B') return null;  // Another block
     if (startTile === 'L' && !newState.unlockedWalls.has(`${x},${y}`)) return null;  // Locked wall
+    // Can't push into ramp unless going up it
+    if (isRamp(startBase)) {
+      const upDir = getRampUpDir(startBase);
+      if (!(upDir && upDir.dx === dx && upDir.dy === dy)) return null;
+    }
   }
 
   for (let i = 0; i < 50; i++) {
@@ -1106,6 +1111,21 @@ function pushRamp(state, rx, ry, dx, dy) {
   const fromX = rx, fromY = ry;
   let wentUpRamp = false;
   let elevationRampX, elevationRampY;
+
+  // Check immediate first position - can't push into wall, block, locked wall, or another ramp
+  const startTile = getTile(newState, x, y);
+  const startBase = getBaseTile(newState, x, y);
+  if (startTile === '#' || startTile === 'B' ||
+      (startTile === 'L' && !newState.unlockedWalls.has(`${x},${y}`))) {
+    return null;  // Can't push - blocked immediately
+  }
+  // Can't push into another ramp (unless going up it)
+  if (isRamp(startBase)) {
+    const upDir = getRampUpDir(startBase);
+    if (!(upDir && upDir.dx === dx && upDir.dy === dy)) {
+      return null;  // Wrong direction, can't push through ramp
+    }
+  }
 
   // Slide until hitting obstacle
   for (let i = 0; i < 50; i++) {
