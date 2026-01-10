@@ -387,7 +387,7 @@ function initSnow() {
     snowflakes.push({
       x: Math.random() * canvas.width,
       y: Math.random() * canvas.height,
-      speed: 0.3 + Math.random() * 0.7,  // 0.3-1.0 pixels per frame
+      speed: 0.1 + Math.random() * 0.2,  // 0.1-0.3 pixels per frame (gentle)
       sway: Math.random() * Math.PI * 2,  // phase offset for sine wave
       size: Math.random() < 0.7 ? 1 : 2   // mostly 1px, some 2px
     });
@@ -471,9 +471,8 @@ async function loadSprites() {
         console.log('FAILED: ' + file);
         resolve();
       };
-      // Floor tiles always local (so git push updates them), others from cloud
-      const isFloorTile = file.startsWith('ice_floor_16x12_v');
-      img.src = (!isFloorTile && cloudUrls[file]) || (file + '?v=' + cacheBust);
+      // Use cloud URL if available, otherwise local file
+      img.src = cloudUrls[file] || (file + '?v=' + cacheBust);
     });
   });
   await Promise.all(promises);
