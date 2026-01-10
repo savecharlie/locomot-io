@@ -4504,7 +4504,8 @@ Canvas: ${state.canvasWidth}x${state.canvasHeight}`;
 
         // ===== GAME ASSETS =====
         let cachedAssets = [];
-        const ASSETS_BUCKET = 'game-assets';
+        const ASSETS_BUCKET = 'Game assets';
+        const ASSETS_PATH = 'admin/assets';
 
         async function showGameAssets() {
             document.getElementById('gameAssetsModal').classList.add('active');
@@ -4513,7 +4514,7 @@ Canvas: ${state.canvasWidth}x${state.canvasHeight}`;
             // Try cloud first if logged in, fall back to local server
             if (state.user && supabaseClient) {
                 try {
-                    const { data, error } = await supabaseClient.storage.from(ASSETS_BUCKET).list('', { limit: 500 });
+                    const { data, error } = await supabaseClient.storage.from(ASSETS_BUCKET).list(ASSETS_PATH, { limit: 500 });
                     if (error) throw error;
                     cachedAssets = data.filter(f => f.name.endsWith('.png')).map(f => ({
                         name: f.name,
@@ -4561,15 +4562,17 @@ Canvas: ${state.canvasWidth}x${state.canvasHeight}`;
             let urlMap = {};
             if (source === 'cloud' && supabaseClient) {
                 try {
-                    // Get signed URLs for all assets (batch)
+                    // Get signed URLs for all assets (batch) - include full path
                     const { data, error } = await supabaseClient.storage
                         .from(ASSETS_BUCKET)
-                        .createSignedUrls(assets.map(a => a.name), 300); // 5 min validity
+                        .createSignedUrls(assets.map(a => `${ASSETS_PATH}/${a.name}`), 300); // 5 min validity
 
                     if (!error && data) {
                         data.forEach(item => {
                             if (item.signedUrl) {
-                                urlMap[item.path] = item.signedUrl;
+                                // Extract just the filename for the map key
+                                const filename = item.path.split('/').pop();
+                                urlMap[filename] = item.signedUrl;
                             }
                         });
                     }
@@ -4615,7 +4618,7 @@ Canvas: ${state.canvasWidth}x${state.canvasHeight}`;
                 try {
                     const { data, error } = await supabaseClient.storage
                         .from(ASSETS_BUCKET)
-                        .createSignedUrl(name, 60); // 60 seconds validity
+                        .createSignedUrl(`${ASSETS_PATH}/${name}`, 60); // 60 seconds validity
 
                     if (error) throw error;
                     assetUrl = data.signedUrl;
@@ -4711,7 +4714,7 @@ Canvas: ${state.canvasWidth}x${state.canvasHeight}`;
                     // Upload to Supabase storage (upsert to overwrite)
                     const { data, error } = await supabaseClient.storage
                         .from(ASSETS_BUCKET)
-                        .upload(finalName, blob, {
+                        .upload(`${ASSETS_PATH}/${finalName}`, blob, {
                             contentType: 'image/png',
                             upsert: true
                         });
