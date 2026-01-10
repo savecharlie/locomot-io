@@ -4558,6 +4558,9 @@ Canvas: ${state.canvasWidth}x${state.canvasHeight}`;
                     return;
                 } catch (e) {
                     console.warn('Cloud assets failed:', e);
+                    // Show error directly for debugging
+                    document.getElementById('assetsList').innerHTML = `<div style="padding:10px;color:#ff6b6b;font-size:12px;word-break:break-all">Cloud error: ${e.message || e}</div>`;
+                    return;
                 }
             }
 
@@ -4573,7 +4576,10 @@ Canvas: ${state.canvasWidth}x${state.canvasHeight}`;
                 }
             }
 
-            document.getElementById('assetsList').innerHTML = '<div style="text-align:center;padding:20px;color:#e94560">Sign in to access cloud assets, or use local server from home</div>';
+            // Show debug info directly
+            const authH = await getAuthHeader();
+            const debugInfo = `Auth: ${authH ? 'has token' : 'no token'}, Client: ${!!supabaseClient}`;
+            document.getElementById('assetsList').innerHTML = `<div style="text-align:center;padding:20px;color:#e94560">Sign in to access cloud assets<br><small style="color:#666">${debugInfo}</small></div>`;
         }
 
         let assetsSource = 'local'; // 'cloud' or 'local'
