@@ -3475,10 +3475,10 @@
                 document.getElementById('gameAssetsModal').classList.remove('active');
             };
             document.getElementById('saveAsAssetBtn').onclick = saveAsAsset;
-            document.getElementById('assetSearch').oninput = (e) => {
+            document.getElementById('assetSearch').oninput = async (e) => {
                 const q = e.target.value.toLowerCase();
                 const filtered = cachedAssets.filter(a => a.name.toLowerCase().includes(q));
-                renderAssetsList(filtered);
+                await renderAssetsList(filtered, assetsSource);
             };
 
             // New canvas modal
@@ -4504,43 +4504,128 @@ Canvas: ${state.canvasWidth}x${state.canvasHeight}`;
 
         // ===== GAME ASSETS =====
         let cachedAssets = [];
+        const ASSETS_BUCKET = 'game-assets';
 
         async function showGameAssets() {
-            if (!localServerAvailable) {
-                showToast('Local server not available');
-                return;
-            }
-
             document.getElementById('gameAssetsModal').classList.add('active');
             document.getElementById('assetsList').innerHTML = '<div style="text-align:center;padding:20px;color:var(--text-dim)">Loading...</div>';
 
-            try {
-                const resp = await fetch(`${LOCAL_SAVE_SERVER}/assets`);
-                cachedAssets = await resp.json();
-                renderAssetsList(cachedAssets);
-            } catch (e) {
-                document.getElementById('assetsList').innerHTML = '<div style="text-align:center;padding:20px;color:#e94560">Failed to load assets</div>';
+            // Try cloud first if logged in, fall back to local server
+            if (state.user && supabaseClient) {
+                try {
+                    const { data, error } = await supabaseClient.storage.from(ASSETS_BUCKET).list('', { limit: 500 });
+                    if (error) throw error;
+                    cachedAssets = data.filter(f => f.name.endsWith('.png')).map(f => ({
+                        name: f.name,
+                        size: f.metadata?.size || 0,
+                        updated_at: new Date(f.updated_at).getTime() / 1000
+                    }));
+                    await renderAssetsList(cachedAssets, 'cloud');
+                    return;
+                } catch (e) {
+                    console.warn('Cloud assets failed:', e);
+                }
             }
+
+            // Fall back to local server
+            if (localServerAvailable) {
+                try {
+                    const resp = await fetch(`${LOCAL_SAVE_SERVER}/assets`);
+                    cachedAssets = await resp.json();
+                    await renderAssetsList(cachedAssets, 'local');
+                    return;
+                } catch (e) {
+                    console.warn('Local assets failed:', e);
+                }
+            }
+
+            document.getElementById('assetsList').innerHTML = '<div style="text-align:center;padding:20px;color:#e94560">Sign in to access cloud assets, or use local server from home</div>';
         }
 
-        function renderAssetsList(assets) {
+        let assetsSource = 'local'; // 'cloud' or 'local'
+
+        async function renderAssetsList(assets, source = 'local') {
+            assetsSource = source;
             const list = document.getElementById('assetsList');
+
+            // Remove old source label
+            const oldLabel = document.getElementById('assetsSourceLabel');
+            if (oldLabel) oldLabel.remove();
+
             if (assets.length === 0) {
                 list.innerHTML = '<div style="text-align:center;padding:20px;color:var(--text-dim)">No assets found</div>';
                 return;
             }
 
+            // For cloud, get signed URLs for thumbnails
+            let urlMap = {};
+            if (source === 'cloud' && supabaseClient) {
+                try {
+                    // Get signed URLs for all assets (batch)
+                    const { data, error } = await supabaseClient.storage
+                        .from(ASSETS_BUCKET)
+                        .createSignedUrls(assets.map(a => a.name), 300); // 5 min validity
+
+                    if (!error && data) {
+                        data.forEach(item => {
+                            if (item.signedUrl) {
+                                urlMap[item.path] = item.signedUrl;
+                            }
+                        });
+                    }
+                } catch (e) {
+                    console.warn('Failed to get signed URLs:', e);
+                }
+            }
+
+            const getAssetUrl = (name) => {
+                if (source === 'cloud' && urlMap[name]) {
+                    return urlMap[name];
+                }
+                if (source === 'local') {
+                    return `${LOCAL_SAVE_SERVER}/assets/${name}`;
+                }
+                return ''; // Fallback
+            };
+
             list.innerHTML = assets.map(a => `
                 <div class="asset-item" data-name="${a.name}" style="background:var(--bg-medium);border-radius:4px;padding:4px;cursor:pointer;text-align:center;" onclick="loadAsset('${a.name}')">
-                    <img src="${LOCAL_SAVE_SERVER}/assets/${a.name}" style="max-width:100%;image-rendering:pixelated;background:#222;">
+                    <img src="${getAssetUrl(a.name)}" style="max-width:100%;image-rendering:pixelated;background:#222;" onerror="this.style.display='none'">
                     <div style="font-size:9px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-top:2px;">${a.name.replace('.png','')}</div>
                 </div>
             `).join('');
+
+            // Show source indicator
+            const sourceLabel = source === 'cloud' ? '☁️ Cloud' : '💻 Local';
+            list.insertAdjacentHTML('beforebegin', `<div id="assetsSourceLabel" style="text-align:right;font-size:11px;color:var(--text-dim);margin-bottom:4px;">${sourceLabel}</div>`);
         }
 
         async function loadAsset(name) {
             document.getElementById('gameAssetsModal').classList.remove('active');
+            // Remove source label if exists
+            const sourceLabel = document.getElementById('assetsSourceLabel');
+            if (sourceLabel) sourceLabel.remove();
+
             showToast('Loading ' + name + '...');
+
+            let assetUrl;
+
+            // For cloud source, get a signed URL (private bucket)
+            if (assetsSource === 'cloud' && supabaseClient) {
+                try {
+                    const { data, error } = await supabaseClient.storage
+                        .from(ASSETS_BUCKET)
+                        .createSignedUrl(name, 60); // 60 seconds validity
+
+                    if (error) throw error;
+                    assetUrl = data.signedUrl;
+                } catch (e) {
+                    showToast('Failed to get asset URL: ' + e.message);
+                    return;
+                }
+            } else {
+                assetUrl = `${LOCAL_SAVE_SERVER}/assets/${name}`;
+            }
 
             const img = new Image();
             img.crossOrigin = 'anonymous';
@@ -4599,15 +4684,10 @@ Canvas: ${state.canvasWidth}x${state.canvasHeight}`;
                 showToast('Loaded ' + name);
             };
             img.onerror = () => showToast('Failed to load asset');
-            img.src = `${LOCAL_SAVE_SERVER}/assets/${name}`;
+            img.src = assetUrl;
         }
 
         async function saveAsAsset() {
-            if (!localServerAvailable) {
-                showToast('Local server not available');
-                return;
-            }
-
             // Get current tab name as default filename
             const currentTab = state.tabs[state.activeTabIndex];
             let filename = currentTab?.name || 'sprite';
@@ -4621,8 +4701,42 @@ Canvas: ${state.canvasWidth}x${state.canvasHeight}`;
 
             // Flatten and export
             const exportCanvas = flattenForExport();
-            const dataUrl = exportCanvas.toDataURL('image/png');
 
+            // Try cloud first if logged in
+            if (state.user && supabaseClient) {
+                try {
+                    // Convert canvas to blob
+                    const blob = await new Promise(resolve => exportCanvas.toBlob(resolve, 'image/png'));
+
+                    // Upload to Supabase storage (upsert to overwrite)
+                    const { data, error } = await supabaseClient.storage
+                        .from(ASSETS_BUCKET)
+                        .upload(finalName, blob, {
+                            contentType: 'image/png',
+                            upsert: true
+                        });
+
+                    if (error) throw error;
+
+                    showToast('Saved to cloud: ' + finalName);
+                    if (document.getElementById('gameAssetsModal').classList.contains('active')) {
+                        showGameAssets();
+                    }
+                    return;
+                } catch (e) {
+                    console.error('Cloud save failed:', e);
+                    showToast('Cloud save failed: ' + e.message);
+                    return;
+                }
+            }
+
+            // Fall back to local server
+            if (!localServerAvailable) {
+                showToast('Sign in to save to cloud, or use local server from home');
+                return;
+            }
+
+            const dataUrl = exportCanvas.toDataURL('image/png');
             try {
                 const resp = await fetch(`${LOCAL_SAVE_SERVER}/assets/${finalName}`, {
                     method: 'POST',
@@ -4631,8 +4745,7 @@ Canvas: ${state.canvasWidth}x${state.canvasHeight}`;
                 });
                 const result = await resp.json();
                 if (result.success) {
-                    showToast('Saved ' + finalName);
-                    // Refresh list if modal still open
+                    showToast('Saved locally: ' + finalName);
                     if (document.getElementById('gameAssetsModal').classList.contains('active')) {
                         showGameAssets();
                     }
