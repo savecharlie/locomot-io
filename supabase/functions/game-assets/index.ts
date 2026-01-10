@@ -23,7 +23,50 @@ Deno.serve(async (req) => {
   }
 
   try {
-    // Get user from auth header
+    const url = new URL(req.url)
+    const action = url.searchParams.get('action')
+
+    // PUBLIC endpoint for game to load assets (no auth required)
+    // Returns signed URLs valid for 1 hour
+    if (req.method === 'GET' && action === 'game-urls') {
+      const adminClient = createClient(SUPABASE_URL, SERVICE_ROLE_KEY)
+
+      // List all assets
+      const { data: files, error: listError } = await adminClient.storage
+        .from(BUCKET)
+        .list(PATH, { limit: 500 })
+
+      if (listError) throw listError
+
+      const pngFiles = files.filter(f => f.name.endsWith('.png')).map(f => f.name)
+
+      if (pngFiles.length === 0) {
+        return new Response(JSON.stringify({ urls: {} }), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        })
+      }
+
+      // Get signed URLs valid for 1 hour
+      const { data, error } = await adminClient.storage
+        .from(BUCKET)
+        .createSignedUrls(pngFiles.map(f => `${PATH}/${f}`), 3600)
+
+      if (error) throw error
+
+      const urls: Record<string, string> = {}
+      data.forEach(item => {
+        if (item.signedUrl) {
+          const filename = item.path?.split('/').pop() || ''
+          urls[filename] = item.signedUrl
+        }
+      })
+
+      return new Response(JSON.stringify({ urls }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      })
+    }
+
+    // Get user from auth header (required for all other actions)
     const authHeader = req.headers.get('Authorization')
     if (!authHeader) {
       return new Response(JSON.stringify({ error: 'No auth header' }), {
@@ -55,9 +98,6 @@ Deno.serve(async (req) => {
 
     // Create admin client with service_role key
     const adminClient = createClient(SUPABASE_URL, SERVICE_ROLE_KEY)
-
-    const url = new URL(req.url)
-    const action = url.searchParams.get('action')
 
     // LIST assets
     if (req.method === 'GET' && action === 'list') {

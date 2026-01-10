@@ -421,19 +421,39 @@ let deathAnimation = null;  // { startTime, duration, x, y } - for fall into hol
 const canvas = document.getElementById('game');
 const ctx = canvas.getContext('2d');
 
+const GAME_ASSETS_URL = 'https://vwlbjjznvczfecjnrjen.supabase.co/functions/v1/game-assets';
+
 async function loadSprites() {
+  console.log('LOADING SPRITES from cloud...');
+
+  // Try to get signed URLs from cloud
+  let cloudUrls = {};
+  try {
+    const resp = await fetch(`${GAME_ASSETS_URL}?action=game-urls`);
+    if (resp.ok) {
+      const data = await resp.json();
+      cloudUrls = data.urls || {};
+      console.log(`Got ${Object.keys(cloudUrls).length} cloud URLs`);
+    }
+  } catch (e) {
+    console.log('Cloud fetch failed, using local files:', e.message);
+  }
+
   const cacheBust = Date.now();
-  console.log('LOADING SPRITES, cacheBust=' + cacheBust);
   const promises = spriteFiles.map(file => {
     return new Promise((resolve, reject) => {
       const img = new Image();
+      img.crossOrigin = 'anonymous'; // Allow CORS for cloud images
       img.onload = () => {
         sprites[file.replace('.png', '')] = img;
-        if (file.includes('block')) console.log('LOADED: ' + file + '?v=' + cacheBust + ' size=' + img.width + 'x' + img.height);
         resolve();
       };
-      img.onerror = () => { console.log('FAILED: ' + file); resolve(); };
-      img.src = file + '?v=' + cacheBust;
+      img.onerror = () => {
+        console.log('FAILED: ' + file);
+        resolve();
+      };
+      // Use cloud URL if available, otherwise local file
+      img.src = cloudUrls[file] || (file + '?v=' + cacheBust);
     });
   });
   await Promise.all(promises);
