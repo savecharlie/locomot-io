@@ -961,6 +961,13 @@ function pushRamp(state, rx, ry, dx, dy) {
         break;
       }
 
+      // Penguin - stop before it (can't push ramp onto penguin)
+      if (baseTile === 'P') {
+        x -= dx;
+        y -= dy;
+        break;
+      }
+
       // Other ramp - try to go UP it!
       if (isRamp(baseTile)) {
         const upDir = getRampUpDir(baseTile);
@@ -1043,6 +1050,11 @@ function pushRamp(state, rx, ry, dx, dy) {
     else {
       // Wall - slide onto it and stop (elevated on wall)
       if (tile === '#' || (tile === 'L' && !newState.unlockedWalls.has(`${x},${y}`))) {
+        break;
+      }
+
+      // Penguin on wall - can land on it at elevation
+      if (baseTile === 'P' && level.penguinOnWall) {
         break;
       }
 
