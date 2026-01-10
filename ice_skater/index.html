@@ -1503,7 +1503,7 @@ function render() {
   }
 
   // Draw trail pixels (skate marks on ice)
-  ctx.fillStyle = '#B0CBD5';  // Darker shade so line is visible
+  ctx.fillStyle = '#CFDFE2';  // Subtle light color
   for (const p of trailPoints) {
     const px = offsetX + p.tileX * TILE_W * SCALE + p.pixelX * SCALE;
     const py = offsetY + TOP_PADDING * SCALE + p.tileY * TILE_H * SCALE + p.pixelY * SCALE;
@@ -2147,9 +2147,9 @@ function handleInput(dir) {
       }
 
       // Add trail pixel at each pixel position crossed
-      // Skate blade offset within tile (center-ish)
+      // Skate blade offset within tile (adjusted up one tile)
       const bladeOffsetX = 8;
-      const bladeOffsetY = 6;
+      const bladeOffsetY = -6;
       // Start and end in absolute pixel coordinates
       const startPixelX = oldState.playerX * 16 + bladeOffsetX;
       const startPixelY = oldState.playerY * 12 + bladeOffsetY;
