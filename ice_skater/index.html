@@ -1516,15 +1516,12 @@ function render() {
     for (let tx = 0; tx < tilesX; tx++) {
       const px = floorStartX + tx * tileW;
       const py = floorStartY + ty * tileH;
-      // DEBUG: alternating red/black tiles
-      ctx.fillStyle = (tx + ty) % 2 === 0 ? '#FF0000' : '#000000';
-      ctx.fillRect(px, py, tileW, tileH);
-      /* // Pick variant based on position (deterministic pseudo-random)
+      // Pick variant based on position (deterministic pseudo-random)
       const variant = Math.abs((tx * 7 + ty * 13) % 12);
       const floorSprite = floorVariants[variant];
       if (floorSprite) {
         ctx.drawImage(floorSprite, px, py, tileW, tileH);
-      } */
+      }
     }
   }
 
