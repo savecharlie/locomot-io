@@ -395,7 +395,7 @@
 // === ICE SKATER ENGINE v2 ===
 // Fixed: locked wall, height system, ramps, block stops
 
-const GAME_VERSION = 'v230';  // Bump this and tell Ivy the version when pushing changes!
+const GAME_VERSION = 'v231';  // Bump this and tell Ivy the version when pushing changes!
 
 const TILE_W = 16;  // Tile width
 const TILE_H = 12;  // Tile height (floor surface depth) - oblique angle
@@ -2452,24 +2452,13 @@ function render() {
     ctx.fillText('Tap to continue', canvas.width / 2, canvas.height / 2 + 30 * SCALE);
   }
 
-  // Draw hint arrow next to player
+  // Draw hint arrow on player
   if (hintArrow && !gameState.won && !gameState.dead) {
     const elapsed = performance.now() - hintShowTime;
     if (elapsed < HINT_DISPLAY_MS) {
-      // Calculate player screen position
-      const px = effectivePlayerX * TILE_W * SCALE + ICE_MARGIN_PX * SCALE;
-      const py = (TOP_PADDING + effectivePlayerY * TILE_H) * SCALE;
-
-      // Arrow offset based on direction
-      const arrowOffset = 20 * SCALE;
-      let ax = px + 8 * SCALE;  // Center on tile
-      let ay = py;
-
-      // Position arrow in the direction of hint
-      if (hintArrow === 'up') { ay -= arrowOffset; }
-      else if (hintArrow === 'down') { ay += arrowOffset + 16 * SCALE; }
-      else if (hintArrow === 'left') { ax -= arrowOffset; ay += 8 * SCALE; }
-      else if (hintArrow === 'right') { ax += arrowOffset + 8 * SCALE; ay += 8 * SCALE; }
+      // Use same positioning as player sprite
+      const ax = offsetX + playerObj.x * TILE_W * SCALE + 8 * SCALE;  // Center of tile
+      const ay = offsetY + (TOP_PADDING + playerObj.y * TILE_H) * SCALE + 8 * SCALE;
 
       // Draw pixel arrow - hint color from palette
       ctx.fillStyle = '#40ACBF';
