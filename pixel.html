@@ -5674,62 +5674,49 @@ Canvas: ${state.canvasWidth}x${state.canvasHeight}`;
                 return;
             }
 
-            // Non-floating selection - flip on current layer
-            console.log('[FLIP] Non-floating path - writing to layer');
+            // Non-floating selection - flip on current layer using ImageData
             const layer = getCurrentLayer();
-            if (!layer) {
-                console.log('[FLIP] No layer found!');
-                return;
-            }
+            if (!layer) return;
             const layerCtx = layer.ctx;
-            const srcData = layerCtx.getImageData(bounds.x, bounds.y, bounds.width, bounds.height);
 
-            // Create array to store flipped pixel data
-            const flippedPixels = [];
+            // Get the selection area from layer
+            const w = bounds.width;
+            const h = bounds.height;
+            const srcData = layerCtx.getImageData(bounds.x, bounds.y, w, h);
+            const flippedData = new ImageData(w, h);
 
-            // For each selected pixel, calculate flipped position and store color
+            // Flip the image data
+            for (let y = 0; y < h; y++) {
+                for (let x = 0; x < w; x++) {
+                    const srcX = horizontal ? (w - 1 - x) : x;
+                    const srcY = vertical ? (h - 1 - y) : y;
+                    const srcIdx = (srcY * w + srcX) * 4;
+                    const dstIdx = (y * w + x) * 4;
+                    flippedData.data[dstIdx] = srcData.data[srcIdx];
+                    flippedData.data[dstIdx + 1] = srcData.data[srcIdx + 1];
+                    flippedData.data[dstIdx + 2] = srcData.data[srcIdx + 2];
+                    flippedData.data[dstIdx + 3] = srcData.data[srcIdx + 3];
+                }
+            }
+
+            // Clear the area and put flipped data back
+            layerCtx.clearRect(bounds.x, bounds.y, w, h);
+            layerCtx.putImageData(flippedData, bounds.x, bounds.y);
+
+            // Update selection pixels (flip their positions too)
+            const newPixels = new Set();
             state.selection.pixels.forEach(key => {
                 const [px, py] = key.split(',').map(Number);
                 const lx = px - bounds.x;
                 const ly = py - bounds.y;
-
-                // Get source color
-                const srcIdx = (ly * bounds.width + lx) * 4;
-                const r = srcData.data[srcIdx];
-                const g = srcData.data[srcIdx + 1];
-                const b = srcData.data[srcIdx + 2];
-                const a = srcData.data[srcIdx + 3];
-
-                // Calculate flipped position
-                const newLx = horizontal ? (bounds.width - 1 - lx) : lx;
-                const newLy = vertical ? (bounds.height - 1 - ly) : ly;
-                const newPx = bounds.x + newLx;
-                const newPy = bounds.y + newLy;
-
-                flippedPixels.push({ox: px, oy: py, nx: newPx, ny: newPy, r, g, b, a});
+                const newLx = horizontal ? (w - 1 - lx) : lx;
+                const newLy = vertical ? (h - 1 - ly) : ly;
+                newPixels.add(`${bounds.x + newLx},${bounds.y + newLy}`);
             });
-
-            console.log('[FLIP] Flipping', flippedPixels.length, 'pixels');
-
-            // Clear original selected pixels from layer
-            state.selection.pixels.forEach(key => {
-                const [x, y] = key.split(',').map(Number);
-                layerCtx.clearRect(x, y, 1, 1);
-            });
-
-            // Draw flipped pixels to layer and update selection set
-            state.selection.pixels.clear();
-            flippedPixels.forEach(p => {
-                if (p.a > 0) {
-                    layerCtx.fillStyle = `rgba(${p.r},${p.g},${p.b},${p.a/255})`;
-                    layerCtx.fillRect(p.nx, p.ny, 1, 1);
-                }
-                state.selection.pixels.add(`${p.nx},${p.ny}`);
-            });
+            state.selection.pixels = newPixels;
 
             compositeAndRender();
             drawSelection();
-            console.log('[FLIP] Non-floating flip complete');
             showToast(horizontal ? 'Flipped H!' : 'Flipped V!');
         }
 
