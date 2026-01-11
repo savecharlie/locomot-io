@@ -5644,8 +5644,12 @@ Canvas: ${state.canvasWidth}x${state.canvasHeight}`;
             const bounds = state.selection.bounds;
             saveState();
 
+            // Log which path we're taking
+            console.log('[FLIP] floating:', state.selection.floating, 'floatingData:', !!state.selection.floatingData);
+
             // Handle floating selection - flip the floatingData directly
             if (state.selection.floating && state.selection.floatingData) {
+                console.log('[FLIP] Taking FLOATING path');
                 const srcData = state.selection.floatingData;
                 const w = srcData.width;
                 const h = srcData.height;
