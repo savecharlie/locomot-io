@@ -2461,7 +2461,13 @@ async function init() {
     const response = await fetch('levels.json?v=' + Date.now());
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
     const data = await response.json();
-    allLevels = data.levels;
+    // Sort levels by progression: simple mechanics first, combos later
+    const order = { 'block_push': 0, 'hole_fill': 1, 'key_lock': 2, 'block_hole': 3, 'key_block': 4, 'triple': 5 };
+    allLevels = data.levels.sort((a, b) => {
+      const aOrder = order[a.combo_type] ?? 99;
+      const bOrder = order[b.combo_type] ?? 99;
+      return aOrder - bOrder || (b.quality || 0) - (a.quality || 0);
+    });
     console.log(`Loaded ${allLevels.length} levels`);
   } catch (e) {
     console.error('Failed to load levels.json:', e);
