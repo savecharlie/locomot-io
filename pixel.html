@@ -5669,13 +5669,18 @@ Canvas: ${state.canvasWidth}x${state.canvasHeight}`;
                 );
 
                 drawSelection();
-                showToast(horizontal ? 'Flipped H (float)' : 'Flipped V (float)');
+                console.log('[FLIP] Floating path - updated floatingData');
+                showToast(horizontal ? 'Flipped H!' : 'Flipped V!');
                 return;
             }
 
             // Non-floating selection - flip on current layer
+            console.log('[FLIP] Non-floating path - writing to layer');
             const layer = getCurrentLayer();
-            if (!layer) return;
+            if (!layer) {
+                console.log('[FLIP] No layer found!');
+                return;
+            }
             const layerCtx = layer.ctx;
             const srcData = layerCtx.getImageData(bounds.x, bounds.y, bounds.width, bounds.height);
 
@@ -5704,6 +5709,8 @@ Canvas: ${state.canvasWidth}x${state.canvasHeight}`;
                 flippedPixels.push({ox: px, oy: py, nx: newPx, ny: newPy, r, g, b, a});
             });
 
+            console.log('[FLIP] Flipping', flippedPixels.length, 'pixels');
+
             // Clear original selected pixels from layer
             state.selection.pixels.forEach(key => {
                 const [x, y] = key.split(',').map(Number);
@@ -5722,7 +5729,8 @@ Canvas: ${state.canvasWidth}x${state.canvasHeight}`;
 
             compositeAndRender();
             drawSelection();
-            showToast(horizontal ? 'Flipped H (layer)' : 'Flipped V (layer)');
+            console.log('[FLIP] Non-floating flip complete');
+            showToast(horizontal ? 'Flipped H!' : 'Flipped V!');
         }
 
         function pasteClipboard() {

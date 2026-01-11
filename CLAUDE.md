@@ -36,3 +36,7 @@ const isPremium = () => localStorage.getItem('pixelArtPremium') === 'true';
 ```
 
 Free tier: 2 layers max. Premium: unlimited.
+
+## Debugging Notes
+
+**Ivy doesn't watch toasts** - don't use toast messages for debugging. Use visible UI changes or console logging (check via remote logs) instead.
