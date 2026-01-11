@@ -2455,6 +2455,11 @@
         }
 
         function compositeAndRender() {
+            // Log caller for debugging
+            const stack = new Error().stack.split('\n')[2] || '';
+            const caller = stack.match(/at (\w+)/) ? stack.match(/at (\w+)/)[1] : 'unknown';
+            console.log('[COMPOSITE] Called from:', caller);
+
             // Clear main canvas
             ctx.clearRect(0, 0, state.canvasWidth, state.canvasHeight);
 
@@ -4321,12 +4326,14 @@
         }
 
         function undo() {
+            console.log('[UNDO] Called! Stack length:', state.undoStack.length);
             if (state.undoStack.length <= 1) return;
 
             const currentEntry = state.undoStack.pop();
             state.redoStack.push(currentEntry);
 
             const prevEntry = state.undoStack[state.undoStack.length - 1];
+            console.log('[UNDO] Restoring layer', prevEntry.layerIndex);
 
             // Restore to the correct layer
             const targetLayer = state.layers[prevEntry.layerIndex];
@@ -5675,11 +5682,20 @@ Canvas: ${state.canvasWidth}x${state.canvasHeight}`;
             }
 
             // Non-floating selection - flip on current layer using canvas transforms
+            console.log('[FLIP] Starting non-floating flip', horizontal ? 'H' : 'V');
             const layer = getCurrentLayer();
-            if (!layer) return;
+            if (!layer) {
+                console.log('[FLIP] ERROR: No layer!');
+                return;
+            }
+            console.log('[FLIP] Layer:', state.currentLayerIndex, 'bounds:', bounds);
             const layerCtx = layer.ctx;
             const w = bounds.width;
             const h = bounds.height;
+
+            // Sample a pixel before flip
+            const beforeData = layerCtx.getImageData(bounds.x, bounds.y, 1, 1).data;
+            console.log('[FLIP] Before pixel at', bounds.x, bounds.y, ':', beforeData[0], beforeData[1], beforeData[2], beforeData[3]);
 
             // Create temp canvas with the selection content
             const tempCanvas = document.createElement('canvas');
@@ -5705,6 +5721,10 @@ Canvas: ${state.canvasWidth}x${state.canvasHeight}`;
             }
             layerCtx.restore();
 
+            // Sample pixel after flip
+            const afterData = layerCtx.getImageData(bounds.x, bounds.y, 1, 1).data;
+            console.log('[FLIP] After pixel at', bounds.x, bounds.y, ':', afterData[0], afterData[1], afterData[2], afterData[3]);
+
             // Update selection pixels (flip their positions too)
             const newPixels = new Set();
             state.selection.pixels.forEach(key => {
@@ -5720,6 +5740,7 @@ Canvas: ${state.canvasWidth}x${state.canvasHeight}`;
             compositeAndRender();
             drawSelection();
             autoSave();
+            console.log('[FLIP] Flip complete, autoSave called');
             showToast(horizontal ? 'Flipped H!' : 'Flipped V!');
         }
 
