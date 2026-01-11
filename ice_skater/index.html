@@ -2408,10 +2408,59 @@ function updateStatus() {
 let allLevels = [];
 let currentLevelIndex = 0;
 
-function loadLevel(index) {
-  if (index < 0 || index >= allLevels.length) return;
+// Chunked level loading
+let levelIndex = null;  // Chunk index metadata
+let loadedChunks = {};  // Cache of loaded chunks
+let totalLevels = 0;
+
+async function ensureChunkLoaded(levelIdx) {
+  if (!levelIndex) return false;
+  const chunkSize = levelIndex.chunk_size;
+  const chunkId = Math.floor(levelIdx / chunkSize);
+
+  if (loadedChunks[chunkId]) return true;
+
+  const chunk = levelIndex.chunks.find(c => c.id === chunkId);
+  if (!chunk) return false;
+
+  try {
+    console.log(`Loading chunk ${chunkId}...`);
+    const response = await fetch(`level_chunks/${chunk.file}?v=${Date.now()}`);
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    const data = await response.json();
+
+    // Store levels in allLevels array at correct positions
+    data.levels.forEach((lv, i) => {
+      allLevels[chunk.start + i] = lv;
+    });
+
+    loadedChunks[chunkId] = true;
+    console.log(`Loaded chunk ${chunkId}: levels ${chunk.start}-${chunk.end - 1}`);
+    return true;
+  } catch (e) {
+    console.error(`Failed to load chunk ${chunkId}:`, e);
+    return false;
+  }
+}
+
+async function loadLevel(index) {
+  if (index < 0 || index >= totalLevels) return;
+
+  // Ensure chunk is loaded
+  if (levelIndex && !allLevels[index]) {
+    const loaded = await ensureChunkLoaded(index);
+    if (!loaded) {
+      console.error(`Could not load level ${index}`);
+      return;
+    }
+  }
+
   currentLevelIndex = index;
   const lv = allLevels[index];
+  if (!lv) {
+    console.error(`Level ${index} not available`);
+    return;
+  }
   level = {
     width: lv.width,
     height: lv.height,
@@ -2426,10 +2475,10 @@ function loadLevel(index) {
   trailPoints = [];
   isUnwinnable = false;
   // Update footer (mobile)
-  document.getElementById('level-num').textContent = `Level ${index + 1}/${allLevels.length}`;
+  document.getElementById('level-num').textContent = `Level ${index + 1}/${totalLevels}`;
   document.getElementById('status').textContent = '';
   // Update sidebar (desktop)
-  document.getElementById('sidebar-level').textContent = `${index + 1} / ${allLevels.length}`;
+  document.getElementById('sidebar-level').textContent = `${index + 1} / ${totalLevels}`;
   document.getElementById('sidebar-par').textContent = lv.par || '-';
   document.getElementById('sidebar-moves').textContent = '0';
   document.getElementById('sidebar-status').textContent = '';
@@ -2441,48 +2490,59 @@ function updateMoveCount() {
   document.getElementById('sidebar-moves').textContent = moves;
 }
 
-function nextLevel() {
-  if (currentLevelIndex < allLevels.length - 1) {
-    loadLevel(currentLevelIndex + 1);
+async function nextLevel() {
+  if (currentLevelIndex < totalLevels - 1) {
+    await loadLevel(currentLevelIndex + 1);
   }
 }
 
-function prevLevel() {
+async function prevLevel() {
   if (currentLevelIndex > 0) {
-    loadLevel(currentLevelIndex - 1);
+    await loadLevel(currentLevelIndex - 1);
   }
 }
 
 async function init() {
   await loadSprites();
 
-  // Load levels from JSON
+  // Try chunked loading first, fall back to single file
   try {
-    const response = await fetch('levels.json?v=' + Date.now());
-    if (!response.ok) throw new Error(`HTTP ${response.status}`);
-    const data = await response.json();
-    // Sort levels by progression: simple mechanics first, combos later
-    const order = { 'block_push': 0, 'hole_fill': 1, 'key_lock': 2, 'block_hole': 3, 'key_block': 4, 'triple': 5 };
-    allLevels = data.levels.sort((a, b) => {
-      const aOrder = order[a.combo_type] ?? 99;
-      const bOrder = order[b.combo_type] ?? 99;
-      return aOrder - bOrder || (b.quality || 0) - (a.quality || 0);
-    });
-    console.log(`Loaded ${allLevels.length} levels`);
+    // Try to load chunk index
+    const indexResponse = await fetch('level_chunks/index.json?v=' + Date.now());
+    if (indexResponse.ok) {
+      levelIndex = await indexResponse.json();
+      totalLevels = levelIndex.total_levels;
+      allLevels = new Array(totalLevels);  // Sparse array
+      console.log(`Chunked levels: ${totalLevels} total in ${levelIndex.chunks.length} chunks`);
+    } else {
+      throw new Error('No chunk index');
+    }
   } catch (e) {
-    console.error('Failed to load levels.json:', e);
-    allLevels = [{
-      width: 7,
-      height: 7,
-      grid: ['#######', '#..P..#', '#.....#', '#..B..#', '#.....#', '#S....#', '#######']
-    }];
+    // Fall back to single file loading
+    console.log('Falling back to single file loading');
+    try {
+      const response = await fetch('levels_dense.json?v=' + Date.now());
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      const data = await response.json();
+      allLevels = data.levels;
+      totalLevels = allLevels.length;
+      console.log(`Loaded ${totalLevels} levels from single file`);
+    } catch (e2) {
+      console.error('Failed to load levels:', e2);
+      allLevels = [{
+        width: 7,
+        height: 7,
+        grid: ['#######', '#..P..#', '#.....#', '#..B..#', '#.....#', '#S....#', '#######']
+      }];
+      totalLevels = 1;
+    }
   }
 
   // Check URL for level skip (e.g., ?level=9)
   const urlParams = new URLSearchParams(window.location.search);
   const startLevel = parseInt(urlParams.get('level')) || 0;
   initSnow();  // Initialize snow particles
-  loadLevel(Math.min(startLevel, allLevels.length - 1));
+  await loadLevel(Math.min(startLevel, totalLevels - 1));
 }
 
 // Level navigation buttons (mobile footer)
