@@ -353,7 +353,7 @@
 // === ICE SKATER ENGINE v2 ===
 // Fixed: locked wall, height system, ramps, block stops
 
-const GAME_VERSION = 'v202';  // Bump this and tell Ivy the version when pushing changes!
+const GAME_VERSION = 'v203';  // Bump this and tell Ivy the version when pushing changes!
 
 // Debug: capture console.log to visible div
 const debugLines = [];
@@ -626,27 +626,28 @@ function isCorner(tile) {
 }
 
 // Get corner redirect: given incoming direction (dx, dy), return new direction
-// 7 = ur: up→right, left→up (from below go right, from left go up)
-// 8 = ul: up→left, right→up (from below go left, from right go up)
-// 9 = dr: down→right, left→down (from above go right, from left go down)
-// 0 = dl: down→left, right→down (from above go left, from right go down)
+// Each corner redirects exactly 2 directions, other 2 pass through
+// 7 = ur (bottom-right curve): UP→RIGHT, LEFT→DOWN
+// 8 = ul (bottom-left curve): UP→LEFT, RIGHT→DOWN
+// 9 = dr (top-right curve): DOWN→RIGHT, LEFT→UP
+// 0 = dl (top-left curve): DOWN→LEFT, RIGHT→UP
 function getCornerRedirect(tile, dx, dy) {
   switch(tile) {
-    case '7': // ur: up→right, left→up
-      if (dy === -1) return { dx: 1, dy: 0 };   // coming from below (moving up) → go right
-      if (dx === 1) return { dx: 0, dy: -1 };   // coming from left (moving right) → go up
+    case '7': // ur: up→right, left→down
+      if (dy === -1) return { dx: 1, dy: 0 };   // moving up → go right
+      if (dx === -1) return { dx: 0, dy: 1 };   // moving left → go down
       return null;
-    case '8': // ul: up→left, right→up
-      if (dy === -1) return { dx: -1, dy: 0 };  // coming from below (moving up) → go left
-      if (dx === -1) return { dx: 0, dy: -1 };  // coming from right (moving left) → go up
+    case '8': // ul: up→left, right→down
+      if (dy === -1) return { dx: -1, dy: 0 };  // moving up → go left
+      if (dx === 1) return { dx: 0, dy: 1 };    // moving right → go down
       return null;
-    case '9': // dr: down→right, left→down
-      if (dy === 1) return { dx: 1, dy: 0 };    // coming from above (moving down) → go right
-      if (dx === 1) return { dx: 0, dy: 1 };    // coming from left (moving right) → go down
+    case '9': // dr: down→right, left→up
+      if (dy === 1) return { dx: 1, dy: 0 };    // moving down → go right
+      if (dx === -1) return { dx: 0, dy: -1 };  // moving left → go up
       return null;
-    case '0': // dl: down→left, right→down
-      if (dy === 1) return { dx: -1, dy: 0 };   // coming from above (moving down) → go left
-      if (dx === -1) return { dx: 0, dy: 1 };   // coming from right (moving left) → go down
+    case '0': // dl: down→left, right→up
+      if (dy === 1) return { dx: -1, dy: 0 };   // moving down → go left
+      if (dx === 1) return { dx: 0, dy: -1 };   // moving right → go up
       return null;
   }
   return null;
