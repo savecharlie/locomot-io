@@ -353,7 +353,7 @@
 // === ICE SKATER ENGINE v2 ===
 // Fixed: locked wall, height system, ramps, block stops
 
-const GAME_VERSION = 'v216';  // Bump this and tell Ivy the version when pushing changes!
+const GAME_VERSION = 'v217';  // Bump this and tell Ivy the version when pushing changes!
 
 // Debug: capture console.log to visible div
 const debugLines = [];
@@ -2025,6 +2025,16 @@ function render() {
     for (const block of animation.blocks) {
       let x, y;
 
+      // Calculate block's own progress (delayed by startProgress)
+      const startProg = block.startProgress || 0;
+      let blockProgress;
+      if (animProgress < startProg) {
+        blockProgress = 0;  // Block hasn't started moving yet
+      } else {
+        blockProgress = (animProgress - startProg) / (1 - startProg);
+      }
+      blockProgress = Math.min(1, Math.max(0, blockProgress));
+
       // Use path waypoints if available (for corner animation)
       if (block.path && block.path.length > 1) {
         const segments = [];
@@ -2034,7 +2044,7 @@ function render() {
           segments.push({ start: block.path[i], end: block.path[i+1], dist: segDist, cumDist: totalDist });
           totalDist += segDist;
         }
-        const targetDist = animProgress * totalDist;
+        const targetDist = blockProgress * totalDist;
         let currentSeg = segments[segments.length - 1];
         for (const seg of segments) {
           if (targetDist <= seg.cumDist + seg.dist) {
@@ -2046,8 +2056,8 @@ function render() {
         x = currentSeg.start.x + (currentSeg.end.x - currentSeg.start.x) * Math.min(1, segProgress);
         y = currentSeg.start.y + (currentSeg.end.y - currentSeg.start.y) * Math.min(1, segProgress);
       } else {
-        x = block.fromX + (block.toX - block.fromX) * animProgress;
-        y = block.fromY + (block.toY - block.fromY) * animProgress;
+        x = block.fromX + (block.toX - block.fromX) * blockProgress;
+        y = block.fromY + (block.toY - block.fromY) * blockProgress;
       }
 
       // Calculate block height based on ramp position (like player)
@@ -2092,6 +2102,16 @@ function render() {
     for (const ramp of animation.ramps) {
       let x, y;
 
+      // Calculate ramp's own progress (delayed by startProgress)
+      const startProg = ramp.startProgress || 0;
+      let rampProgress;
+      if (animProgress < startProg) {
+        rampProgress = 0;  // Ramp hasn't started moving yet
+      } else {
+        rampProgress = (animProgress - startProg) / (1 - startProg);
+      }
+      rampProgress = Math.min(1, Math.max(0, rampProgress));
+
       // Use path waypoints if available (for corner animation)
       if (ramp.path && ramp.path.length > 1) {
         const segments = [];
@@ -2101,7 +2121,7 @@ function render() {
           segments.push({ start: ramp.path[i], end: ramp.path[i+1], dist: segDist, cumDist: totalDist });
           totalDist += segDist;
         }
-        const targetDist = animProgress * totalDist;
+        const targetDist = rampProgress * totalDist;
         let currentSeg = segments[segments.length - 1];
         for (const seg of segments) {
           if (targetDist <= seg.cumDist + seg.dist) {
@@ -2113,8 +2133,8 @@ function render() {
         x = currentSeg.start.x + (currentSeg.end.x - currentSeg.start.x) * Math.min(1, segProgress);
         y = currentSeg.start.y + (currentSeg.end.y - currentSeg.start.y) * Math.min(1, segProgress);
       } else {
-        x = ramp.fromX + (ramp.toX - ramp.fromX) * animProgress;
-        y = ramp.fromY + (ramp.toY - ramp.fromY) * animProgress;
+        x = ramp.fromX + (ramp.toX - ramp.fromX) * rampProgress;
+        y = ramp.fromY + (ramp.toY - ramp.fromY) * rampProgress;
       }
 
       // Choose sprite based on ramp type
@@ -2570,6 +2590,20 @@ function handleInput(dir) {
       const movedBlocks = [];
       if (newState.blockMoveInfo) {
         const info = newState.blockMoveInfo;
+        // Calculate when player hit the block (for animation delay)
+        // Player was at oldState position, block was at info.fromX, info.fromY
+        // Player hit block one tile before it, so collision at (fromX - dir, fromY - dir)
+        const playerDir = {
+          dx: newState.playerX === oldState.playerX ? 0 : (newState.playerX > oldState.playerX ? 1 : -1),
+          dy: newState.playerY === oldState.playerY ? 0 : (newState.playerY > oldState.playerY ? 1 : -1)
+        };
+        const collisionX = info.fromX - playerDir.dx;
+        const collisionY = info.fromY - playerDir.dy;
+        const playerDistToCollision = Math.abs(collisionX - oldState.playerX) + Math.abs(collisionY - oldState.playerY);
+        const blockDist = Math.abs(info.toX - info.fromX) + Math.abs(info.toY - info.fromY);
+        const totalDist = playerDistToCollision + blockDist;
+        const startProgress = totalDist > 0 ? playerDistToCollision / totalDist : 0;
+
         movedBlocks.push({
           fromX: info.fromX,
           fromY: info.fromY,
@@ -2580,7 +2614,8 @@ function handleInput(dir) {
           rampY: info.rampY,
           lastElevatedX: info.lastElevatedX,
           lastElevatedY: info.lastElevatedY,
-          path: info.path  // Path for corner animation
+          path: info.path,  // Path for corner animation
+          startProgress  // When in animation this block starts moving (0-1)
         });
       } else {
         // Fallback: detect moved blocks from position changes
@@ -2604,6 +2639,18 @@ function handleInput(dir) {
       const movedRamps = [];
       if (newState.rampMoveInfo) {
         const info = newState.rampMoveInfo;
+        // Calculate startProgress similar to blocks
+        const playerDir = {
+          dx: newState.playerX === oldState.playerX ? 0 : (newState.playerX > oldState.playerX ? 1 : -1),
+          dy: newState.playerY === oldState.playerY ? 0 : (newState.playerY > oldState.playerY ? 1 : -1)
+        };
+        const collisionX = info.fromX - playerDir.dx;
+        const collisionY = info.fromY - playerDir.dy;
+        const playerDistToCollision = Math.abs(collisionX - oldState.playerX) + Math.abs(collisionY - oldState.playerY);
+        const rampDist = Math.abs(info.toX - info.fromX) + Math.abs(info.toY - info.fromY);
+        const totalDist = playerDistToCollision + rampDist;
+        const startProgress = totalDist > 0 ? playerDistToCollision / totalDist : 0;
+
         movedRamps.push({
           fromX: info.fromX,
           fromY: info.fromY,
@@ -2614,7 +2661,8 @@ function handleInput(dir) {
           elevationRampX: info.elevationRampX,
           elevationRampY: info.elevationRampY,
           path: info.path,
-          fell: info.fell
+          fell: info.fell,
+          startProgress
         });
       }
 
