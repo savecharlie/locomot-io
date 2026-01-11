@@ -6128,7 +6128,7 @@ Canvas: ${state.canvasWidth}x${state.canvasHeight}`;
             updateColorEditorUI();
         };
 
-        document.getElementById('colorEditorHex').onchange = (e) => {
+        document.getElementById('colorEditorHex').oninput = (e) => {
             let hex = e.target.value.trim();
             if (!hex.startsWith('#')) hex = '#' + hex;
             if (/^#[0-9A-Fa-f]{6}$/.test(hex)) {
