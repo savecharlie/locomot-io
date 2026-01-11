@@ -353,7 +353,7 @@
 // === ICE SKATER ENGINE v2 ===
 // Fixed: locked wall, height system, ramps, block stops
 
-const GAME_VERSION = 'v201';  // Bump this and tell Ivy the version when pushing changes!
+const GAME_VERSION = 'v202';  // Bump this and tell Ivy the version when pushing changes!
 
 // Debug: capture console.log to visible div
 const debugLines = [];
@@ -668,7 +668,7 @@ function isBorderWall(state, x, y) {
 
 // Simulate player move
 function simulateMove(state, dir) {
-  const { dx, dy } = DIRS[dir];
+  let { dx, dy } = DIRS[dir];  // let, not const - corners can redirect!
   let x = state.playerX;
   let y = state.playerY;
   let height = state.playerHeight;
