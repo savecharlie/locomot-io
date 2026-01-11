@@ -1405,6 +1405,7 @@
             </div>
             <div class="current-colors">
                 <div class="current-color" id="currentColor" style="background: #000000;"></div>
+                <input type="text" id="hexInput" value="#000000" maxlength="7" style="width: 70px; font-family: monospace; text-align: center; margin-top: 4px; padding: 4px; border: 1px solid #555; border-radius: 4px; background: #2a2a2a; color: #fff;">
             </div>
             <!-- Dither gradient color picker (shown when dither tool active) -->
             <div class="dither-colors" id="ditherColors" style="display:none;">
@@ -2921,6 +2922,9 @@
         function updateCurrentColor() {
             document.getElementById('currentColor').style.background = state.currentColor;
             document.getElementById('mobileCurrentColor').style.background = state.currentColor;
+            // Update hex input
+            const hexInput = document.getElementById('hexInput');
+            if (hexInput) hexInput.value = state.currentColor;
         }
 
         // ===== DITHER COLOR UI =====
@@ -6153,6 +6157,28 @@ Canvas: ${state.canvasWidth}x${state.canvasHeight}`;
             mobileCurrentColorBtn.addEventListener('touchend', (e) => {
                 e.preventDefault();
                 openColorEditor();
+            });
+        }
+
+        // Hex input for color
+        const hexInput = document.getElementById('hexInput');
+        if (hexInput) {
+            hexInput.addEventListener('input', (e) => {
+                let val = e.target.value;
+                // Add # if missing
+                if (val && !val.startsWith('#')) val = '#' + val;
+                // Validate hex color
+                if (/^#[0-9A-Fa-f]{6}$/.test(val)) {
+                    selectColor(val);
+                }
+            });
+            hexInput.addEventListener('blur', (e) => {
+                // On blur, ensure valid color or reset
+                let val = e.target.value;
+                if (val && !val.startsWith('#')) val = '#' + val;
+                if (!/^#[0-9A-Fa-f]{6}$/.test(val)) {
+                    e.target.value = state.currentColor;
+                }
             });
         }
 
