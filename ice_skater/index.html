@@ -231,23 +231,6 @@
     @media (max-width: 899px) {
       #version-display { display: block; }
     }
-    #debug-display {
-      display: block;
-      position: fixed;
-      bottom: 100px;
-      left: 12px;
-      right: 12px;
-      z-index: 100;
-      background: rgba(0,0,0,0.8);
-      color: #0f0;
-      font-family: monospace;
-      font-size: 9px;
-      padding: 8px;
-      max-height: 150px;
-      overflow-y: auto;
-      white-space: pre-wrap;
-      word-break: break-all;
-    }
     @media (max-width: 899px) {
       .mobile-float-btn { display: block; }
     }
@@ -319,7 +302,6 @@
 
   <!-- Mobile floating buttons -->
   <div id="version-display"></div>
-  <div id="debug-display">Debug output...</div>
   <button id="mobile-settings" class="mobile-float-btn">SET</button>
   <button id="mobile-hint" class="mobile-float-btn">HINT</button>
   <button id="mobile-undo" class="mobile-float-btn">UNDO</button>
@@ -351,18 +333,7 @@
 // === ICE SKATER ENGINE v2 ===
 // Fixed: locked wall, height system, ramps, block stops
 
-const GAME_VERSION = 'v224';  // Bump this and tell Ivy the version when pushing changes!
-
-// Debug: capture console.log to visible div
-const debugLines = [];
-const origLog = console.log;
-console.log = (...args) => {
-  origLog(...args);
-  debugLines.push(args.join(' '));
-  if (debugLines.length > 20) debugLines.shift();
-  const el = document.getElementById('debug-display');
-  if (el) el.textContent = debugLines.join('\n');
-};
+const GAME_VERSION = 'v225';  // Bump this and tell Ivy the version when pushing changes!
 
 const TILE_W = 16;  // Tile width
 const TILE_H = 12;  // Tile height (floor surface depth) - oblique angle
@@ -420,8 +391,6 @@ let history = [];
 let animating = false;
 let keyFrame = 0;
 let lastKeyFrameTime = 0;
-let debugMsg = '';
-let showDebugGrid = false;  // Toggle with 'G' key
 let isUnwinnable = false;
 let unwinnableFlashTime = 0;
 
@@ -737,7 +706,6 @@ function simulateMove(state, dir) {
       if (isRamp(baseTile)) {
         const upDir = getRampUpDir(baseTile);
         const match = upDir && upDir.dx === dx && upDir.dy === dy;
-        debugMsg = `RAMP ${baseTile} need(${upDir?.dx},${upDir?.dy}) got(${dx},${dy}) ${match?'GO':'STOP'}`;
         if (match) {
           // Going UP the ramp - ascend to height 1
           x = nx;
@@ -1802,19 +1770,6 @@ function render() {
     }
   }
 
-  // Debug grid overlay (toggle with 'G' key)
-  if (showDebugGrid) {
-    ctx.strokeStyle = 'red';
-    ctx.lineWidth = 1;
-    for (let y = 0; y < h; y++) {
-      for (let x = 0; x < w; x++) {
-        const px = offsetX + x * TILE_W * SCALE;
-        const py = offsetY + TOP_PADDING * SCALE + y * TILE_H * SCALE - TILE_H * SCALE;
-        ctx.strokeRect(px, py, TILE_W * SCALE, TILE_H * SCALE);
-      }
-    }
-  }
-
   // Second pass: draw holes on top of all floor tiles
   for (let y = 0; y < h; y++) {
     for (let x = 0; x < w; x++) {
@@ -2783,7 +2738,6 @@ document.addEventListener('keydown', e => {
     case 'ArrowDown': case 's': handleInput('down'); break;
     case 'ArrowLeft': case 'a': handleInput('left'); break;
     case 'ArrowRight': case 'd': handleInput('right'); break;
-    case 'g': case 'G': showDebugGrid = !showDebugGrid; break;
   }
 });
 
