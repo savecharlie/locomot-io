@@ -5688,6 +5688,12 @@ Canvas: ${state.canvasWidth}x${state.canvasHeight}`;
 
                 drawSelection();
                 console.log('[FLIP] Floating path - updated floatingData');
+
+                // FIX: Commit the floating selection to layer so it persists
+                // Without this, the flipped content only exists on previewCtx
+                // and vanishes when user uses any tool (which clears previewCtx)
+                commitFloatingSelection();
+
                 showToast(horizontal ? 'Flipped H!' : 'Flipped V!');
                 return;
             }
