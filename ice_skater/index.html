@@ -395,7 +395,7 @@
 // === ICE SKATER ENGINE v2 ===
 // Fixed: locked wall, height system, ramps, block stops
 
-const GAME_VERSION = 'v233';  // Bump this and tell Ivy the version when pushing changes!
+const GAME_VERSION = 'v234';  // Bump this and tell Ivy the version when pushing changes!
 
 const TILE_W = 16;  // Tile width
 const TILE_H = 12;  // Tile height (floor surface depth) - oblique angle
@@ -1906,9 +1906,9 @@ function render() {
           y: targetState.playerY
         };
         // Keep gameState not-dead until death animation finishes
-        gameState = { ...targetState, dead: false, newlyUnlocked: null, blockMoveInfo: null };
+        gameState = { ...targetState, dead: false, newlyUnlocked: null, blockMoveInfo: null, rampMoveInfo: null };
       } else {
-        gameState = { ...targetState, newlyUnlocked: null, blockMoveInfo: null };
+        gameState = { ...targetState, newlyUnlocked: null, blockMoveInfo: null, rampMoveInfo: null };
       }
       // Add any remaining trail pixels
       if (animation.trail) {
