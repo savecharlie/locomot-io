@@ -5674,34 +5674,36 @@ Canvas: ${state.canvasWidth}x${state.canvasHeight}`;
                 return;
             }
 
-            // Non-floating selection - flip on current layer using ImageData
+            // Non-floating selection - flip on current layer using canvas transforms
             const layer = getCurrentLayer();
             if (!layer) return;
             const layerCtx = layer.ctx;
-
-            // Get the selection area from layer
             const w = bounds.width;
             const h = bounds.height;
-            const srcData = layerCtx.getImageData(bounds.x, bounds.y, w, h);
-            const flippedData = new ImageData(w, h);
 
-            // Flip the image data
-            for (let y = 0; y < h; y++) {
-                for (let x = 0; x < w; x++) {
-                    const srcX = horizontal ? (w - 1 - x) : x;
-                    const srcY = vertical ? (h - 1 - y) : y;
-                    const srcIdx = (srcY * w + srcX) * 4;
-                    const dstIdx = (y * w + x) * 4;
-                    flippedData.data[dstIdx] = srcData.data[srcIdx];
-                    flippedData.data[dstIdx + 1] = srcData.data[srcIdx + 1];
-                    flippedData.data[dstIdx + 2] = srcData.data[srcIdx + 2];
-                    flippedData.data[dstIdx + 3] = srcData.data[srcIdx + 3];
-                }
-            }
+            // Create temp canvas with the selection content
+            const tempCanvas = document.createElement('canvas');
+            tempCanvas.width = w;
+            tempCanvas.height = h;
+            const tempCtx = tempCanvas.getContext('2d');
+            tempCtx.imageSmoothingEnabled = false;
+            tempCtx.drawImage(layer.canvas, bounds.x, bounds.y, w, h, 0, 0, w, h);
 
-            // Clear the area and put flipped data back
+            // Clear the selection area on the layer
             layerCtx.clearRect(bounds.x, bounds.y, w, h);
-            layerCtx.putImageData(flippedData, bounds.x, bounds.y);
+
+            // Draw back flipped using transforms
+            layerCtx.save();
+            if (horizontal) {
+                layerCtx.translate(bounds.x + w, bounds.y);
+                layerCtx.scale(-1, 1);
+                layerCtx.drawImage(tempCanvas, 0, 0);
+            } else {
+                layerCtx.translate(bounds.x, bounds.y + h);
+                layerCtx.scale(1, -1);
+                layerCtx.drawImage(tempCanvas, 0, 0);
+            }
+            layerCtx.restore();
 
             // Update selection pixels (flip their positions too)
             const newPixels = new Set();
@@ -5717,7 +5719,7 @@ Canvas: ${state.canvasWidth}x${state.canvasHeight}`;
 
             compositeAndRender();
             drawSelection();
-            autoSave(); // Force save flipped state immediately
+            autoSave();
             showToast(horizontal ? 'Flipped H!' : 'Flipped V!');
         }
 
