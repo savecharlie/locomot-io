@@ -5711,10 +5711,10 @@ Canvas: ${state.canvasWidth}x${state.canvasHeight}`;
 
             // Non-floating selection - flip directly on current layer
             console.log('[FLIP] Starting non-floating flip', horizontal ? 'H' : 'V');
-            showToast('PATH: LAYER (non-float)');
             const layer = getCurrentLayer();
             if (!layer) {
                 console.log('[FLIP] ERROR: No layer!');
+                showToast('ERROR: No layer!');
                 return;
             }
             const layerCtx = layer.ctx;
@@ -5723,6 +5723,13 @@ Canvas: ${state.canvasWidth}x${state.canvasHeight}`;
 
             // Read pixels from LAYER directly (not composite)
             const srcData = layerCtx.getImageData(bounds.x, bounds.y, w, h);
+
+            // Count non-transparent pixels to verify content exists
+            let pixelCount = 0;
+            for (let i = 3; i < srcData.data.length; i += 4) {
+                if (srcData.data[i] > 0) pixelCount++;
+            }
+            showToast(`Layer ${state.currentLayerIndex}: ${pixelCount} pixels`);
             const dstData = new ImageData(w, h);
 
             // Flip pixel by pixel
