@@ -5524,7 +5524,13 @@ Canvas: ${state.canvasWidth}x${state.canvasHeight}`;
             document.getElementById('selectionToolbar').style.display = 'none';
         }
 
+        let lastSelectionActionTime = 0;
         function selectionAction(action) {
+            // Debounce: prevent double-fire from touchend + click
+            const now = Date.now();
+            if (now - lastSelectionActionTime < 100) return;
+            lastSelectionActionTime = now;
+
             if (!state.selection.active) return;
 
             const bounds = state.selection.bounds;
