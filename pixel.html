@@ -3944,6 +3944,17 @@
 
         // ===== TOOL HANDLING =====
         function handleToolStart(x, y) {
+            // DEBUG: Log layer state at tool start
+            if (state.selection.bounds) {
+                const layer = getCurrentLayer();
+                if (layer) {
+                    const b = state.selection.bounds;
+                    const checkData = layer.ctx.getImageData(b.x, b.y, 1, 1).data;
+                    console.log('[TOOL_START] Selection bounds:', b.x, b.y, b.width, 'x', b.height);
+                    console.log('[TOOL_START] Layer', state.currentLayerIndex, 'first pixel RGBA:', checkData[0], checkData[1], checkData[2], checkData[3]);
+                }
+            }
+
             // Handle picking for replace color
             if (state.pickingForReplace) {
                 const color = getPixel(x, y);
@@ -5720,6 +5731,12 @@ Canvas: ${state.canvasWidth}x${state.canvasHeight}`;
             // Write flipped pixels to current layer
             layerCtx.putImageData(dstData, bounds.x, bounds.y);
             console.log('[FLIP] Wrote', w, 'x', h, 'flipped pixels to layer', state.currentLayerIndex);
+
+            // Verify the write worked - read back first pixel
+            const verify = layerCtx.getImageData(bounds.x, bounds.y, 1, 1).data;
+            console.log('[FLIP] Verify write - first pixel RGBA:', verify[0], verify[1], verify[2], verify[3]);
+            console.log('[FLIP] Layer object ID:', layer.id, 'Index:', state.currentLayerIndex);
+            console.log('[FLIP] state.layers count:', state.layers.length);
 
             // Update selection pixels (flip their positions too)
             const newPixels = new Set();
