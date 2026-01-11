@@ -1,5 +1,5 @@
 {
-  "total_levels": 10000,
+  "total_levels": 1000,
   "chunk_size": 500,
   "chunks": [
     {
@@ -8,7 +8,7 @@
       "start": 0,
       "end": 500,
       "count": 500,
-      "size_kb": 125.0
+      "size_kb": 213.1
     },
     {
       "id": 1,
@@ -16,151 +16,7 @@
       "start": 500,
       "end": 1000,
       "count": 500,
-      "size_kb": 126.2
-    },
-    {
-      "id": 2,
-      "file": "chunk_2.json",
-      "start": 1000,
-      "end": 1500,
-      "count": 500,
-      "size_kb": 160.4
-    },
-    {
-      "id": 3,
-      "file": "chunk_3.json",
-      "start": 1500,
-      "end": 2000,
-      "count": 500,
-      "size_kb": 158.3
-    },
-    {
-      "id": 4,
-      "file": "chunk_4.json",
-      "start": 2000,
-      "end": 2500,
-      "count": 500,
-      "size_kb": 149.8
-    },
-    {
-      "id": 5,
-      "file": "chunk_5.json",
-      "start": 2500,
-      "end": 3000,
-      "count": 500,
-      "size_kb": 149.4
-    },
-    {
-      "id": 6,
-      "file": "chunk_6.json",
-      "start": 3000,
-      "end": 3500,
-      "count": 500,
-      "size_kb": 189.5
-    },
-    {
-      "id": 7,
-      "file": "chunk_7.json",
-      "start": 3500,
-      "end": 4000,
-      "count": 500,
-      "size_kb": 190.3
-    },
-    {
-      "id": 8,
-      "file": "chunk_8.json",
-      "start": 4000,
-      "end": 4500,
-      "count": 500,
-      "size_kb": 180.4
-    },
-    {
-      "id": 9,
-      "file": "chunk_9.json",
-      "start": 4500,
-      "end": 5000,
-      "count": 500,
-      "size_kb": 183.6
-    },
-    {
-      "id": 10,
-      "file": "chunk_10.json",
-      "start": 5000,
-      "end": 5500,
-      "count": 500,
-      "size_kb": 191.4
-    },
-    {
-      "id": 11,
-      "file": "chunk_11.json",
-      "start": 5500,
-      "end": 6000,
-      "count": 500,
-      "size_kb": 192.3
-    },
-    {
-      "id": 12,
-      "file": "chunk_12.json",
-      "start": 6000,
-      "end": 6500,
-      "count": 500,
-      "size_kb": 215.9
-    },
-    {
-      "id": 13,
-      "file": "chunk_13.json",
-      "start": 6500,
-      "end": 7000,
-      "count": 500,
-      "size_kb": 213.8
-    },
-    {
-      "id": 14,
-      "file": "chunk_14.json",
-      "start": 7000,
-      "end": 7500,
-      "count": 500,
-      "size_kb": 196.9
-    },
-    {
-      "id": 15,
-      "file": "chunk_15.json",
-      "start": 7500,
-      "end": 8000,
-      "count": 500,
-      "size_kb": 197.1
-    },
-    {
-      "id": 16,
-      "file": "chunk_16.json",
-      "start": 8000,
-      "end": 8500,
-      "count": 500,
-      "size_kb": 239.8
-    },
-    {
-      "id": 17,
-      "file": "chunk_17.json",
-      "start": 8500,
-      "end": 9000,
-      "count": 500,
-      "size_kb": 244.5
-    },
-    {
-      "id": 18,
-      "file": "chunk_18.json",
-      "start": 9000,
-      "end": 9500,
-      "count": 500,
-      "size_kb": 263.6
-    },
-    {
-      "id": 19,
-      "file": "chunk_19.json",
-      "start": 9500,
-      "end": 10000,
-      "count": 500,
-      "size_kb": 263.2
+      "size_kb": 247.1
     }
   ]
 }
