@@ -5669,7 +5669,7 @@ Canvas: ${state.canvasWidth}x${state.canvasHeight}`;
                 );
 
                 drawSelection();
-                showToast(horizontal ? 'Flipped H!' : 'Flipped V!');
+                showToast(horizontal ? 'Flipped H (float)' : 'Flipped V (float)');
                 return;
             }
 
@@ -5722,7 +5722,7 @@ Canvas: ${state.canvasWidth}x${state.canvasHeight}`;
 
             compositeAndRender();
             drawSelection();
-            showToast(horizontal ? 'Flipped H!' : 'Flipped V!');
+            showToast(horizontal ? 'Flipped H (layer)' : 'Flipped V (layer)');
         }
 
         function pasteClipboard() {
