@@ -5702,7 +5702,7 @@ Canvas: ${state.canvasWidth}x${state.canvasHeight}`;
                 return;
             }
 
-            // Non-floating selection - flip using pixel-by-pixel ImageData
+            // Non-floating selection - flip directly on current layer
             console.log('[FLIP] Starting non-floating flip', horizontal ? 'H' : 'V');
             const layer = getCurrentLayer();
             if (!layer) {
@@ -5713,11 +5713,11 @@ Canvas: ${state.canvasWidth}x${state.canvasHeight}`;
             const w = bounds.width;
             const h = bounds.height;
 
-            // Read pixels from composite (what user sees)
-            const srcData = ctx.getImageData(bounds.x, bounds.y, w, h);
+            // Read pixels from LAYER directly (not composite)
+            const srcData = layerCtx.getImageData(bounds.x, bounds.y, w, h);
             const dstData = new ImageData(w, h);
 
-            // Flip pixel by pixel - no transforms, just array manipulation
+            // Flip pixel by pixel
             for (let y = 0; y < h; y++) {
                 for (let x = 0; x < w; x++) {
                     const srcX = horizontal ? (w - 1 - x) : x;
@@ -5731,14 +5731,7 @@ Canvas: ${state.canvasWidth}x${state.canvasHeight}`;
                 }
             }
 
-            // Clear selection area from ALL layers
-            state.layers.forEach(l => {
-                if (l.visible) {
-                    l.ctx.clearRect(bounds.x, bounds.y, w, h);
-                }
-            });
-
-            // Write flipped pixels to current layer
+            // Write flipped pixels back to layer (no need to clear - putImageData overwrites)
             layerCtx.putImageData(dstData, bounds.x, bounds.y);
             console.log('[FLIP] Wrote', w, 'x', h, 'flipped pixels to layer', state.currentLayerIndex);
 
