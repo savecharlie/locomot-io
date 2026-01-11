@@ -353,7 +353,7 @@
 // === ICE SKATER ENGINE v2 ===
 // Fixed: locked wall, height system, ramps, block stops
 
-const GAME_VERSION = 'v220';  // Bump this and tell Ivy the version when pushing changes!
+const GAME_VERSION = 'v221';  // Bump this and tell Ivy the version when pushing changes!
 
 // Debug: capture console.log to visible div
 const debugLines = [];
@@ -1697,7 +1697,7 @@ function render() {
   const levelPixelW = w * TILE_W;
   const levelPixelH = h * TILE_H + TOP_PADDING + 10;
 
-  // Fill entire viewport with integer scale for crisp pixels
+  // Scale to fit viewport with integer scale for crisp pixels
   const viewW = window.innerWidth;
   const viewH = window.innerHeight;
   const scaleX = viewW / levelPixelW;
@@ -1705,16 +1705,16 @@ function render() {
   SCALE = Math.floor(Math.min(scaleX, scaleY));
   if (SCALE < 1) SCALE = 1;
 
-  // Canvas fills the viewport
-  canvas.width = viewW;
-  canvas.height = viewH;
-  ctx.imageSmoothingEnabled = false;
-
-  // Center the level in the viewport
+  // Canvas is exactly the chamber size (no extra space)
   const scaledLevelW = levelPixelW * SCALE;
   const scaledLevelH = levelPixelH * SCALE;
-  const offsetX = Math.floor((viewW - scaledLevelW) / 2);
-  const offsetY = Math.floor((viewH - scaledLevelH) / 2);
+  canvas.width = scaledLevelW;
+  canvas.height = scaledLevelH;
+  ctx.imageSmoothingEnabled = false;
+
+  // No offset needed - canvas is exact chamber size
+  const offsetX = 0;
+  const offsetY = 0;
 
   const now = performance.now();
   if (now - lastKeyFrameTime > 200) {
