@@ -5681,49 +5681,42 @@ Canvas: ${state.canvasWidth}x${state.canvasHeight}`;
                 return;
             }
 
-            // Non-floating selection - flip on current layer using canvas transforms
+            // Non-floating selection - flip on current layer
             console.log('[FLIP] Starting non-floating flip', horizontal ? 'H' : 'V');
             const layer = getCurrentLayer();
             if (!layer) {
                 console.log('[FLIP] ERROR: No layer!');
                 return;
             }
-            console.log('[FLIP] Layer:', state.currentLayerIndex, 'bounds:', bounds);
+            console.log('[FLIP] Layer:', state.currentLayerIndex, 'bounds:', JSON.stringify(bounds));
             const layerCtx = layer.ctx;
             const w = bounds.width;
             const h = bounds.height;
 
-            // Sample a pixel before flip
-            const beforeData = layerCtx.getImageData(bounds.x, bounds.y, 1, 1).data;
-            console.log('[FLIP] Before pixel at', bounds.x, bounds.y, ':', beforeData[0], beforeData[1], beforeData[2], beforeData[3]);
-
-            // Create temp canvas with the selection content
+            // Create temp canvas and flip the content there first
             const tempCanvas = document.createElement('canvas');
             tempCanvas.width = w;
             tempCanvas.height = h;
             const tempCtx = tempCanvas.getContext('2d');
             tempCtx.imageSmoothingEnabled = false;
-            tempCtx.drawImage(layer.canvas, bounds.x, bounds.y, w, h, 0, 0, w, h);
 
-            // Clear the selection area on the layer
-            layerCtx.clearRect(bounds.x, bounds.y, w, h);
-
-            // Draw back flipped using transforms
-            layerCtx.save();
+            // Draw flipped to temp canvas using transforms
+            tempCtx.save();
             if (horizontal) {
-                layerCtx.translate(bounds.x + w, bounds.y);
-                layerCtx.scale(-1, 1);
-                layerCtx.drawImage(tempCanvas, 0, 0);
+                tempCtx.translate(w, 0);
+                tempCtx.scale(-1, 1);
             } else {
-                layerCtx.translate(bounds.x, bounds.y + h);
-                layerCtx.scale(1, -1);
-                layerCtx.drawImage(tempCanvas, 0, 0);
+                tempCtx.translate(0, h);
+                tempCtx.scale(1, -1);
             }
-            layerCtx.restore();
+            tempCtx.drawImage(layer.canvas, bounds.x, bounds.y, w, h, 0, 0, w, h);
+            tempCtx.restore();
 
-            // Sample pixel after flip
-            const afterData = layerCtx.getImageData(bounds.x, bounds.y, 1, 1).data;
-            console.log('[FLIP] After pixel at', bounds.x, bounds.y, ':', afterData[0], afterData[1], afterData[2], afterData[3]);
+            // Clear and draw the pre-flipped content back to layer
+            layerCtx.clearRect(bounds.x, bounds.y, w, h);
+            layerCtx.drawImage(tempCanvas, bounds.x, bounds.y);
+
+            console.log('[FLIP] Drew flipped content to layer at', bounds.x, bounds.y);
 
             // Update selection pixels (flip their positions too)
             const newPixels = new Set();
