@@ -5681,7 +5681,7 @@ Canvas: ${state.canvasWidth}x${state.canvasHeight}`;
                 return;
             }
 
-            // Non-floating selection - flip on current layer
+            // Non-floating selection - flip what's visible (from composite) to current layer
             console.log('[FLIP] Starting non-floating flip', horizontal ? 'H' : 'V');
             const layer = getCurrentLayer();
             if (!layer) {
@@ -5693,14 +5693,15 @@ Canvas: ${state.canvasWidth}x${state.canvasHeight}`;
             const w = bounds.width;
             const h = bounds.height;
 
-            // Create temp canvas and flip the content there first
+            // Read from COMPOSITE (mainCanvas/ctx) - this is what the user sees
+            // Then write flipped content to current layer
             const tempCanvas = document.createElement('canvas');
             tempCanvas.width = w;
             tempCanvas.height = h;
             const tempCtx = tempCanvas.getContext('2d');
             tempCtx.imageSmoothingEnabled = false;
 
-            // Draw flipped to temp canvas using transforms
+            // Draw flipped from composite to temp canvas
             tempCtx.save();
             if (horizontal) {
                 tempCtx.translate(w, 0);
@@ -5709,14 +5710,19 @@ Canvas: ${state.canvasWidth}x${state.canvasHeight}`;
                 tempCtx.translate(0, h);
                 tempCtx.scale(1, -1);
             }
-            tempCtx.drawImage(layer.canvas, bounds.x, bounds.y, w, h, 0, 0, w, h);
+            // Read from mainCanvas (ctx) which is the composite of all layers
+            tempCtx.drawImage(mainCanvas, bounds.x, bounds.y, w, h, 0, 0, w, h);
             tempCtx.restore();
 
-            // Clear and draw the pre-flipped content back to layer
-            layerCtx.clearRect(bounds.x, bounds.y, w, h);
+            // Clear selection area from ALL visible layers, then draw flipped to current
+            state.layers.forEach(l => {
+                if (l.visible) {
+                    l.ctx.clearRect(bounds.x, bounds.y, w, h);
+                }
+            });
             layerCtx.drawImage(tempCanvas, bounds.x, bounds.y);
 
-            console.log('[FLIP] Drew flipped content to layer at', bounds.x, bounds.y);
+            console.log('[FLIP] Flipped composite content to layer', state.currentLayerIndex);
 
             // Update selection pixels (flip their positions too)
             const newPixels = new Set();
