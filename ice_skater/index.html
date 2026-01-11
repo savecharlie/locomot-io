@@ -353,7 +353,7 @@
 // === ICE SKATER ENGINE v2 ===
 // Fixed: locked wall, height system, ramps, block stops
 
-const GAME_VERSION = 'v217';  // Bump this and tell Ivy the version when pushing changes!
+const GAME_VERSION = 'v218';  // Bump this and tell Ivy the version when pushing changes!
 
 // Debug: capture console.log to visible div
 const debugLines = [];
@@ -1908,6 +1908,15 @@ function render() {
   if (animation) {
     const p = animation.player;
 
+    // Calculate player's progress (may end before full animation if pushing objects)
+    const playerEndProg = animation.playerEndProgress || 1;
+    let playerProgress;
+    if (animProgress >= playerEndProg) {
+      playerProgress = 1;  // Player has reached destination
+    } else {
+      playerProgress = playerEndProg > 0 ? animProgress / playerEndProg : 1;
+    }
+
     // Use path waypoints if available (for corner animation)
     if (p.path && p.path.length > 1) {
       // Calculate segment distances
@@ -1920,7 +1929,7 @@ function render() {
       }
 
       // Find current position along path
-      const targetDist = animProgress * totalDist;
+      const targetDist = playerProgress * totalDist;
       let currentSeg = segments[segments.length - 1];
       for (const seg of segments) {
         if (targetDist <= seg.cumDist + seg.dist) {
@@ -1935,33 +1944,33 @@ function render() {
       playerY = currentSeg.start.y + (currentSeg.end.y - currentSeg.start.y) * Math.min(1, segProgress);
     } else {
       // Fallback to simple interpolation
-      playerX = p.fromX + (p.toX - p.fromX) * animProgress;
-      playerY = p.fromY + (p.toY - p.fromY) * animProgress;
+      playerX = p.fromX + (p.toX - p.fromX) * playerProgress;
+      playerY = p.fromY + (p.toY - p.fromY) * playerProgress;
     }
 
-    // Calculate height based on ramp position
+    // Calculate height based on ramp position (use playerProgress, not animProgress)
     if (p.wentUpRamp && p.rampX !== undefined) {
       const totalDist = Math.abs(p.toX - p.fromX) + Math.abs(p.toY - p.fromY);
       const distToRamp = Math.abs(p.rampX - p.fromX) + Math.abs(p.rampY - p.fromY);
-      const rampProgress = distToRamp / totalDist;
+      const rampProgressThreshold = distToRamp / totalDist;
 
       // Calculate drop point - after last elevated position (block/ramp)
       let dropDist = distToRamp + 1;  // Default: 1 tile after ramp
       if (p.lastElevatedX !== undefined) {
         dropDist = Math.abs(p.lastElevatedX - p.fromX) + Math.abs(p.lastElevatedY - p.fromY) + 1;
       }
-      const dropProgress = dropDist / totalDist;
+      const dropProgressThreshold = dropDist / totalDist;
 
       // Before ramp: height 0, on ramp to drop point: height 1, after: final height
-      if (animProgress < rampProgress) {
+      if (playerProgress < rampProgressThreshold) {
         playerHeight = 0;
-      } else if (animProgress < dropProgress) {
+      } else if (playerProgress < dropProgressThreshold) {
         playerHeight = 1;
       } else {
         playerHeight = p.toHeight;
       }
     } else {
-      playerHeight = p.fromHeight + (p.toHeight - p.fromHeight) * animProgress;
+      playerHeight = p.fromHeight + (p.toHeight - p.fromHeight) * playerProgress;
     }
   } else {
     playerX = gameState.playerX;
@@ -2583,11 +2592,14 @@ function handleInput(dir) {
     // Calculate animation distance
     const dx = newState.playerX - oldState.playerX;
     const dy = newState.playerY - oldState.playerY;
-    const dist = Math.abs(dx) + Math.abs(dy);
+    const playerDist = Math.abs(dx) + Math.abs(dy);
 
-    if (dist > 0) {
+    if (playerDist > 0) {
       // Find moved blocks - use blockMoveInfo if available
       const movedBlocks = [];
+      let maxObjectDist = 0;  // Track longest object movement for animation timing
+      let playerDistToCollision = playerDist;  // Default: player travels full distance
+
       if (newState.blockMoveInfo) {
         const info = newState.blockMoveInfo;
         // Calculate when player hit the block (for animation delay)
@@ -2599,10 +2611,11 @@ function handleInput(dir) {
         };
         const collisionX = info.fromX - playerDir.dx;
         const collisionY = info.fromY - playerDir.dy;
-        const playerDistToCollision = Math.abs(collisionX - oldState.playerX) + Math.abs(collisionY - oldState.playerY);
+        playerDistToCollision = Math.abs(collisionX - oldState.playerX) + Math.abs(collisionY - oldState.playerY);
         const blockDist = Math.abs(info.toX - info.fromX) + Math.abs(info.toY - info.fromY);
-        const totalDist = playerDistToCollision + blockDist;
-        const startProgress = totalDist > 0 ? playerDistToCollision / totalDist : 0;
+        maxObjectDist = Math.max(maxObjectDist, blockDist);
+        const totalAnimDist = playerDistToCollision + blockDist;
+        const startProgress = totalAnimDist > 0 ? playerDistToCollision / totalAnimDist : 0;
 
         movedBlocks.push({
           fromX: info.fromX,
@@ -2646,10 +2659,12 @@ function handleInput(dir) {
         };
         const collisionX = info.fromX - playerDir.dx;
         const collisionY = info.fromY - playerDir.dy;
-        const playerDistToCollision = Math.abs(collisionX - oldState.playerX) + Math.abs(collisionY - oldState.playerY);
+        const rampPlayerDist = Math.abs(collisionX - oldState.playerX) + Math.abs(collisionY - oldState.playerY);
+        playerDistToCollision = Math.min(playerDistToCollision, rampPlayerDist);  // Use closest collision
         const rampDist = Math.abs(info.toX - info.fromX) + Math.abs(info.toY - info.fromY);
-        const totalDist = playerDistToCollision + rampDist;
-        const startProgress = totalDist > 0 ? playerDistToCollision / totalDist : 0;
+        maxObjectDist = Math.max(maxObjectDist, rampDist);
+        const totalAnimDist = rampPlayerDist + rampDist;
+        const startProgress = totalAnimDist > 0 ? rampPlayerDist / totalAnimDist : 0;
 
         movedRamps.push({
           fromX: info.fromX,
@@ -2681,10 +2696,15 @@ function handleInput(dir) {
       trailInfo.pixelDirY = trailInfo.endPixelY === trailInfo.startPixelY ? 0 : (trailInfo.endPixelY - trailInfo.startPixelY) / Math.abs(trailInfo.endPixelY - trailInfo.startPixelY);
 
       // Start animation
+      // Total animation distance includes object movement so timing syncs correctly
+      const totalAnimDist = maxObjectDist > 0 ? (playerDistToCollision + maxObjectDist) : playerDist;
+      const playerEndProgress = totalAnimDist > 0 ? playerDist / totalAnimDist : 1;
+
       animating = true;
       animation = {
         startTime: performance.now(),
-        duration: (dist / ANIM_SPEED) * 1000,
+        duration: (totalAnimDist / ANIM_SPEED) * 1000,
+        playerEndProgress,  // When player stops moving (0-1)
         player: {
           fromX: oldState.playerX,
           fromY: oldState.playerY,
