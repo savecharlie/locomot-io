@@ -441,7 +441,7 @@ def generate_levels(count: int, progress_callback=None) -> List[dict]:
     """Generate specified number of levels with progressive difficulty."""
     levels = []
     attempts = 0
-    max_attempts = count * 50
+    max_attempts = count * 100  # More attempts to ensure we hit target
 
     # Difficulty progression
     difficulty_brackets = [

@@ -1,22 +1,14 @@
 {
-  "total_levels": 1000,
-  "chunk_size": 500,
+  "total_levels": 100,
+  "chunk_size": 100,
   "chunks": [
     {
       "id": 0,
       "file": "chunk_0.json",
       "start": 0,
-      "end": 500,
-      "count": 500,
-      "size_kb": 213.6
-    },
-    {
-      "id": 1,
-      "file": "chunk_1.json",
-      "start": 500,
-      "end": 1000,
-      "count": 500,
-      "size_kb": 241.9
+      "end": 100,
+      "count": 100,
+      "size_kb": 52.7
     }
   ]
 }
