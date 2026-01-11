@@ -395,7 +395,7 @@
 // === ICE SKATER ENGINE v2 ===
 // Fixed: locked wall, height system, ramps, block stops
 
-const GAME_VERSION = 'v234';  // Bump this and tell Ivy the version when pushing changes!
+const GAME_VERSION = 'v235';  // Bump this and tell Ivy the version when pushing changes!
 
 const TILE_W = 16;  // Tile width
 const TILE_H = 12;  // Tile height (floor surface depth) - oblique angle
@@ -436,9 +436,6 @@ const spriteFiles = [
   'skater_front_sad_16x24.png', 'skater_side_standing_sad_16x24.png', 'skater_side_left_standing_sad_16x24.png',
   'skater_front_standing_16x24.png', 'skater_back_standing_16x24.png',
   'skater_front_skating_16x24.png', 'skater_back_skating_16x24.png',
-  'skater_front_behind_16.png', 'skater_back_behind_16.png',
-  'skater_side_behind_16.png', 'skater_side_left_behind_16.png',
-  'block_behind_16x5.png', 'wall_behind_16x5.png', 'wall_keyhole_behind_16x5.png',
   'wall_keyhole_sink_frame_1.png', 'wall_keyhole_sink_frame_2.png',
   'wall_keyhole_sink_frame_3.png', 'wall_keyhole_sink_frame_4.png',
   'wall_keyhole_sink_frame_5.png', 'wall_keyhole_sink_frame_6.png',
@@ -2341,22 +2338,6 @@ function render() {
     }
   }
 
-  // Find OPAQUE objects that occlude player (for leg clipping)
-  // Transparent objects don't clip - player draws fully behind them
-  const occludingObjects = opaqueObjects.filter(o => {
-    if (o.sortY <= playerObj.y) return false;  // Must be in front (higher Y)
-    if (o.sortY > playerObj.y + 2) return false;  // Not too far away
-    // Check X overlap (within ~1 tile)
-    if (Math.abs(o.x - playerObj.x) >= 1) return false;
-
-    // Ramps only occlude if their tall side faces the camera
-    if (o.type === 'ramp') {
-      return o.sprite === 'ramp_north_16x24';  // Only north ramps occlude
-    }
-
-    return true;  // Opaque walls and blocks occlude
-  });
-
   // Helper function to draw an object
   function drawObject(obj) {
     const px = offsetX + obj.x * TILE_W * SCALE;
@@ -2431,22 +2412,7 @@ function render() {
     if (playerDrawn || gameState.dead) return;
     playerDrawn = true;
 
-    if (occludingObjects.length > 0 && !deathAnimation) {
-      let occludeTop = canvas.height;
-      for (const occ of occludingObjects) {
-        const occPy = offsetY + TOP_PADDING * SCALE + occ.y * TILE_H * SCALE;
-        const occSprite = sprites[occ.sprite];
-        if (occSprite) {
-          occludeTop = Math.min(occludeTop, occPy - occSprite.height * SCALE);
-        }
-      }
-      ctx.save();
-      ctx.beginPath();
-      ctx.rect(0, 0, canvas.width, occludeTop);
-      ctx.clip();
-      ctx.drawImage(playerSprite, playerPx, playerSpriteY, playerSprite.width * SCALE, playerSprite.height * SCALE);
-      ctx.restore();
-    } else if (shrinkScale > 0.01) {
+    if (shrinkScale > 0.01) {
       ctx.drawImage(playerSprite, shrinkPlayerX, shrinkPlayerY, drawnWidth, drawnHeight);
     }
   }
@@ -2599,16 +2565,6 @@ function getPlayerSprite(dir, sad = false, isMoving = false) {
     case 'left': return isMoving ? 'skater_side_skating_16x24' : 'skater_side_standing_16x24';
     case 'right': return isMoving ? 'skater_side_left_skating_16x24' : 'skater_side_left_standing_16x24';
     default: return isMoving ? 'skater_front_skating_16x24' : 'skater_front_standing_16x24';
-  }
-}
-
-function getPlayerSpriteBehind(dir) {
-  switch (dir) {
-    case 'up': return 'skater_back_behind_16';
-    case 'down': return 'skater_front_behind_16';
-    case 'left': return 'skater_side_left_behind_16';
-    case 'right': return 'skater_side_behind_16';
-    default: return 'skater_front_behind_16';
   }
 }
 
