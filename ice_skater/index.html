@@ -221,6 +221,23 @@
     @media (max-width: 899px) {
       #version-display { display: block; }
     }
+    #debug-display {
+      display: block;
+      position: fixed;
+      bottom: 100px;
+      left: 12px;
+      right: 12px;
+      z-index: 100;
+      background: rgba(0,0,0,0.8);
+      color: #0f0;
+      font-family: monospace;
+      font-size: 9px;
+      padding: 8px;
+      max-height: 150px;
+      overflow-y: auto;
+      white-space: pre-wrap;
+      word-break: break-all;
+    }
     @media (max-width: 899px) {
       .mobile-float-btn { display: block; }
     }
@@ -294,6 +311,7 @@
 
   <!-- Mobile floating buttons -->
   <div id="version-display"></div>
+  <div id="debug-display">Debug output...</div>
   <button id="mobile-settings" class="mobile-float-btn">SET</button>
   <button id="mobile-hint" class="mobile-float-btn">HINT</button>
   <button id="mobile-undo" class="mobile-float-btn">UNDO</button>
@@ -325,7 +343,18 @@
 // === ICE SKATER ENGINE v2 ===
 // Fixed: locked wall, height system, ramps, block stops
 
-const GAME_VERSION = 'v199';  // Bump this and tell Ivy the version when pushing changes!
+const GAME_VERSION = 'v200';  // Bump this and tell Ivy the version when pushing changes!
+
+// Debug: capture console.log to visible div
+const debugLines = [];
+const origLog = console.log;
+console.log = (...args) => {
+  origLog(...args);
+  debugLines.push(args.join(' '));
+  if (debugLines.length > 20) debugLines.shift();
+  const el = document.getElementById('debug-display');
+  if (el) el.textContent = debugLines.join('\n');
+};
 
 const TILE_W = 16;  // Tile width
 const TILE_H = 12;  // Tile height (floor surface depth) - oblique angle
@@ -657,10 +686,13 @@ function simulateMove(state, dir) {
     const tile = getTile(newState, nx, ny);
     const baseTile = getBaseTile(newState, nx, ny);
 
+    // DEBUG: Show what tile we're checking
+    console.log(`MOVE CHECK: (${nx},${ny}) tile='${tile}' baseTile='${baseTile}' height=${height}`);
+
     // --- GROUND LEVEL (height 0) ---
     if (height === 0) {
       // Wall - stop before
-      if (tile === '#') break;
+      if (tile === '#') { console.log('BLOCKED: wall'); break; }
 
       // Locked wall - stop before, unlock if have key
       if (tile === 'L' && !newState.unlockedWalls.has(`${nx},${ny}`)) {
