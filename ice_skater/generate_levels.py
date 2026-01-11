@@ -39,6 +39,14 @@ DIRECTIONS = {
 RAMPS = {RAMP_N, RAMP_S, RAMP_E, RAMP_W}
 CORNERS = {CORNER_UR, CORNER_UL, CORNER_DR, CORNER_DL}
 
+# Ramp climb directions - direction you must go to climb UP the ramp
+RAMP_CLIMB_DIR = {
+    RAMP_N: (0, -1),   # ^ high end north, climb by going up
+    RAMP_S: (0, 1),    # v high end south, climb by going down
+    RAMP_E: (1, 0),    # > high end east, climb by going right
+    RAMP_W: (-1, 0),   # < high end west, climb by going left
+}
+
 
 def get_corner_redirect(tile: str, dx: int, dy: int) -> Optional[Tuple[int, int]]:
     """Get new direction after hitting a corner tile."""
@@ -62,12 +70,14 @@ class GameState:
                  blocks: Set[Tuple[int, int]], has_key: bool = False,
                  unlocked: Set[Tuple[int, int]] = None,
                  filled_holes: Set[Tuple[int, int]] = None,
-                 ramps: Dict[Tuple[int, int], str] = None):
+                 ramps: Dict[Tuple[int, int], str] = None,
+                 player_height: int = 0):
         self.grid = grid
         self.width = len(grid[0])
         self.height = len(grid)
         self.player_x = player_x
         self.player_y = player_y
+        self.player_height = player_height  # 0 = ground, 1 = elevated
         self.blocks = blocks
         self.has_key = has_key
         self.unlocked = unlocked or set()
@@ -77,13 +87,14 @@ class GameState:
         self.won = False
 
     def copy(self):
-        return GameState(
+        new_state = GameState(
             [row[:] for row in self.grid],
             self.player_x, self.player_y,
             set(self.blocks), self.has_key,
             set(self.unlocked), set(self.filled_holes),
-            dict(self.ramps)
+            dict(self.ramps), self.player_height
         )
+        return new_state
 
     def get_tile(self, x: int, y: int) -> str:
         if 0 <= x < self.width and 0 <= y < self.height:
@@ -93,7 +104,7 @@ class GameState:
     def to_key(self) -> tuple:
         """Hashable state for BFS."""
         return (
-            self.player_x, self.player_y,
+            self.player_x, self.player_y, self.player_height,
             frozenset(self.blocks),
             self.has_key,
             frozenset(self.unlocked),
@@ -108,6 +119,7 @@ def simulate_move(state: GameState, direction: str) -> Optional[GameState]:
     new_state = state.copy()
 
     x, y = new_state.player_x, new_state.player_y
+    height = new_state.player_height
 
     # Slide until hitting something
     moves = 0
@@ -117,68 +129,136 @@ def simulate_move(state: GameState, direction: str) -> Optional[GameState]:
         nx, ny = x + dx, y + dy
         tile = new_state.get_tile(nx, ny)
 
-        # Wall or locked wall stops movement
+        # Wall always stops movement
         if tile == WALL:
             break
+
+        # Locked wall
         if tile == LOCKED and (nx, ny) not in new_state.unlocked:
-            # Try to unlock if we have key
-            if new_state.has_key:
-                new_state.unlocked.add((nx, ny))
-                new_state.has_key = False
-            break
-
-        # Block - try to push
-        if (nx, ny) in new_state.blocks:
-            pushed = push_block(new_state, nx, ny, dx, dy)
-            if not pushed:
+            if height == 0:
+                # Try to unlock if we have key
+                if new_state.has_key:
+                    new_state.unlocked.add((nx, ny))
+                    new_state.has_key = False
                 break
-            # Player ends up on block's original position
-            x, y = nx, ny
-            break
-
-        # Ramp - check if pushable
-        if (nx, ny) in new_state.ramps:
-            pushed = push_ramp(new_state, nx, ny, dx, dy)
-            if not pushed:
-                break
-            # Player ends up on ramp's original position
-            x, y = nx, ny
-            break
-
-        # Move to new position
-        x, y = nx, ny
-
-        # Check what we landed on
-        if tile == HOLE and (x, y) not in new_state.filled_holes:
-            new_state.dead = True
-            break
-
-        if tile == KEY:
-            new_state.has_key = True
-            new_state.grid[y][x] = ICE
-
-        if tile == GOAL:
-            new_state.won = True
-            break
-
-        if tile == STICKY:
-            break  # Stop on sticky
-
-        # Corner redirect
-        if tile in CORNERS:
-            redirect = get_corner_redirect(tile, dx, dy)
-            if redirect:
-                dx, dy = redirect
             else:
-                break  # Invalid approach angle
+                break  # Can't pass over locked walls even when elevated
+
+        # Handle based on elevation
+        if height == 0:
+            # GROUND LEVEL
+
+            # Block - try to push
+            if (nx, ny) in new_state.blocks:
+                pushed = push_block(new_state, nx, ny, dx, dy)
+                if not pushed:
+                    break
+                # Player ends up on block's original position
+                x, y = nx, ny
+                break
+
+            # Ramp - climb or push
+            if (nx, ny) in new_state.ramps:
+                ramp_type = new_state.ramps[(nx, ny)]
+                climb_dir = RAMP_CLIMB_DIR[ramp_type]
+
+                if (dx, dy) == climb_dir:
+                    # Climbing UP the ramp
+                    x, y = nx, ny
+                    height = 1
+                    # Continue sliding at height 1
+                    moves += 1
+                    continue
+                else:
+                    # Try to push the ramp
+                    pushed = push_ramp(new_state, nx, ny, dx, dy)
+                    if not pushed:
+                        break
+                    x, y = nx, ny
+                    break
+
+            # Move to new position
+            x, y = nx, ny
+
+            # Check what we landed on
+            if tile == HOLE and (x, y) not in new_state.filled_holes:
+                new_state.dead = True
+                break
+
+            if tile == KEY:
+                new_state.has_key = True
+                new_state.grid[y][x] = ICE
+
+            if tile == GOAL:
+                new_state.won = True
+                break
+
+            if tile == STICKY:
+                break  # Stop on sticky
+
+            # Corner redirect
+            if tile in CORNERS:
+                redirect = get_corner_redirect(tile, dx, dy)
+                if redirect:
+                    dx, dy = redirect
+                else:
+                    break  # Invalid approach angle
+
+        else:
+            # ELEVATED (height == 1)
+
+            # Pass over ground-level blocks
+            if (nx, ny) in new_state.blocks:
+                x, y = nx, ny
+                moves += 1
+                continue
+
+            # Ramp - descend or pass over
+            if (nx, ny) in new_state.ramps:
+                ramp_type = new_state.ramps[(nx, ny)]
+                climb_dir = RAMP_CLIMB_DIR[ramp_type]
+                descent_dir = (-climb_dir[0], -climb_dir[1])
+
+                if (dx, dy) == descent_dir:
+                    # Going DOWN the ramp
+                    x, y = nx, ny
+                    height = 0
+                    # Continue sliding at height 0
+                    moves += 1
+                    continue
+                else:
+                    # Pass over ramp (we're elevated)
+                    x, y = nx, ny
+                    moves += 1
+                    continue
+
+            # Move to new position
+            x, y = nx, ny
+
+            # At height 1, pass over holes
+            # At height 1, pass over corners (no redirect)
+            # At height 1, can still pick up keys and reach goal
+
+            if tile == KEY:
+                new_state.has_key = True
+                new_state.grid[y][x] = ICE
+
+            if tile == GOAL:
+                new_state.won = True
+                break
+
+            if tile == STICKY:
+                height = 0  # Land on sticky
+                break
 
         moves += 1
 
-    if x == state.player_x and y == state.player_y:
+    if x == state.player_x and y == state.player_y and height == state.player_height:
         return None  # No movement
 
     new_state.player_x = x
     new_state.player_y = y
+    new_state.player_height = height
     return new_state
 
 
@@ -530,9 +610,10 @@ if __name__ == '__main__':
     import sys
 
     count = int(sys.argv[1]) if len(sys.argv) > 1 else 10000
-    output_dir = sys.argv[2] if len(sys.argv) > 2 else '/home/ivy/locomot-io/ice_skater/level_chunks'
+    top_n = int(sys.argv[2]) if len(sys.argv) > 2 else 100
+    output_dir = sys.argv[3] if len(sys.argv) > 3 else '/home/ivy/locomot-io/ice_skater/level_chunks'
 
-    print(f"Generating {count} levels...")
+    print(f"Generating {count} levels, keeping top {top_n} by quality, sorted by difficulty...")
 
     def progress(current, total):
         if current % 100 == 0 or current == total:
@@ -541,8 +622,17 @@ if __name__ == '__main__':
     levels = generate_levels(count, progress)
 
     print(f"\nGenerated {len(levels)} levels")
-    print("Saving to chunks...")
 
+    # Sort by quality (descending) and take top N
+    levels.sort(key=lambda x: x['quality'], reverse=True)
+    levels = levels[:top_n]
+    print(f"Kept top {len(levels)} by quality (range: {levels[-1]['quality']}-{levels[0]['quality']})")
+
+    # Sort by difficulty (par)
+    levels.sort(key=lambda x: x['par'])
+    print(f"Sorted by difficulty (par range: {levels[0]['par']}-{levels[-1]['par']})")
+
+    print("Saving to chunks...")
     index = save_chunked(levels, output_dir)
 
     print(f"Done! {index['total_levels']} levels in {len(index['chunks'])} chunks")

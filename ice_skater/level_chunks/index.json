@@ -1,6 +1,6 @@
 {
   "total_levels": 100,
-  "chunk_size": 100,
+  "chunk_size": 500,
   "chunks": [
     {
       "id": 0,
@@ -8,7 +8,7 @@
       "start": 0,
       "end": 100,
       "count": 100,
-      "size_kb": 52.7
+      "size_kb": 51.8
     }
   ]
 }
