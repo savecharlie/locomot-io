@@ -353,7 +353,7 @@
 // === ICE SKATER ENGINE v2 ===
 // Fixed: locked wall, height system, ramps, block stops
 
-const GAME_VERSION = 'v203';  // Bump this and tell Ivy the version when pushing changes!
+const GAME_VERSION = 'v204';  // Bump this and tell Ivy the version when pushing changes!
 
 // Debug: capture console.log to visible div
 const debugLines = [];
@@ -687,7 +687,8 @@ function simulateMove(state, dir) {
     wentUpRamp: false,  // Reset each move
     rampX: undefined,
     rampY: undefined,
-    blockMoveInfo: null  // Clear previous block move info
+    blockMoveInfo: null,  // Clear previous block move info
+    path: [{ x: state.playerX, y: state.playerY }]  // Track path for corner animation
   };
 
   // Slide until hitting something
@@ -790,6 +791,8 @@ function simulateMove(state, dir) {
         const redirect = getCornerRedirect(baseTile, dx, dy);
         if (redirect) {
           console.log(`CORNER ${baseTile} at (${x},${y}): redirecting (${dx},${dy}) → (${redirect.dx},${redirect.dy})`);
+          // Add corner as waypoint for animation
+          newState.path.push({ x, y, corner: true });
           dx = redirect.dx;
           dy = redirect.dy;
           newState.playerDir = dx === 1 ? 'right' : dx === -1 ? 'left' : dy === -1 ? 'up' : 'down';
@@ -958,6 +961,8 @@ function simulateMove(state, dir) {
   newState.playerX = x;
   newState.playerY = y;
   newState.playerHeight = height;
+  // Add final position to path
+  newState.path.push({ x, y });
   return newState;
 }
 
@@ -1785,8 +1790,37 @@ function render() {
   let playerX, playerY, playerHeight;
   if (animation) {
     const p = animation.player;
-    playerX = p.fromX + (p.toX - p.fromX) * animProgress;
-    playerY = p.fromY + (p.toY - p.fromY) * animProgress;
+
+    // Use path waypoints if available (for corner animation)
+    if (p.path && p.path.length > 1) {
+      // Calculate segment distances
+      const segments = [];
+      let totalDist = 0;
+      for (let i = 0; i < p.path.length - 1; i++) {
+        const segDist = Math.abs(p.path[i+1].x - p.path[i].x) + Math.abs(p.path[i+1].y - p.path[i].y);
+        segments.push({ start: p.path[i], end: p.path[i+1], dist: segDist, cumDist: totalDist });
+        totalDist += segDist;
+      }
+
+      // Find current position along path
+      const targetDist = animProgress * totalDist;
+      let currentSeg = segments[segments.length - 1];
+      for (const seg of segments) {
+        if (targetDist <= seg.cumDist + seg.dist) {
+          currentSeg = seg;
+          break;
+        }
+      }
+
+      // Interpolate within segment
+      const segProgress = currentSeg.dist > 0 ? (targetDist - currentSeg.cumDist) / currentSeg.dist : 0;
+      playerX = currentSeg.start.x + (currentSeg.end.x - currentSeg.start.x) * Math.min(1, segProgress);
+      playerY = currentSeg.start.y + (currentSeg.end.y - currentSeg.start.y) * Math.min(1, segProgress);
+    } else {
+      // Fallback to simple interpolation
+      playerX = p.fromX + (p.toX - p.fromX) * animProgress;
+      playerY = p.fromY + (p.toY - p.fromY) * animProgress;
+    }
 
     // Calculate height based on ramp position
     if (p.wentUpRamp && p.rampX !== undefined) {
@@ -2363,7 +2397,8 @@ function handleInput(dir) {
           rampX: newState.rampX,
           rampY: newState.rampY,
           lastElevatedX: newState.lastElevatedX,
-          lastElevatedY: newState.lastElevatedY
+          lastElevatedY: newState.lastElevatedY,
+          path: newState.path || []  // Waypoints for corner animation
         },
         blocks: movedBlocks,
         targetState: newState,
