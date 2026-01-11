@@ -395,7 +395,7 @@
 // === ICE SKATER ENGINE v2 ===
 // Fixed: locked wall, height system, ramps, block stops
 
-const GAME_VERSION = 'v236';  // Bump this and tell Ivy the version when pushing changes!
+const GAME_VERSION = 'v237';  // Bump this and tell Ivy the version when pushing changes!
 
 const TILE_W = 16;  // Tile width
 const TILE_H = 12;  // Tile height (floor surface depth) - oblique angle
@@ -1751,20 +1751,20 @@ function render() {
   SCALE = Math.floor(Math.min(scaleX, scaleY));
   if (SCALE < 1) SCALE = 1;
 
-  // Canvas = chamber size + snow padding, CSS centers it
-  const SNOW_PADDING = 30;  // Pixels of space around chamber for snow
+  // Canvas = chamber width + horizontal snow padding, height = exact puzzle height
+  const SNOW_PADDING = 30;  // Pixels of horizontal space for snow
   const scaledLevelW = levelPixelW * SCALE;
   const scaledLevelH = levelPixelH * SCALE;
   const snowPad = SNOW_PADDING * SCALE;
   canvas.width = scaledLevelW + snowPad * 2;
-  canvas.height = scaledLevelH + snowPad * 2;
+  canvas.height = scaledLevelH;  // No vertical padding - Y edges match puzzle
   canvas.style.width = canvas.width + 'px';
   canvas.style.height = canvas.height + 'px';
   ctx.imageSmoothingEnabled = false;
 
-  // Offset chamber into center of canvas (leaving snow padding)
+  // Offset chamber horizontally (snow padding), no vertical offset
   const offsetX = snowPad;
-  const offsetY = snowPad;
+  const offsetY = 0;
 
   const now = performance.now();
   if (now - lastKeyFrameTime > 200) {
