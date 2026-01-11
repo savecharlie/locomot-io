@@ -376,17 +376,20 @@ def solve_bfs(initial_state: GameState, max_depth: int = 30) -> Optional[List[st
     return None
 
 
-def create_level(width: int, height: int, mechanics: List[str], difficulty: int) -> Optional[dict]:
+def create_level(width: int, height: int, mechanics: List[str], difficulty: int, narrow: bool = False) -> Optional[dict]:
     """Generate a single level with specified mechanics."""
     # Create empty grid with walls
     grid = [[WALL if x == 0 or x == width-1 or y == 0 or y == height-1 else ICE
              for x in range(width)] for y in range(height)]
 
-    # Available interior positions
-    interior = [(x, y) for x in range(2, width-2) for y in range(2, height-2)]
+    # Available interior positions - for narrow puzzles use all non-wall tiles
+    if narrow:
+        interior = [(x, y) for x in range(1, width-1) for y in range(1, height-1)]
+    else:
+        interior = [(x, y) for x in range(2, width-2) for y in range(2, height-2)]
     random.shuffle(interior)
 
-    if len(interior) < 4:
+    if len(interior) < 2:  # Need at least start and goal
         return None
 
     # Place start and goal
@@ -606,26 +609,73 @@ def save_chunked(levels: List[dict], output_dir: str, chunk_size: int = 500):
     return index
 
 
+def generate_narrow_levels(count: int, interior_w: int, interior_h: int, progress_callback=None) -> List[dict]:
+    """Generate narrow puzzles with fixed interior dimensions."""
+    levels = []
+    attempts = 0
+    max_attempts = count * 200  # More attempts needed for constrained puzzles
+
+    # Total dimensions = interior + 2 walls
+    width = interior_w + 2
+    height = interior_h + 2
+
+    # Mechanics that work in narrow spaces
+    narrow_mechanics = [
+        ['BASIC'],
+        ['BLOCK'],
+        ['STICKY'],
+        ['BLOCK', 'STICKY'],
+    ]
+
+    while len(levels) < count and attempts < max_attempts:
+        attempts += 1
+
+        mechanics = random.choice(narrow_mechanics)
+        difficulty = random.randint(1, 3)
+
+        level = create_level(width, height, mechanics, difficulty, narrow=True)
+
+        if level:
+            levels.append(level)
+            if progress_callback and (len(levels) % 100 == 0 or len(levels) == count):
+                progress_callback(len(levels), count)
+
+    return levels
+
+
 if __name__ == '__main__':
     import sys
+    import argparse
 
-    count = int(sys.argv[1]) if len(sys.argv) > 1 else 10000
-    top_n = int(sys.argv[2]) if len(sys.argv) > 2 else 100
-    output_dir = sys.argv[3] if len(sys.argv) > 3 else '/home/ivy/locomot-io/ice_skater/level_chunks'
-
-    print(f"Generating {count} levels, keeping top {top_n} by quality, sorted by difficulty...")
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--narrow', type=str, help='Generate narrow puzzles with WxH interior (e.g., 1x3)')
+    parser.add_argument('--count', type=int, default=10000, help='Number to generate')
+    parser.add_argument('--top', type=int, default=100, help='Top N to keep')
+    parser.add_argument('--output', type=str, default='/home/ivy/locomot-io/ice_skater/level_chunks')
+    args = parser.parse_args()
 
     def progress(current, total):
         if current % 100 == 0 or current == total:
             print(f"  {current}/{total} ({100*current//total}%)")
 
-    levels = generate_levels(count, progress)
+    if args.narrow:
+        # Parse WxH format
+        interior_w, interior_h = map(int, args.narrow.lower().split('x'))
+        print(f"Generating {args.count} narrow puzzles ({interior_w}x{interior_h} interior), keeping top {args.top}...")
+        levels = generate_narrow_levels(args.count, interior_w, interior_h, progress)
+    else:
+        print(f"Generating {args.count} levels, keeping top {args.top} by quality, sorted by difficulty...")
+        levels = generate_levels(args.count, progress)
 
     print(f"\nGenerated {len(levels)} levels")
 
+    if len(levels) == 0:
+        print("No valid levels generated!")
+        sys.exit(1)
+
     # Sort by quality (descending) and take top N
     levels.sort(key=lambda x: x['quality'], reverse=True)
-    levels = levels[:top_n]
+    levels = levels[:args.top]
     print(f"Kept top {len(levels)} by quality (range: {levels[-1]['quality']}-{levels[0]['quality']})")
 
     # Sort by difficulty (par)
@@ -633,7 +683,7 @@ if __name__ == '__main__':
     print(f"Sorted by difficulty (par range: {levels[0]['par']}-{levels[-1]['par']})")
 
     print("Saving to chunks...")
-    index = save_chunked(levels, output_dir)
+    index = save_chunked(levels, args.output)
 
     print(f"Done! {index['total_levels']} levels in {len(index['chunks'])} chunks")
-    print(f"Output: {output_dir}")
+    print(f"Output: {args.output}")
