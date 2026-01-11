@@ -9,6 +9,10 @@
 /index.html
   Cache-Control: no-cache
 
+# No cache for JSON level files
+/ice_skater/*.json
+  Cache-Control: no-cache, no-store, must-revalidate
+
 # Security Headers
 /*
   X-Frame-Options: DENY
