@@ -353,7 +353,7 @@
 // === ICE SKATER ENGINE v2 ===
 // Fixed: locked wall, height system, ramps, block stops
 
-const GAME_VERSION = 'v206';  // Bump this and tell Ivy the version when pushing changes!
+const GAME_VERSION = 'v207';  // Bump this and tell Ivy the version when pushing changes!
 
 // Debug: capture console.log to visible div
 const debugLines = [];
@@ -627,25 +627,26 @@ function isCorner(tile) {
 
 // Get corner redirect: given incoming direction (dx, dy), return new direction
 // Each corner redirects exactly 2 directions, other 2 pass through
-// 7 = ur (bottom-right curve): UP→RIGHT, LEFT→DOWN
-// 8 = ul (bottom-left curve): UP→LEFT, RIGHT→DOWN
-// 9 = dr (top-right curve): DOWN→RIGHT, LEFT→UP
-// 0 = dl (top-left curve): DOWN→LEFT, RIGHT→UP
+// Behavior matches the visual track path in each sprite:
+// 8 = ul: track connects bottom→right, so UP→RIGHT, LEFT→DOWN
+// 7 = ur: track connects bottom→left, so UP→LEFT, RIGHT→DOWN
+// 0 = dl: track connects top→right, so DOWN→RIGHT, LEFT→UP
+// 9 = dr: track connects top→left, so DOWN→LEFT, RIGHT→UP
 function getCornerRedirect(tile, dx, dy) {
   switch(tile) {
-    case '7': // ur: up→right, left→down
+    case '8': // ul: track bottom→right (curve hugs top-left)
       if (dy === -1) return { dx: 1, dy: 0 };   // moving up → go right
       if (dx === -1) return { dx: 0, dy: 1 };   // moving left → go down
       return null;
-    case '8': // ul: up→left, right→down
+    case '7': // ur: track bottom→left (curve hugs top-right)
       if (dy === -1) return { dx: -1, dy: 0 };  // moving up → go left
       if (dx === 1) return { dx: 0, dy: 1 };    // moving right → go down
       return null;
-    case '9': // dr: down→right, left→up
+    case '0': // dl: track top→right (curve hugs bottom-left)
       if (dy === 1) return { dx: 1, dy: 0 };    // moving down → go right
       if (dx === -1) return { dx: 0, dy: -1 };  // moving left → go up
       return null;
-    case '0': // dl: down→left, right→up
+    case '9': // dr: track top→left (curve hugs bottom-right)
       if (dy === 1) return { dx: -1, dy: 0 };   // moving down → go left
       if (dx === 1) return { dx: 0, dy: -1 };   // moving right → go up
       return null;
