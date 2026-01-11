@@ -257,7 +257,7 @@
       #sidebar { display: flex; }
       #footer .mobile-only { display: none; }
     }
-    /* Mobile: fullscreen game only */
+    /* Mobile: centered chamber */
     @media (max-width: 899px) {
       #sidebar { display: none; }
       #header { display: none; }
@@ -265,11 +265,9 @@
       #main-layout, #game-area, #game-container { display: contents; }
       canvas {
         position: fixed;
-        top: 0;
-        left: 0;
-        width: 100vw;
-        height: 100vh;
-        height: 100dvh;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
       }
     }
   </style>
@@ -353,7 +351,7 @@
 // === ICE SKATER ENGINE v2 ===
 // Fixed: locked wall, height system, ramps, block stops
 
-const GAME_VERSION = 'v222';  // Bump this and tell Ivy the version when pushing changes!
+const GAME_VERSION = 'v223';  // Bump this and tell Ivy the version when pushing changes!
 
 // Debug: capture console.log to visible div
 const debugLines = [];
@@ -1705,16 +1703,18 @@ function render() {
   SCALE = Math.floor(Math.min(scaleX, scaleY));
   if (SCALE < 1) SCALE = 1;
 
-  // Canvas width = chamber width, height = viewport height
+  // Canvas = exact chamber size, CSS centers it
   const scaledLevelW = levelPixelW * SCALE;
   const scaledLevelH = levelPixelH * SCALE;
   canvas.width = scaledLevelW;
-  canvas.height = viewH;
+  canvas.height = scaledLevelH;
+  canvas.style.width = scaledLevelW + 'px';
+  canvas.style.height = scaledLevelH + 'px';
   ctx.imageSmoothingEnabled = false;
 
-  // Center level vertically only
+  // No offset - canvas is exact chamber size
   const offsetX = 0;
-  const offsetY = Math.floor((viewH - scaledLevelH) / 2);
+  const offsetY = 0;
 
   const now = performance.now();
   if (now - lastKeyFrameTime > 200) {
