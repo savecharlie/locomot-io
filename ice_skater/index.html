@@ -353,7 +353,7 @@
 // === ICE SKATER ENGINE v2 ===
 // Fixed: locked wall, height system, ramps, block stops
 
-const GAME_VERSION = 'v211';  // Bump this and tell Ivy the version when pushing changes!
+const GAME_VERSION = 'v212';  // Bump this and tell Ivy the version when pushing changes!
 
 // Debug: capture console.log to visible div
 const debugLines = [];
@@ -1123,6 +1123,15 @@ function pushBlock(state, bx, by, dx, dy) {
         }
       }
 
+      // Corner redirect - change block direction
+      if (isCorner(baseTile)) {
+        const redirect = getCornerRedirect(baseTile, dx, dy);
+        if (redirect) {
+          dx = redirect.dx;
+          dy = redirect.dy;
+        }
+      }
+
       // Check next position
       const nx = x + dx;
       const ny = y + dy;
@@ -1208,6 +1217,15 @@ function pushBlock(state, bx, by, dx, dy) {
       } else if (tile !== '#' && tile !== 'B' && !(tile === 'L' && !newState.unlockedWalls.has(`${x},${y}`))) {
         // Not on ramp, wall, or block - drop to ground
         blockHeight = 0;
+      }
+
+      // Corner redirect - change block direction (elevated blocks too)
+      if (isCorner(baseTile)) {
+        const redirect = getCornerRedirect(baseTile, dx, dy);
+        if (redirect) {
+          dx = redirect.dx;
+          dy = redirect.dy;
+        }
       }
 
       // Move to next position
