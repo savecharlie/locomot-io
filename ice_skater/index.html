@@ -327,8 +327,9 @@ const DIRS = {
 // Tile types:
 // . = ice floor, # = wall, S = start, P = goal (penguin)
 // B = ice block, H = hole (hazard), K = key, L = locked wall
-// T = sticky tile, 1-4 = crack variants (cosmetic floor)
+// T = sticky tile, 1-4 = crack variants (break if you stop on them)
 // Ramps: ^ = high end north, v = high end south, < = high end west, > = high end east
+// Corners: a = ur (up→right), b = ul (up→left), c = dr (down→right), d = dl (down→left)
 
 const sprites = {};
 const spriteFiles = [
@@ -339,6 +340,7 @@ const spriteFiles = [
   'ice_crack_1.png', 'ice_crack_2.png', 'ice_crack_3.png', 'ice_crack_4.png',
   'key_frame_1.png', 'key_frame_2.png', 'key_frame_3.png', 'key_frame_4.png',
   'ramp_north_16x24.png', 'ramp_south_16x24.png', 'ramp_east_16x24.png', 'ramp_west_16x24.png',
+  'corner_ur.png', 'corner_ul.png', 'corner_dr.png', 'corner_dl.png',
   'skater_16x24.png', 'skater_back_fixed_16x24.png',
   'skater_side_16x24.png', 'skater_side_left_16x24.png',
   'skater_side_standing_16x24.png', 'skater_side_left_standing_16x24.png',
@@ -563,6 +565,38 @@ function getRampUpDir(tile) {
   return null;
 }
 
+// Check if tile is a corner redirect
+function isCorner(tile) {
+  return tile === 'a' || tile === 'b' || tile === 'c' || tile === 'd';
+}
+
+// Get corner redirect: given incoming direction (dx, dy), return new direction
+// a = ur: up→right, left→up (from below go right, from left go up)
+// b = ul: up→left, right→up (from below go left, from right go up)
+// c = dr: down→right, left→down (from above go right, from left go down)
+// d = dl: down→left, right→down (from above go left, from right go down)
+function getCornerRedirect(tile, dx, dy) {
+  switch(tile) {
+    case 'a': // ur: up→right, left→up
+      if (dy === -1) return { dx: 1, dy: 0 };   // coming from below (moving up) → go right
+      if (dx === 1) return { dx: 0, dy: -1 };   // coming from left (moving right) → go up
+      return null;
+    case 'b': // ul: up→left, right→up
+      if (dy === -1) return { dx: -1, dy: 0 };  // coming from below (moving up) → go left
+      if (dx === -1) return { dx: 0, dy: -1 };  // coming from right (moving left) → go up
+      return null;
+    case 'c': // dr: down→right, left→down
+      if (dy === 1) return { dx: 1, dy: 0 };    // coming from above (moving down) → go right
+      if (dx === 1) return { dx: 0, dy: 1 };    // coming from left (moving right) → go down
+      return null;
+    case 'd': // dl: down→left, right→down
+      if (dy === 1) return { dx: -1, dy: 0 };   // coming from above (moving down) → go left
+      if (dx === -1) return { dx: 0, dy: 1 };   // coming from right (moving left) → go down
+      return null;
+  }
+  return null;
+}
+
 // Check if a block at position is elevated (on wall, locked wall, or ramp)
 function isBlockElevatedAt(state, x, y) {
   const baseTile = getBaseTile(state, x, y);
@@ -690,6 +724,18 @@ function simulateMove(state, dir) {
         newState.grid[y] = [...newState.grid[y]];
         newState.grid[y][x] = '.';
         console.log(`After pickup, grid[${y}][${x}] = '${newState.grid[y][x]}'`);
+      }
+
+      // Corner redirect - change direction if coming from correct side
+      if (isCorner(baseTile)) {
+        const redirect = getCornerRedirect(baseTile, dx, dy);
+        if (redirect) {
+          console.log(`CORNER ${baseTile} at (${x},${y}): redirecting (${dx},${dy}) → (${redirect.dx},${redirect.dy})`);
+          dx = redirect.dx;
+          dy = redirect.dy;
+          newState.playerDir = dx === 1 ? 'right' : dx === -1 ? 'left' : dy === -1 ? 'up' : 'down';
+        }
+        // If no redirect (wrong direction), just continue sliding through
       }
 
       // Goal - win! (but if penguin is on wall, need to be elevated)
@@ -1545,6 +1591,12 @@ function render() {
       if (tile >= '1' && tile <= '4') {
         drawSprite(`ice_crack_${tile}`, px, py - TILE_H * SCALE);
       }
+
+      // Corner redirects (floor overlays)
+      if (tile === 'a') drawSprite('corner_ur', px, py - TILE_H * SCALE);
+      if (tile === 'b') drawSprite('corner_ul', px, py - TILE_H * SCALE);
+      if (tile === 'c') drawSprite('corner_dr', px, py - TILE_H * SCALE);
+      if (tile === 'd') drawSprite('corner_dl', px, py - TILE_H * SCALE);
 
       // Sticky (floor overlay, centered on grid)
       if (tile === 'T' || (tile === 'L' && renderState.unlockedWalls.has(`${x},${y}`))) {
