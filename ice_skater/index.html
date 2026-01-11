@@ -205,9 +205,61 @@
         0 0 0 2px #304d78;
     }
     #mobile-settings { top: 12px; right: 12px; }
+    #mobile-lvl { bottom: 56px; left: 12px; }
     #mobile-hint { bottom: 56px; right: 12px; }
     #mobile-undo { bottom: 12px; right: 12px; }
     #mobile-restart { bottom: 12px; left: 12px; }
+
+    /* Level select modal */
+    #level-overlay {
+      display: none;
+      position: fixed;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(29, 43, 48, 0.95);
+      z-index: 100;
+      justify-content: center;
+      align-items: center;
+      overflow-y: auto;
+    }
+    #level-overlay.visible { display: flex; }
+    #level-panel {
+      background: #1D2B30;
+      border: 2px solid #3B8897;
+      border-radius: 8px;
+      padding: 20px;
+      max-width: 90vw;
+      max-height: 80vh;
+      overflow-y: auto;
+    }
+    #level-panel h2 {
+      color: #68BBC4;
+      font-size: 18px;
+      margin-bottom: 15px;
+      text-align: center;
+    }
+    #level-grid {
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      gap: 8px;
+      margin-bottom: 15px;
+    }
+    .level-btn {
+      background: #2A474F;
+      color: #8DCBCA;
+      border: 2px solid #3B8897;
+      padding: 10px 5px;
+      font-size: 14px;
+      font-weight: bold;
+      cursor: pointer;
+      border-radius: 4px;
+    }
+    .level-btn:hover { background: #346672; }
+    .level-btn.current { background: #3B8897; color: #fff; }
+    .level-btn.completed { background: #2A5F4F; }
+    #level-close {
+      width: 100%;
+      margin-top: 10px;
+    }
     #version-display {
       display: none;
       position: fixed;
@@ -303,9 +355,19 @@
   <!-- Mobile floating buttons -->
   <div id="version-display"></div>
   <button id="mobile-settings" class="mobile-float-btn">SET</button>
+  <button id="mobile-lvl" class="mobile-float-btn">LVL</button>
   <button id="mobile-hint" class="mobile-float-btn">HINT</button>
   <button id="mobile-undo" class="mobile-float-btn">UNDO</button>
   <button id="mobile-restart" class="mobile-float-btn">RST</button>
+
+  <!-- Level Select Modal -->
+  <div id="level-overlay">
+    <div id="level-panel">
+      <h2>Select Level</h2>
+      <div id="level-grid"></div>
+      <button id="level-close">Close</button>
+    </div>
+  </div>
 
   <!-- Settings Modal -->
   <div id="settings-overlay">
@@ -333,7 +395,7 @@
 // === ICE SKATER ENGINE v2 ===
 // Fixed: locked wall, height system, ramps, block stops
 
-const GAME_VERSION = 'v225';  // Bump this and tell Ivy the version when pushing changes!
+const GAME_VERSION = 'v226';  // Bump this and tell Ivy the version when pushing changes!
 
 const TILE_W = 16;  // Tile width
 const TILE_H = 12;  // Tile height (floor surface depth) - oblique angle
@@ -2999,6 +3061,39 @@ document.getElementById('toggle-hints')?.addEventListener('click', () => {
 document.getElementById('toggle-unwinnable')?.addEventListener('click', () => {
   settings.showUnwinnable = !settings.showUnwinnable;
   saveSettings();
+});
+
+// Level select
+function openLevelSelect() {
+  const grid = document.getElementById('level-grid');
+  grid.innerHTML = '';
+  const totalLevels = allLevels.length;
+  const completed = parseInt(localStorage.getItem('iceSkaterCompleted') || '0');
+
+  for (let i = 0; i < totalLevels; i++) {
+    const btn = document.createElement('button');
+    btn.className = 'level-btn';
+    btn.textContent = i + 1;
+    if (i === currentLevelIndex) btn.classList.add('current');
+    if (i < completed) btn.classList.add('completed');
+    btn.addEventListener('click', () => {
+      currentLevelIndex = i;
+      loadCurrentLevel();
+      closeLevelSelect();
+    });
+    grid.appendChild(btn);
+  }
+  document.getElementById('level-overlay').classList.add('visible');
+}
+
+function closeLevelSelect() {
+  document.getElementById('level-overlay').classList.remove('visible');
+}
+
+document.getElementById('mobile-lvl')?.addEventListener('click', openLevelSelect);
+document.getElementById('level-close')?.addEventListener('click', closeLevelSelect);
+document.getElementById('level-overlay')?.addEventListener('click', (e) => {
+  if (e.target.id === 'level-overlay') closeLevelSelect();
 });
 
 loadSettings();
