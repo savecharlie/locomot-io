@@ -132,8 +132,8 @@ def simulate_move(state: GameState, direction: str) -> Optional[GameState]:
             pushed = push_block(new_state, nx, ny, dx, dy)
             if not pushed:
                 break
-            # Player stops after pushing
-            x, y = nx - dx, ny - dy  # Stay one behind where block was
+            # Player ends up on block's original position
+            x, y = nx, ny
             break
 
         # Ramp - check if pushable
@@ -141,7 +141,8 @@ def simulate_move(state: GameState, direction: str) -> Optional[GameState]:
             pushed = push_ramp(new_state, nx, ny, dx, dy)
             if not pushed:
                 break
-            x, y = nx - dx, ny - dy
+            # Player ends up on ramp's original position
+            x, y = nx, ny
             break
 
         # Move to new position
