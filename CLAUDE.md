@@ -40,3 +40,14 @@ Free tier: 2 layers max. Premium: unlimited.
 ## Debugging Notes
 
 **Ivy doesn't watch toasts** - don't use toast messages for debugging. Use visible UI changes or console logging (check via remote logs) instead.
+
+## Ice Skater Versioning
+
+**ALWAYS tell Ivy the version when pushing ice_skater changes!**
+
+Version is displayed on mobile at top-left corner. When making changes:
+1. Bump `GAME_VERSION` in `ice_skater/index.html` (line ~314)
+2. Bump `CACHE_NAME` in `sw.js`
+3. Tell Ivy: "Pushed v199" (or whatever version)
+
+This lets her confirm she's seeing the right version after refreshing.

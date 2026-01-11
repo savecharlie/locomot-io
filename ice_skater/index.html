@@ -208,6 +208,19 @@
     #mobile-hint { bottom: 56px; right: 12px; }
     #mobile-undo { bottom: 12px; right: 12px; }
     #mobile-restart { bottom: 12px; left: 12px; }
+    #version-display {
+      display: none;
+      position: fixed;
+      top: 12px;
+      left: 12px;
+      z-index: 50;
+      color: #5a7a7f;
+      font-family: monospace;
+      font-size: 10px;
+    }
+    @media (max-width: 899px) {
+      #version-display { display: block; }
+    }
     @media (max-width: 899px) {
       .mobile-float-btn { display: block; }
     }
@@ -280,6 +293,7 @@
   </div>
 
   <!-- Mobile floating buttons -->
+  <div id="version-display"></div>
   <button id="mobile-settings" class="mobile-float-btn">SET</button>
   <button id="mobile-hint" class="mobile-float-btn">HINT</button>
   <button id="mobile-undo" class="mobile-float-btn">UNDO</button>
@@ -311,6 +325,8 @@
 // === ICE SKATER ENGINE v2 ===
 // Fixed: locked wall, height system, ramps, block stops
 
+const GAME_VERSION = 'v199';  // Bump this and tell Ivy the version when pushing changes!
+
 const TILE_W = 16;  // Tile width
 const TILE_H = 12;  // Tile height (floor surface depth) - oblique angle
 let SCALE = 4;  // Dynamic - calculated per level to fit viewport
@@ -329,7 +345,7 @@ const DIRS = {
 // B = ice block, H = hole (hazard), K = key, L = locked wall
 // T = sticky tile, 1-4 = crack variants (break if you stop on them)
 // Ramps: ^ = high end north, v = high end south, < = high end west, > = high end east
-// Corners: a = ur (up→right), b = ul (up→left), c = dr (down→right), d = dl (down→left)
+// Corners: 7 = ur (up→right), 8 = ul (up→left), 9 = dr (down→right), 0 = dl (down→left)
 
 const sprites = {};
 const spriteFiles = [
@@ -567,29 +583,29 @@ function getRampUpDir(tile) {
 
 // Check if tile is a corner redirect
 function isCorner(tile) {
-  return tile === 'a' || tile === 'b' || tile === 'c' || tile === 'd';
+  return tile === '7' || tile === '8' || tile === '9' || tile === '0';
 }
 
 // Get corner redirect: given incoming direction (dx, dy), return new direction
-// a = ur: up→right, left→up (from below go right, from left go up)
-// b = ul: up→left, right→up (from below go left, from right go up)
-// c = dr: down→right, left→down (from above go right, from left go down)
-// d = dl: down→left, right→down (from above go left, from right go down)
+// 7 = ur: up→right, left→up (from below go right, from left go up)
+// 8 = ul: up→left, right→up (from below go left, from right go up)
+// 9 = dr: down→right, left→down (from above go right, from left go down)
+// 0 = dl: down→left, right→down (from above go left, from right go down)
 function getCornerRedirect(tile, dx, dy) {
   switch(tile) {
-    case 'a': // ur: up→right, left→up
+    case '7': // ur: up→right, left→up
       if (dy === -1) return { dx: 1, dy: 0 };   // coming from below (moving up) → go right
       if (dx === 1) return { dx: 0, dy: -1 };   // coming from left (moving right) → go up
       return null;
-    case 'b': // ul: up→left, right→up
+    case '8': // ul: up→left, right→up
       if (dy === -1) return { dx: -1, dy: 0 };  // coming from below (moving up) → go left
       if (dx === -1) return { dx: 0, dy: -1 };  // coming from right (moving left) → go up
       return null;
-    case 'c': // dr: down→right, left→down
+    case '9': // dr: down→right, left→down
       if (dy === 1) return { dx: 1, dy: 0 };    // coming from above (moving down) → go right
       if (dx === 1) return { dx: 0, dy: 1 };    // coming from left (moving right) → go down
       return null;
-    case 'd': // dl: down→left, right→down
+    case '0': // dl: down→left, right→down
       if (dy === 1) return { dx: -1, dy: 0 };   // coming from above (moving down) → go left
       if (dx === -1) return { dx: 0, dy: 1 };   // coming from right (moving left) → go down
       return null;
@@ -1593,10 +1609,10 @@ function render() {
       }
 
       // Corner redirects (floor overlays)
-      if (tile === 'a') drawSprite('corner_ur', px, py - TILE_H * SCALE);
-      if (tile === 'b') drawSprite('corner_ul', px, py - TILE_H * SCALE);
-      if (tile === 'c') drawSprite('corner_dr', px, py - TILE_H * SCALE);
-      if (tile === 'd') drawSprite('corner_dl', px, py - TILE_H * SCALE);
+      if (tile === '7') drawSprite('corner_ur', px, py - TILE_H * SCALE);
+      if (tile === '8') drawSprite('corner_ul', px, py - TILE_H * SCALE);
+      if (tile === '9') drawSprite('corner_dr', px, py - TILE_H * SCALE);
+      if (tile === '0') drawSprite('corner_dl', px, py - TILE_H * SCALE);
 
       // Sticky (floor overlay, centered on grid)
       if (tile === 'T' || (tile === 'L' && renderState.unlockedWalls.has(`${x},${y}`))) {
@@ -2555,6 +2571,9 @@ async function prevLevel() {
 }
 
 async function init() {
+  // Display version
+  document.getElementById('version-display').textContent = GAME_VERSION;
+
   await loadSprites();
 
   // Try chunked loading first, fall back to single file
