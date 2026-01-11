@@ -395,7 +395,7 @@
 // === ICE SKATER ENGINE v2 ===
 // Fixed: locked wall, height system, ramps, block stops
 
-const GAME_VERSION = 'v232';  // Bump this and tell Ivy the version when pushing changes!
+const GAME_VERSION = 'v233';  // Bump this and tell Ivy the version when pushing changes!
 
 const TILE_W = 16;  // Tile width
 const TILE_H = 12;  // Tile height (floor surface depth) - oblique angle
@@ -501,6 +501,27 @@ function loadSettings() {
 function saveSettings() {
   localStorage.setItem('iceSkaterSettings', JSON.stringify(settings));
   updateSettingsUI();
+}
+
+// Level completion tracking
+function getCompletedLevels() {
+  const saved = localStorage.getItem('iceSkaterCompletedLevels');
+  if (saved) {
+    try {
+      return new Set(JSON.parse(saved));
+    } catch (e) {}
+  }
+  return new Set();
+}
+
+function markLevelComplete(levelIndex) {
+  const completed = getCompletedLevels();
+  completed.add(levelIndex);
+  localStorage.setItem('iceSkaterCompletedLevels', JSON.stringify([...completed]));
+}
+
+function isLevelComplete(levelIndex) {
+  return getCompletedLevels().has(levelIndex);
 }
 
 function updateSettingsUI() {
@@ -2442,6 +2463,11 @@ function render() {
   drawPlayer();
 
   if (gameState.won) {
+    // Mark level complete (only once per win)
+    if (!gameState.completionSaved) {
+      markLevelComplete(currentLevelIndex);
+      gameState.completionSaved = true;
+    }
     ctx.fillStyle = 'rgba(29, 43, 48, 0.8)';
     ctx.fillRect(0, 0, canvas.width, canvas.height);
     ctx.fillStyle = '#68BBC4';
@@ -3105,15 +3131,14 @@ document.getElementById('toggle-unwinnable')?.addEventListener('click', () => {
 function openLevelSelect() {
   const grid = document.getElementById('level-grid');
   grid.innerHTML = '';
-  const totalLevels = allLevels.length;
-  const completed = parseInt(localStorage.getItem('iceSkaterCompleted') || '0');
+  const completedLevels = getCompletedLevels();
 
   for (let i = 0; i < totalLevels; i++) {
     const btn = document.createElement('button');
     btn.className = 'level-btn';
     btn.textContent = i + 1;
     if (i === currentLevelIndex) btn.classList.add('current');
-    if (i < completed) btn.classList.add('completed');
+    if (completedLevels.has(i)) btn.classList.add('completed');
     btn.addEventListener('click', () => {
       loadLevel(i);
       closeLevelSelect();
