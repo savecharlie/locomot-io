@@ -214,9 +214,19 @@
       top: 12px;
       left: 12px;
       z-index: 50;
-      color: #5a7a7f;
+      background: #2a374f;
+      color: #b0d5cf;
+      padding: 4px 8px;
       font-family: monospace;
       font-size: 10px;
+      font-weight: bold;
+      text-transform: uppercase;
+      border: none;
+      border-radius: 0;
+      box-shadow:
+        inset 2px 2px 0 #696d75,
+        inset -2px -2px 0 #1d2b30,
+        0 0 0 2px #304d78;
     }
     @media (max-width: 899px) {
       #version-display { display: block; }
@@ -343,7 +353,7 @@
 // === ICE SKATER ENGINE v2 ===
 // Fixed: locked wall, height system, ramps, block stops
 
-const GAME_VERSION = 'v200';  // Bump this and tell Ivy the version when pushing changes!
+const GAME_VERSION = 'v201';  // Bump this and tell Ivy the version when pushing changes!
 
 // Debug: capture console.log to visible div
 const debugLines = [];
