@@ -470,11 +470,13 @@ def generate_levels(count: int, progress_callback=None) -> List[dict]:
                 mechanics = mechs
                 break
 
-        # Random size based on difficulty
-        min_size = 6 + difficulty
-        max_size = 10 + difficulty * 2
-        width = random.randint(min_size, max_size)
-        height = random.randint(min_size, max_size)
+        # Phone shape: taller than wide (portrait orientation)
+        min_w = 6 + difficulty // 2
+        max_w = 8 + difficulty
+        min_h = 10 + difficulty
+        max_h = 14 + difficulty * 2
+        width = random.randint(min_w, max_w)
+        height = random.randint(min_h, max_h)
 
         level = create_level(width, height, mechanics, difficulty)
 
