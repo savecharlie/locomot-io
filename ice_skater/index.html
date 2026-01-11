@@ -353,7 +353,7 @@
 // === ICE SKATER ENGINE v2 ===
 // Fixed: locked wall, height system, ramps, block stops
 
-const GAME_VERSION = 'v215';  // Bump this and tell Ivy the version when pushing changes!
+const GAME_VERSION = 'v216';  // Bump this and tell Ivy the version when pushing changes!
 
 // Debug: capture console.log to visible div
 const debugLines = [];
@@ -1032,8 +1032,30 @@ function pushBlock(state, bx, by, dx, dy) {
         return newState;
       }
 
-      // Another block - stop at previous position
+      // Player - push them! (momentum transfer)
+      if (x === newState.playerX && y === newState.playerY) {
+        // Block stops just before player
+        newState.blocks.add(`${x - dx},${y - dy}`);
+        finishAt(x - dx, y - dy);
+        // Mark that player should be pushed
+        newState.playerPushedBy = { dx, dy };
+        return newState;
+      }
+
+      // Another block - try to push it (momentum chain)
       if (tile === 'B') {
+        // Try to push the other block
+        const chainResult = pushBlock(newState, x, y, dx, dy);
+        if (chainResult) {
+          // Chain succeeded - our block stops where we are now
+          chainResult.blocks.add(`${x - dx},${y - dy}`);
+          // Combine path info for animation (could be enhanced)
+          finishAt(x - dx, y - dy);
+          chainResult.blockMoveInfo = newState.blockMoveInfo;
+          chainResult.chainedBlockInfo = chainResult.blockMoveInfo; // Track the chained push
+          return chainResult;
+        }
+        // Chain failed - just stop
         newState.blocks.add(`${x - dx},${y - dy}`);
         finishAt(x - dx, y - dy);
         return newState;
@@ -1109,7 +1131,7 @@ function pushBlock(state, bx, by, dx, dy) {
         return newState;
       }
 
-      // Ramp - block goes up if moving in the right direction
+      // Ramp - block goes up if moving in the right direction, or pushes ramp
       if (isRamp(baseTile)) {
         const upDir = getRampUpDir(baseTile);
         if (upDir && upDir.dx === dx && upDir.dy === dy) {
@@ -1119,7 +1141,16 @@ function pushBlock(state, bx, by, dx, dy) {
           blockRampX = x;
           blockRampY = y;
         } else {
-          // Wrong direction - stop before ramp
+          // Wrong direction - try to push the ramp (momentum chain)
+          const chainResult = pushRamp(newState, x, y, dx, dy);
+          if (chainResult) {
+            // Chain succeeded - our block stops where we are now
+            chainResult.blocks.add(`${x - dx},${y - dy}`);
+            finishAt(x - dx, y - dy);
+            chainResult.blockMoveInfo = newState.blockMoveInfo;
+            return chainResult;
+          }
+          // Chain failed - just stop
           newState.blocks.add(`${x - dx},${y - dy}`);
           finishAt(x - dx, y - dy);
           return newState;
@@ -1334,9 +1365,38 @@ function pushRamp(state, rx, ry, dx, dy) {
 
     // --- GROUND LEVEL ---
     if (rampHeight === 0) {
-      // Stop at walls, blocks, locked walls
-      if (tile === '#' || tile === 'B' ||
-          (tile === 'L' && !newState.unlockedWalls.has(`${x},${y}`))) {
+      // Wall - stop
+      if (tile === '#' || (tile === 'L' && !newState.unlockedWalls.has(`${x},${y}`))) {
+        x -= dx;
+        y -= dy;
+        break;
+      }
+
+      // Player - push them! (momentum transfer)
+      if (x === newState.playerX && y === newState.playerY) {
+        x -= dx;
+        y -= dy;
+        newState.ramps.set(`${x},${y}`, rampType);
+        rampPath.push({ x, y });
+        newState.rampMoveInfo = { fromX, fromY, toX: x, toY: y, rampType, wentUpRamp, elevationRampX, elevationRampY, path: rampPath };
+        newState.playerPushedBy = { dx, dy };
+        return newState;
+      }
+
+      // Block - try to push it (momentum chain)
+      if (tile === 'B') {
+        const chainResult = pushBlock(newState, x, y, dx, dy);
+        if (chainResult) {
+          // Chain succeeded - ramp stops here
+          x -= dx;
+          y -= dy;
+          // Use chain result state
+          chainResult.ramps.set(`${x},${y}`, rampType);
+          rampPath.push({ x, y });
+          chainResult.rampMoveInfo = { fromX, fromY, toX: x, toY: y, rampType, wentUpRamp, elevationRampX, elevationRampY, path: rampPath };
+          return chainResult;
+        }
+        // Chain failed - just stop
         x -= dx;
         y -= dy;
         break;
@@ -1349,7 +1409,7 @@ function pushRamp(state, rx, ry, dx, dy) {
         break;
       }
 
-      // Other ramp - try to go UP it!
+      // Other ramp - try to go UP it, or push it
       if (isRamp(baseTile)) {
         const upDir = getRampUpDir(baseTile);
         if (upDir && upDir.dx === dx && upDir.dy === dy) {
@@ -1360,7 +1420,18 @@ function pushRamp(state, rx, ry, dx, dy) {
           elevationRampY = y;
           // Continue sliding elevated
         } else {
-          // Wrong direction - stop before ramp
+          // Wrong direction - try to push the other ramp (momentum chain)
+          const chainResult = pushRamp(newState, x, y, dx, dy);
+          if (chainResult) {
+            // Chain succeeded - ramp stops here
+            x -= dx;
+            y -= dy;
+            chainResult.ramps.set(`${x},${y}`, rampType);
+            rampPath.push({ x, y });
+            chainResult.rampMoveInfo = { fromX, fromY, toX: x, toY: y, rampType, wentUpRamp, elevationRampX, elevationRampY, path: rampPath };
+            return chainResult;
+          }
+          // Chain failed - just stop
           x -= dx;
           y -= dy;
           break;
@@ -2437,7 +2508,46 @@ function handleInput(dir) {
   isUnwinnable = false;
 
   const oldState = gameState;
-  const newState = simulateMove(gameState, dir);
+  let newState = simulateMove(gameState, dir);
+
+  // Handle player being pushed by block/ramp
+  if (newState && newState.playerPushedBy) {
+    const push = newState.playerPushedBy;
+    // Slide player from their position in push direction
+    let px = newState.playerX + push.dx;
+    let py = newState.playerY + push.dy;
+    for (let i = 0; i < 50; i++) {
+      const tile = getTile(newState, px, py);
+      const baseTile = getBaseTile(newState, px, py);
+      // Stop at walls, blocks, locked walls
+      if (tile === '#' || tile === 'B' ||
+          (tile === 'L' && !newState.unlockedWalls.has(`${px},${py}`))) {
+        px -= push.dx;
+        py -= push.dy;
+        break;
+      }
+      // Stop at ramps (can't go up when pushed)
+      if (isRamp(baseTile)) {
+        px -= push.dx;
+        py -= push.dy;
+        break;
+      }
+      // Corner redirect
+      if (isCorner(baseTile)) {
+        const redirect = getCornerRedirect(baseTile, push.dx, push.dy);
+        if (redirect) {
+          push.dx = redirect.dx;
+          push.dy = redirect.dy;
+        }
+      }
+      px += push.dx;
+      py += push.dy;
+    }
+    newState.playerX = px;
+    newState.playerY = py;
+    delete newState.playerPushedBy;
+  }
+
   if (newState) {
     // Save for undo - convert Sets/Maps to arrays for JSON serialization
     const historyEntry = {
