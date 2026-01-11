@@ -5717,6 +5717,7 @@ Canvas: ${state.canvasWidth}x${state.canvasHeight}`;
 
             compositeAndRender();
             drawSelection();
+            autoSave(); // Force save flipped state immediately
             showToast(horizontal ? 'Flipped H!' : 'Flipped V!');
         }
 
