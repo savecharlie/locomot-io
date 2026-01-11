@@ -5650,6 +5650,7 @@ Canvas: ${state.canvasWidth}x${state.canvasHeight}`;
             // Handle floating selection - flip the floatingData directly
             if (state.selection.floating && state.selection.floatingData) {
                 console.log('[FLIP] Taking FLOATING path');
+                showToast('PATH: FLOATING');
                 const srcData = state.selection.floatingData;
                 const w = srcData.width;
                 const h = srcData.height;
@@ -5704,6 +5705,7 @@ Canvas: ${state.canvasWidth}x${state.canvasHeight}`;
 
             // Non-floating selection - flip directly on current layer
             console.log('[FLIP] Starting non-floating flip', horizontal ? 'H' : 'V');
+            showToast('PATH: LAYER (non-float)');
             const layer = getCurrentLayer();
             if (!layer) {
                 console.log('[FLIP] ERROR: No layer!');
