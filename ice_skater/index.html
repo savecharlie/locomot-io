@@ -300,9 +300,8 @@
       #main-layout, #game-area, #game-container { display: contents; }
       canvas {
         position: fixed;
-        top: 50%;
+        top: 0;
         left: 0;
-        transform: translateY(-50%);
       }
     }
   </style>
@@ -395,7 +394,7 @@
 // === ICE SKATER ENGINE v2 ===
 // Fixed: locked wall, height system, ramps, block stops
 
-const GAME_VERSION = 'v239';  // Bump this and tell Ivy the version when pushing changes!
+const GAME_VERSION = 'v240';  // Bump this and tell Ivy the version when pushing changes!
 
 const TILE_W = 16;  // Tile width
 const TILE_H = 12;  // Tile height (floor surface depth) - oblique angle
@@ -1751,18 +1750,18 @@ function render() {
   SCALE = Math.floor(Math.min(scaleX, scaleY));
   if (SCALE < 1) SCALE = 1;
 
-  // Canvas fills viewport width, puzzle height - snow fills the sides
+  // Canvas fills ENTIRE viewport - ice everywhere, no dark background
   const scaledLevelW = levelPixelW * SCALE;
   const scaledLevelH = levelPixelH * SCALE;
   canvas.width = viewW;
-  canvas.height = scaledLevelH;
+  canvas.height = viewH;
   canvas.style.width = viewW + 'px';
-  canvas.style.height = scaledLevelH + 'px';
+  canvas.style.height = viewH + 'px';
   ctx.imageSmoothingEnabled = false;
 
-  // Center puzzle horizontally, snow fills the rest
+  // Center puzzle in viewport - ice fills all around
   const offsetX = Math.floor((viewW - scaledLevelW) / 2);
-  const offsetY = 0;
+  const offsetY = Math.floor((viewH - scaledLevelH) / 2);
 
   const now = performance.now();
   if (now - lastKeyFrameTime > 200) {
