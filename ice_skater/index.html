@@ -353,7 +353,7 @@
 // === ICE SKATER ENGINE v2 ===
 // Fixed: locked wall, height system, ramps, block stops
 
-const GAME_VERSION = 'v214';  // Bump this and tell Ivy the version when pushing changes!
+const GAME_VERSION = 'v215';  // Bump this and tell Ivy the version when pushing changes!
 
 // Debug: capture console.log to visible div
 const debugLines = [];
@@ -1928,12 +1928,7 @@ function render() {
         }
         // else: fully unlocked, don't render wall (sticky floor shows instead)
       }
-      // Ramps from dynamic state (can be pushed)
-      const rampType = renderState.ramps.get(`${x},${y}`);
-      if (rampType === '^') objects.push({ type: 'ramp', x, y, sortY: y, sprite: 'ramp_north_16x24' });
-      if (rampType === 'v') objects.push({ type: 'ramp', x, y, sortY: y, sprite: 'ramp_south_16x24' });
-      if (rampType === '<') objects.push({ type: 'ramp', x, y, sortY: y, sprite: 'ramp_west_16x24' });
-      if (rampType === '>') objects.push({ type: 'ramp', x, y, sortY: y, sprite: 'ramp_east_16x24' });
+      // Ramps are rendered separately with animation support (see below)
       // Check grid directly for penguin (blocks can be on same tile)
       if (renderState.grid[y][x] === 'P') {
         // If penguin is on a wall, draw wall underneath and elevate penguin
@@ -2017,6 +2012,63 @@ function render() {
     if (!animatingBlockPositions.has(key)) {
       const [bx, by] = key.split(',').map(Number);
       objects.push({ type: 'block', x: bx, y: by, sortY: by, height: 0, sprite: 'ice_block_v3' });
+    }
+  }
+
+  // Animated ramps
+  const animatingRampPositions = new Set();
+  if (animation && animation.ramps) {
+    for (const ramp of animation.ramps) {
+      let x, y;
+
+      // Use path waypoints if available (for corner animation)
+      if (ramp.path && ramp.path.length > 1) {
+        const segments = [];
+        let totalDist = 0;
+        for (let i = 0; i < ramp.path.length - 1; i++) {
+          const segDist = Math.abs(ramp.path[i+1].x - ramp.path[i].x) + Math.abs(ramp.path[i+1].y - ramp.path[i].y);
+          segments.push({ start: ramp.path[i], end: ramp.path[i+1], dist: segDist, cumDist: totalDist });
+          totalDist += segDist;
+        }
+        const targetDist = animProgress * totalDist;
+        let currentSeg = segments[segments.length - 1];
+        for (const seg of segments) {
+          if (targetDist <= seg.cumDist + seg.dist) {
+            currentSeg = seg;
+            break;
+          }
+        }
+        const segProgress = currentSeg.dist > 0 ? (targetDist - currentSeg.cumDist) / currentSeg.dist : 0;
+        x = currentSeg.start.x + (currentSeg.end.x - currentSeg.start.x) * Math.min(1, segProgress);
+        y = currentSeg.start.y + (currentSeg.end.y - currentSeg.start.y) * Math.min(1, segProgress);
+      } else {
+        x = ramp.fromX + (ramp.toX - ramp.fromX) * animProgress;
+        y = ramp.fromY + (ramp.toY - ramp.fromY) * animProgress;
+      }
+
+      // Choose sprite based on ramp type
+      let sprite = 'ramp_north_16x24';
+      if (ramp.rampType === 'v') sprite = 'ramp_south_16x24';
+      if (ramp.rampType === '<') sprite = 'ramp_west_16x24';
+      if (ramp.rampType === '>') sprite = 'ramp_east_16x24';
+
+      // If ramp fell into hole, fade out
+      if (!ramp.fell) {
+        objects.push({ type: 'ramp', x, y, sortY: y, sprite });
+      }
+      animatingRampPositions.add(`${ramp.toX},${ramp.toY}`);
+    }
+  }
+
+  // Non-animating ramps (skip positions being animated)
+  for (const [key, rampType] of renderState.ramps) {
+    if (!animatingRampPositions.has(key)) {
+      const [rx, ry] = key.split(',').map(Number);
+      let sprite = 'ramp_north_16x24';
+      if (rampType === 'v') sprite = 'ramp_south_16x24';
+      if (rampType === '<') sprite = 'ramp_west_16x24';
+      if (rampType === '>') sprite = 'ramp_east_16x24';
+      objects.push({ type: 'ramp', x: rx, y: ry, sortY: ry, sprite });
     }
   }
 
@@ -2438,6 +2490,24 @@ function handleInput(dir) {
         }
       }
 
+      // Find moved ramps - use rampMoveInfo if available
+      const movedRamps = [];
+      if (newState.rampMoveInfo) {
+        const info = newState.rampMoveInfo;
+        movedRamps.push({
+          fromX: info.fromX,
+          fromY: info.fromY,
+          toX: info.toX,
+          toY: info.toY,
+          rampType: info.rampType,
+          wentUpRamp: info.wentUpRamp,
+          elevationRampX: info.elevationRampX,
+          elevationRampY: info.elevationRampY,
+          path: info.path,
+          fell: info.fell
+        });
+      }
+
       // Trail info for progressive drawing during animation
       const bladeOffsetX = 8;
       const bladeOffsetY = -6;
@@ -2472,6 +2542,7 @@ function handleInput(dir) {
           path: newState.path || []  // Waypoints for corner animation
         },
         blocks: movedBlocks,
+        ramps: movedRamps,
         targetState: newState,
         trail: trailInfo
       };
