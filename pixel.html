@@ -5681,48 +5681,45 @@ Canvas: ${state.canvasWidth}x${state.canvasHeight}`;
                 return;
             }
 
-            // Non-floating selection - flip what's visible (from composite) to current layer
+            // Non-floating selection - flip using pixel-by-pixel ImageData
             console.log('[FLIP] Starting non-floating flip', horizontal ? 'H' : 'V');
             const layer = getCurrentLayer();
             if (!layer) {
                 console.log('[FLIP] ERROR: No layer!');
                 return;
             }
-            console.log('[FLIP] Layer:', state.currentLayerIndex, 'bounds:', JSON.stringify(bounds));
             const layerCtx = layer.ctx;
             const w = bounds.width;
             const h = bounds.height;
 
-            // Read from COMPOSITE (mainCanvas/ctx) - this is what the user sees
-            // Then write flipped content to current layer
-            const tempCanvas = document.createElement('canvas');
-            tempCanvas.width = w;
-            tempCanvas.height = h;
-            const tempCtx = tempCanvas.getContext('2d');
-            tempCtx.imageSmoothingEnabled = false;
+            // Read pixels from composite (what user sees)
+            const srcData = ctx.getImageData(bounds.x, bounds.y, w, h);
+            const dstData = new ImageData(w, h);
 
-            // Draw flipped from composite to temp canvas
-            tempCtx.save();
-            if (horizontal) {
-                tempCtx.translate(w, 0);
-                tempCtx.scale(-1, 1);
-            } else {
-                tempCtx.translate(0, h);
-                tempCtx.scale(1, -1);
+            // Flip pixel by pixel - no transforms, just array manipulation
+            for (let y = 0; y < h; y++) {
+                for (let x = 0; x < w; x++) {
+                    const srcX = horizontal ? (w - 1 - x) : x;
+                    const srcY = vertical ? (h - 1 - y) : y;
+                    const srcIdx = (srcY * w + srcX) * 4;
+                    const dstIdx = (y * w + x) * 4;
+                    dstData.data[dstIdx] = srcData.data[srcIdx];
+                    dstData.data[dstIdx + 1] = srcData.data[srcIdx + 1];
+                    dstData.data[dstIdx + 2] = srcData.data[srcIdx + 2];
+                    dstData.data[dstIdx + 3] = srcData.data[srcIdx + 3];
+                }
             }
-            // Read from mainCanvas (ctx) which is the composite of all layers
-            tempCtx.drawImage(mainCanvas, bounds.x, bounds.y, w, h, 0, 0, w, h);
-            tempCtx.restore();
 
-            // Clear selection area from ALL visible layers, then draw flipped to current
+            // Clear selection area from ALL layers
             state.layers.forEach(l => {
                 if (l.visible) {
                     l.ctx.clearRect(bounds.x, bounds.y, w, h);
                 }
             });
-            layerCtx.drawImage(tempCanvas, bounds.x, bounds.y);
 
-            console.log('[FLIP] Flipped composite content to layer', state.currentLayerIndex);
+            // Write flipped pixels to current layer
+            layerCtx.putImageData(dstData, bounds.x, bounds.y);
+            console.log('[FLIP] Wrote', w, 'x', h, 'flipped pixels to layer', state.currentLayerIndex);
 
             // Update selection pixels (flip their positions too)
             const newPixels = new Set();
