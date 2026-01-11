@@ -395,7 +395,7 @@
 // === ICE SKATER ENGINE v2 ===
 // Fixed: locked wall, height system, ramps, block stops
 
-const GAME_VERSION = 'v229';  // Bump this and tell Ivy the version when pushing changes!
+const GAME_VERSION = 'v230';  // Bump this and tell Ivy the version when pushing changes!
 
 const TILE_W = 16;  // Tile width
 const TILE_H = 12;  // Tile height (floor surface depth) - oblique angle
@@ -2258,7 +2258,8 @@ function render() {
       if (checkY >= 0) {
         const checkTile = renderState.grid[checkY]?.[Math.floor(obj.x)];
         const levelTile = level.grid[checkY]?.[Math.floor(obj.x)];
-        if (checkTile === 'K' || checkTile === 'H' || (checkTile >= '1' && checkTile <= '4')) {
+        if (checkTile === 'K' || checkTile === 'H' || (checkTile >= '1' && checkTile <= '4') ||
+            checkTile === '7' || checkTile === '8' || checkTile === '9' || checkTile === '0') {
           makeTransparent = true;
         }
         if (levelTile === 'L' || levelTile === 'T' || levelTile === 'P') {
@@ -2293,7 +2294,8 @@ function render() {
         // Check for important tiles directly behind
         const checkTile = renderState.grid[behindY]?.[behindX];
         const levelTile = level.grid[behindY]?.[behindX];
-        if (checkTile === 'K' || checkTile === 'H' || (checkTile >= '1' && checkTile <= '4')) {
+        if (checkTile === 'K' || checkTile === 'H' || (checkTile >= '1' && checkTile <= '4') ||
+            checkTile === '7' || checkTile === '8' || checkTile === '9' || checkTile === '0') {
           makeTransparent = true;
         }
         if (levelTile === 'L' || levelTile === 'T' || levelTile === 'P') {
@@ -2469,8 +2471,8 @@ function render() {
       else if (hintArrow === 'left') { ax -= arrowOffset; ay += 8 * SCALE; }
       else if (hintArrow === 'right') { ax += arrowOffset + 8 * SCALE; ay += 8 * SCALE; }
 
-      // Draw pixel arrow - yellow from palette
-      ctx.fillStyle = '#fac982';
+      // Draw pixel arrow - hint color from palette
+      ctx.fillStyle = '#40ACBF';
       ctx.font = `bold ${16 * SCALE}px monospace`;
       ctx.textAlign = 'center';
       const arrows = { up: '▲', down: '▼', left: '◀', right: '▶' };
