@@ -353,7 +353,7 @@
 // === ICE SKATER ENGINE v2 ===
 // Fixed: locked wall, height system, ramps, block stops
 
-const GAME_VERSION = 'v213';  // Bump this and tell Ivy the version when pushing changes!
+const GAME_VERSION = 'v214';  // Bump this and tell Ivy the version when pushing changes!
 
 // Debug: capture console.log to visible div
 const debugLines = [];
@@ -1310,6 +1310,7 @@ function pushRamp(state, rx, ry, dx, dy) {
   const fromX = rx, fromY = ry;
   let wentUpRamp = false;
   let elevationRampX, elevationRampY;
+  const rampPath = [{ x: rx, y: ry }];  // Track path for corner animation
 
   // Check immediate first position - can't push into wall, block, locked wall, or another ramp
   const startTile = getTile(newState, x, y);
@@ -1401,6 +1402,16 @@ function pushRamp(state, rx, ry, dx, dy) {
         }
       }
 
+      // Corner redirect - change ramp direction
+      if (isCorner(baseTile)) {
+        const redirect = getCornerRedirect(baseTile, dx, dy);
+        if (redirect) {
+          rampPath.push({ x, y, corner: true });  // Add waypoint for animation
+          dx = redirect.dx;
+          dy = redirect.dy;
+        }
+      }
+
       // Check next position
       const nx = x + dx;
       const ny = y + dy;
@@ -1451,6 +1462,16 @@ function pushRamp(state, rx, ry, dx, dy) {
         rampHeight = 0;
       }
 
+      // Corner redirect - change ramp direction (elevated too)
+      if (isCorner(baseTile)) {
+        const redirect = getCornerRedirect(baseTile, dx, dy);
+        if (redirect) {
+          rampPath.push({ x, y, corner: true });  // Add waypoint for animation
+          dx = redirect.dx;
+          dy = redirect.dy;
+        }
+      }
+
       // Check next position
       const nx = x + dx;
       const ny = y + dy;
@@ -1484,7 +1505,8 @@ function pushRamp(state, rx, ry, dx, dy) {
   }
 
   newState.ramps.set(`${x},${y}`, rampType);
-  newState.rampMoveInfo = { fromX, fromY, toX: x, toY: y, rampType, wentUpRamp, elevationRampX, elevationRampY };
+  rampPath.push({ x, y });  // Add final position
+  newState.rampMoveInfo = { fromX, fromY, toX: x, toY: y, rampType, wentUpRamp, elevationRampX, elevationRampY, path: rampPath };
   return newState;
 }
 
@@ -2395,7 +2417,8 @@ function handleInput(dir) {
           rampX: info.rampX,
           rampY: info.rampY,
           lastElevatedX: info.lastElevatedX,
-          lastElevatedY: info.lastElevatedY
+          lastElevatedY: info.lastElevatedY,
+          path: info.path  // Path for corner animation
         });
       } else {
         // Fallback: detect moved blocks from position changes
