@@ -5673,8 +5673,11 @@ Canvas: ${state.canvasWidth}x${state.canvasHeight}`;
                 return;
             }
 
-            // Non-floating selection - flip on canvas directly
-            const srcData = ctx.getImageData(bounds.x, bounds.y, bounds.width, bounds.height);
+            // Non-floating selection - flip on current layer
+            const layer = getCurrentLayer();
+            if (!layer) return;
+            const layerCtx = layer.ctx;
+            const srcData = layerCtx.getImageData(bounds.x, bounds.y, bounds.width, bounds.height);
 
             // Create array to store flipped pixel data
             const flippedPixels = [];
@@ -5701,22 +5704,23 @@ Canvas: ${state.canvasWidth}x${state.canvasHeight}`;
                 flippedPixels.push({ox: px, oy: py, nx: newPx, ny: newPy, r, g, b, a});
             });
 
-            // Clear original selected pixels
+            // Clear original selected pixels from layer
             state.selection.pixels.forEach(key => {
                 const [x, y] = key.split(',').map(Number);
-                ctx.clearRect(x, y, 1, 1);
+                layerCtx.clearRect(x, y, 1, 1);
             });
 
-            // Draw flipped pixels and update selection set
+            // Draw flipped pixels to layer and update selection set
             state.selection.pixels.clear();
             flippedPixels.forEach(p => {
                 if (p.a > 0) {
-                    ctx.fillStyle = `rgba(${p.r},${p.g},${p.b},${p.a/255})`;
-                    ctx.fillRect(p.nx, p.ny, 1, 1);
+                    layerCtx.fillStyle = `rgba(${p.r},${p.g},${p.b},${p.a/255})`;
+                    layerCtx.fillRect(p.nx, p.ny, 1, 1);
                 }
                 state.selection.pixels.add(`${p.nx},${p.ny}`);
             });
 
+            compositeAndRender();
             drawSelection();
             showToast(horizontal ? 'Flipped H!' : 'Flipped V!');
         }
