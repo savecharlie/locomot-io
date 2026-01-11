@@ -353,7 +353,7 @@
 // === ICE SKATER ENGINE v2 ===
 // Fixed: locked wall, height system, ramps, block stops
 
-const GAME_VERSION = 'v221';  // Bump this and tell Ivy the version when pushing changes!
+const GAME_VERSION = 'v222';  // Bump this and tell Ivy the version when pushing changes!
 
 // Debug: capture console.log to visible div
 const debugLines = [];
@@ -1705,16 +1705,16 @@ function render() {
   SCALE = Math.floor(Math.min(scaleX, scaleY));
   if (SCALE < 1) SCALE = 1;
 
-  // Canvas is exactly the chamber size (no extra space)
+  // Canvas width = chamber width, height = viewport height
   const scaledLevelW = levelPixelW * SCALE;
   const scaledLevelH = levelPixelH * SCALE;
   canvas.width = scaledLevelW;
-  canvas.height = scaledLevelH;
+  canvas.height = viewH;
   ctx.imageSmoothingEnabled = false;
 
-  // No offset needed - canvas is exact chamber size
+  // Center level vertically only
   const offsetX = 0;
-  const offsetY = 0;
+  const offsetY = Math.floor((viewH - scaledLevelH) / 2);
 
   const now = performance.now();
   if (now - lastKeyFrameTime > 200) {
