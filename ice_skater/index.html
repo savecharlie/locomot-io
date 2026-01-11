@@ -395,7 +395,7 @@
 // === ICE SKATER ENGINE v2 ===
 // Fixed: locked wall, height system, ramps, block stops
 
-const GAME_VERSION = 'v231';  // Bump this and tell Ivy the version when pushing changes!
+const GAME_VERSION = 'v232';  // Bump this and tell Ivy the version when pushing changes!
 
 const TILE_W = 16;  // Tile width
 const TILE_H = 12;  // Tile height (floor surface depth) - oblique angle
@@ -2456,16 +2456,63 @@ function render() {
   if (hintArrow && !gameState.won && !gameState.dead) {
     const elapsed = performance.now() - hintShowTime;
     if (elapsed < HINT_DISPLAY_MS) {
-      // Use same positioning as player sprite
-      const ax = offsetX + playerObj.x * TILE_W * SCALE + 8 * SCALE;  // Center of tile
-      const ay = offsetY + (TOP_PADDING + playerObj.y * TILE_H) * SCALE + 8 * SCALE;
+      // Position: center of tile, half tile higher
+      const ax = offsetX + playerObj.x * TILE_W * SCALE + 8 * SCALE;
+      const ay = offsetY + (TOP_PADDING + playerObj.y * TILE_H) * SCALE + 8 * SCALE - (TILE_H / 2) * SCALE;
 
-      // Draw pixel arrow - hint color from palette
+      // Draw arrow with tail
       ctx.fillStyle = '#40ACBF';
-      ctx.font = `bold ${16 * SCALE}px monospace`;
-      ctx.textAlign = 'center';
-      const arrows = { up: '▲', down: '▼', left: '◀', right: '▶' };
-      ctx.fillText(arrows[hintArrow], ax, ay);
+      ctx.strokeStyle = '#40ACBF';
+      ctx.lineWidth = 3 * SCALE;
+      ctx.lineCap = 'round';
+
+      const headSize = 6 * SCALE;
+      const tailLen = 10 * SCALE;
+
+      ctx.beginPath();
+      if (hintArrow === 'up') {
+        // Tail
+        ctx.moveTo(ax, ay + headSize + tailLen);
+        ctx.lineTo(ax, ay + headSize);
+        ctx.stroke();
+        // Head
+        ctx.beginPath();
+        ctx.moveTo(ax, ay);
+        ctx.lineTo(ax - headSize, ay + headSize);
+        ctx.lineTo(ax + headSize, ay + headSize);
+        ctx.closePath();
+        ctx.fill();
+      } else if (hintArrow === 'down') {
+        ctx.moveTo(ax, ay - headSize - tailLen);
+        ctx.lineTo(ax, ay - headSize);
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.moveTo(ax, ay);
+        ctx.lineTo(ax - headSize, ay - headSize);
+        ctx.lineTo(ax + headSize, ay - headSize);
+        ctx.closePath();
+        ctx.fill();
+      } else if (hintArrow === 'left') {
+        ctx.moveTo(ax + headSize + tailLen, ay);
+        ctx.lineTo(ax + headSize, ay);
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.moveTo(ax, ay);
+        ctx.lineTo(ax + headSize, ay - headSize);
+        ctx.lineTo(ax + headSize, ay + headSize);
+        ctx.closePath();
+        ctx.fill();
+      } else if (hintArrow === 'right') {
+        ctx.moveTo(ax - headSize - tailLen, ay);
+        ctx.lineTo(ax - headSize, ay);
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.moveTo(ax, ay);
+        ctx.lineTo(ax - headSize, ay - headSize);
+        ctx.lineTo(ax - headSize, ay + headSize);
+        ctx.closePath();
+        ctx.fill();
+      }
     } else {
       hintArrow = null;  // Clear after timeout
     }
