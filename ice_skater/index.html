@@ -394,7 +394,7 @@
 // === ICE SKATER ENGINE v2 ===
 // Fixed: locked wall, height system, ramps, block stops
 
-const GAME_VERSION = 'v240';  // Bump this and tell Ivy the version when pushing changes!
+const GAME_VERSION = 'v241';  // Bump this and tell Ivy the version when pushing changes!
 
 const TILE_W = 16;  // Tile width
 const TILE_H = 12;  // Tile height (floor surface depth) - oblique angle
@@ -1738,9 +1738,9 @@ function render() {
   const h = level.height;
 
   // Calculate scale to fit puzzle in viewport
-  // Level size in base pixels (before scale)
+  // Level size = just the grid, no padding
   const levelPixelW = w * TILE_W;
-  const levelPixelH = h * TILE_H + TOP_PADDING + 10;
+  const levelPixelH = h * TILE_H;
 
   // Scale to fit viewport with integer scale for crisp pixels
   const viewW = window.innerWidth;
@@ -1750,7 +1750,7 @@ function render() {
   SCALE = Math.floor(Math.min(scaleX, scaleY));
   if (SCALE < 1) SCALE = 1;
 
-  // Canvas fills ENTIRE viewport - ice everywhere, no dark background
+  // Canvas fills ENTIRE viewport - ice everywhere
   const scaledLevelW = levelPixelW * SCALE;
   const scaledLevelH = levelPixelH * SCALE;
   canvas.width = viewW;
@@ -1759,7 +1759,7 @@ function render() {
   canvas.style.height = viewH + 'px';
   ctx.imageSmoothingEnabled = false;
 
-  // Center puzzle in viewport - ice fills all around
+  // Center puzzle grid in viewport - ice extends everywhere
   const offsetX = Math.floor((viewW - scaledLevelW) / 2);
   const offsetY = Math.floor((viewH - scaledLevelH) / 2);
 
