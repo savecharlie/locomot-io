@@ -353,7 +353,7 @@
 // === ICE SKATER ENGINE v2 ===
 // Fixed: locked wall, height system, ramps, block stops
 
-const GAME_VERSION = 'v208';  // Bump this and tell Ivy the version when pushing changes!
+const GAME_VERSION = 'v209';  // Bump this and tell Ivy the version when pushing changes!
 
 // Debug: capture console.log to visible div
 const debugLines = [];
@@ -627,10 +627,11 @@ function isCorner(tile) {
 
 // Get corner redirect: given incoming direction (dx, dy), return new direction
 // Each corner redirects exactly 2 directions, other 2 pass through
-// 7 = ur: UP→RIGHT, LEFT→DOWN
-// 8 = ul: UP→LEFT, RIGHT→DOWN
-// 9 = dr: DOWN→RIGHT, LEFT→UP
-// 0 = dl: DOWN→LEFT, RIGHT→UP
+// Names describe what UP/DOWN becomes:
+// 7 = ur: UP→RIGHT, LEFT→DOWN  (use in top-LEFT of level - sends away from left wall)
+// 8 = ul: UP→LEFT, RIGHT→DOWN  (use in top-RIGHT of level - sends away from right wall)
+// 9 = dr: DOWN→RIGHT, LEFT→UP  (use in bottom-LEFT of level - sends away from left wall)
+// 0 = dl: DOWN→LEFT, RIGHT→UP  (use in bottom-RIGHT of level - sends away from right wall)
 function getCornerRedirect(tile, dx, dy) {
   switch(tile) {
     case '7': // ur: up→right, left→down
