@@ -643,12 +643,53 @@ def generate_narrow_levels(count: int, interior_w: int, interior_h: int, progres
     return levels
 
 
+def generate_ratio_levels(count: int, ratio_w: int, ratio_h: int, progress_callback=None) -> List[dict]:
+    """Generate puzzles with a specific width:height ratio."""
+    levels = []
+    attempts = 0
+    max_attempts = count * 100
+
+    # Generate various sizes maintaining the ratio
+    # For 1:3 ratio, use widths 5-8 giving heights 15-24
+    base_widths = [5, 6, 7, 8]
+
+    while len(levels) < count and attempts < max_attempts:
+        attempts += 1
+
+        # Pick a base width and calculate height from ratio
+        base_w = random.choice(base_widths)
+        width = base_w
+        height = base_w * ratio_h // ratio_w
+
+        # Determine difficulty based on progress
+        progress = len(levels) / count if count > 0 else 0
+        if progress < 0.3:
+            difficulty = random.randint(1, 2)
+            mechanics = random.choice([['BASIC'], ['BLOCK'], ['CORNER']])
+        elif progress < 0.6:
+            difficulty = random.randint(2, 3)
+            mechanics = random.choice([['BLOCK'], ['CORNER'], ['BLOCK', 'CORNER'], ['RAMP']])
+        else:
+            difficulty = random.randint(3, 5)
+            mechanics = random.choice([['BLOCK', 'CORNER'], ['RAMP'], ['BLOCK', 'RAMP'], ['HOLE'], ['BLOCK', 'HOLE']])
+
+        level = create_level(width, height, mechanics, difficulty)
+
+        if level:
+            levels.append(level)
+            if progress_callback and (len(levels) % 100 == 0 or len(levels) == count):
+                progress_callback(len(levels), count)
+
+    return levels
+
+
 if __name__ == '__main__':
     import sys
     import argparse
 
     parser = argparse.ArgumentParser()
     parser.add_argument('--narrow', type=str, help='Generate narrow puzzles with WxH interior (e.g., 1x3)')
+    parser.add_argument('--ratio', type=str, help='Generate puzzles with W:H ratio (e.g., 1:3 for 3x tall as wide)')
     parser.add_argument('--count', type=int, default=10000, help='Number to generate')
     parser.add_argument('--top', type=int, default=100, help='Top N to keep')
     parser.add_argument('--output', type=str, default='/home/ivy/locomot-io/ice_skater/level_chunks')
@@ -658,7 +699,12 @@ if __name__ == '__main__':
         if current % 100 == 0 or current == total:
             print(f"  {current}/{total} ({100*current//total}%)")
 
-    if args.narrow:
+    if args.ratio:
+        # Parse W:H ratio format
+        ratio_w, ratio_h = map(int, args.ratio.split(':'))
+        print(f"Generating {args.count} puzzles with {ratio_w}:{ratio_h} ratio, keeping top {args.top}...")
+        levels = generate_ratio_levels(args.count, ratio_w, ratio_h, progress)
+    elif args.narrow:
         # Parse WxH format
         interior_w, interior_h = map(int, args.narrow.lower().split('x'))
         print(f"Generating {args.count} narrow puzzles ({interior_w}x{interior_h} interior), keeping top {args.top}...")
