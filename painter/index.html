@@ -579,6 +579,17 @@
                 return;
             }
 
+            // Try to enumerate devices first
+            let devices = [];
+            let videoDevices = [];
+            try {
+                devices = await navigator.mediaDevices.enumerateDevices();
+                videoDevices = devices.filter(d => d.kind === 'videoinput');
+                console.log('Video devices found:', videoDevices.length, videoDevices);
+            } catch (e) {
+                console.log('Could not enumerate devices:', e);
+            }
+
             // Check permission state first
             let permState = 'unknown';
             try {
@@ -626,12 +637,15 @@
                         <div style="font-size:10px;text-align:left;background:#222;padding:10px;border-radius:6px;margin:15px 0;">
                             <b>Debug info:</b><br>
                             Permission: ${permState}<br>
+                            Video devices: ${videoDevices.length}<br>
                             Secure: ${window.isSecureContext}<br>
                             Protocol: ${location.protocol}<br>
-                            Host: ${location.hostname}<br>
-                            In iframe: ${window.self !== window.top}
+                            Host: ${location.hostname}
                         </div>
-                        <button onclick="location.reload()" style="padding:10px 20px;font-size:14px;">
+                        <p style="font-size:11px;margin-top:15px;color:#aaa;">
+                            Check: Android Settings → Apps → Browser → Permissions → Camera
+                        </p>
+                        <button onclick="location.reload()" style="padding:10px 20px;font-size:14px;margin-top:10px;">
                             Reload
                         </button>
                     </div>`;
