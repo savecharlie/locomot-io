@@ -394,7 +394,7 @@
 // === ICE SKATER ENGINE v2 ===
 // Fixed: locked wall, height system, ramps, block stops
 
-const GAME_VERSION = 'v251';  // Bump this and tell Ivy the version when pushing changes!
+const GAME_VERSION = 'v252';  // Bump this and tell Ivy the version when pushing changes!
 
 const TILE_W = 16;  // Tile width
 const TILE_H = 12;  // Tile height (floor surface depth) - oblique angle
@@ -715,12 +715,12 @@ function drawLoadingScreen(progress) {
   ctx.fillStyle = '#1D2B30';
   ctx.fillRect(0, 0, w, h);
 
-  // Title - FIGURE
+  // Title - FIGURE ♾
   ctx.fillStyle = '#68BBC4';
-  ctx.font = '32px "Press Start 2P", monospace';
+  ctx.font = '24px "Press Start 2P", monospace';
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
-  ctx.fillText('FIGURE', w / 2, h / 2 - 60);
+  ctx.fillText('FIGURE ♾', w / 2, h / 2 - 60);
 
   // Loading text
   ctx.font = '12px "Press Start 2P", monospace';
