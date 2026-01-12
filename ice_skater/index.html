@@ -394,7 +394,7 @@
 // === ICE SKATER ENGINE v2 ===
 // Fixed: locked wall, height system, ramps, block stops
 
-const GAME_VERSION = 'v246';  // Bump this and tell Ivy the version when pushing changes!
+const GAME_VERSION = 'v247';  // Bump this and tell Ivy the version when pushing changes!
 
 const TILE_W = 16;  // Tile width
 const TILE_H = 12;  // Tile height (floor surface depth) - oblique angle
@@ -462,6 +462,167 @@ let trailPoints = [];  // [{tileX, tileY, pixelX, pixelY}, ...]
 
 // Snow particles
 const snowflakes = [];
+
+// Judge scoring system
+let judgeState = null;  // { scores: [10, 8, 10], revealed: 0, startTime: null, isRecord: false }
+let globalBestTimes = {};  // Cache of global best times per level
+const PARTYKIT_URL = 'https://locomot-io.savecharlie.partykit.dev/party/main';
+
+// Fetch global best for a level
+async function fetchGlobalBest(levelIndex) {
+  if (globalBestTimes[levelIndex] !== undefined) {
+    return globalBestTimes[levelIndex];
+  }
+  try {
+    const resp = await fetch(PARTYKIT_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ type: 'ice_skater_get_best', level: levelIndex })
+    });
+    const data = await resp.json();
+    globalBestTimes[levelIndex] = data.best;
+    return data.best;
+  } catch (e) {
+    console.log('Failed to fetch global best:', e);
+    return null;
+  }
+}
+
+// Submit score and check for record
+async function submitScore(levelIndex, moves) {
+  try {
+    const resp = await fetch(PARTYKIT_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ type: 'ice_skater_submit', level: levelIndex, moves: moves })
+    });
+    const data = await resp.json();
+    globalBestTimes[levelIndex] = data.best;
+    return data;
+  } catch (e) {
+    console.log('Failed to submit score:', e);
+    return { best: null, isRecord: false };
+  }
+}
+
+// Calculate judge scores
+async function calculateJudgeScores(moves, par, levelIndex) {
+  // Judge 1: always 10 (completion bonus)
+  const j1 = 10;
+
+  // Judge 2: par-based (10 for par, 0 for double par)
+  const parDiff = moves - par;
+  const j2 = Math.round(Math.max(0, 10 - (parDiff / par) * 10));
+
+  // Judge 3: global leaderboard comparison
+  const result = await submitScore(levelIndex, moves);
+  const globalBest = result.best;
+  let j3;
+  let isRecord = result.isRecord;
+
+  if (globalBest === null || moves <= globalBest) {
+    j3 = 10;  // New record or tied
+  } else {
+    const bestDiff = moves - globalBest;
+    j3 = Math.round(Math.max(0, 10 - (bestDiff / globalBest) * 10));
+  }
+
+  return { scores: [j1, j2, j3], isRecord };
+}
+
+// Draw pixel-style number (7-segment LED style)
+// Each segment is a small rectangle, giving it a blocky pixel art look
+const SEGMENT_PATTERNS = {
+  0: [1,1,1,0,1,1,1],  // top, top-right, bottom-right, middle, bottom-left, top-left, bottom
+  1: [0,1,1,0,0,0,0],
+  2: [1,1,0,1,1,0,1],
+  3: [1,1,1,1,0,0,1],
+  4: [0,1,1,1,0,1,0],
+  5: [1,0,1,1,0,1,1],
+  6: [1,0,1,1,1,1,1],
+  7: [1,1,1,0,0,0,0],
+  8: [1,1,1,1,1,1,1],
+  9: [1,1,1,1,0,1,1],
+  10: [1,1,1,0,1,1,1, 0,1,1,0,0,0,0]  // Special: "10" combined
+};
+
+function drawPixelNumber(ctx, num, x, y, size, color) {
+  const segW = size * 0.8;  // Segment width
+  const segH = size * 0.15; // Segment thickness
+  const gap = size * 0.05;  // Gap between segments
+
+  ctx.fillStyle = color;
+
+  // For "10", draw two digits
+  if (num === 10) {
+    // Draw "1" (just right segments)
+    const x1 = x - size * 0.6;
+    ctx.fillRect(x1 + segW + gap, y + gap, segH, segW);           // top-right
+    ctx.fillRect(x1 + segW + gap, y + segW + gap * 3, segH, segW); // bottom-right
+
+    // Draw "0"
+    const x0 = x + size * 0.3;
+    drawSingleDigit(ctx, 0, x0, y, size, color);
+    return;
+  }
+
+  drawSingleDigit(ctx, num, x, y, size, color);
+}
+
+function drawSingleDigit(ctx, num, x, y, size, color) {
+  const segW = size * 0.6;
+  const segH = size * 0.12;
+  const gap = size * 0.08;
+  const pattern = SEGMENT_PATTERNS[num] || SEGMENT_PATTERNS[0];
+
+  ctx.fillStyle = color;
+
+  // Segment positions (7-segment display):
+  // 0: top horizontal
+  if (pattern[0]) ctx.fillRect(x + gap, y, segW, segH);
+  // 1: top-right vertical
+  if (pattern[1]) ctx.fillRect(x + segW + gap, y + gap, segH, segW * 0.5);
+  // 2: bottom-right vertical
+  if (pattern[2]) ctx.fillRect(x + segW + gap, y + segW * 0.5 + gap * 2, segH, segW * 0.5);
+  // 3: middle horizontal
+  if (pattern[3]) ctx.fillRect(x + gap, y + segW * 0.5 + gap, segW, segH);
+  // 4: bottom-left vertical
+  if (pattern[4]) ctx.fillRect(x, y + segW * 0.5 + gap * 2, segH, segW * 0.5);
+  // 5: top-left vertical
+  if (pattern[5]) ctx.fillRect(x, y + gap, segH, segW * 0.5);
+  // 6: bottom horizontal
+  if (pattern[6]) ctx.fillRect(x + gap, y + segW + gap * 2, segW, segH);
+}
+
+// Draw a score card that flips up
+function drawScoreCard(ctx, score, x, y, cardW, cardH, flipProgress, color, bgColor) {
+  // flipProgress: 0 = flat (not visible), 1 = fully flipped up
+
+  if (flipProgress <= 0) return;
+
+  // Card background with perspective effect
+  const scaleY = flipProgress;  // Vertical scale (0 to 1)
+  const actualH = cardH * scaleY;
+  const offsetY = (cardH - actualH) / 2;
+
+  // Draw card background
+  ctx.fillStyle = bgColor;
+  ctx.fillRect(x - cardW/2, y - actualH/2 + offsetY, cardW, actualH);
+
+  // Draw border
+  ctx.strokeStyle = color;
+  ctx.lineWidth = 2 * SCALE;
+  ctx.strokeRect(x - cardW/2, y - actualH/2 + offsetY, cardW, actualH);
+
+  // Only draw number when mostly flipped
+  if (flipProgress > 0.5) {
+    const numScale = (flipProgress - 0.5) * 2;  // 0 to 1 after halfway
+    const numSize = cardH * 0.6 * numScale;
+    const numY = y - numSize/2 + offsetY;
+    drawPixelNumber(ctx, score, x - numSize * 0.3, numY, numSize, color);
+  }
+}
+
 const SNOWFLAKE_COUNT = 40;
 function initSnow() {
   snowflakes.length = 0;
@@ -2428,19 +2589,86 @@ function render() {
   drawPlayer();
 
   if (gameState.won) {
-    // Mark level complete (only once per win)
+    // Mark level complete and start judge scoring (only once per win)
     if (!gameState.completionSaved) {
       markLevelComplete(currentLevelIndex);
       gameState.completionSaved = true;
+
+      // Calculate and start judge scoring
+      const moves = history.length;
+      const par = level.par || 12;
+      calculateJudgeScores(moves, par, currentLevelIndex).then(result => {
+        judgeState = {
+          scores: result.scores,
+          isRecord: result.isRecord,
+          revealed: 0,
+          startTime: performance.now()
+        };
+      });
     }
-    ctx.fillStyle = 'rgba(29, 43, 48, 0.8)';
+
+    // Draw overlay
+    ctx.fillStyle = 'rgba(29, 43, 48, 0.85)';
     ctx.fillRect(0, 0, canvas.width, canvas.height);
-    ctx.fillStyle = '#68BBC4';
-    ctx.font = `${24 * SCALE}px sans-serif`;
-    ctx.textAlign = 'center';
-    ctx.fillText('You Win!', canvas.width / 2, canvas.height / 2);
-    ctx.font = `${12 * SCALE}px sans-serif`;
-    ctx.fillText('Tap to continue', canvas.width / 2, canvas.height / 2 + 30 * SCALE);
+
+    // Draw judge scoring animation
+    if (judgeState) {
+      const elapsed = performance.now() - judgeState.startTime;
+
+      // Timing: 800ms delay, then 400ms flip + 600ms pause for each judge
+      // Judge 1: 800-1200ms flip, 1200-1800ms visible
+      // Judge 2: 1800-2200ms flip, 2200-2800ms visible
+      // Judge 3: 2800-3200ms flip, 3200+ visible
+      const cardW = 50 * SCALE;
+      const cardH = 60 * SCALE;
+      const spacing = 70 * SCALE;
+      const baseY = canvas.height / 2 - 20 * SCALE;
+
+      const colors = ['#68BBC4', '#f0f', '#ff0'];  // Cyan, Magenta, Yellow
+      const bgColor = '#1D2B30';
+
+      for (let i = 0; i < 3; i++) {
+        const flipStart = 800 + i * 1000;  // 800, 1800, 2800
+        const flipEnd = flipStart + 400;
+
+        let flipProgress = 0;
+        if (elapsed >= flipEnd) {
+          flipProgress = 1;
+          if (judgeState.revealed < i + 1) judgeState.revealed = i + 1;
+        } else if (elapsed >= flipStart) {
+          flipProgress = (elapsed - flipStart) / 400;
+        }
+
+        const x = canvas.width / 2 + (i - 1) * spacing;
+        drawScoreCard(ctx, judgeState.scores[i], x, baseY, cardW, cardH, flipProgress, colors[i], bgColor);
+      }
+
+      // Show total after all revealed
+      if (judgeState.revealed >= 3) {
+        const total = judgeState.scores.reduce((a, b) => a + b, 0);
+        ctx.fillStyle = '#fff';
+        ctx.font = `bold ${16 * SCALE}px sans-serif`;
+        ctx.textAlign = 'center';
+        ctx.fillText(`Total: ${total}/30`, canvas.width / 2, baseY + cardH / 2 + 30 * SCALE);
+
+        // Show world record indicator
+        if (judgeState.isRecord) {
+          ctx.fillStyle = '#ff0';
+          ctx.font = `bold ${12 * SCALE}px sans-serif`;
+          ctx.fillText('★ NEW WORLD RECORD! ★', canvas.width / 2, baseY + cardH / 2 + 50 * SCALE);
+        }
+
+        ctx.fillStyle = '#68BBC4';
+        ctx.font = `${12 * SCALE}px sans-serif`;
+        ctx.fillText('Tap to continue', canvas.width / 2, baseY + cardH / 2 + 75 * SCALE);
+      }
+    } else {
+      // Fallback while calculating scores
+      ctx.fillStyle = '#68BBC4';
+      ctx.font = `${16 * SCALE}px sans-serif`;
+      ctx.textAlign = 'center';
+      ctx.fillText('Calculating scores...', canvas.width / 2, canvas.height / 2);
+    }
   }
 
   // Draw hint arrow on player
@@ -2809,9 +3037,12 @@ function restartLevel() {
 }
 
 document.addEventListener('keydown', e => {
-  // Advance when won
+  // Advance when won (only after all judges revealed)
   if (gameState.won && (e.key === 'Enter' || e.key === ' ')) {
-    nextLevel();
+    if (judgeState && judgeState.revealed >= 3) {
+      judgeState = null;  // Reset for next level
+      nextLevel();
+    }
     return;
   }
   switch (e.key) {
@@ -2827,9 +3058,10 @@ canvas.addEventListener('touchstart', e => {
   touchStart = { x: e.touches[0].clientX, y: e.touches[0].clientY };
 });
 
-// Click to advance on desktop
+// Click to advance on desktop (only after all judges revealed)
 canvas.addEventListener('click', () => {
-  if (gameState.won) {
+  if (gameState.won && judgeState && judgeState.revealed >= 3) {
+    judgeState = null;
     nextLevel();
   }
 });
@@ -2838,9 +3070,10 @@ canvas.addEventListener('touchend', e => {
   const dx = e.changedTouches[0].clientX - touchStart.x;
   const dy = e.changedTouches[0].clientY - touchStart.y;
 
-  // Tap to advance when won
+  // Tap to advance when won (only after all judges revealed)
   if (Math.abs(dx) < 30 && Math.abs(dy) < 30) {
-    if (gameState.won) {
+    if (gameState.won && judgeState && judgeState.revealed >= 3) {
+      judgeState = null;
       nextLevel();
       touchStart = null;
       return;

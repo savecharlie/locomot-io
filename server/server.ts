@@ -1945,6 +1945,56 @@ export default class LocomotServer implements Party.Server {
             headers: { ...headers, 'Content-Type': 'application/json' }
           });
         }
+        // ==================== ICE SKATER LEADERBOARD ====================
+
+        if (data.type === 'ice_skater_get_best') {
+          const levelIndex = (data as any).level;
+          if (levelIndex === undefined) {
+            return new Response(JSON.stringify({ error: 'Missing level' }), {
+              status: 400, headers: { ...headers, 'Content-Type': 'application/json' }
+            });
+          }
+          const best = await this.room.storage.get(`ice_best_${levelIndex}`) as number | null;
+          return new Response(JSON.stringify({ best: best || null }), {
+            headers: { ...headers, 'Content-Type': 'application/json' }
+          });
+        }
+
+        if (data.type === 'ice_skater_submit') {
+          const { level, moves } = data as any;
+          if (level === undefined || moves === undefined) {
+            return new Response(JSON.stringify({ error: 'Missing level or moves' }), {
+              status: 400, headers: { ...headers, 'Content-Type': 'application/json' }
+            });
+          }
+          const key = `ice_best_${level}`;
+          const current = await this.room.storage.get(key) as number | null;
+
+          if (current === null || moves < current) {
+            await this.room.storage.put(key, moves);
+            console.log(`[IceSkater] New record for level ${level}: ${moves} moves`);
+            return new Response(JSON.stringify({ best: moves, isRecord: true }), {
+              headers: { ...headers, 'Content-Type': 'application/json' }
+            });
+          }
+          return new Response(JSON.stringify({ best: current, isRecord: false }), {
+            headers: { ...headers, 'Content-Type': 'application/json' }
+          });
+        }
+
+        if (data.type === 'ice_skater_get_all_bests') {
+          // Get all best times (for preloading)
+          const allBests: { [level: number]: number } = {};
+          const keys = await this.room.storage.list({ prefix: 'ice_best_' });
+          for (const [key, value] of keys) {
+            const levelNum = parseInt(key.replace('ice_best_', ''));
+            allBests[levelNum] = value as number;
+          }
+          return new Response(JSON.stringify({ bests: allBests }), {
+            headers: { ...headers, 'Content-Type': 'application/json' }
+          });
+        }
+
         return new Response(JSON.stringify({ error: 'Unknown type' }), {
           status: 400,
           headers: { ...headers, 'Content-Type': 'application/json' }
