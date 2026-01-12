@@ -909,6 +909,146 @@ export default class LocomotServer implements Party.Server {
       });
     }
 
+    // ICE SKATER ANALYTICS DASHBOARD
+    if (req.method === 'GET' && url.pathname.endsWith('/ice-analytics')) {
+      // Get player data
+      const players: any[] = [];
+      const playerKeys = await this.room.storage.list({ prefix: 'ice_player_' });
+      for (const [key, value] of playerKeys) {
+        players.push(value);
+      }
+
+      // Get level completion counts
+      const levelCompletions: { [level: number]: number } = {};
+      const levelKeys = await this.room.storage.list({ prefix: 'ice_level_completions_' });
+      for (const [key, value] of levelKeys) {
+        const levelNum = parseInt(key.replace('ice_level_completions_', ''));
+        levelCompletions[levelNum] = value as number;
+      }
+
+      const now = Date.now();
+      const day = 24 * 60 * 60 * 1000;
+
+      // Stats
+      const uniquePlayers = players.length;
+      const todayPlayers = players.filter(p => now - p.lastSeen < day).length;
+      const totalCompletions = players.reduce((sum, p) => sum + (p.completedLevels?.length || 0), 0);
+
+      // Furthest level reached
+      const maxLevel = players.reduce((max, p) => Math.max(max, p.highestLevel || 0), 0);
+
+      // Level distribution
+      const levelDist: { [level: number]: number } = {};
+      for (const p of players) {
+        const lvl = p.highestLevel || 0;
+        levelDist[lvl] = (levelDist[lvl] || 0) + 1;
+      }
+
+      // Recent players
+      const recentPlayers = players
+        .sort((a, b) => b.lastSeen - a.lastSeen)
+        .slice(0, 30);
+
+      const html = `<!DOCTYPE html>
+<html>
+<head>
+  <title>FIGURE ∞ Analytics</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta http-equiv="refresh" content="60">
+  <style>
+    body { font-family: system-ui, sans-serif; background: #1a1a2e; color: #eee; padding: 20px; max-width: 1100px; margin: 0 auto; }
+    h1 { color: #0ff; text-align: center; }
+    .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 15px; margin: 20px 0; }
+    .stat { background: #16213e; padding: 20px; border-radius: 10px; text-align: center; }
+    .stat-value { font-size: 2.5em; color: #0ff; font-weight: bold; }
+    .stat-label { color: #888; font-size: 0.9em; }
+    table { width: 100%; border-collapse: collapse; margin: 20px 0; }
+    th, td { padding: 10px; text-align: left; border-bottom: 1px solid #333; }
+    th { color: #0ff; }
+    .section { background: #16213e; padding: 20px; border-radius: 10px; margin: 20px 0; }
+    h2 { color: #f0f; margin-top: 0; }
+    .bar-chart { display: flex; align-items: flex-end; height: 100px; gap: 2px; }
+    .bar { background: linear-gradient(to top, #0ff, #f0f); min-width: 8px; border-radius: 2px 2px 0 0; }
+    .bar:hover { opacity: 0.8; }
+    .note { color: #666; font-size: 0.8em; text-align: center; }
+    .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+    @media (max-width: 700px) { .grid { grid-template-columns: 1fr; } }
+  </style>
+</head>
+<body>
+  <h1>⛸️ FIGURE ∞ Analytics</h1>
+  <p class="note">Auto-refreshes every 60s</p>
+
+  <div class="stats">
+    <div class="stat">
+      <div class="stat-value">${uniquePlayers}</div>
+      <div class="stat-label">Unique Players</div>
+    </div>
+    <div class="stat">
+      <div class="stat-value">${todayPlayers}</div>
+      <div class="stat-label">Active Today</div>
+    </div>
+    <div class="stat">
+      <div class="stat-value">${totalCompletions}</div>
+      <div class="stat-label">Total Completions</div>
+    </div>
+    <div class="stat">
+      <div class="stat-value">${maxLevel}</div>
+      <div class="stat-label">Furthest Level</div>
+    </div>
+  </div>
+
+  <div class="section">
+    <h2>📊 Player Progress Distribution</h2>
+    <p class="note">How many players reached each level</p>
+    <div class="bar-chart">
+      ${Object.entries(levelDist).sort((a, b) => parseInt(a[0]) - parseInt(b[0])).slice(0, 50).map(([lvl, count]) => {
+        const maxCount = Math.max(...Object.values(levelDist));
+        const height = Math.max(5, (count / maxCount) * 90);
+        return \`<div class="bar" style="height:\${height}px" title="Level \${lvl}: \${count} players"></div>\`;
+      }).join('')}
+    </div>
+    <p class="note">Levels 0-${Math.min(49, maxLevel)} (hover for details)</p>
+  </div>
+
+  <div class="section">
+    <h2>🏆 Recent Players</h2>
+    <table>
+      <tr><th>Player</th><th>Highest Level</th><th>Completions</th><th>Visits</th><th>Last Seen</th><th>Country</th></tr>
+      ${recentPlayers.map(p => {
+        const ago = Math.round((now - p.lastSeen) / 60000);
+        const timeStr = ago < 60 ? \`\${ago}m ago\` : ago < 1440 ? \`\${Math.round(ago/60)}h ago\` : \`\${Math.round(ago/1440)}d ago\`;
+        return \`<tr>
+          <td>\${p.id.slice(0, 8)}...</td>
+          <td>\${p.highestLevel || 0}</td>
+          <td>\${p.completedLevels?.length || 0}</td>
+          <td>\${p.visits || 1}</td>
+          <td>\${timeStr}</td>
+          <td>\${p.country || '?'}</td>
+        </tr>\`;
+      }).join('')}
+    </table>
+  </div>
+
+  <div class="section">
+    <h2>📈 Level Completion Counts</h2>
+    <p class="note">How many times each level was completed</p>
+    <div class="bar-chart">
+      ${Object.entries(levelCompletions).sort((a, b) => parseInt(a[0]) - parseInt(b[0])).slice(0, 50).map(([lvl, count]) => {
+        const maxCount = Math.max(...Object.values(levelCompletions), 1);
+        const height = Math.max(5, (count / maxCount) * 90);
+        return \`<div class="bar" style="height:\${height}px" title="Level \${lvl}: \${count} completions"></div>\`;
+      }).join('')}
+    </div>
+    <p class="note">Levels completed (hover for details)</p>
+  </div>
+</body>
+</html>`;
+      return new Response(html, {
+        headers: { ...headers, 'Content-Type': 'text/html' }
+      });
+    }
+
     // DEBUG: GET returns current server state
     if (req.method === 'GET') {
       const state = {
@@ -2045,6 +2185,196 @@ export default class LocomotServer implements Party.Server {
             allTimes[levelNum] = value as number;
           }
           return new Response(JSON.stringify({ times: allTimes }), {
+            headers: { ...headers, 'Content-Type': 'application/json' }
+          });
+        }
+
+        // ==================== ICE SKATER PLAYER ANALYTICS ====================
+
+        if (data.type === 'ice_skater_track_player') {
+          // Track player visit with their highest level reached
+          // Retroactive: if playing level 76, count as completing 1-75
+          const req = data as any;
+          const playerId = req.player_id;
+          const highestLevel = req.highest_level || 0;
+
+          if (!playerId) {
+            return new Response(JSON.stringify({ error: 'Missing player_id' }), {
+              status: 400, headers: { ...headers, 'Content-Type': 'application/json' }
+            });
+          }
+
+          // Get geo from Cloudflare headers
+          const cf = (req as any).cf || {};
+          const country = cf?.country || 'unknown';
+          const region = cf?.region || cf?.regionCode || 'unknown';
+
+          // Get or create player record
+          const playerKey = `ice_player_${playerId}`;
+          let player = await this.room.storage.get(playerKey) as any;
+
+          if (!player) {
+            player = {
+              id: playerId,
+              firstSeen: Date.now(),
+              lastSeen: Date.now(),
+              visits: 1,
+              highestLevel: highestLevel,
+              completedLevels: new Array(highestLevel).fill(0).map((_, i) => i), // Retroactive
+              country,
+              region
+            };
+          } else {
+            player.lastSeen = Date.now();
+            player.visits++;
+            // Update highest level if higher (retroactive tracking)
+            if (highestLevel > player.highestLevel) {
+              // Add all levels between old highest and new highest
+              for (let i = player.highestLevel; i < highestLevel; i++) {
+                if (!player.completedLevels.includes(i)) {
+                  player.completedLevels.push(i);
+                }
+              }
+              player.highestLevel = highestLevel;
+            }
+          }
+
+          await this.room.storage.put(playerKey, player);
+          console.log(`[IceSkater] Player ${playerId.slice(0,8)} tracked, highest: ${player.highestLevel}`);
+
+          return new Response(JSON.stringify({ success: true, player }), {
+            headers: { ...headers, 'Content-Type': 'application/json' }
+          });
+        }
+
+        if (data.type === 'ice_skater_track_completion') {
+          // Track puzzle completion
+          const req = data as any;
+          const playerId = req.player_id;
+          const level = req.level;
+          const moves = req.moves;
+          const time = req.time;
+
+          if (!playerId || level === undefined) {
+            return new Response(JSON.stringify({ error: 'Missing player_id or level' }), {
+              status: 400, headers: { ...headers, 'Content-Type': 'application/json' }
+            });
+          }
+
+          // Update player record
+          const playerKey = `ice_player_${playerId}`;
+          let player = await this.room.storage.get(playerKey) as any;
+
+          if (!player) {
+            player = {
+              id: playerId,
+              firstSeen: Date.now(),
+              lastSeen: Date.now(),
+              visits: 1,
+              highestLevel: level + 1,
+              completedLevels: [],
+              completions: []
+            };
+          }
+
+          // Add this level to completed if not already
+          if (!player.completedLevels) player.completedLevels = [];
+          if (!player.completedLevels.includes(level)) {
+            player.completedLevels.push(level);
+          }
+
+          // Track completion details
+          if (!player.completions) player.completions = [];
+          player.completions.push({
+            level,
+            moves,
+            time,
+            timestamp: Date.now()
+          });
+          // Keep last 100 completions per player
+          if (player.completions.length > 100) {
+            player.completions = player.completions.slice(-100);
+          }
+
+          // Update highest level (retroactive)
+          if (level + 1 > player.highestLevel) {
+            player.highestLevel = level + 1;
+            // Retroactively add all prior levels as completed
+            for (let i = 0; i < level; i++) {
+              if (!player.completedLevels.includes(i)) {
+                player.completedLevels.push(i);
+              }
+            }
+          }
+
+          player.lastSeen = Date.now();
+          await this.room.storage.put(playerKey, player);
+
+          // Also track global level completion count
+          const levelKey = `ice_level_completions_${level}`;
+          const levelCount = (await this.room.storage.get(levelKey) as number) || 0;
+          await this.room.storage.put(levelKey, levelCount + 1);
+
+          console.log(`[IceSkater] Player ${playerId.slice(0,8)} completed level ${level}`);
+
+          return new Response(JSON.stringify({ success: true }), {
+            headers: { ...headers, 'Content-Type': 'application/json' }
+          });
+        }
+
+        if (data.type === 'ice_skater_get_analytics') {
+          // Get analytics summary
+          const players: any[] = [];
+          const playerKeys = await this.room.storage.list({ prefix: 'ice_player_' });
+
+          for (const [key, value] of playerKeys) {
+            players.push(value);
+          }
+
+          // Get level completion counts
+          const levelCompletions: { [level: number]: number } = {};
+          const levelKeys = await this.room.storage.list({ prefix: 'ice_level_completions_' });
+          for (const [key, value] of levelKeys) {
+            const levelNum = parseInt(key.replace('ice_level_completions_', ''));
+            levelCompletions[levelNum] = value as number;
+          }
+
+          const now = Date.now();
+          const day = 24 * 60 * 60 * 1000;
+
+          // Calculate stats
+          const uniquePlayers = players.length;
+          const todayPlayers = players.filter(p => now - p.lastSeen < day).length;
+          const totalCompletions = players.reduce((sum, p) => sum + (p.completedLevels?.length || 0), 0);
+
+          // Distribution of highest levels reached
+          const levelDistribution: { [level: number]: number } = {};
+          for (const p of players) {
+            const lvl = p.highestLevel || 0;
+            levelDistribution[lvl] = (levelDistribution[lvl] || 0) + 1;
+          }
+
+          // Recent players (last 20)
+          const recentPlayers = players
+            .sort((a, b) => b.lastSeen - a.lastSeen)
+            .slice(0, 20)
+            .map(p => ({
+              id: p.id.slice(0, 8) + '...',
+              highestLevel: p.highestLevel,
+              completions: p.completedLevels?.length || 0,
+              visits: p.visits,
+              lastSeen: new Date(p.lastSeen).toISOString(),
+              country: p.country
+            }));
+
+          return new Response(JSON.stringify({
+            uniquePlayers,
+            todayPlayers,
+            totalCompletions,
+            levelDistribution: Object.entries(levelDistribution).sort((a, b) => parseInt(a[0]) - parseInt(b[0])),
+            levelCompletions: Object.entries(levelCompletions).sort((a, b) => parseInt(a[0]) - parseInt(b[0])),
+            recentPlayers
+          }), {
             headers: { ...headers, 'Content-Type': 'application/json' }
           });
         }

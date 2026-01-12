@@ -394,7 +394,7 @@
 // === ICE SKATER ENGINE v2 ===
 // Fixed: locked wall, height system, ramps, block stops
 
-const GAME_VERSION = 'v267';  // Bump this and tell Ivy the version when pushing changes!
+const GAME_VERSION = 'v268';  // Bump this and tell Ivy the version when pushing changes!
 
 const TILE_W = 16;  // Tile width
 const TILE_H = 12;  // Tile height (floor surface depth) - oblique angle
@@ -468,6 +468,59 @@ let judgeState = null;  // { scores: [10, 8, 10], revealed: 0, startTime: null, 
 let globalBestTimes = {};  // Cache of global best times per level
 let levelStartTime = 0;  // When current level started (for speed tracking)
 const PARTYKIT_URL = 'https://locomot-io.savecharlie.partykit.dev/party/main';
+
+// Player analytics
+function getPlayerId() {
+  let id = localStorage.getItem('ice_skater_player_id');
+  if (!id) {
+    id = 'p_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 10);
+    localStorage.setItem('ice_skater_player_id', id);
+  }
+  return id;
+}
+
+async function trackPlayer() {
+  // Track player visit with their highest level reached (retroactive)
+  const playerId = getPlayerId();
+  const completed = getCompletedLevels();
+  const highestLevel = completed.size > 0 ? Math.max(...completed) + 1 : currentLevelIndex;
+
+  try {
+    await fetch(PARTYKIT_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        type: 'ice_skater_track_player',
+        player_id: playerId,
+        highest_level: highestLevel
+      })
+    });
+    console.log('[Analytics] Player tracked, highest level:', highestLevel);
+  } catch (e) {
+    console.log('[Analytics] Failed to track player:', e);
+  }
+}
+
+async function trackCompletion(levelIndex, moves, timeMs) {
+  const playerId = getPlayerId();
+
+  try {
+    await fetch(PARTYKIT_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        type: 'ice_skater_track_completion',
+        player_id: playerId,
+        level: levelIndex,
+        moves: moves,
+        time: timeMs
+      })
+    });
+    console.log('[Analytics] Completion tracked for level', levelIndex);
+  } catch (e) {
+    console.log('[Analytics] Failed to track completion:', e);
+  }
+}
 
 // Tutorial system
 let tutorialText = null;  // Current level's tutorial text (if any)
@@ -2700,6 +2753,10 @@ function render() {
       const moves = history.length;
       const par = level.par || 12;
       const completionTimeMs = performance.now() - levelStartTime;
+
+      // Track completion for analytics
+      trackCompletion(currentLevelIndex, moves, completionTimeMs);
+
       calculateJudgeScores(moves, par, currentLevelIndex, completionTimeMs).then(result => {
         judgeState = {
           scores: result.scores,
@@ -3437,6 +3494,9 @@ async function init() {
   const startLevel = parseInt(urlParams.get('level')) || 0;
   initSnow();  // Initialize snow particles
   await loadLevel(Math.min(startLevel, totalLevels - 1));
+
+  // Track player visit with retroactive progress
+  trackPlayer();
 }
 
 // Level navigation buttons (mobile footer)
