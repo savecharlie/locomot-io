@@ -394,7 +394,7 @@
 // === ICE SKATER ENGINE v2 ===
 // Fixed: locked wall, height system, ramps, block stops
 
-const GAME_VERSION = 'v255';  // Bump this and tell Ivy the version when pushing changes!
+const GAME_VERSION = 'v256';  // Bump this and tell Ivy the version when pushing changes!
 
 const TILE_W = 16;  // Tile width
 const TILE_H = 12;  // Tile height (floor surface depth) - oblique angle
@@ -553,16 +553,14 @@ function drawPixelNumber(ctx, num, x, y, size, color) {
 
   ctx.fillStyle = color;
 
-  // For "10", draw two digits
+  // For "10", draw two compact digits
   if (num === 10) {
-    // Draw "1" (just right segments)
-    const x1 = x - size * 0.6;
-    ctx.fillRect(x1 + segW + gap, y + gap, segH, segW);           // top-right
-    ctx.fillRect(x1 + segW + gap, y + segW + gap * 3, segH, segW); // bottom-right
+    // Draw "1" (simple vertical line)
+    const digitW = size * 0.4;
+    ctx.fillRect(x + digitW * 0.3, y + gap, segH, segW * 1.8);
 
-    // Draw "0"
-    const x0 = x + size * 0.3;
-    drawSingleDigit(ctx, 0, x0, y, size, color);
+    // Draw "0" next to it
+    drawSingleDigit(ctx, 0, x + digitW, y, size * 0.9, color);
     return;
   }
 
@@ -617,9 +615,11 @@ function drawScoreCard(ctx, score, x, y, cardW, cardH, flipProgress, color, bgCo
   // Only draw number when mostly flipped
   if (flipProgress > 0.5) {
     const numScale = (flipProgress - 0.5) * 2;  // 0 to 1 after halfway
-    const numSize = cardH * 0.6 * numScale;
+    const numSize = cardH * 0.5 * numScale;  // Smaller to fit 10
     const numY = y - numSize/2 + offsetY;
-    drawPixelNumber(ctx, score, x - numSize * 0.3, numY, numSize, color);
+    // Center differently for 10 vs single digit
+    const numX = score === 10 ? x - numSize * 0.5 : x - numSize * 0.3;
+    drawPixelNumber(ctx, score, numX, numY, numSize, color);
   }
 }
 
