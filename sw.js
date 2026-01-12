@@ -1,5 +1,5 @@
 // LOCOMOT.IO Service Worker - Auto-updating with offline fallback
-const CACHE_NAME = 'locomotio-v263';
+const CACHE_NAME = 'locomotio-v264';
 
 const urlsToCache = [
   './',
