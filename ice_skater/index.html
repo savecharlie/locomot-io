@@ -394,7 +394,7 @@
 // === ICE SKATER ENGINE v2 ===
 // Fixed: locked wall, height system, ramps, block stops
 
-const GAME_VERSION = 'v266';  // Bump this and tell Ivy the version when pushing changes!
+const GAME_VERSION = 'v267';  // Bump this and tell Ivy the version when pushing changes!
 
 const TILE_W = 16;  // Tile width
 const TILE_H = 12;  // Tile height (floor surface depth) - oblique angle
@@ -519,13 +519,17 @@ async function calculateJudgeScores(moves, par, levelIndex, completionTimeMs) {
   // Judge 2: par-based (10 ONLY for exact par, 9 for better, 0 for double par)
   const parDiff = moves - par;
   let j2;
+  console.log(`PAR SCORING: moves=${moves} par=${par} moves===par=${moves === par}`);
   if (moves === par) {
     j2 = 10;  // Perfect par = 10
+    console.log('PAR SCORING: exact match -> 10');
   } else if (moves < par) {
     j2 = 9;   // Better than par = max 9 (10 is reserved for exact par)
+    console.log('PAR SCORING: under par -> 9');
   } else {
     // Worse than par: scale down, floor to round down
     j2 = Math.max(0, Math.floor(10 - (parDiff / par) * 10));
+    console.log(`PAR SCORING: over par -> ${j2}`);
   }
 
   // Judge 3: speed - compare completion time to world record
