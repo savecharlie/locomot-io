@@ -509,17 +509,57 @@
                 document.getElementById('status').textContent = 'Camera ready!';
                 return true;
             } catch (e) {
-                let msg = 'Camera error: ' + e.message;
+                console.error('Camera error:', e.name, e.message, e);
+                let msg = 'Camera error: ' + e.name + ' - ' + e.message;
                 if (e.name === 'NotAllowedError') {
-                    msg = 'Camera blocked. Check browser settings → Camera → Allow for this site';
+                    msg = 'Camera blocked by browser';
                 } else if (e.name === 'NotFoundError') {
                     msg = 'No camera found';
+                } else if (e.name === 'NotReadableError') {
+                    msg = 'Camera in use by another app';
+                } else if (e.name === 'OverconstrainedError') {
+                    msg = 'Camera constraints not supported';
                 }
                 document.getElementById('status').textContent = msg;
-                document.getElementById('loading').innerHTML = msg + '<br><br><button onclick="location.reload()" style="padding:10px 20px;font-size:16px;">RETRY</button>';
+                document.getElementById('loading').innerHTML = `
+                    <div style="padding:20px;text-align:center;">
+                        <p style="margin-bottom:20px;">${msg}</p>
+                        <button onclick="requestCameraManually()" style="padding:15px 30px;font-size:18px;background:#4CAF50;color:white;border:none;border-radius:8px;margin:10px;">
+                            TAP TO ALLOW CAMERA
+                        </button>
+                        <br>
+                        <button onclick="location.reload()" style="padding:10px 20px;font-size:14px;margin-top:10px;">
+                            Reload Page
+                        </button>
+                    </div>`;
                 document.getElementById('loading').classList.remove('hidden');
-                console.error(e);
                 return false;
+            }
+        }
+
+        // Manual camera request (triggered by user tap for better permission handling)
+        async function requestCameraManually() {
+            document.getElementById('loading').innerHTML = '<p>Requesting camera...</p>';
+            try {
+                // Try with minimal constraints first
+                const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+                video.srcObject = stream;
+                await video.play();
+                document.getElementById('loading').classList.add('hidden');
+                document.getElementById('status').textContent = 'Camera ready!';
+
+                // Now restart with proper constraints
+                setTimeout(() => restartCamera(), 500);
+            } catch (e) {
+                console.error('Manual camera request failed:', e);
+                document.getElementById('loading').innerHTML = `
+                    <div style="padding:20px;text-align:center;">
+                        <p>Still blocked: ${e.name}</p>
+                        <p style="font-size:12px;margin-top:10px;">Check Fully Kiosk Settings → Web Content → Webcam Access</p>
+                        <button onclick="location.reload()" style="padding:10px 20px;font-size:14px;margin-top:20px;">
+                            Reload
+                        </button>
+                    </div>`;
             }
         }
 
