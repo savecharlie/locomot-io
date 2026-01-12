@@ -394,7 +394,7 @@
 // === ICE SKATER ENGINE v2 ===
 // Fixed: locked wall, height system, ramps, block stops
 
-const GAME_VERSION = 'v262';  // Bump this and tell Ivy the version when pushing changes!
+const GAME_VERSION = 'v263';  // Bump this and tell Ivy the version when pushing changes!
 
 const TILE_W = 16;  // Tile width
 const TILE_H = 12;  // Tile height (floor surface depth) - oblique angle
@@ -2717,8 +2717,10 @@ function render() {
       // Labels for each judge
       const labels = ['FINISH', 'PAR', 'SPEED'];
       const currentPar = allLevels[currentLevelIndex]?.par || 12;
+      const userMoves = history.length;
+      const parText = `${userMoves} / ${currentPar}`;
       const recordText = judgeState.globalBest ? `record: ${judgeState.globalBest}` : 'first!';
-      const descriptions = ['completed!', `target: ${currentPar}`, recordText];
+      const descriptions = ['completed!', parText, recordText];
 
       for (let i = 0; i < 3; i++) {
         const flipStart = 800 + i * 1000;  // 800, 1800, 2800
