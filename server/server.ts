@@ -1968,16 +1968,18 @@ export default class LocomotServer implements Party.Server {
             });
           }
           const key = `ice_best_${level}`;
-          const current = await this.room.storage.get(key) as number | null;
+          const current = await this.room.storage.get(key);
+          const currentBest = typeof current === 'number' ? current : null;
+          console.log(`[IceSkater] Level ${level}, moves ${moves}, current best: ${currentBest}`);
 
-          if (current === null || moves < current) {
+          if (currentBest === null || moves < currentBest) {
             await this.room.storage.put(key, moves);
             console.log(`[IceSkater] New record for level ${level}: ${moves} moves`);
             return new Response(JSON.stringify({ best: moves, isRecord: true }), {
               headers: { ...headers, 'Content-Type': 'application/json' }
             });
           }
-          return new Response(JSON.stringify({ best: current, isRecord: false }), {
+          return new Response(JSON.stringify({ best: currentBest, isRecord: false }), {
             headers: { ...headers, 'Content-Type': 'application/json' }
           });
         }
