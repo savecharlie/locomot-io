@@ -394,7 +394,7 @@
 // === ICE SKATER ENGINE v2 ===
 // Fixed: locked wall, height system, ramps, block stops
 
-const GAME_VERSION = 'v257';  // Bump this and tell Ivy the version when pushing changes!
+const GAME_VERSION = 'v258';  // Bump this and tell Ivy the version when pushing changes!
 
 const TILE_W = 16;  // Tile width
 const TILE_H = 12;  // Tile height (floor surface depth) - oblique angle
@@ -467,6 +467,11 @@ const snowflakes = [];
 let judgeState = null;  // { scores: [10, 8, 10], revealed: 0, startTime: null, isRecord: false }
 let globalBestTimes = {};  // Cache of global best times per level
 const PARTYKIT_URL = 'https://locomot-io.savecharlie.partykit.dev/party/main';
+
+// Tutorial system
+let tutorialText = null;  // Current level's tutorial text (if any)
+let tutorialStage = null; // Current tutorial stage name
+const TUTORIAL_COUNT = 24; // Number of tutorial levels
 
 // Fetch global best for a level
 async function fetchGlobalBest(levelIndex) {
@@ -2847,6 +2852,16 @@ function render() {
     ctx.fillText('START OVER', canvas.width / 2, 20 * SCALE);
   }
 
+  // Draw tutorial text (show for first 2 moves only)
+  if (tutorialText && history.length < 2 && !gameState.won && !gameState.dead) {
+    ctx.fillStyle = '#68BBC4';  // Teal color matching game theme
+    ctx.font = `bold ${12 * SCALE}px monospace`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'top';
+    // Draw at top of screen with slight padding
+    ctx.fillText(tutorialText.toUpperCase(), canvas.width / 2, 12 * SCALE);
+  }
+
   // Snow animation
   ctx.fillStyle = '#CFDFE2';  // Light color
   for (const flake of snowflakes) {
@@ -3312,11 +3327,16 @@ async function loadLevel(index) {
   history = [];
   trailPoints = [];
   isUnwinnable = false;
-  // Update footer (mobile)
-  document.getElementById('level-num').textContent = `Level ${index + 1}/${totalLevels}`;
+  // Tutorial text (first 24 levels are tutorials)
+  tutorialText = lv.tutorial_text || null;
+  tutorialStage = lv.stage || null;
+  // Update footer (mobile) - show "Tutorial X" for first 24 levels
+  const isTutorial = index < TUTORIAL_COUNT && tutorialText;
+  const levelLabel = isTutorial ? `Tutorial ${index + 1}` : `Level ${index + 1 - TUTORIAL_COUNT}`;
+  document.getElementById('level-num').textContent = isTutorial ? levelLabel : `Level ${index + 1}/${totalLevels}`;
   document.getElementById('status').textContent = '';
   // Update sidebar (desktop)
-  document.getElementById('sidebar-level').textContent = `${index + 1} / ${totalLevels}`;
+  document.getElementById('sidebar-level').textContent = isTutorial ? `T${index + 1}` : `${index + 1 - TUTORIAL_COUNT} / ${totalLevels - TUTORIAL_COUNT}`;
   document.getElementById('sidebar-par').textContent = lv.par || '-';
   document.getElementById('sidebar-moves').textContent = '0';
   document.getElementById('sidebar-status').textContent = '';
