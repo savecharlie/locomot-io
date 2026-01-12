@@ -394,7 +394,7 @@
 // === ICE SKATER ENGINE v2 ===
 // Fixed: locked wall, height system, ramps, block stops
 
-const GAME_VERSION = 'v247';  // Bump this and tell Ivy the version when pushing changes!
+const GAME_VERSION = 'v248';  // Bump this and tell Ivy the version when pushing changes!
 
 const TILE_W = 16;  // Tile width
 const TILE_H = 12;  // Tile height (floor surface depth) - oblique angle
@@ -2619,13 +2619,17 @@ function render() {
       // Judge 1: 800-1200ms flip, 1200-1800ms visible
       // Judge 2: 1800-2200ms flip, 2200-2800ms visible
       // Judge 3: 2800-3200ms flip, 3200+ visible
-      const cardW = 50 * SCALE;
-      const cardH = 60 * SCALE;
-      const spacing = 70 * SCALE;
-      const baseY = canvas.height / 2 - 20 * SCALE;
 
-      const colors = ['#68BBC4', '#f0f', '#ff0'];  // Cyan, Magenta, Yellow
-      const bgColor = '#1D2B30';
+      // Size cards to fit screen width with buffer
+      const maxCardW = Math.min(canvas.width / 5, 40 * SCALE);  // Max 1/5 screen width
+      const cardW = maxCardW;
+      const cardH = cardW * 1.2;
+      const spacing = cardW * 1.4;  // Cards with comfortable gap
+      const baseY = canvas.height / 2 - 10 * SCALE;
+
+      // Game palette colors
+      const colors = ['#68BBC4', '#68BBC4', '#68BBC4'];  // All same cyan
+      const bgColor = '#2A474F';  // Dark teal background
 
       for (let i = 0; i < 3; i++) {
         const flipStart = 800 + i * 1000;  // 800, 1800, 2800
@@ -2646,21 +2650,24 @@ function render() {
       // Show total after all revealed
       if (judgeState.revealed >= 3) {
         const total = judgeState.scores.reduce((a, b) => a + b, 0);
-        ctx.fillStyle = '#fff';
-        ctx.font = `bold ${16 * SCALE}px sans-serif`;
+        const textY = baseY + cardH / 2 + 25 * SCALE;
+
+        ctx.fillStyle = '#68BBC4';
+        ctx.font = `bold ${14 * SCALE}px sans-serif`;
         ctx.textAlign = 'center';
-        ctx.fillText(`Total: ${total}/30`, canvas.width / 2, baseY + cardH / 2 + 30 * SCALE);
+        ctx.fillText(`Total: ${total}/30`, canvas.width / 2, textY);
 
         // Show world record indicator
         if (judgeState.isRecord) {
-          ctx.fillStyle = '#ff0';
-          ctx.font = `bold ${12 * SCALE}px sans-serif`;
-          ctx.fillText('★ NEW WORLD RECORD! ★', canvas.width / 2, baseY + cardH / 2 + 50 * SCALE);
+          ctx.fillStyle = '#40ACBF';
+          ctx.font = `bold ${10 * SCALE}px sans-serif`;
+          ctx.fillText('NEW WORLD RECORD!', canvas.width / 2, textY + 18 * SCALE);
         }
 
         ctx.fillStyle = '#68BBC4';
-        ctx.font = `${12 * SCALE}px sans-serif`;
-        ctx.fillText('Tap to continue', canvas.width / 2, baseY + cardH / 2 + 75 * SCALE);
+        ctx.font = `${10 * SCALE}px sans-serif`;
+        const continueY = judgeState.isRecord ? textY + 38 * SCALE : textY + 22 * SCALE;
+        ctx.fillText('Tap to continue', canvas.width / 2, continueY);
       }
     } else {
       // Fallback while calculating scores
