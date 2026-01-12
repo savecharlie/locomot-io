@@ -502,13 +502,14 @@ def is_mechanic_required(state: GameState, mechanic: str, max_depth: int = 30) -
         modified.ramps = {}
 
     elif mechanic == 'KEY_LOCK':
-        # Remove keys and open all locks
+        # Remove keys and KEEP locks as walls (can't unlock without key)
+        # If unsolvable without keys, KEY_LOCK is required
         for y in range(modified.height):
             for x in range(modified.width):
                 if modified.grid[y][x] == KEY:
-                    modified.grid[y][x] = ICE
+                    modified.grid[y][x] = ICE  # No keys available
                 if modified.grid[y][x] == LOCKED:
-                    modified.grid[y][x] = ICE
+                    modified.grid[y][x] = WALL  # Lock stays closed = wall
 
     elif mechanic == 'HOLE_FILL':
         # Make holes into walls (can't be filled)
@@ -585,6 +586,124 @@ def calculate_quality(state: GameState, solution: List[str], analysis: dict = No
         clean_bonus += 20
 
     return base + mechanic_bonus + required_bonus + clean_bonus
+
+
+# ============================================================================
+# VISIBILITY SCORING FOR TUTORIALS
+# ============================================================================
+
+def get_mechanic_positions(state: GameState, elements: List[str]) -> List[Tuple[int, int]]:
+    """Get positions of all key mechanics in a level."""
+    positions = []
+
+    if 'BLOCK' in elements:
+        positions.extend(state.blocks)
+
+    if 'CORNER' in elements:
+        for y in range(state.height):
+            for x in range(state.width):
+                if state.grid[y][x] in CORNERS:
+                    positions.append((x, y))
+
+    if 'STICKY' in elements:
+        for y in range(state.height):
+            for x in range(state.width):
+                if state.grid[y][x] == STICKY:
+                    positions.append((x, y))
+
+    if 'RAMP' in elements:
+        positions.extend(state.ramps.keys())
+
+    if 'KEY' in elements:
+        for y in range(state.height):
+            for x in range(state.width):
+                if state.grid[y][x] == KEY:
+                    positions.append((x, y))
+
+    if 'HOLE' in elements:
+        for y in range(state.height):
+            for x in range(state.width):
+                if state.grid[y][x] == HOLE:
+                    positions.append((x, y))
+
+    if 'LOCK' in elements:
+        for y in range(state.height):
+            for x in range(state.width):
+                if state.grid[y][x] == LOCKED:
+                    positions.append((x, y))
+
+    return positions
+
+
+def calculate_visibility_score(state: GameState, elements: List[str]) -> int:
+    """Score how VISIBLE the key mechanics are (not blocked by walls/player).
+
+    Higher = better visibility. Focuses on:
+    - Clear sight lines (no walls blocking view)
+    - Mechanic not directly behind player (player sprite blocking)
+    - Mechanic above or level with start (visible on screen)
+    - Longer paths are FINE - visibility is about being seen, not proximity
+    """
+    mechanic_positions = get_mechanic_positions(state, elements)
+    if not mechanic_positions:
+        # No mechanics = basic slide level, always visible
+        return 150
+
+    start_x, start_y = state.player_x, state.player_y
+    score = 100
+
+    for mx, my in mechanic_positions:
+        # VISIBILITY CHECK 1: Is mechanic above or level with player? (on screen)
+        # Mechanics ABOVE player = clearly visible (+30)
+        # Mechanics at same row = visible (+20)
+        # Mechanics below = might be off initial view (-20)
+        if my < start_y:
+            score += 30  # Above player = great visibility
+        elif my == start_y:
+            score += 20  # Same row = visible
+        else:
+            score -= 20  # Below player = might be scrolled off
+
+        # VISIBILITY CHECK 2: Player sprite not blocking mechanic
+        # If mechanic is directly behind where player faces, bad
+        # Player usually faces the direction of first move
+        if mx == start_x and my == start_y + 1:
+            score -= 30  # Directly below player sprite = hidden
+
+        # VISIBILITY CHECK 3: No walls between start and mechanic (line of sight)
+        walls_blocking = 0
+        dx = 1 if mx > start_x else (-1 if mx < start_x else 0)
+        dy = 1 if my > start_y else (-1 if my < start_y else 0)
+
+        check_x, check_y = start_x, start_y
+        steps = max(abs(mx - start_x), abs(my - start_y))
+        for _ in range(steps):
+            check_x += dx
+            check_y += dy
+            if check_x == mx and check_y == my:
+                break  # Reached mechanic
+            if 0 <= check_x < state.width and 0 <= check_y < state.height:
+                if state.grid[check_y][check_x] == WALL:
+                    walls_blocking += 1
+
+        if walls_blocking == 0:
+            score += 25  # Clear line of sight = bonus
+        else:
+            score -= walls_blocking * 15  # Each blocking wall = penalty
+
+        # VISIBILITY CHECK 4: Not in a corner hidden by chamber walls
+        # Check if mechanic has walls on 3+ sides (tucked away)
+        adjacent_walls = 0
+        for adx, ady in [(0, -1), (0, 1), (-1, 0), (1, 0)]:
+            ax, ay = mx + adx, my + ady
+            if ax < 0 or ax >= state.width or ay < 0 or ay >= state.height:
+                adjacent_walls += 1
+            elif state.grid[ay][ax] == WALL:
+                adjacent_walls += 1
+        if adjacent_walls >= 3:
+            score -= 20  # Tucked in corner = hard to see
+
+    return max(0, score)
 
 
 # ============================================================================
@@ -713,6 +832,9 @@ def generate_tutorial(params: dict, max_attempts: int = 500) -> Optional[dict]:
         if skip:
             continue
 
+        # Calculate visibility score
+        visibility = calculate_visibility_score(state, params.get('elements', []))
+
         # Build level dict
         grid_strings = []
         for y in range(state.height):
@@ -734,24 +856,26 @@ def generate_tutorial(params: dict, max_attempts: int = 500) -> Optional[dict]:
             'solution': solution,
             'tutorial_text': params.get('text', ''),
             'stage': params.get('name', ''),
-            'penguinOnWall': False
+            'penguinOnWall': False,
+            'visibility_score': visibility
         }
 
     return None
 
 
-def generate_all_tutorials(progress_callback=None, candidates_per_stage: int = 100) -> List[dict]:
+def generate_all_tutorials(progress_callback=None, candidates_per_stage: int = 100, min_visibility: int = 80) -> List[dict]:
     """Generate all tutorial levels following the curriculum.
 
     Args:
-        candidates_per_stage: Generate this many candidates per stage, keep best 3
+        candidates_per_stage: Generate this many candidates per stage, keep best
+        min_visibility: Minimum visibility score to accept (0-200+)
     """
     tutorials = []
     learned = set()
     total_stages = len(TUTORIAL_CURRICULUM)
 
     for stage_idx, stage in enumerate(TUTORIAL_CURRICULUM):
-        print(f"  Generating stage: {stage['name']} ({candidates_per_stage} candidates)...")
+        print(f"  Generating stage: {stage['name']} ({candidates_per_stage} candidates, min visibility {min_visibility})...")
 
         # Forbidden = everything not yet learned (except what we're teaching)
         forbidden = set(ALL_MECHANICS) - learned
@@ -773,25 +897,29 @@ def generate_all_tutorials(progress_callback=None, candidates_per_stage: int = 1
 
         # Generate many candidates
         candidates = []
-        for attempt in range(candidates_per_stage * 10):  # More attempts to hit target
+        for attempt in range(candidates_per_stage * 20):  # More attempts for visibility filtering
             level = generate_tutorial(params, max_attempts=50)
             if level:
-                # Score the tutorial (shorter = better for tutorials, but must work)
-                level['tutorial_quality'] = 100 - level['par'] * 5  # Prefer shorter
-                candidates.append(level)
-                if len(candidates) >= candidates_per_stage:
-                    break
+                vis = level.get('visibility_score', 0)
+                # Only keep if visibility is good enough
+                if vis >= min_visibility:
+                    # Combined score: visibility + short par bonus
+                    level['tutorial_quality'] = vis + (100 - level['par'] * 5)
+                    candidates.append(level)
+                    if len(candidates) >= candidates_per_stage:
+                        break
 
         if candidates:
-            # Sort by quality and keep best 3
+            # Sort by combined quality (visibility + shortness) and keep best
             candidates.sort(key=lambda x: x['tutorial_quality'], reverse=True)
             best = candidates[:stage['count']]
             for level in best:
                 level['index'] = len(tutorials)
                 tutorials.append(level)
-            print(f"    Kept {len(best)} best (quality range: {best[-1]['tutorial_quality']}-{best[0]['tutorial_quality']})")
+            vis_range = f"{best[-1].get('visibility_score', 0)}-{best[0].get('visibility_score', 0)}"
+            print(f"    Kept {len(best)} best (visibility: {vis_range}, quality: {best[-1]['tutorial_quality']}-{best[0]['tutorial_quality']})")
         else:
-            print(f"    WARNING: No valid tutorials for {stage['name']}")
+            print(f"    WARNING: No valid tutorials for {stage['name']} (try lower min_visibility)")
 
         if progress_callback:
             progress_callback(stage_idx + 1, total_stages)
@@ -1112,6 +1240,7 @@ if __name__ == '__main__':
     parser.add_argument('--tutorials', action='store_true', help='Generate tutorial levels only')
     parser.add_argument('--with-tutorials', action='store_true', help='Generate tutorials + regular levels')
     parser.add_argument('--tutorial-candidates', type=int, default=100, help='Candidates per tutorial stage (default: 100)')
+    parser.add_argument('--min-visibility', type=int, default=100, help='Minimum visibility score for tutorials (default: 100)')
     parser.add_argument('--narrow', type=str, help='Generate narrow puzzles with WxH interior (e.g., 1x3)')
     parser.add_argument('--ratio', type=str, help='Generate puzzles with W:H ratio (e.g., 1:3 for 3x tall as wide)')
     parser.add_argument('--count', type=int, default=50000, help='Number to generate (default: 50000)')
@@ -1126,8 +1255,8 @@ if __name__ == '__main__':
 
     # Tutorial-only mode
     if args.tutorials:
-        print(f"Generating tutorial levels ({args.tutorial_candidates} candidates per stage)...")
-        tutorials = generate_all_tutorials(progress, candidates_per_stage=args.tutorial_candidates)
+        print(f"Generating tutorial levels ({args.tutorial_candidates} candidates per stage, min visibility {args.min_visibility})...")
+        tutorials = generate_all_tutorials(progress, candidates_per_stage=args.tutorial_candidates, min_visibility=args.min_visibility)
         print(f"\nGenerated {len(tutorials)} tutorial levels")
 
         # Save tutorials
@@ -1141,9 +1270,9 @@ if __name__ == '__main__':
     # Combined mode: tutorials + regular levels
     if args.with_tutorials:
         print("=" * 60)
-        print(f"PHASE 1: Generating tutorial levels ({args.tutorial_candidates} candidates per stage)...")
+        print(f"PHASE 1: Generating tutorial levels ({args.tutorial_candidates} candidates per stage, min visibility {args.min_visibility})...")
         print("=" * 60)
-        tutorials = generate_all_tutorials(progress, candidates_per_stage=args.tutorial_candidates)
+        tutorials = generate_all_tutorials(progress, candidates_per_stage=args.tutorial_candidates, min_visibility=args.min_visibility)
         print(f"Generated {len(tutorials)} tutorial levels\n")
 
         print("=" * 60)

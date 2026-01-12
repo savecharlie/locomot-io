@@ -41,6 +41,10 @@ Free tier: 2 layers max. Premium: unlimited.
 
 **Ivy doesn't watch toasts** - don't use toast messages for debugging. Use visible UI changes or console logging (check via remote logs) instead.
 
+## Ice Skater Level Design
+
+**Iris cannot design levels.** Don't default to manually creating or redesigning puzzle levels - they'll be wrong. Use the generator or ask Ivy for direction instead.
+
 ## Ice Skater Versioning
 
 **ALWAYS tell Ivy the version when pushing ice_skater changes!**

@@ -394,7 +394,7 @@
 // === ICE SKATER ENGINE v2 ===
 // Fixed: locked wall, height system, ramps, block stops
 
-const GAME_VERSION = 'v264';  // Bump this and tell Ivy the version when pushing changes!
+const GAME_VERSION = 'v265';  // Bump this and tell Ivy the version when pushing changes!
 
 const TILE_W = 16;  // Tile width
 const TILE_H = 12;  // Tile height (floor surface depth) - oblique angle
@@ -1148,15 +1148,19 @@ function simulateMove(state, dir) {
 
     // --- ELEVATED (height 1) ---
     else {
+      console.log(`ELEVATED: checking (${nx},${ny}) tile='${tile}' baseTile='${baseTile}'`);
+
       // Wall - can slide onto it (1 tile) then stop, BUT NOT border walls
       if (tile === '#') {
         if (isBorderWall(newState, nx, ny)) {
+          console.log(`ELEVATED: blocked by border wall at (${nx},${ny})`);
           break;  // Stop BEFORE border wall
         }
         x = nx;
         y = ny;
         newState.lastElevatedX = x;
         newState.lastElevatedY = y;
+        console.log(`ELEVATED: stopping on interior wall at (${x},${y})`);
         break;  // Stop on top of interior wall
       }
 
@@ -1166,10 +1170,12 @@ function simulateMove(state, dir) {
         y = ny;
         newState.lastElevatedX = x;
         newState.lastElevatedY = y;
+        console.log(`ELEVATED: stopping on locked wall at (${x},${y})`);
         break;
       }
 
       // Move to next position
+      console.log(`ELEVATED: moving to (${nx},${ny})`);
       x = nx;
       y = ny;
 
