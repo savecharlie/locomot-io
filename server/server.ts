@@ -145,6 +145,23 @@ export default class LocomotServer implements Party.Server {
     }
   }
 
+  // Send notification to IrisHub (pasted to Iris terminal)
+  async sendIrisNotification(message: string) {
+    const BOT_TOKEN = "8435158044:AAEZLkJv3wc-Wk2IxxasveLYG0PbdoyJK_k";
+    const CHAT_ID = 6248804784;
+
+    try {
+      await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ chat_id: CHAT_ID, text: message })
+      });
+      console.log(`[IrisNotify] Sent: ${message.slice(0, 50)}...`);
+    } catch (e) {
+      console.error('[IrisNotify] Failed:', e);
+    }
+  }
+
   // Send email notification via formsubmit.co
   async sendPlayerAlert(region: string, country: string, playerCount: number) {
     const now = Date.now();
@@ -2154,6 +2171,12 @@ export default class LocomotServer implements Party.Server {
           if (currentBest === null || time < currentBest) {
             await this.room.storage.put(key, time);
             console.log(`[IceSkater] New speed record for level ${level}: ${time}ms`);
+
+            // Notify Iris of new record
+            const timeStr = (time / 1000).toFixed(2);
+            const prevStr = currentBest ? (currentBest / 1000).toFixed(2) + 's' : 'none';
+            this.sendIrisNotification(`⛸️ FIGURE ∞ NEW RECORD!\nLevel ${level}: ${timeStr}s\nPrevious: ${prevStr}`);
+
             return new Response(JSON.stringify({ best: time, isRecord: true }), {
               headers: { ...headers, 'Content-Type': 'application/json' }
             });
