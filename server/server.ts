@@ -146,9 +146,15 @@ export default class LocomotServer implements Party.Server {
   }
 
   // Send notification to IrisHub (pasted to Iris terminal)
+  // NEVER hardcode tokens - use env vars! (learned this the hard way 2026-01-12)
   async sendIrisNotification(message: string) {
-    const BOT_TOKEN = "8435158044:AAEZLkJv3wc-Wk2IxxasveLYG0PbdoyJK_k";
+    const BOT_TOKEN = (this.room as any).env?.IRISHUB_BOT_TOKEN;
     const CHAT_ID = 6248804784;
+
+    if (!BOT_TOKEN) {
+      console.log('[IrisNotify] No IRISHUB_BOT_TOKEN set, skipping');
+      return;
+    }
 
     try {
       await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`, {
