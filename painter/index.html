@@ -523,7 +523,13 @@
                 document.getElementById('status').textContent = msg;
                 document.getElementById('loading').innerHTML = `
                     <div style="padding:20px;text-align:center;">
-                        <p style="margin-bottom:20px;">${msg}</p>
+                        <p style="margin-bottom:15px;color:#ff6b6b;">${msg}</p>
+                        <div style="font-size:10px;text-align:left;background:#222;padding:10px;border-radius:6px;margin:15px 0;">
+                            Error: ${e.name}<br>
+                            Secure: ${window.isSecureContext}<br>
+                            Protocol: ${location.protocol}<br>
+                            Host: ${location.hostname}
+                        </div>
                         <button onclick="requestCameraManually()" style="padding:15px 30px;font-size:18px;background:#4CAF50;color:white;border:none;border-radius:8px;margin:10px;">
                             TAP TO ALLOW CAMERA
                         </button>
@@ -539,11 +545,45 @@
 
         // Manual camera request (triggered by user tap for better permission handling)
         async function requestCameraManually() {
-            document.getElementById('loading').innerHTML = '<p>Requesting camera...</p>';
+            const loading = document.getElementById('loading');
+            loading.innerHTML = '<p>Checking camera access...</p>';
+
+            // Diagnostic info
+            const diagnostics = {
+                secureContext: window.isSecureContext,
+                mediaDevices: !!navigator.mediaDevices,
+                getUserMedia: !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia),
+                protocol: location.protocol,
+                hostname: location.hostname,
+                inIframe: window.self !== window.top
+            };
+            console.log('Camera diagnostics:', diagnostics);
+
+            // Check if we're in a secure context
+            if (!window.isSecureContext) {
+                loading.innerHTML = `
+                    <div style="padding:20px;text-align:center;">
+                        <p style="color:#ff6b6b;">Not a secure context (HTTPS required)</p>
+                        <p>Protocol: ${location.protocol}</p>
+                    </div>`;
+                return;
+            }
+
+            // Check if mediaDevices exists
+            if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+                loading.innerHTML = `
+                    <div style="padding:20px;text-align:center;">
+                        <p style="color:#ff6b6b;">Camera API not available</p>
+                        <p style="font-size:12px;">mediaDevices: ${!!navigator.mediaDevices}</p>
+                    </div>`;
+                return;
+            }
 
             // Check permission state first
+            let permState = 'unknown';
             try {
                 const permStatus = await navigator.permissions.query({ name: 'camera' });
+                permState = permStatus.state;
                 console.log('Camera permission state:', permStatus.state);
 
                 if (permStatus.state === 'denied') {
@@ -579,11 +619,19 @@
                 setTimeout(() => restartCamera(), 500);
             } catch (e) {
                 console.error('Manual camera request failed:', e);
-                document.getElementById('loading').innerHTML = `
+                loading.innerHTML = `
                     <div style="padding:20px;text-align:center;">
-                        <p>Still blocked: ${e.name}</p>
-                        <p style="font-size:12px;margin-top:10px;">Tap lock icon in address bar → Camera → Allow</p>
-                        <button onclick="location.reload()" style="padding:10px 20px;font-size:14px;margin-top:20px;">
+                        <p style="color:#ff6b6b;font-size:16px;">Camera blocked: ${e.name}</p>
+                        <p style="font-size:12px;margin:10px 0;">${e.message}</p>
+                        <div style="font-size:10px;text-align:left;background:#222;padding:10px;border-radius:6px;margin:15px 0;">
+                            <b>Debug info:</b><br>
+                            Permission: ${permState}<br>
+                            Secure: ${window.isSecureContext}<br>
+                            Protocol: ${location.protocol}<br>
+                            Host: ${location.hostname}<br>
+                            In iframe: ${window.self !== window.top}
+                        </div>
+                        <button onclick="location.reload()" style="padding:10px 20px;font-size:14px;">
                             Reload
                         </button>
                     </div>`;
