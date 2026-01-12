@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
     <meta name="screen-orientation" content="portrait">
+    <meta http-equiv="Permissions-Policy" content="camera=*, microphone=*">
     <title>Live Portrait Painter</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -480,7 +481,8 @@
                     video: {
                         facingMode: facingMode,
                         width: { ideal: 640 },
-                        height: { ideal: 480 }
+                        height: { ideal: 480 },
+                        frameRate: { ideal: 30, max: 30 }
                     }
                 });
                 video.srcObject = stream;
@@ -541,7 +543,8 @@
                     video: {
                         facingMode: facingMode,
                         width: { ideal: 640 },
-                        height: { ideal: 480 }
+                        height: { ideal: 480 },
+                        frameRate: { ideal: 30, max: 30 }
                     }
                 });
                 video.srcObject = stream;
