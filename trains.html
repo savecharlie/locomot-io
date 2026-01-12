@@ -7729,16 +7729,12 @@
 
             if (!head || head.x === undefined) return; // Safety check
 
-            // Detect world wrap and adjust camera offset for seamless scrolling
-            const dx = head.x - lastHeadX;
-            const dy = head.y - lastHeadY;
-            // If position jumped by more than half the world, it wrapped
-            if (dx > WORLD_COLS / 2) cameraWrapOffsetX -= WORLD_COLS; // Wrapped left
-            if (dx < -WORLD_COLS / 2) cameraWrapOffsetX += WORLD_COLS; // Wrapped right
-            if (dy > WORLD_ROWS / 2) cameraWrapOffsetY -= WORLD_ROWS; // Wrapped up
-            if (dy < -WORLD_ROWS / 2) cameraWrapOffsetY += WORLD_ROWS; // Wrapped down
+            // Update last head position for next frame (wrap offset disabled - was causing invisibility)
             lastHeadX = head.x;
             lastHeadY = head.y;
+            // Keep wrap offsets at 0 - camera will jump on wrap but player stays visible
+            cameraWrapOffsetX = 0;
+            cameraWrapOffsetY = 0;
 
             // Calculate bounding box of entire snake
             let minX = head.x, maxX = head.x, minY = head.y, maxY = head.y;
