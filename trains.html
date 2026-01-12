@@ -5499,6 +5499,7 @@
             cameraX = spawnX * GRID - canvas.width / 2 / cameraZoom;
             cameraY = spawnY * GRID - canvas.height / 2 / cameraZoom;
             cameraWrapOffsetX = 0; cameraWrapOffsetY = 0; // Reset wrap tracking
+            lastHeadX = spawnX; lastHeadY = spawnY; // Initialize wrap detection
             dirQueue = []; // Clear direction queue
 
             updateHUD(); updateLeaderboard(); announceSpawn();
