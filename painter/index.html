@@ -540,6 +540,33 @@
         // Manual camera request (triggered by user tap for better permission handling)
         async function requestCameraManually() {
             document.getElementById('loading').innerHTML = '<p>Requesting camera...</p>';
+
+            // Check permission state first
+            try {
+                const permStatus = await navigator.permissions.query({ name: 'camera' });
+                console.log('Camera permission state:', permStatus.state);
+
+                if (permStatus.state === 'denied') {
+                    document.getElementById('loading').innerHTML = `
+                        <div style="padding:20px;text-align:center;">
+                            <p style="color:#ff6b6b;font-size:18px;margin-bottom:15px;">Camera permission DENIED</p>
+                            <p style="font-size:14px;margin-bottom:20px;">You need to reset the permission:</p>
+                            <p style="font-size:12px;text-align:left;background:#222;padding:15px;border-radius:8px;">
+                                <b>Chrome/Android:</b><br>
+                                Tap the lock/info icon in address bar → Site settings → Camera → Allow<br><br>
+                                <b>Or clear site data:</b><br>
+                                Settings → Site settings → locomot.io → Clear & reset
+                            </p>
+                            <button onclick="location.reload()" style="padding:12px 24px;font-size:14px;margin-top:20px;">
+                                Reload After Allowing
+                            </button>
+                        </div>`;
+                    return;
+                }
+            } catch (e) {
+                console.log('Permission query not supported:', e);
+            }
+
             try {
                 // Try with minimal constraints first
                 const stream = await navigator.mediaDevices.getUserMedia({ video: true });
@@ -555,7 +582,7 @@
                 document.getElementById('loading').innerHTML = `
                     <div style="padding:20px;text-align:center;">
                         <p>Still blocked: ${e.name}</p>
-                        <p style="font-size:12px;margin-top:10px;">Check Fully Kiosk Settings → Web Content → Webcam Access</p>
+                        <p style="font-size:12px;margin-top:10px;">Tap lock icon in address bar → Camera → Allow</p>
                         <button onclick="location.reload()" style="padding:10px 20px;font-size:14px;margin-top:20px;">
                             Reload
                         </button>
