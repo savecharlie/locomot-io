@@ -1,14 +1,16 @@
 #!/usr/bin/env python3
 """
-Ice Skater Level Generator
-Generates puzzles with: sliding, blocks, ramps, corners, holes, keys, sticky tiles
+Ice Skater Level Generator v2
+Generates puzzles with mechanic validation - every element serves a purpose.
+Includes tutorial generation and enhanced quality scoring.
 """
 
 import json
 import random
 import copy
+import os
 from collections import deque
-from typing import List, Tuple, Optional, Set, Dict
+from typing import List, Tuple, Optional, Set, Dict, Union
 
 # Tile types
 WALL = '#'
@@ -46,6 +48,51 @@ RAMP_CLIMB_DIR = {
     RAMP_E: (1, 0),    # > high end east, climb by going right
     RAMP_W: (-1, 0),   # < high end west, climb by going left
 }
+
+# Mechanics that can be validated
+ALL_MECHANICS = {
+    'BLOCK_PUSH',       # Pushed a block
+    'HOLE_FILL',        # Block/ramp fell in hole
+    'CORNER_REDIRECT',  # Used corner to change direction
+    'STICKY_STOP',      # Stopped on sticky tile
+    'RAMP_USE',         # Any ramp interaction (climb/descend)
+    'KEY_LOCK',         # Used key to open lock
+}
+
+# Tutorial curriculum - teaches one mechanic at a time
+TUTORIAL_CURRICULUM = [
+    # Stage 1: Pure sliding (3 levels)
+    {'name': 'slide', 'count': 3, 'elements': [], 'teach': None,
+     'max_par': 2, 'grid_size': (4, 6), 'text': 'Swipe to slide'},
+
+    # Stage 2: Blocks exist as obstacles (3 levels)
+    {'name': 'blocks_obstacle', 'count': 3, 'elements': ['BLOCK'], 'teach': None,
+     'forbidden': ['BLOCK_PUSH'], 'max_par': 3, 'grid_size': (5, 7), 'text': 'Blocks stop you'},
+
+    # Stage 3: Must push blocks (3 levels)
+    {'name': 'block_push', 'count': 3, 'elements': ['BLOCK'], 'teach': 'BLOCK_PUSH',
+     'max_par': 4, 'grid_size': (5, 8), 'text': 'Push blocks'},
+
+    # Stage 4: Corners redirect (3 levels)
+    {'name': 'corners', 'count': 3, 'elements': ['CORNER'], 'teach': 'CORNER_REDIRECT',
+     'max_par': 4, 'grid_size': (5, 7), 'text': 'Corners redirect'},
+
+    # Stage 5: Holes + blocks (3 levels)
+    {'name': 'hole_fill', 'count': 3, 'elements': ['BLOCK', 'HOLE'], 'teach': 'HOLE_FILL',
+     'max_par': 5, 'grid_size': (6, 8), 'text': 'Fill holes with blocks'},
+
+    # Stage 6: Sticky tiles (3 levels)
+    {'name': 'sticky', 'count': 3, 'elements': ['STICKY'], 'teach': 'STICKY_STOP',
+     'max_par': 5, 'grid_size': (5, 8), 'text': 'Sticky tiles stop you'},
+
+    # Stage 7: Ramps (3 levels)
+    {'name': 'ramps', 'count': 3, 'elements': ['RAMP'], 'teach': 'RAMP_USE',
+     'max_par': 5, 'grid_size': (6, 9), 'text': 'Ramps change height'},
+
+    # Stage 8: Keys and locks (3 levels)
+    {'name': 'keys', 'count': 3, 'elements': ['KEY'], 'teach': 'KEY_LOCK',
+     'max_par': 6, 'grid_size': (6, 9), 'text': 'Keys open locks'},
+]
 
 
 def get_corner_redirect(tile: str, dx: int, dy: int) -> Optional[Tuple[int, int]]:
@@ -376,6 +423,391 @@ def solve_bfs(initial_state: GameState, max_depth: int = 30) -> Optional[List[st
     return None
 
 
+# ============================================================================
+# MECHANIC VALIDATION SYSTEM
+# ============================================================================
+
+def trace_mechanics(state: GameState, solution: List[str]) -> Set[str]:
+    """Trace a solution and return all mechanics USED."""
+    used = set()
+    current = state.copy()
+
+    for direction in solution:
+        old_blocks = set(current.blocks)
+        old_height = current.player_height
+        old_key = current.has_key
+        old_unlocked = set(current.unlocked)
+        old_filled = set(current.filled_holes)
+        old_ramps = dict(current.ramps)
+
+        new_state = simulate_move(current, direction)
+        if new_state is None:
+            continue
+
+        # Detect block push
+        if new_state.blocks != old_blocks:
+            used.add('BLOCK_PUSH')
+
+        # Detect hole fill (block or ramp disappeared)
+        if len(new_state.blocks) < len(old_blocks) or len(new_state.ramps) < len(old_ramps):
+            used.add('HOLE_FILL')
+
+        # Detect ramp use (height changed)
+        if new_state.player_height != old_height:
+            used.add('RAMP_USE')
+
+        # Detect key collection
+        if new_state.has_key and not old_key:
+            used.add('KEY_LOCK')
+
+        # Detect lock opening
+        if new_state.unlocked != old_unlocked:
+            used.add('KEY_LOCK')
+
+        # Detect sticky stop - check end tile
+        end_tile = current.grid[new_state.player_y][new_state.player_x]
+        if end_tile == STICKY:
+            used.add('STICKY_STOP')
+
+        current = new_state
+
+    return used
+
+
+def is_mechanic_required(state: GameState, mechanic: str, max_depth: int = 30) -> bool:
+    """Check if a mechanic is REQUIRED (level unsolvable without it)."""
+    modified = state.copy()
+
+    if mechanic == 'BLOCK_PUSH':
+        # Make blocks into walls (immovable)
+        for bx, by in list(modified.blocks):
+            modified.grid[by][bx] = WALL
+        modified.blocks = set()
+
+    elif mechanic == 'CORNER_REDIRECT':
+        # Replace corners with walls
+        for y in range(modified.height):
+            for x in range(modified.width):
+                if modified.grid[y][x] in CORNERS:
+                    modified.grid[y][x] = WALL
+
+    elif mechanic == 'STICKY_STOP':
+        # Replace sticky with ice
+        for y in range(modified.height):
+            for x in range(modified.width):
+                if modified.grid[y][x] == STICKY:
+                    modified.grid[y][x] = ICE
+
+    elif mechanic == 'RAMP_USE':
+        # Replace ramps with walls
+        for pos in list(modified.ramps.keys()):
+            rx, ry = pos
+            modified.grid[ry][rx] = WALL
+        modified.ramps = {}
+
+    elif mechanic == 'KEY_LOCK':
+        # Remove keys and open all locks
+        for y in range(modified.height):
+            for x in range(modified.width):
+                if modified.grid[y][x] == KEY:
+                    modified.grid[y][x] = ICE
+                if modified.grid[y][x] == LOCKED:
+                    modified.grid[y][x] = ICE
+
+    elif mechanic == 'HOLE_FILL':
+        # Make holes into walls (can't be filled)
+        for y in range(modified.height):
+            for x in range(modified.width):
+                if modified.grid[y][x] == HOLE:
+                    modified.grid[y][x] = WALL
+
+    # Try to solve without the mechanic
+    return solve_bfs(modified, max_depth=max_depth) is None
+
+
+def has_element(state: GameState, element: str) -> bool:
+    """Check if a level has a particular element type."""
+    if element == 'BLOCK':
+        return len(state.blocks) > 0
+    elif element == 'CORNER':
+        for row in state.grid:
+            for tile in row:
+                if tile in CORNERS:
+                    return True
+        return False
+    elif element == 'STICKY':
+        return any(STICKY in row for row in state.grid)
+    elif element == 'RAMP':
+        return len(state.ramps) > 0
+    elif element == 'KEY':
+        return any(KEY in row for row in state.grid)
+    elif element == 'HOLE':
+        return any(HOLE in row for row in state.grid)
+    return False
+
+
+def analyze_level(state: GameState, solution: List[str]) -> dict:
+    """Full mechanic analysis of a level."""
+    used = trace_mechanics(state, solution)
+
+    required = set()
+    for mechanic in used:
+        if is_mechanic_required(state, mechanic):
+            required.add(mechanic)
+
+    # Also check corner redirect specially (might not show in trace)
+    if has_element(state, 'CORNER') and is_mechanic_required(state, 'CORNER_REDIRECT'):
+        required.add('CORNER_REDIRECT')
+
+    return {
+        'mechanics_used': list(used),
+        'mechanics_required': list(required),
+        'num_required': len(required)
+    }
+
+
+def calculate_quality(state: GameState, solution: List[str], analysis: dict = None) -> int:
+    """Calculate quality score based on mechanic engagement."""
+    if analysis is None:
+        analysis = analyze_level(state, solution)
+
+    par = len(solution)
+    base = 100 + par * 10
+
+    # Bonus for mechanics used
+    mechanic_bonus = len(analysis['mechanics_used']) * 15
+
+    # Bigger bonus for mechanics REQUIRED
+    required_bonus = analysis['num_required'] * 30
+
+    # Clean design bonus (all elements serve a purpose)
+    # Simplified: if we have blocks and BLOCK_PUSH is required, that's clean
+    clean_bonus = 0
+    if state.blocks and 'BLOCK_PUSH' in analysis['mechanics_required']:
+        clean_bonus += 20
+    if has_element(state, 'CORNER') and 'CORNER_REDIRECT' in analysis['mechanics_required']:
+        clean_bonus += 20
+
+    return base + mechanic_bonus + required_bonus + clean_bonus
+
+
+# ============================================================================
+# TUTORIAL GENERATION
+# ============================================================================
+
+def create_tutorial_level(width: int, height: int, elements: List[str]) -> Optional[GameState]:
+    """Create a level with only specified elements for tutorials."""
+    grid = [[WALL if x == 0 or x == width-1 or y == 0 or y == height-1 else ICE
+             for x in range(width)] for y in range(height)]
+
+    interior = [(x, y) for x in range(1, width-1) for y in range(1, height-1)]
+    random.shuffle(interior)
+
+    if len(interior) < 2:
+        return None
+
+    start_x, start_y = interior.pop()
+    goal_x, goal_y = interior.pop()
+    grid[start_y][start_x] = START
+    grid[goal_y][goal_x] = GOAL
+
+    blocks = set()
+    ramps = {}
+
+    # Place only allowed elements
+    if 'BLOCK' in elements:
+        num = random.randint(1, min(2, len(interior)))
+        for _ in range(num):
+            if interior:
+                bx, by = interior.pop()
+                blocks.add((bx, by))
+
+    if 'HOLE' in elements:
+        num = random.randint(1, 1)
+        for _ in range(num):
+            if interior:
+                hx, hy = interior.pop()
+                grid[hy][hx] = HOLE
+
+    if 'STICKY' in elements:
+        num = random.randint(1, 2)
+        for _ in range(num):
+            if interior:
+                tx, ty = interior.pop()
+                grid[ty][tx] = STICKY
+
+    if 'CORNER' in elements:
+        # Place 1 corner in a useful position
+        corner_spots = [(1, 1, CORNER_UR), (width-2, 1, CORNER_UL),
+                        (1, height-2, CORNER_DR), (width-2, height-2, CORNER_DL)]
+        random.shuffle(corner_spots)
+        cx, cy, ctype = corner_spots[0]
+        if grid[cy][cx] == ICE:
+            grid[cy][cx] = ctype
+
+    if 'RAMP' in elements:
+        if interior:
+            rx, ry = interior.pop()
+            ramp_type = random.choice([RAMP_N, RAMP_S, RAMP_E, RAMP_W])
+            ramps[(rx, ry)] = ramp_type
+            grid[ry][rx] = ramp_type
+
+    if 'KEY' in elements:
+        if interior:
+            kx, ky = interior.pop()
+            grid[ky][kx] = KEY
+            # Place locked wall
+            for x in range(1, width-1):
+                for y in range(1, height-1):
+                    if grid[y][x] == ICE and random.random() < 0.15:
+                        grid[y][x] = LOCKED
+                        break
+                else:
+                    continue
+                break
+
+    # Add some internal walls
+    num_walls = random.randint(0, 2)
+    for _ in range(num_walls):
+        if interior:
+            wx, wy = interior.pop()
+            if grid[wy][wx] == ICE:
+                grid[wy][wx] = WALL
+
+    return GameState(grid, start_x, start_y, blocks, False, set(), set(), ramps)
+
+
+def generate_tutorial(params: dict, max_attempts: int = 500) -> Optional[dict]:
+    """Generate a single tutorial level meeting the params."""
+    width, height = params['grid_size']
+    elements = params.get('elements', [])
+    teach = params.get('teach')
+    forbidden = set(params.get('forbidden', []))
+    max_par = params.get('max_par', 10)
+
+    for _ in range(max_attempts):
+        state = create_tutorial_level(width, height, elements)
+        if state is None:
+            continue
+
+        solution = solve_bfs(state, max_depth=max_par)
+        if solution is None:
+            continue
+
+        if len(solution) > max_par:
+            continue
+
+        if len(solution) < 1:
+            continue
+
+        # Check teaches required mechanic
+        if teach:
+            if not is_mechanic_required(state, teach):
+                continue
+
+        # Check no forbidden mechanics required
+        skip = False
+        for fm in forbidden:
+            if is_mechanic_required(state, fm):
+                skip = True
+                break
+        if skip:
+            continue
+
+        # Build level dict
+        grid_strings = []
+        for y in range(state.height):
+            row = ''
+            for x in range(state.width):
+                if (x, y) in state.blocks:
+                    row += BLOCK
+                elif (x, y) in state.ramps:
+                    row += state.ramps[(x, y)]
+                else:
+                    row += state.grid[y][x]
+            grid_strings.append(row)
+
+        return {
+            'grid': grid_strings,
+            'width': state.width,
+            'height': state.height,
+            'par': len(solution),
+            'solution': solution,
+            'tutorial_text': params.get('text', ''),
+            'stage': params.get('name', ''),
+            'penguinOnWall': False
+        }
+
+    return None
+
+
+def generate_all_tutorials(progress_callback=None, candidates_per_stage: int = 100) -> List[dict]:
+    """Generate all tutorial levels following the curriculum.
+
+    Args:
+        candidates_per_stage: Generate this many candidates per stage, keep best 3
+    """
+    tutorials = []
+    learned = set()
+    total_stages = len(TUTORIAL_CURRICULUM)
+
+    for stage_idx, stage in enumerate(TUTORIAL_CURRICULUM):
+        print(f"  Generating stage: {stage['name']} ({candidates_per_stage} candidates)...")
+
+        # Forbidden = everything not yet learned (except what we're teaching)
+        forbidden = set(ALL_MECHANICS) - learned
+        if stage.get('teach'):
+            forbidden.discard(stage['teach'])
+
+        # Add any explicitly forbidden mechanics
+        forbidden.update(stage.get('forbidden', []))
+
+        params = {
+            'elements': stage['elements'],
+            'teach': stage.get('teach'),
+            'forbidden': forbidden,
+            'max_par': stage['max_par'],
+            'grid_size': stage['grid_size'],
+            'text': stage['text'],
+            'name': stage['name']
+        }
+
+        # Generate many candidates
+        candidates = []
+        for attempt in range(candidates_per_stage * 10):  # More attempts to hit target
+            level = generate_tutorial(params, max_attempts=50)
+            if level:
+                # Score the tutorial (shorter = better for tutorials, but must work)
+                level['tutorial_quality'] = 100 - level['par'] * 5  # Prefer shorter
+                candidates.append(level)
+                if len(candidates) >= candidates_per_stage:
+                    break
+
+        if candidates:
+            # Sort by quality and keep best 3
+            candidates.sort(key=lambda x: x['tutorial_quality'], reverse=True)
+            best = candidates[:stage['count']]
+            for level in best:
+                level['index'] = len(tutorials)
+                tutorials.append(level)
+            print(f"    Kept {len(best)} best (quality range: {best[-1]['tutorial_quality']}-{best[0]['tutorial_quality']})")
+        else:
+            print(f"    WARNING: No valid tutorials for {stage['name']}")
+
+        if progress_callback:
+            progress_callback(stage_idx + 1, total_stages)
+
+        # After this stage, player has learned the mechanic
+        if stage.get('teach'):
+            learned.add(stage['teach'])
+
+    return tutorials
+
+
+# ============================================================================
+# LEVEL GENERATION (ORIGINAL + ENHANCED)
+# ============================================================================
+
 def create_level(width: int, height: int, mechanics: List[str], difficulty: int, narrow: bool = False) -> Optional[dict]:
     """Generate a single level with specified mechanics."""
     # Create empty grid with walls
@@ -491,20 +923,9 @@ def create_level(width: int, height: int, mechanics: List[str], difficulty: int,
                     row += grid[y][x]
             grid_strings.append(row)
 
-        # Detect mechanics used
-        used_mechanics = []
-        if blocks:
-            used_mechanics.append('BLOCK_PUSHED')
-        if ramps:
-            used_mechanics.append('RAMP_USED')
-        if any(c in ''.join(grid_strings) for c in CORNERS):
-            used_mechanics.append('CORNER_USED')
-        if HOLE in ''.join(grid_strings):
-            used_mechanics.append('HOLE_PRESENT')
-        if STICKY in ''.join(grid_strings):
-            used_mechanics.append('STICKY_USED')
-        if KEY in ''.join(grid_strings):
-            used_mechanics.append('KEY_USED')
+        # Enhanced mechanic analysis
+        analysis = analyze_level(initial_state, solution)
+        quality = calculate_quality(initial_state, solution, analysis)
 
         return {
             'grid': grid_strings,
@@ -512,8 +933,9 @@ def create_level(width: int, height: int, mechanics: List[str], difficulty: int,
             'height': height,
             'par': len(solution),
             'solution': solution,
-            'quality': 100 + len(solution) * 10,
-            'mechanics': used_mechanics,
+            'quality': quality,
+            'mechanics_used': analysis['mechanics_used'],
+            'mechanics_required': analysis['mechanics_required'],
             'penguinOnWall': False
         }
 
@@ -687,17 +1109,73 @@ if __name__ == '__main__':
     import sys
     import argparse
 
-    parser = argparse.ArgumentParser()
+    parser = argparse.ArgumentParser(description='Ice Skater Level Generator v2 - with mechanic validation')
+    parser.add_argument('--tutorials', action='store_true', help='Generate tutorial levels only')
+    parser.add_argument('--with-tutorials', action='store_true', help='Generate tutorials + regular levels')
+    parser.add_argument('--tutorial-candidates', type=int, default=100, help='Candidates per tutorial stage (default: 100)')
     parser.add_argument('--narrow', type=str, help='Generate narrow puzzles with WxH interior (e.g., 1x3)')
     parser.add_argument('--ratio', type=str, help='Generate puzzles with W:H ratio (e.g., 1:3 for 3x tall as wide)')
-    parser.add_argument('--count', type=int, default=10000, help='Number to generate')
-    parser.add_argument('--top', type=int, default=100, help='Top N to keep')
+    parser.add_argument('--count', type=int, default=50000, help='Number to generate (default: 50000)')
+    parser.add_argument('--top', type=int, default=500, help='Top N to keep (default: 500)')
     parser.add_argument('--output', type=str, default='/home/ivy/locomot-io/ice_skater/level_chunks')
     args = parser.parse_args()
 
     def progress(current, total):
         if current % 100 == 0 or current == total:
-            print(f"  {current}/{total} ({100*current//total}%)")
+            pct = 100 * current // total if total > 0 else 0
+            print(f"  {current}/{total} ({pct}%)")
+
+    # Tutorial-only mode
+    if args.tutorials:
+        print(f"Generating tutorial levels ({args.tutorial_candidates} candidates per stage)...")
+        tutorials = generate_all_tutorials(progress, candidates_per_stage=args.tutorial_candidates)
+        print(f"\nGenerated {len(tutorials)} tutorial levels")
+
+        # Save tutorials
+        import os
+        os.makedirs(args.output, exist_ok=True)
+        with open(os.path.join(args.output, 'tutorials.json'), 'w') as f:
+            json.dump({'tutorials': tutorials}, f)
+        print(f"Saved to {args.output}/tutorials.json")
+        sys.exit(0)
+
+    # Combined mode: tutorials + regular levels
+    if args.with_tutorials:
+        print("=" * 60)
+        print(f"PHASE 1: Generating tutorial levels ({args.tutorial_candidates} candidates per stage)...")
+        print("=" * 60)
+        tutorials = generate_all_tutorials(progress, candidates_per_stage=args.tutorial_candidates)
+        print(f"Generated {len(tutorials)} tutorial levels\n")
+
+        print("=" * 60)
+        print(f"PHASE 2: Generating {args.count} regular levels...")
+        print("=" * 60)
+        levels = generate_levels(args.count, progress)
+        print(f"Generated {len(levels)} regular levels")
+
+        if len(levels) > 0:
+            # Sort by quality and keep top N
+            levels.sort(key=lambda x: x['quality'], reverse=True)
+            levels = levels[:args.top]
+            print(f"Kept top {len(levels)} by quality (range: {levels[-1]['quality']}-{levels[0]['quality']})")
+
+            # Sort by difficulty
+            levels.sort(key=lambda x: x['par'])
+            print(f"Sorted by difficulty (par range: {levels[0]['par']}-{levels[-1]['par']})")
+
+        # Combine: tutorials first, then regular levels
+        all_levels = tutorials + levels
+        print(f"\nTotal: {len(all_levels)} levels ({len(tutorials)} tutorials + {len(levels)} regular)")
+
+        print("\nSaving to chunks...")
+        index = save_chunked(all_levels, args.output)
+        print(f"Done! {index['total_levels']} levels in {len(index['chunks'])} chunks")
+
+        # Also save tutorials separately
+        with open(os.path.join(args.output, 'tutorials.json'), 'w') as f:
+            json.dump({'tutorials': tutorials, 'count': len(tutorials)}, f)
+        print(f"Tutorials also saved to {args.output}/tutorials.json")
+        sys.exit(0)
 
     if args.ratio:
         # Parse W:H ratio format
