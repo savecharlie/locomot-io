@@ -1997,6 +1997,58 @@ export default class LocomotServer implements Party.Server {
           });
         }
 
+        // ==================== ICE SKATER SPEED RECORDS (TIME-BASED) ====================
+
+        if (data.type === 'ice_skater_get_best_time') {
+          const levelIndex = (data as any).level;
+          if (levelIndex === undefined) {
+            return new Response(JSON.stringify({ error: 'Missing level' }), {
+              status: 400, headers: { ...headers, 'Content-Type': 'application/json' }
+            });
+          }
+          const bestTime = await this.room.storage.get(`ice_time_${levelIndex}`) as number | null;
+          return new Response(JSON.stringify({ best: bestTime || null }), {
+            headers: { ...headers, 'Content-Type': 'application/json' }
+          });
+        }
+
+        if (data.type === 'ice_skater_submit_time') {
+          const { level, time } = data as any;
+          if (level === undefined || time === undefined) {
+            return new Response(JSON.stringify({ error: 'Missing level or time' }), {
+              status: 400, headers: { ...headers, 'Content-Type': 'application/json' }
+            });
+          }
+          const key = `ice_time_${level}`;
+          const current = await this.room.storage.get(key);
+          const currentBest = typeof current === 'number' ? current : null;
+          console.log(`[IceSkater] Level ${level}, time ${time}ms, current best: ${currentBest}ms`);
+
+          if (currentBest === null || time < currentBest) {
+            await this.room.storage.put(key, time);
+            console.log(`[IceSkater] New speed record for level ${level}: ${time}ms`);
+            return new Response(JSON.stringify({ best: time, isRecord: true }), {
+              headers: { ...headers, 'Content-Type': 'application/json' }
+            });
+          }
+          return new Response(JSON.stringify({ best: currentBest, isRecord: false }), {
+            headers: { ...headers, 'Content-Type': 'application/json' }
+          });
+        }
+
+        if (data.type === 'ice_skater_get_all_times') {
+          // Get all best times (for preloading speed records)
+          const allTimes: { [level: number]: number } = {};
+          const keys = await this.room.storage.list({ prefix: 'ice_time_' });
+          for (const [key, value] of keys) {
+            const levelNum = parseInt(key.replace('ice_time_', ''));
+            allTimes[levelNum] = value as number;
+          }
+          return new Response(JSON.stringify({ times: allTimes }), {
+            headers: { ...headers, 'Content-Type': 'application/json' }
+          });
+        }
+
         return new Response(JSON.stringify({ error: 'Unknown type' }), {
           status: 400,
           headers: { ...headers, 'Content-Type': 'application/json' }
