@@ -129,6 +129,51 @@
       color: #2A474F;
     }
 
+    .kofi-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      background: #ff5e5b;
+      border: 2px solid #ff5e5b;
+      border-radius: 6px;
+      padding: 10px 16px;
+      text-decoration: none;
+      transition: transform 0.2s, box-shadow 0.2s;
+      margin-bottom: 16px;
+    }
+
+    .kofi-btn:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 4px 12px rgba(255, 94, 91, 0.4);
+    }
+
+    .kofi-btn:active {
+      transform: translateY(0) scale(0.98);
+    }
+
+    .kofi-btn canvas {
+      width: 24px;
+      height: 24px;
+      image-rendering: pixelated;
+      image-rendering: -moz-crisp-edges;
+      image-rendering: crisp-edges;
+    }
+
+    .kofi-btn span {
+      font-size: 10px;
+      color: #fff;
+      letter-spacing: 0.5px;
+    }
+
+    @media (max-width: 600px) {
+      .kofi-btn {
+        padding: 8px 12px;
+      }
+      .kofi-btn span {
+        font-size: 8px;
+      }
+    }
+
     /* Mobile adjustments */
     @media (max-width: 600px) {
       .game-grid {
@@ -211,7 +256,11 @@
   </main>
 
   <footer>
-    LOCOMOT.IO
+    <a href="https://ko-fi.com/sendivylove" class="kofi-btn" target="_blank" rel="noopener">
+      <canvas id="kofi-icon" data-emoji="☕"></canvas>
+      <span>Support on Ko-fi</span>
+    </a>
+    <div>LOCOMOT.IO</div>
   </footer>
 
   <script>
@@ -240,6 +289,12 @@
       const isMobile = window.innerWidth < 600;
       pixelateEmoji(canvas, emoji, 16, isMobile ? 48 : 64);
     });
+
+    // Initialize Ko-fi icon (smaller)
+    const kofiIcon = document.getElementById('kofi-icon');
+    if (kofiIcon) {
+      pixelateEmoji(kofiIcon, '☕', 12, 24);
+    }
 
     // Register service worker
     if ('serviceWorker' in navigator) {
