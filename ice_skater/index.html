@@ -394,7 +394,7 @@
 // === ICE SKATER ENGINE v2 ===
 // Fixed: locked wall, height system, ramps, block stops
 
-const GAME_VERSION = 'v249';  // Bump this and tell Ivy the version when pushing changes!
+const GAME_VERSION = 'v250';  // Bump this and tell Ivy the version when pushing changes!
 
 const TILE_W = 16;  // Tile width
 const TILE_H = 12;  // Tile height (floor surface depth) - oblique angle
@@ -706,7 +706,63 @@ const ctx = canvas.getContext('2d');
 
 const GAME_ASSETS_URL = 'https://vwlbjjznvczfecjnrjen.supabase.co/functions/v1/game-assets';
 
-async function loadSprites() {
+// Pixel art loading screen
+function drawLoadingScreen(progress) {
+  const w = canvas.width;
+  const h = canvas.height;
+
+  // Dark background
+  ctx.fillStyle = '#1D2B30';
+  ctx.fillRect(0, 0, w, h);
+
+  // Title - ICE SKATER
+  ctx.fillStyle = '#68BBC4';
+  ctx.font = '24px "Press Start 2P", monospace';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText('ICE SKATER', w / 2, h / 2 - 60);
+
+  // Loading text
+  ctx.font = '12px "Press Start 2P", monospace';
+  ctx.fillStyle = '#40ACBF';
+  ctx.fillText('Loading...', w / 2, h / 2 - 10);
+
+  // Progress bar dimensions (pixel-perfect)
+  const barW = 200;
+  const barH = 16;
+  const barX = Math.floor((w - barW) / 2);
+  const barY = Math.floor(h / 2 + 20);
+  const pixelSize = 4;  // Size of each "pixel" block
+
+  // Bar border (2px pixel border)
+  ctx.fillStyle = '#3B8897';
+  ctx.fillRect(barX - pixelSize, barY - pixelSize, barW + pixelSize * 2, barH + pixelSize * 2);
+
+  // Bar background
+  ctx.fillStyle = '#1D2B30';
+  ctx.fillRect(barX, barY, barW, barH);
+
+  // Progress fill (pixelated blocks)
+  const fillW = Math.floor((barW * progress) / pixelSize) * pixelSize;
+  ctx.fillStyle = '#68BBC4';
+  ctx.fillRect(barX, barY, fillW, barH);
+
+  // Pixel grid overlay on progress bar (gives it that chunky pixel look)
+  ctx.fillStyle = '#1D2B30';
+  for (let x = barX; x < barX + barW; x += pixelSize * 2) {
+    ctx.fillRect(x + pixelSize, barY, 1, barH);
+  }
+  for (let y = barY; y < barY + barH; y += pixelSize) {
+    ctx.fillRect(barX, y + pixelSize - 1, barW, 1);
+  }
+
+  // Percentage text
+  ctx.fillStyle = '#8DCBCA';
+  ctx.font = '10px "Press Start 2P", monospace';
+  ctx.fillText(Math.floor(progress * 100) + '%', w / 2, barY + barH + 25);
+}
+
+async function loadSprites(onProgress) {
   console.log('LOADING SPRITES from cloud...');
 
   // Try to get signed URLs from cloud (cache-bust to always get fresh URLs)
@@ -723,16 +779,23 @@ async function loadSprites() {
   }
 
   const cacheBust = Date.now();
+  const total = spriteFiles.length;
+  let loaded = 0;
+
   const promises = spriteFiles.map(file => {
     return new Promise((resolve, reject) => {
       const img = new Image();
       img.crossOrigin = 'anonymous'; // Allow CORS for cloud images
       img.onload = () => {
         sprites[file.replace('.png', '')] = img;
+        loaded++;
+        if (onProgress) onProgress(loaded / total);
         resolve();
       };
       img.onerror = () => {
         console.log('FAILED: ' + file);
+        loaded++;
+        if (onProgress) onProgress(loaded / total);
         resolve();
       };
       // Floor tiles always local (git push updates them), others from cloud
@@ -3249,15 +3312,11 @@ async function init() {
   // Display version
   document.getElementById('version-display').textContent = GAME_VERSION;
 
-  // Draw loading screen immediately (before async work)
-  ctx.fillStyle = '#1D2B30';
-  ctx.fillRect(0, 0, canvas.width, canvas.height);
-  ctx.fillStyle = '#68BBC4';
-  ctx.font = '16px "Press Start 2P", monospace';
-  ctx.textAlign = 'center';
-  ctx.fillText('Loading...', canvas.width / 2, canvas.height / 2);
+  // Draw initial loading screen
+  drawLoadingScreen(0);
 
-  await loadSprites();
+  // Load sprites with progress updates
+  await loadSprites(progress => drawLoadingScreen(progress));
 
   // Try chunked loading first, fall back to single file
   try {
