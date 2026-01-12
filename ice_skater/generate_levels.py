@@ -59,39 +59,35 @@ ALL_MECHANICS = {
     'KEY_LOCK',         # Used key to open lock
 }
 
-# Tutorial curriculum - teaches one mechanic at a time
+# Tutorial curriculum - ONE level per mechanic
 TUTORIAL_CURRICULUM = [
-    # Stage 1: Pure sliding (3 levels)
-    {'name': 'slide', 'count': 3, 'elements': [], 'teach': None,
+    # 1: Pure sliding
+    {'name': 'slide', 'count': 1, 'elements': [], 'teach': None,
      'max_par': 2, 'grid_size': (4, 6), 'text': 'Swipe to slide'},
 
-    # Stage 2: Blocks exist as obstacles (3 levels)
-    {'name': 'blocks_obstacle', 'count': 3, 'elements': ['BLOCK'], 'teach': None,
-     'forbidden': ['BLOCK_PUSH'], 'max_par': 3, 'grid_size': (5, 7), 'text': 'Blocks stop you'},
-
-    # Stage 3: Must push blocks (3 levels)
-    {'name': 'block_push', 'count': 3, 'elements': ['BLOCK'], 'teach': 'BLOCK_PUSH',
+    # 2: Must push blocks
+    {'name': 'block_push', 'count': 1, 'elements': ['BLOCK'], 'teach': 'BLOCK_PUSH',
      'max_par': 4, 'grid_size': (5, 8), 'text': 'Push blocks'},
 
-    # Stage 4: Corners redirect (3 levels)
-    {'name': 'corners', 'count': 3, 'elements': ['CORNER'], 'teach': 'CORNER_REDIRECT',
+    # 3: Corners redirect
+    {'name': 'corners', 'count': 1, 'elements': ['CORNER'], 'teach': 'CORNER_REDIRECT',
      'max_par': 4, 'grid_size': (5, 7), 'text': 'Corners redirect'},
 
-    # Stage 5: Holes + blocks (3 levels)
-    {'name': 'hole_fill', 'count': 3, 'elements': ['BLOCK', 'HOLE'], 'teach': 'HOLE_FILL',
-     'max_par': 5, 'grid_size': (6, 8), 'text': 'Fill holes with blocks'},
+    # 4: Fill holes with blocks
+    {'name': 'hole_fill', 'count': 1, 'elements': ['BLOCK', 'HOLE'], 'teach': 'HOLE_FILL',
+     'max_par': 5, 'grid_size': (6, 8), 'text': 'Push block into hole'},
 
-    # Stage 6: Sticky tiles (3 levels)
-    {'name': 'sticky', 'count': 3, 'elements': ['STICKY'], 'teach': 'STICKY_STOP',
+    # 5: Sticky tiles stop you
+    {'name': 'sticky', 'count': 1, 'elements': ['STICKY'], 'teach': 'STICKY_STOP',
      'max_par': 5, 'grid_size': (5, 8), 'text': 'Sticky tiles stop you'},
 
-    # Stage 7: Ramps (3 levels)
-    {'name': 'ramps', 'count': 3, 'elements': ['RAMP'], 'teach': 'RAMP_USE',
-     'max_par': 5, 'grid_size': (6, 9), 'text': 'Ramps change height'},
+    # 6: Ramps change height
+    {'name': 'ramps', 'count': 1, 'elements': ['RAMP'], 'teach': 'RAMP_USE',
+     'max_par': 5, 'grid_size': (6, 9), 'text': 'Climb ramps'},
 
-    # Stage 8: Keys and locks (3 levels)
-    {'name': 'keys', 'count': 3, 'elements': ['KEY'], 'teach': 'KEY_LOCK',
-     'max_par': 6, 'grid_size': (6, 9), 'text': 'Keys open locks'},
+    # 7: Keys unlock doors
+    {'name': 'keys', 'count': 1, 'elements': ['KEY', 'LOCK'], 'teach': 'KEY_LOCK',
+     'max_par': 6, 'grid_size': (6, 9), 'text': 'Get key to unlock door'},
 ]
 
 
@@ -652,19 +648,22 @@ def create_tutorial_level(width: int, height: int, elements: List[str]) -> Optio
             ramps[(rx, ry)] = ramp_type
             grid[ry][rx] = ramp_type
 
-    if 'KEY' in elements:
+    if 'KEY' in elements or 'LOCK' in elements:
         if interior:
             kx, ky = interior.pop()
             grid[ky][kx] = KEY
-            # Place locked wall
+            # Place locked door - try to block path to goal
+            # Find a spot that's likely between start and goal
+            lock_candidates = []
             for x in range(1, width-1):
                 for y in range(1, height-1):
-                    if grid[y][x] == ICE and random.random() < 0.15:
-                        grid[y][x] = LOCKED
-                        break
-                else:
-                    continue
-                break
+                    if grid[y][x] == ICE:
+                        # Prefer spots closer to goal than to key
+                        lock_candidates.append((x, y))
+            if lock_candidates:
+                random.shuffle(lock_candidates)
+                lx, ly = lock_candidates[0]
+                grid[ly][lx] = LOCKED
 
     # Add some internal walls
     num_walls = random.randint(0, 2)

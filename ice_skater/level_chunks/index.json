@@ -1,5 +1,5 @@
 {
-  "total_levels": 524,
+  "total_levels": 507,
   "chunk_size": 500,
   "chunks": [
     {
@@ -8,15 +8,15 @@
       "start": 0,
       "end": 500,
       "count": 500,
-      "size_kb": 263.3
+      "size_kb": 267.6
     },
     {
       "id": 1,
       "file": "chunk_1.json",
       "start": 500,
-      "end": 524,
-      "count": 24,
-      "size_kb": 13.7
+      "end": 507,
+      "count": 7,
+      "size_kb": 4.1
     }
   ]
 }

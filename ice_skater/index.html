@@ -394,7 +394,7 @@
 // === ICE SKATER ENGINE v2 ===
 // Fixed: locked wall, height system, ramps, block stops
 
-const GAME_VERSION = 'v259';  // Bump this and tell Ivy the version when pushing changes!
+const GAME_VERSION = 'v260';  // Bump this and tell Ivy the version when pushing changes!
 
 const TILE_W = 16;  // Tile width
 const TILE_H = 12;  // Tile height (floor surface depth) - oblique angle
@@ -471,7 +471,7 @@ const PARTYKIT_URL = 'https://locomot-io.savecharlie.partykit.dev/party/main';
 // Tutorial system
 let tutorialText = null;  // Current level's tutorial text (if any)
 let tutorialStage = null; // Current tutorial stage name
-const TUTORIAL_COUNT = 24; // Number of tutorial levels
+const TUTORIAL_COUNT = 7; // Number of tutorial levels (one per mechanic)
 
 // Fetch global best for a level
 async function fetchGlobalBest(levelIndex) {
