@@ -7969,6 +7969,20 @@
             // Update train frame for wheel animation
             trainFrame++;
 
+            // DEBUG: Draw big marker at player position
+            if (snake.length > 0) {
+                const head = snake[0];
+                const hx = head.x * GRID + GRID/2;
+                const hy = head.y * GRID + GRID/2;
+                ctx.fillStyle = '#f00';
+                ctx.beginPath();
+                ctx.arc(hx, hy, 20, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.fillStyle = '#fff';
+                ctx.font = '10px sans-serif';
+                ctx.fillText('PLAYER', hx - 20, hy - 25);
+            }
+
             // Draw smoke behind everything
             drawSmoke(ctx);
 
@@ -8017,13 +8031,21 @@
                 const segDir = getSegDir(i);
 
                 // Team mode: player always blue (friendly), otherwise gun color
-                const trainColor = teamMode ? '#0af' : playerGunType?.color;
+                const trainColor = teamMode ? '#0af' : (playerGunType?.color || '#0f0');
+
+                // DEBUG: Make player super visible with glow
+                ctx.save();
+                ctx.shadowColor = '#0f0';
+                ctx.shadowBlur = 15;
+
                 if (i === 0) {
                     drawLocomotive(ctx, x, y, GRID, segDir, trainFrame, trainColor);
                     if (trainFrame % 8 === 0) spawnSmoke(x, y, segDir);
                 } else {
                     drawBoxcar(ctx, x, y, GRID, segDir, seg.type, trainFrame, seg.hp, seg.maxHp, trainColor);
                 }
+
+                ctx.restore();
 
                 // Health bar for damaged cars
                 if (i > 0 && seg.hp !== undefined && seg.maxHp > 0 && seg.hp < seg.maxHp) {
