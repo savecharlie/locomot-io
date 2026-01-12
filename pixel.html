@@ -1388,6 +1388,7 @@
             <button class="sel-action" data-action="delete" title="Delete">🗑️</button>
             <button class="sel-action" data-action="fliph" title="Flip Horizontal">↔️</button>
             <button class="sel-action" data-action="flipv" title="Flip Vertical">↕️</button>
+            <button class="sel-action" data-action="resize" title="Resize">📐</button>
             <button class="sel-action" data-action="deselect" title="Deselect">✖️</button>
         </div>
 
@@ -5646,7 +5647,99 @@ Canvas: ${state.canvasWidth}x${state.canvasHeight}`;
                     setTool('select');
                     showToast('Drag on canvas to move');
                     break;
+
+                case 'resize':
+                    // Prompt for scale factor
+                    const scaleInput = prompt('Scale factor (e.g., 2 for 2x, 0.5 for half):', '2');
+                    if (!scaleInput) break;
+                    const scale = parseFloat(scaleInput);
+                    if (isNaN(scale) || scale <= 0 || scale > 10) {
+                        showToast('Invalid scale (use 0.1 - 10)');
+                        break;
+                    }
+                    resizeSelection(scale);
+                    break;
             }
+        }
+
+        function resizeSelection(scale) {
+            if (!state.selection.active || !state.selection.bounds) return;
+
+            const bounds = state.selection.bounds;
+            saveState();
+
+            // Get current layer
+            const layer = getCurrentLayer();
+            if (!layer) return;
+
+            // Get source pixels (only selected ones)
+            const srcData = layer.ctx.getImageData(bounds.x, bounds.y, bounds.width, bounds.height);
+            const newWidth = Math.max(1, Math.round(bounds.width * scale));
+            const newHeight = Math.max(1, Math.round(bounds.height * scale));
+
+            // Create scaled ImageData using nearest-neighbor
+            const scaledData = new ImageData(newWidth, newHeight);
+
+            for (let y = 0; y < newHeight; y++) {
+                for (let x = 0; x < newWidth; x++) {
+                    // Map to source coordinates (nearest-neighbor)
+                    const srcX = Math.floor(x / scale);
+                    const srcY = Math.floor(y / scale);
+
+                    // Check if this source pixel was in the selection
+                    const globalSrcX = bounds.x + srcX;
+                    const globalSrcY = bounds.y + srcY;
+                    const key = `${globalSrcX},${globalSrcY}`;
+
+                    if (state.selection.pixels.has(key)) {
+                        const srcIdx = (srcY * bounds.width + srcX) * 4;
+                        const dstIdx = (y * newWidth + x) * 4;
+                        scaledData.data[dstIdx] = srcData.data[srcIdx];
+                        scaledData.data[dstIdx + 1] = srcData.data[srcIdx + 1];
+                        scaledData.data[dstIdx + 2] = srcData.data[srcIdx + 2];
+                        scaledData.data[dstIdx + 3] = srcData.data[srcIdx + 3];
+                    }
+                }
+            }
+
+            // Clear original selection from layer
+            state.selection.pixels.forEach(key => {
+                const [x, y] = key.split(',').map(Number);
+                layer.ctx.clearRect(x, y, 1, 1);
+            });
+
+            // Draw scaled result at same position
+            // Create temp canvas for the scaled data
+            const tempCanvas = document.createElement('canvas');
+            tempCanvas.width = newWidth;
+            tempCanvas.height = newHeight;
+            const tempCtx = tempCanvas.getContext('2d');
+            tempCtx.putImageData(scaledData, 0, 0);
+
+            // Draw to layer
+            layer.ctx.drawImage(tempCanvas, bounds.x, bounds.y);
+
+            // Update selection bounds and pixels
+            const newPixels = new Set();
+            for (let y = 0; y < newHeight; y++) {
+                for (let x = 0; x < newWidth; x++) {
+                    const idx = (y * newWidth + x) * 4;
+                    if (scaledData.data[idx + 3] > 0) {  // Has alpha
+                        newPixels.add(`${bounds.x + x},${bounds.y + y}`);
+                    }
+                }
+            }
+            state.selection.pixels = newPixels;
+            state.selection.bounds = {
+                x: bounds.x,
+                y: bounds.y,
+                width: newWidth,
+                height: newHeight
+            };
+
+            compositeAndRender();
+            renderSelection();
+            showToast(`Resized to ${newWidth}x${newHeight} (${scale}x)`);
         }
 
         function flipSelection(horizontal, vertical) {
