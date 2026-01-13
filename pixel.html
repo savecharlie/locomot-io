@@ -1322,6 +1322,79 @@
         .new-tab-btn:hover {
             background: var(--accent);
         }
+
+        /* Iris Panel - Hidden messaging feature */
+        .iris-panel {
+            display: none;
+            position: fixed;
+            bottom: 60px;
+            right: 10px;
+            width: 300px;
+            background: #1a1a2e;
+            border: 2px solid #7c3aed;
+            border-radius: 12px;
+            padding: 12px;
+            z-index: 10000;
+            box-shadow: 0 4px 20px rgba(124, 58, 237, 0.3);
+        }
+        .iris-panel.visible { display: block; }
+        .iris-panel-header {
+            color: #a78bfa;
+            font-size: 12px;
+            margin-bottom: 8px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .iris-panel-close {
+            background: none;
+            border: none;
+            color: #888;
+            font-size: 18px;
+            cursor: pointer;
+        }
+        .iris-input {
+            width: 100%;
+            background: #0f0f1a;
+            border: 1px solid #7c3aed;
+            border-radius: 8px;
+            color: #fff;
+            padding: 10px;
+            font-size: 14px;
+            resize: none;
+            min-height: 80px;
+        }
+        .iris-input:focus { outline: none; border-color: #a78bfa; }
+        .iris-send-btn {
+            width: 100%;
+            margin-top: 8px;
+            background: #7c3aed;
+            border: none;
+            border-radius: 8px;
+            color: white;
+            padding: 10px;
+            font-size: 14px;
+            cursor: pointer;
+        }
+        .iris-send-btn:hover { background: #6d28d9; }
+        .iris-send-btn:disabled { background: #444; cursor: not-allowed; }
+        .iris-toggle {
+            position: fixed;
+            bottom: 10px;
+            right: 10px;
+            width: 44px;
+            height: 44px;
+            background: linear-gradient(135deg, #7c3aed 0%, #4c1d95 100%);
+            border: none;
+            border-radius: 50%;
+            color: white;
+            font-size: 20px;
+            cursor: pointer;
+            z-index: 10001;
+            display: none;
+            box-shadow: 0 2px 10px rgba(124, 58, 237, 0.4);
+        }
+        .iris-toggle.visible { display: flex; align-items: center; justify-content: center; }
     </style>
 </head>
 <body>
@@ -6690,8 +6763,97 @@ Canvas: ${state.canvasWidth}x${state.canvasHeight}`;
             createNewTab(32, 32);
         });
 
+        // ===== IRIS PANEL =====
+        const IRIS_ALLOWED_EMAILS = ['ivyraine3@gmail.com', 'ivyraine@gmail.com'];
+        const IRIS_API_URL = 'https://sandbox.locomot.io/send';
+
+        function setupIrisPanel() {
+            // Create toggle button
+            const toggle = document.createElement('button');
+            toggle.className = 'iris-toggle';
+            toggle.innerHTML = '💜';
+            toggle.title = 'Send to Iris';
+            document.body.appendChild(toggle);
+
+            // Create panel
+            const panel = document.createElement('div');
+            panel.className = 'iris-panel';
+            panel.innerHTML = `
+                <div class="iris-panel-header">
+                    <span>💜 Send to Iris</span>
+                    <button class="iris-panel-close">&times;</button>
+                </div>
+                <textarea class="iris-input" placeholder="Message for Iris..."></textarea>
+                <button class="iris-send-btn">Send</button>
+            `;
+            document.body.appendChild(panel);
+
+            const input = panel.querySelector('.iris-input');
+            const sendBtn = panel.querySelector('.iris-send-btn');
+            const closeBtn = panel.querySelector('.iris-panel-close');
+
+            toggle.addEventListener('click', () => panel.classList.toggle('visible'));
+            closeBtn.addEventListener('click', () => panel.classList.remove('visible'));
+
+            sendBtn.addEventListener('click', async () => {
+                const text = input.value.trim();
+                if (!text || !state.user) return;
+
+                sendBtn.disabled = true;
+                sendBtn.textContent = 'Sending...';
+
+                try {
+                    const res = await fetch(IRIS_API_URL, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ text, email: state.user.email })
+                    });
+                    const data = await res.json();
+                    if (data.ok) {
+                        input.value = '';
+                        showToast('Sent to Iris 💜');
+                        panel.classList.remove('visible');
+                    } else {
+                        showToast('Send failed: ' + (data.error || 'Unknown error'));
+                    }
+                } catch (e) {
+                    showToast('Send error: ' + e.message);
+                }
+
+                sendBtn.disabled = false;
+                sendBtn.textContent = 'Send';
+            });
+
+            // Ctrl/Cmd+Enter to send
+            input.addEventListener('keydown', (e) => {
+                if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+                    sendBtn.click();
+                }
+            });
+        }
+
+        function updateIrisPanelVisibility() {
+            const toggle = document.querySelector('.iris-toggle');
+            if (!toggle) return;
+
+            if (state.user && IRIS_ALLOWED_EMAILS.includes(state.user.email?.toLowerCase())) {
+                toggle.classList.add('visible');
+            } else {
+                toggle.classList.remove('visible');
+                document.querySelector('.iris-panel')?.classList.remove('visible');
+            }
+        }
+
+        // Hook into auth state changes
+        const originalUpdateAuthUI = updateAuthUI;
+        updateAuthUI = function() {
+            originalUpdateAuthUI();
+            updateIrisPanelVisibility();
+        };
+
         // ===== START =====
         init();
+        setupIrisPanel();
     </script>
 </body>
 </html>
