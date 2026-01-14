@@ -394,7 +394,7 @@
 // === ICE SKATER ENGINE v2 ===
 // Fixed: locked wall, height system, ramps, block stops
 
-const GAME_VERSION = 'v268';  // Bump this and tell Ivy the version when pushing changes!
+const GAME_VERSION = 'v269';  // Bump this and tell Ivy the version when pushing changes!
 
 const TILE_W = 16;  // Tile width
 const TILE_H = 12;  // Tile height (floor surface depth) - oblique angle
@@ -2059,27 +2059,33 @@ function render() {
   const levelPixelH = h * TILE_H;
 
   // Scale to fit viewport
-  const viewW = window.innerWidth;
-  const viewH = window.innerHeight;
-  const isMobile = viewW < 900;
+  const screenW = window.innerWidth;
+  const screenH = window.innerHeight;
+  const isMobile = screenW < 900;
+  // Desktop: reserve space for sidebar (170px) + gap (30px) + margins
+  const SIDEBAR_RESERVED = 220;
+  const viewW = isMobile ? screenW : screenW - SIDEBAR_RESERVED;
+  const viewH = isMobile ? screenH : screenH - 120;  // Room for header/footer
   const scaleX = viewW / levelPixelW;
   const scaleY = viewH / levelPixelH;
   // Mobile: exact width fill (non-integer OK), desktop: integer scale
   SCALE = isMobile ? scaleX : Math.floor(Math.min(scaleX, scaleY));
   if (SCALE < 1) SCALE = 1;
 
-  // Canvas fills ENTIRE viewport - ice everywhere
+  // Canvas size - mobile: full screen, desktop: fits in game area
   const scaledLevelW = levelPixelW * SCALE;
   const scaledLevelH = levelPixelH * SCALE;
-  canvas.width = viewW;
-  canvas.height = viewH;
-  canvas.style.width = viewW + 'px';
-  canvas.style.height = viewH + 'px';
+  const canvasW = isMobile ? screenW : scaledLevelW;
+  const canvasH = isMobile ? screenH : scaledLevelH;
+  canvas.width = canvasW;
+  canvas.height = canvasH;
+  canvas.style.width = canvasW + 'px';
+  canvas.style.height = canvasH + 'px';
   ctx.imageSmoothingEnabled = false;
 
-  // Mobile: puzzle fills width exactly (offsetX=0), desktop: center
-  const offsetX = isMobile ? 0 : Math.floor((viewW - scaledLevelW) / 2);
-  const offsetY = Math.floor((viewH - scaledLevelH) / 2);
+  // Mobile: puzzle fills width exactly (offsetX=0), desktop: no offset (canvas sized to fit)
+  const offsetX = isMobile ? 0 : 0;
+  const offsetY = isMobile ? Math.floor((screenH - scaledLevelH) / 2) : 0;
 
   const now = performance.now();
   if (now - lastKeyFrameTime > 200) {
