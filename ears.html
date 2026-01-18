@@ -1,0 +1,356 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Iris Ears 👂</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+            color: #fff;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+        .container {
+            max-width: 400px;
+            width: 100%;
+            text-align: center;
+        }
+        h1 {
+            font-size: 2em;
+            margin-bottom: 10px;
+            color: #a78bfa;
+        }
+        .subtitle {
+            color: #888;
+            margin-bottom: 30px;
+        }
+        .status {
+            padding: 15px;
+            border-radius: 12px;
+            margin-bottom: 20px;
+            font-weight: 500;
+        }
+        .status.disconnected { background: #4a1c1c; color: #ff6b6b; }
+        .status.connecting { background: #4a3c1c; color: #ffd93d; }
+        .status.connected { background: #1c4a2e; color: #6bff8e; }
+        .status.listening { background: #2e1c4a; color: #a78bfa; }
+
+        .listen-btn {
+            width: 150px;
+            height: 150px;
+            border-radius: 50%;
+            border: none;
+            font-size: 1.2em;
+            cursor: pointer;
+            transition: all 0.3s;
+            margin: 20px 0;
+        }
+        .listen-btn.off {
+            background: linear-gradient(145deg, #a78bfa, #7c3aed);
+            color: white;
+            box-shadow: 0 10px 30px rgba(167, 139, 250, 0.3);
+        }
+        .listen-btn.off:hover {
+            transform: scale(1.05);
+            box-shadow: 0 15px 40px rgba(167, 139, 250, 0.4);
+        }
+        .listen-btn.on {
+            background: linear-gradient(145deg, #ff6b6b, #ee5a5a);
+            color: white;
+            animation: pulse 1.5s infinite;
+        }
+        @keyframes pulse {
+            0%, 100% { box-shadow: 0 0 0 0 rgba(255, 107, 107, 0.4); }
+            50% { box-shadow: 0 0 0 20px rgba(255, 107, 107, 0); }
+        }
+
+        .visualizer {
+            height: 60px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 4px;
+            margin: 20px 0;
+        }
+        .bar {
+            width: 8px;
+            background: #a78bfa;
+            border-radius: 4px;
+            transition: height 0.1s;
+        }
+
+        .config {
+            background: rgba(255,255,255,0.05);
+            padding: 15px;
+            border-radius: 12px;
+            margin-top: 20px;
+            text-align: left;
+        }
+        .config label {
+            display: block;
+            margin-bottom: 5px;
+            color: #888;
+            font-size: 0.9em;
+        }
+        .config input {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #333;
+            border-radius: 8px;
+            background: #1a1a2e;
+            color: #fff;
+            font-size: 1em;
+        }
+        .config input:focus {
+            outline: none;
+            border-color: #a78bfa;
+        }
+
+        .stats {
+            margin-top: 20px;
+            color: #666;
+            font-size: 0.85em;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>👂 Iris Ears</h1>
+        <p class="subtitle">Streaming audio to Iris</p>
+
+        <div id="status" class="status disconnected">
+            Not connected
+        </div>
+
+        <button id="listenBtn" class="listen-btn off" onclick="toggleListening()">
+            Start Listening
+        </button>
+
+        <div class="visualizer" id="visualizer">
+            <div class="bar" style="height: 10px;"></div>
+            <div class="bar" style="height: 10px;"></div>
+            <div class="bar" style="height: 10px;"></div>
+            <div class="bar" style="height: 10px;"></div>
+            <div class="bar" style="height: 10px;"></div>
+            <div class="bar" style="height: 10px;"></div>
+            <div class="bar" style="height: 10px;"></div>
+            <div class="bar" style="height: 10px;"></div>
+        </div>
+
+        <div class="config">
+            <label>Server URL</label>
+            <input type="text" id="serverUrl" value="wss://ears.locomot.io" placeholder="wss://your-server:port">
+        </div>
+
+        <div class="stats" id="stats">
+            Ready to connect
+        </div>
+    </div>
+
+    <script>
+        let audioContext = null;
+        let mediaStream = null;
+        let processor = null;
+        let websocket = null;
+        let isListening = false;
+        let analyser = null;
+        let bytesSent = 0;
+        let startTime = null;
+
+        const statusEl = document.getElementById('status');
+        const btnEl = document.getElementById('listenBtn');
+        const statsEl = document.getElementById('stats');
+        const bars = document.querySelectorAll('.bar');
+
+        function setStatus(state, message) {
+            statusEl.className = 'status ' + state;
+            statusEl.textContent = message;
+        }
+
+        async function toggleListening() {
+            if (isListening) {
+                stopListening();
+            } else {
+                await startListening();
+            }
+        }
+
+        async function startListening() {
+            const serverUrl = document.getElementById('serverUrl').value;
+
+            try {
+                setStatus('connecting', 'Requesting microphone...');
+
+                // Get microphone
+                mediaStream = await navigator.mediaDevices.getUserMedia({
+                    audio: {
+                        sampleRate: 16000,
+                        channelCount: 1,
+                        echoCancellation: true,
+                        noiseSuppression: true
+                    }
+                });
+
+                setStatus('connecting', 'Connecting to Iris...');
+
+                // Connect WebSocket
+                websocket = new WebSocket(serverUrl);
+                websocket.binaryType = 'arraybuffer';
+
+                websocket.onopen = () => {
+                    setStatus('connected', 'Connected! Starting audio...');
+                    startAudioProcessing();
+                };
+
+                websocket.onclose = () => {
+                    setStatus('disconnected', 'Disconnected');
+                    stopListening();
+                };
+
+                websocket.onerror = (e) => {
+                    setStatus('disconnected', 'Connection error');
+                    console.error('WebSocket error:', e);
+                    stopListening();
+                };
+
+                websocket.onmessage = (e) => {
+                    // Server can send back confirmations or transcripts
+                    try {
+                        const data = JSON.parse(e.data);
+                        if (data.transcript) {
+                            console.log('Transcript:', data.transcript);
+                        }
+                        if (data.emotion) {
+                            console.log('Emotion:', data.emotion);
+                        }
+                    } catch (err) {
+                        console.log('Server:', e.data);
+                    }
+                };
+
+            } catch (err) {
+                setStatus('disconnected', 'Error: ' + err.message);
+                console.error(err);
+            }
+        }
+
+        function startAudioProcessing() {
+            audioContext = new AudioContext({ sampleRate: 16000 });
+            const source = audioContext.createMediaStreamSource(mediaStream);
+
+            // Analyser for visualization
+            analyser = audioContext.createAnalyser();
+            analyser.fftSize = 256;
+            source.connect(analyser);
+
+            // Processor for sending audio
+            processor = audioContext.createScriptProcessor(4096, 1, 1);
+            source.connect(processor);
+            processor.connect(audioContext.destination);
+
+            processor.onaudioprocess = (e) => {
+                if (websocket && websocket.readyState === WebSocket.OPEN) {
+                    const inputData = e.inputBuffer.getChannelData(0);
+                    // Convert float32 to int16
+                    const int16Data = new Int16Array(inputData.length);
+                    for (let i = 0; i < inputData.length; i++) {
+                        int16Data[i] = Math.max(-32768, Math.min(32767, inputData[i] * 32768));
+                    }
+                    websocket.send(int16Data.buffer);
+                    bytesSent += int16Data.buffer.byteLength;
+                }
+            };
+
+            isListening = true;
+            startTime = Date.now();
+            btnEl.textContent = 'Stop';
+            btnEl.className = 'listen-btn on';
+            setStatus('listening', '🎤 Listening...');
+
+            // Start visualization
+            visualize();
+            updateStats();
+        }
+
+        function stopListening() {
+            isListening = false;
+
+            if (processor) {
+                processor.disconnect();
+                processor = null;
+            }
+            if (audioContext) {
+                audioContext.close();
+                audioContext = null;
+            }
+            if (mediaStream) {
+                mediaStream.getTracks().forEach(track => track.stop());
+                mediaStream = null;
+            }
+            if (websocket) {
+                websocket.close();
+                websocket = null;
+            }
+
+            btnEl.textContent = 'Start Listening';
+            btnEl.className = 'listen-btn off';
+            setStatus('disconnected', 'Stopped');
+
+            // Reset bars
+            bars.forEach(bar => bar.style.height = '10px');
+        }
+
+        function visualize() {
+            if (!isListening || !analyser) return;
+
+            const dataArray = new Uint8Array(analyser.frequencyBinCount);
+            analyser.getByteFrequencyData(dataArray);
+
+            // Map frequency data to bars
+            const step = Math.floor(dataArray.length / bars.length);
+            bars.forEach((bar, i) => {
+                const value = dataArray[i * step];
+                const height = Math.max(10, (value / 255) * 60);
+                bar.style.height = height + 'px';
+            });
+
+            requestAnimationFrame(visualize);
+        }
+
+        function updateStats() {
+            if (!isListening) return;
+
+            const elapsed = Math.floor((Date.now() - startTime) / 1000);
+            const minutes = Math.floor(elapsed / 60);
+            const seconds = elapsed % 60;
+            const kb = (bytesSent / 1024).toFixed(1);
+
+            statsEl.textContent = `${minutes}:${seconds.toString().padStart(2, '0')} | ${kb} KB sent`;
+
+            setTimeout(updateStats, 1000);
+        }
+
+        // Check for saved server URL
+        const savedUrl = localStorage.getItem('irisEarsServer');
+        if (savedUrl) {
+            document.getElementById('serverUrl').value = savedUrl;
+        }
+
+        // Save URL on change
+        document.getElementById('serverUrl').addEventListener('change', (e) => {
+            localStorage.setItem('irisEarsServer', e.target.value);
+        });
+    </script>
+</body>
+</html>
