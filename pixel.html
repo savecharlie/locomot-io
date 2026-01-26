@@ -542,6 +542,50 @@
             border-color: white;
         }
 
+        /* Mobile dither colors */
+        .mobile-dither-colors {
+            display: none;
+            padding: 8px;
+            gap: 8px;
+            justify-content: center;
+            align-items: center;
+            background: var(--bg-light);
+        }
+
+        .mobile-dither-colors.visible {
+            display: flex;
+        }
+
+        @media (min-width: 768px) {
+            .mobile-dither-colors {
+                display: none !important;
+            }
+        }
+
+        .mobile-dither-slot {
+            width: 40px;
+            height: 40px;
+            border-radius: 8px;
+            border: 2px solid var(--border);
+            cursor: pointer;
+            background-image: linear-gradient(45deg, #666 25%, transparent 25%),
+                              linear-gradient(-45deg, #666 25%, transparent 25%),
+                              linear-gradient(45deg, transparent 75%, #666 75%),
+                              linear-gradient(-45deg, transparent 75%, #666 75%);
+            background-size: 8px 8px;
+            background-position: 0 0, 0 4px, 4px -4px, -4px 0px;
+        }
+
+        .mobile-dither-slot.active {
+            border-color: var(--accent);
+            box-shadow: 0 0 0 2px var(--accent);
+        }
+
+        .mobile-dither-label {
+            font-size: 11px;
+            color: var(--text-dim);
+        }
+
         .mobile-tools {
             display: flex;
             padding: 8px;
@@ -1535,6 +1579,15 @@
                 <option value="5">5px</option>
             </select>
             <div class="mobile-palette" id="mobilePalette"></div>
+            <!-- Mobile dither colors (shown when dither tool active) -->
+            <div class="mobile-dither-colors" id="mobileDitherColors">
+                <span class="mobile-dither-label">1:</span>
+                <div class="mobile-dither-slot active" data-slot="1" style="background:#000000;"></div>
+                <span class="mobile-dither-label">2:</span>
+                <div class="mobile-dither-slot" data-slot="2" style="background:transparent;"></div>
+                <span class="mobile-dither-label">3:</span>
+                <div class="mobile-dither-slot" data-slot="3" style="background:#ffffff;"></div>
+            </div>
         </div>
         <div class="mobile-tools">
             <button class="tool-btn active" data-tool="pencil" title="Pencil"><canvas class="pixel-icon" data-icon="pencil"></canvas></button>
@@ -3004,6 +3057,7 @@
 
         // ===== DITHER COLOR UI =====
         function updateDitherUI() {
+            // Update desktop dither slots
             const slots = document.querySelectorAll('.dither-slot');
             slots.forEach((slot, i) => {
                 slot.classList.toggle('active', (i + 1) === state.ditherActiveSlot);
@@ -3013,6 +3067,18 @@
                     swatch.style.background = color;
                 } else {
                     swatch.style.background = 'transparent';
+                }
+            });
+
+            // Update mobile dither slots
+            const mobileSlots = document.querySelectorAll('.mobile-dither-slot');
+            mobileSlots.forEach((slot, i) => {
+                slot.classList.toggle('active', (i + 1) === state.ditherActiveSlot);
+                const color = state.ditherColors[i];
+                if (color) {
+                    slot.style.background = color;
+                } else {
+                    slot.style.background = 'transparent';
                 }
             });
         }
@@ -3038,10 +3104,16 @@
             // Hide eraser cursor when switching tools
             document.getElementById('eraserCursor').style.display = 'none';
 
-            // Show/hide dither color picker
+            // Show/hide dither color picker (desktop)
             const ditherPanel = document.getElementById('ditherColors');
             if (ditherPanel) {
                 ditherPanel.style.display = (tool === 'dither') ? 'block' : 'none';
+            }
+
+            // Show/hide mobile dither colors
+            const mobileDitherPanel = document.getElementById('mobileDitherColors');
+            if (mobileDitherPanel) {
+                mobileDitherPanel.classList.toggle('visible', tool === 'dither');
             }
 
             // Update UI
@@ -3504,10 +3576,21 @@
                 btn.onclick = () => setTool(btn.dataset.tool);
             });
 
-            // Dither color slots
+            // Dither color slots (desktop)
             document.querySelectorAll('.dither-slot').forEach(slot => {
                 slot.onclick = () => selectDitherSlot(parseInt(slot.dataset.slot));
                 // Double-click to clear middle slot
+                slot.ondblclick = () => {
+                    if (slot.dataset.slot === '2') {
+                        clearDitherSlot(2);
+                    }
+                };
+            });
+
+            // Mobile dither color slots
+            document.querySelectorAll('.mobile-dither-slot').forEach(slot => {
+                slot.onclick = () => selectDitherSlot(parseInt(slot.dataset.slot));
+                // Double-tap to clear middle slot
                 slot.ondblclick = () => {
                     if (slot.dataset.slot === '2') {
                         clearDitherSlot(2);
