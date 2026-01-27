@@ -130,23 +130,9 @@
         ];
 
         function draw() {
-            // Clear
+            // Clear - solid green, no noise
             ctx.fillStyle = GRASS_GREEN;
             ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-            // Draw grass texture (darker squares randomly)
-            for (let y = 0; y < CANVAS_HEIGHT; y++) {
-                for (let x = 0; x < CANVAS_WIDTH; x++) {
-                    if (Math.random() < 0.1) {
-                        ctx.fillStyle = DARK_GREEN;
-                        ctx.fillRect(
-                            x * GRID_SIZE * SCALE + Math.floor(Math.random() * GRID_SIZE) * SCALE,
-                            y * GRID_SIZE * SCALE + Math.floor(Math.random() * GRID_SIZE) * SCALE,
-                            SCALE, SCALE
-                        );
-                    }
-                }
-            }
 
             // Draw hole
             drawSprite(holeSprite, state.hole.x, state.hole.y);
