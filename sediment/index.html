@@ -118,7 +118,7 @@ const canvas = document.getElementById('c');
 const ctx = canvas.getContext('2d');
 
 // ── Config ──
-const VERSION = 'v14';
+const VERSION = 'v15';
 const TILE = 12;
 const GRAVITY = 700;
 const JUMP_FORCE = -280;
@@ -525,7 +525,18 @@ let jumpBuffered = false;
 let holdingJump = false;
 let holdTime = 0;
 let canDive = false; // set after double jump, cleared on landing only
-const DIVE_HOLD_TIME = 0.25; // seconds of hold on third tap to trigger dive
+const DIVE_HOLD_TIME = 0.15; // keyboard hold fallback
+const SWIPE_DIVE_PX = 30; // pixels of downward swipe to trigger dive
+let touchStartY = 0;
+
+function triggerDive() {
+    if (!canDive || player.onGround || player.diving) return;
+    player.vy = 380;
+    player.diving = true;
+    player.squash = 0.7;
+    canDive = false;
+    spawnP(player.x + player.w/2, player.y, C.player, 3, 30, 0.15);
+}
 
 function doJump() {
     if (!started) { started = true; return; }
@@ -548,12 +559,22 @@ function doDie() {
 canvas.addEventListener('touchstart', (e) => {
     e.preventDefault();
     for (const t of e.changedTouches) {
+        touchStartY = t.clientY;
         const sw = window.innerWidth;
         const sh = window.innerHeight;
         if (t.clientX > sw - 90 && t.clientY > sh - 90) {
             doDie();
         } else {
             doJump();
+        }
+    }
+}, { passive: false });
+
+canvas.addEventListener('touchmove', (e) => {
+    e.preventDefault();
+    for (const t of e.changedTouches) {
+        if (canDive && t.clientY - touchStartY > SWIPE_DIVE_PX) {
+            triggerDive();
         }
     }
 }, { passive: false });
@@ -723,15 +744,10 @@ function update(dt) {
         }
     }
 
-    // Hold-to-dive: only from the same press that triggered double jump
+    // Hold-to-dive fallback (keyboard users)
     if (holdingJump && canDive && !player.onGround && !player.diving) {
         holdTime += dt;
-        if (holdTime >= DIVE_HOLD_TIME) {
-            player.vy = 380;
-            player.diving = true;
-            player.squash = 0.7;
-            spawnP(player.x + player.w/2, player.y, C.player, 3, 30, 0.15);
-        }
+        if (holdTime >= DIVE_HOLD_TIME) triggerDive();
     }
 
     // Move X
