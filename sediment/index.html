@@ -1057,7 +1057,7 @@ function draw() {
     }
     ctx.globalAlpha = 1;
 
-    // Player
+    // Player — you ARE the tool you'll become
     if (!player.dead) {
         const sx = 1 / player.squash;
         const sy = player.squash;
@@ -1066,31 +1066,66 @@ function draw() {
         const pw = player.w * sx;
         const ph = player.h * sy;
 
-        // Invincibility — the void walks (diamond outline, void body)
         const invincible = player.invincible > 0;
-        if (invincible) {
-            // Diamond glow outline
-            ctx.fillStyle = C.goal;
-            ctx.fillRect(cx - pw/2 - 1, cy - ph - 1, pw + 2, ph + 2);
-            // Void body — you become the background
-            ctx.fillStyle = C.bg;
-        } else {
-            ctx.fillStyle = C.player;
-        }
-        ctx.fillRect(cx - pw/2, cy - ph, pw, ph);
+        const bodyColor = invincible ? C.bg : C.player;
+        const outlineColor = invincible ? C.goal : null;
+        const eyeColor = invincible ? C.goal : C.playerDark;
+        const pupilColor = invincible ? C.bg : '#fff';
 
-        // Eyes
+        // Draw invincible outline if needed
+        if (outlineColor) {
+            ctx.fillStyle = outlineColor;
+            ctx.fillRect(cx - pw/2 - 1, cy - ph - 1, pw + 2, ph + 2);
+        }
+
+        // Draw body based on what you'll become
+        ctx.fillStyle = bodyColor;
+        if (player.nextCorpse === 'spring') {
+            // Living spring — compact with coil lines
+            ctx.fillRect(cx - pw/2, cy - ph, pw, ph);
+            // Coil detail lines
+            const detailColor = invincible ? C.goal : '#B87820';
+            ctx.fillStyle = detailColor;
+            for (let i = 0; i < 3; i++) {
+                ctx.fillRect(cx - pw/2 + 1 + i * 3, cy - ph + ph * 0.5, 1, ph * 0.4);
+            }
+            // Bright top edge
+            ctx.fillStyle = invincible ? C.goal : '#FFD060';
+            ctx.fillRect(cx - pw/2, cy - ph, pw, 1);
+        } else if (player.nextCorpse === 'platform') {
+            // Living platform — wider, shelf-like
+            ctx.fillRect(cx - pw/2, cy - ph, pw, ph);
+            // Top surface highlight
+            ctx.fillStyle = invincible ? C.goal : '#FFD060';
+            ctx.fillRect(cx - pw/2, cy - ph, pw, 1);
+            // Bottom shadow
+            ctx.fillStyle = invincible ? C.bg : '#B87820';
+            ctx.fillRect(cx - pw/2, cy - 1, pw, 1);
+        } else if (player.nextCorpse === 'booster') {
+            // Living booster — with directional arrow
+            ctx.fillRect(cx - pw/2, cy - ph, pw, ph);
+            // Arrow showing direction
+            const d = player.facing;
+            ctx.fillStyle = invincible ? C.goal : '#B87820';
+            ctx.beginPath();
+            ctx.moveTo(cx + d * 3.5, cy - ph/2);
+            ctx.lineTo(cx - d * 1.5, cy - ph/2 - 2.5);
+            ctx.lineTo(cx - d * 1.5, cy - ph/2 + 2.5);
+            ctx.fill();
+        }
+
+        // Eyes — the spark of life
         const eyeShift = player.facing * 1.5;
         const eyeY = cy - ph + 2 * sy;
-        ctx.fillStyle = invincible ? C.goal : C.playerDark;
+        ctx.fillStyle = eyeColor;
         ctx.fillRect(cx - 3 * sx + eyeShift, eyeY, 2, 2);
         ctx.fillRect(cx + 1 * sx + eyeShift, eyeY, 2, 2);
-        // Pupils — bright spark of life
-        ctx.fillStyle = invincible ? C.bg : '#fff';
+        // Pupils
+        ctx.fillStyle = pupilColor;
         ctx.fillRect(cx - 3 * sx + eyeShift + player.facing * 0.7 + 0.5, eyeY + 0.5, 1, 1);
         ctx.fillRect(cx + 1 * sx + eyeShift + player.facing * 0.7 + 0.5, eyeY + 0.5, 1, 1);
 
-        // Dive visual — amber streak above when diving
+        // Dive visual — streak above when diving
         if (player.diving) {
             ctx.globalAlpha = 0.3;
             ctx.fillStyle = C.player;
@@ -1106,33 +1141,6 @@ function draw() {
             ctx.fillRect(wx, player.y + 1, 2, player.h - 2);
             ctx.globalAlpha = 1;
         }
-
-        // Corpse preview — show next corpse type above player head
-        const previewY = cy - ph - 10 + Math.sin(performance.now() / 300) * 2;
-        const previewX = cx;
-        ctx.globalAlpha = 0.5 + Math.sin(performance.now() / 400) * 0.15;
-        if (player.nextCorpse === 'spring') {
-            ctx.fillStyle = C.spring;
-            // Small zigzag spring shape
-            ctx.fillRect(previewX - 4, previewY, 8, 2);
-            ctx.fillRect(previewX - 3, previewY - 2, 2, 2);
-            ctx.fillRect(previewX + 1, previewY + 2, 2, 2);
-        } else if (player.nextCorpse === 'platform') {
-            ctx.fillStyle = C.platform;
-            // Small platform rectangle
-            ctx.fillRect(previewX - 5, previewY, 10, 3);
-            ctx.fillStyle = '#D0C0A0';
-            ctx.fillRect(previewX - 5, previewY, 10, 1);
-        } else if (player.nextCorpse === 'booster') {
-            ctx.fillStyle = C.booster;
-            // Small arrow
-            ctx.beginPath();
-            ctx.moveTo(previewX + 4, previewY + 1);
-            ctx.lineTo(previewX - 2, previewY - 2);
-            ctx.lineTo(previewX - 2, previewY + 4);
-            ctx.fill();
-        }
-        ctx.globalAlpha = 1;
     }
 
     // Particles
