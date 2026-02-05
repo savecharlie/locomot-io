@@ -106,15 +106,15 @@ const C = {
 };
 
 // ── Game resolution ──
+const LEVEL_H_TILES = 14;
 let W, H, scale;
 function resize() {
-    const dpr = window.devicePixelRatio || 1;
     const sw = window.innerWidth;
     const sh = window.innerHeight;
-    // Target ~320px wide game resolution
-    scale = Math.max(1, Math.floor(Math.min(sw, sh * 1.5) / 320));
+    // Scale so level height fills screen exactly
+    scale = sh / (LEVEL_H_TILES * TILE);
     W = Math.floor(sw / scale);
-    H = Math.floor(sh / scale);
+    H = LEVEL_H_TILES * TILE; // exact fit
     canvas.width = W;
     canvas.height = H;
     canvas.style.imageRendering = 'pixelated';
@@ -134,7 +134,7 @@ let particles = [];
 let buzzsaws = [];
 
 function generateSegment(segIndex, difficulty) {
-    const h = Math.min(Math.floor(H / TILE), 14); // tight ceiling — hell is cramped
+    const h = LEVEL_H_TILES;
     levelH = h;
     const startX = segIndex * SEGMENT_W;
     const d = Math.min(10, 1 + segIndex * 0.5 + difficulty * 0.3);
@@ -242,6 +242,7 @@ const player = {
     squash: 1,
     trail: [],
     boostTimer: 0,
+    hasJumped: false, // must jump at least once to leave a corpse
     deathCount: 0,
     distance: 0,
     bestDistance: 0,
@@ -312,7 +313,7 @@ function init() {
     generateSegment(0, 0);
     generateSegment(1, 0);
     spawnPickups();
-    const h = Math.min(Math.floor(H / TILE), 14);
+    const h = LEVEL_H_TILES;
     player.x = 2 * TILE;
     player.y = (h - 3) * TILE;
     player.respawnX = player.x;
@@ -411,28 +412,32 @@ function die() {
     spawnP(player.x + player.w/2, player.y + player.h/2, C.player, 12, 80, 0.4);
     spawnP(player.x + player.w/2, player.y + player.h/2, C.spike, 6, 50, 0.3);
 
-    // Leave corpse
-    const type = CORPSE_TYPES[Math.floor(Math.random() * CORPSE_TYPES.length)];
-    const c = { x: player.x, y: player.y, w: player.w, h: player.h, type, age: 0 };
+    // Only leave corpse if player actually tried (jumped at least once)
+    // and didn't die in a chasm (below the floor)
+    const inChasm = player.y > (LEVEL_H_TILES - 1) * TILE;
+    if (player.hasJumped && !inChasm) {
+        const type = CORPSE_TYPES[Math.floor(Math.random() * CORPSE_TYPES.length)];
+        const c = { x: player.x, y: player.y, w: player.w, h: player.h, type, age: 0 };
 
-    if (type === 'spring') {
-        c.w = 11; c.h = 5;
-        c.y = c.y + player.h - c.h;
-    } else if (type === 'platform') {
-        c.w = 16; c.h = 5;
-        c.y = c.y + player.h - c.h;
-    } else if (type === 'booster') {
-        c.w = 9; c.h = 9;
-        c.dir = player.facing;
-        c.y = c.y + player.h/2 - c.h/2;
+        if (type === 'spring') {
+            c.w = 11; c.h = 5;
+            c.y = c.y + player.h - c.h;
+        } else if (type === 'platform') {
+            c.w = 16; c.h = 5;
+            c.y = c.y + player.h - c.h;
+        } else if (type === 'booster') {
+            c.w = 9; c.h = 9;
+            c.dir = player.facing;
+            c.y = c.y + player.h/2 - c.h/2;
+        }
+
+        corpses.push(c);
     }
-
-    corpses.push(c);
 }
 
 function respawn() {
     // Roguelike: restart from the very beginning, corpses stay
-    const h = Math.min(Math.floor(H / TILE), 14);
+    const h = LEVEL_H_TILES;
     player.x = 2 * TILE;
     player.y = (h - 3) * TILE;
     player.vx = RUN_SPEED;
@@ -443,6 +448,7 @@ function respawn() {
     player.trail = [];
     player.boostTimer = 0;
     player.invincible = 0;
+    player.hasJumped = false;
     player.distance = 0;
     cam.x = 0; cam.y = 0;
     // Re-enable pickups for this run
@@ -458,6 +464,7 @@ function doJump() {
 }
 
 function doDie() {
+    player.hasJumped = true; // intentional sacrifice always counts
     die();
 }
 
@@ -534,16 +541,8 @@ function update(dt) {
 
     // Camera
     const targetX = player.x + player.w/2 - W/2 + 40; // look ahead
-    const levelPixH = levelH * TILE;
-    let camTargetY;
-    if (levelPixH <= H) {
-        // Level fits on screen — lock camera to show exactly the level, no void
-        camTargetY = (levelPixH - H) / 2;
-    } else {
-        camTargetY = Math.max(0, Math.min(player.y + player.h/2 - H/2, levelPixH - H));
-    }
     cam.x += (targetX - cam.x) * 6 * dt;
-    cam.y += (camTargetY - cam.y) * 6 * dt;
+    cam.y = 0; // level fits screen exactly — no vertical scroll
     if (cam.shake > 0) {
         cam.sx = (Math.random() * 2 - 1) * cam.shake;
         cam.sy = (Math.random() * 2 - 1) * cam.shake;
@@ -603,12 +602,14 @@ function update(dt) {
         if (player.onGround) {
             player.vy = JUMP_FORCE;
             player.onGround = false;
+            player.hasJumped = true;
             player.squash = 1.3;
             spawnP(player.x + player.w/2, player.y + player.h, C.player, 3, 25, 0.15);
         } else if (player.onWall !== 0) {
             player.vx = -player.onWall * 180;
             player.vy = JUMP_FORCE * 0.9;
             player.facing = -player.onWall;
+            player.hasJumped = true;
             player.boostTimer = 0.15;
             player.squash = 1.3;
             spawnP(player.x + player.w, player.y + player.h/2, C.tile, 4, 40, 0.2);
