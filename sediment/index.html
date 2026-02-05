@@ -9,7 +9,7 @@
 * { margin: 0; padding: 0; box-sizing: border-box; }
 html, body {
     width: 100%; height: 100%; overflow: hidden;
-    background: #1a1a2a;
+    background: #0D0D1A;
     touch-action: none;
     user-select: none;
     -webkit-user-select: none;
@@ -18,7 +18,7 @@ html, body {
 #rotate-msg {
     display: none;
     position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-    background: #1a1a2a;
+    background: #0D0D1A;
     z-index: 999;
     flex-direction: column;
     align-items: center; justify-content: center;
@@ -27,12 +27,12 @@ html, body {
     padding: 40px;
 }
 #rotate-msg .title {
-    color: #fff;
+    color: #F0A030;
     font: bold 28px monospace;
     letter-spacing: 4px;
 }
 #rotate-msg .tagline {
-    color: rgba(255,255,255,0.4);
+    color: rgba(240,160,48,0.4);
     font: 10px monospace;
     letter-spacing: 1px;
 }
@@ -41,13 +41,13 @@ html, body {
     animation: rock 1.5s ease-in-out infinite;
 }
 #rotate-msg .rotate-hint {
-    color: rgba(255,255,255,0.6);
+    color: rgba(208,204,196,0.5);
     font: 9px monospace;
 }
 #rotate-msg .version {
     position: absolute;
     bottom: 12px; right: 14px;
-    color: rgba(255,255,255,0.2);
+    color: rgba(208,204,196,0.2);
     font: 8px monospace;
 }
 @keyframes rock {
@@ -118,29 +118,31 @@ const canvas = document.getElementById('c');
 const ctx = canvas.getContext('2d');
 
 // ── Config ──
-const VERSION = 'v6';
+const VERSION = 'v7';
 const TILE = 12;
 const GRAVITY = 700;
 const JUMP_FORCE = -280;
 const RUN_SPEED = 100;
 const WALL_SLIDE_SPEED = 40;
 
-// ── Colors (B&W — shape is the vocabulary) ──
+// ── Colors (Geological Strata) ──
+// Warm = alive/danger, Cool = tools/help, Neutral = structure, White = power
 const C = {
-    bg: '#000',
-    tile: '#e0e0e0',
-    tileHL: '#f0f0f0',
-    player: '#ffffff',
-    playerDark: '#1a1a1a',
-    spike: '#888',
-    saw: '#bbb',
-    sawBlade: '#333',
-    goal: '#fff',
-    spring: '#ccc',
-    platform: '#aaa',
-    booster: '#ddd',
-    text: '#fff',
-    ghost: 'rgba(255,255,255,0.18)'
+    bg: '#0D0D1A',          // deep basalt
+    tile: '#3A3A50',         // slate stone
+    tileHL: '#4E4E68',       // stone highlight
+    tileSH: '#2A2A3A',       // stone shadow
+    player: '#F0A030',       // amber (life)
+    playerDark: '#331A00',   // dark amber (eyes)
+    spike: '#CC3040',        // magma red (static danger)
+    saw: '#EE5533',          // hot orange (active danger)
+    sawBlade: '#882211',     // dark red (blade teeth)
+    goal: '#DDEEFF',         // diamond blue-white (power)
+    spring: '#40CC90',       // crystal teal (vertical help)
+    platform: '#B8A080',     // sandstone tan (stable help)
+    booster: '#50AADD',      // geothermal blue (forward help)
+    text: '#D0CCC4',         // stone text
+    ghost: 'rgba(240,160,48,0.18)' // amber trail
 };
 
 // ── Game resolution ──
@@ -466,7 +468,7 @@ function die() {
     player.deathCount++;
 
     cam.shake = Math.max(cam.shake, 5);
-    flash.a = 0.6; flash.r = 1; flash.g = 1; flash.b = 1;
+    flash.a = 0.6; flash.r = 0.94; flash.g = 0.63; flash.b = 0.19;
     spawnP(player.x + player.w/2, player.y + player.h/2, C.player, 12, 80, 0.4);
     spawnP(player.x + player.w/2, player.y + player.h/2, C.spike, 6, 50, 0.3);
 
@@ -698,14 +700,14 @@ function update(dt) {
             player.hasJumped = true;
             player.diving = false;
             player.squash = 1.2;
-            spawnP(player.x + player.w/2, player.y + player.h, 'rgba(255,255,255,0.5)', 4, 35, 0.2);
-            spawnP(player.x + player.w/2, player.y + player.h/2, '#fff', 2, 20, 0.15);
+            spawnP(player.x + player.w/2, player.y + player.h, 'rgba(240,180,80,0.5)', 4, 35, 0.2);
+            spawnP(player.x + player.w/2, player.y + player.h/2, '#FFD060', 2, 20, 0.15);
         } else if (!player.onGround && player.vy > -50) {
             // Dive — third tap while airborne, slams down
             player.vy = 380;
             player.diving = true;
             player.squash = 0.7;
-            spawnP(player.x + player.w/2, player.y, C.spike, 3, 30, 0.15);
+            spawnP(player.x + player.w/2, player.y, C.player, 3, 30, 0.15);
         }
     }
 
@@ -742,10 +744,10 @@ function update(dt) {
                     player.onGround = true;
                     if (wasInAir && player.vy > 80) {
                         if (player.diving) {
-                            // Dive impact — big slam
+                            // Dive impact — big slam, stone dust + amber force
                             player.squash = 0.4;
                             cam.shake = Math.max(cam.shake, 4);
-                            spawnP(player.x + player.w/2, player.y + player.h, C.spike, 6, 50, 0.25);
+                            spawnP(player.x + player.w/2, player.y + player.h, C.tile, 6, 50, 0.25);
                             spawnP(player.x + player.w/2, player.y + player.h, C.player, 4, 35, 0.2);
                             player.diving = false;
                         } else {
@@ -779,10 +781,10 @@ function update(dt) {
         }
     }
 
-    // Dive particles (downward streak)
+    // Dive particles (amber downward streak)
     if (player.diving && !player.onGround) {
         if (Math.random() < 0.6) {
-            spawnP(player.x + Math.random() * player.w, player.y, C.spike, 1, 15, 0.12);
+            spawnP(player.x + Math.random() * player.w, player.y, C.player, 1, 15, 0.12);
         }
     }
 
@@ -803,7 +805,7 @@ function update(dt) {
             pk.collected = true;
             player.invincible = INVINCIBLE_DURATION;
             cam.shake = Math.max(cam.shake, 3);
-            flash.a = 0.5; flash.r = 1; flash.g = 1; flash.b = 1;
+            flash.a = 0.5; flash.r = 0.87; flash.g = 0.93; flash.b = 1.0;
             spawnP(pk.x + pk.w/2, pk.y + pk.h/2, '#fff', 10, 60, 0.4);
             spawnP(pk.x + pk.w/2, pk.y + pk.h/2, C.goal, 6, 40, 0.3);
         }
@@ -917,19 +919,19 @@ function draw() {
                 ctx.fillRect(px, py, TILE, 1);
                 ctx.fillRect(px, py, 1, TILE);
                 // Bottom and right edge shadow
-                ctx.fillStyle = '#aaa';
+                ctx.fillStyle = C.tileSH;
                 ctx.fillRect(px, py + TILE - 1, TILE, 1);
                 ctx.fillRect(px + TILE - 1, py, 1, TILE);
             } else if (t === 2) {
-                // Spikes — darker gray, distinct from tiles
+                // Spikes — magma red triangles
                 ctx.fillStyle = C.spike;
                 ctx.beginPath();
                 ctx.moveTo(px + 1, py + TILE);
                 ctx.lineTo(px + TILE/2, py + 2);
                 ctx.lineTo(px + TILE - 1, py + TILE);
                 ctx.fill();
-                // Bright tip
-                ctx.fillStyle = '#fff';
+                // Hot bright tip
+                ctx.fillStyle = '#FF5050';
                 ctx.fillRect(px + TILE/2 - 0.5, py + 2, 1, 2);
             }
         }
@@ -954,7 +956,7 @@ function draw() {
             );
         }
         // Center dot
-        ctx.fillStyle = C.bg;
+        ctx.fillStyle = '#331111';
         ctx.beginPath();
         ctx.arc(saw.x, saw.y, 2, 0, Math.PI * 2);
         ctx.fill();
@@ -971,33 +973,33 @@ function draw() {
             ctx.globalAlpha = a;
             ctx.fillStyle = C.spring;
             ctx.fillRect(c.x, c.y, c.w, c.h);
-            ctx.fillStyle = C.bg;
+            ctx.fillStyle = '#1A6648';
             for (let i = 0; i < 3; i++) {
                 ctx.fillRect(c.x + 1 + i * 3, c.y + 1, 1, c.h - 2);
             }
-            // Top highlight
-            ctx.fillStyle = '#fff';
+            // Bright top edge — the active surface
+            ctx.fillStyle = '#60EEAD';
             ctx.fillRect(c.x, c.y, c.w, 1);
             ctx.globalAlpha = 1;
         } else if (c.type === 'platform') {
             ctx.globalAlpha = a;
             ctx.fillStyle = C.platform;
             ctx.fillRect(c.x, c.y, c.w, c.h);
-            ctx.fillStyle = '#ccc';
+            ctx.fillStyle = '#D0C0A0';
             ctx.fillRect(c.x, c.y, c.w, 1);
-            // Bottom edge
-            ctx.fillStyle = '#777';
+            // Shadow bottom
+            ctx.fillStyle = '#8A7058';
             ctx.fillRect(c.x, c.y + c.h - 1, c.w, 1);
             ctx.globalAlpha = 1;
         } else if (c.type === 'booster') {
             ctx.globalAlpha = a;
             ctx.fillStyle = C.booster;
             ctx.fillRect(c.x, c.y, c.w, c.h);
-            // Arrow
+            // Dark directional arrow
             const cx = c.x + c.w/2;
             const cy = c.y + c.h/2;
             const d = c.dir || 1;
-            ctx.fillStyle = C.bg;
+            ctx.fillStyle = '#1A4466';
             ctx.beginPath();
             ctx.moveTo(cx + d * 3.5, cy);
             ctx.lineTo(cx - d * 2, cy - 3);
@@ -1052,14 +1054,14 @@ function draw() {
         const pw = player.w * sx;
         const ph = player.h * sy;
 
-        // Invincibility — player inverts to black
+        // Invincibility — the void walks (diamond outline, void body)
         const invincible = player.invincible > 0;
         if (invincible) {
-            // White outline (the void walks)
-            ctx.fillStyle = '#fff';
+            // Diamond glow outline
+            ctx.fillStyle = C.goal;
             ctx.fillRect(cx - pw/2 - 1, cy - ph - 1, pw + 2, ph + 2);
-            // Black body
-            ctx.fillStyle = '#000';
+            // Void body — you become the background
+            ctx.fillStyle = C.bg;
         } else {
             ctx.fillStyle = C.player;
         }
@@ -1068,18 +1070,18 @@ function draw() {
         // Eyes
         const eyeShift = player.facing * 1.5;
         const eyeY = cy - ph + 2 * sy;
-        ctx.fillStyle = invincible ? '#fff' : '#000';
+        ctx.fillStyle = invincible ? C.goal : C.playerDark;
         ctx.fillRect(cx - 3 * sx + eyeShift, eyeY, 2, 2);
         ctx.fillRect(cx + 1 * sx + eyeShift, eyeY, 2, 2);
-        // Pupils
-        ctx.fillStyle = invincible ? '#000' : '#fff';
+        // Pupils — bright spark of life
+        ctx.fillStyle = invincible ? C.bg : '#fff';
         ctx.fillRect(cx - 3 * sx + eyeShift + player.facing * 0.7 + 0.5, eyeY + 0.5, 1, 1);
         ctx.fillRect(cx + 1 * sx + eyeShift + player.facing * 0.7 + 0.5, eyeY + 0.5, 1, 1);
 
-        // Dive visual — stretch player when diving
+        // Dive visual — amber streak above when diving
         if (player.diving) {
             ctx.globalAlpha = 0.3;
-            ctx.fillStyle = C.spike;
+            ctx.fillStyle = C.player;
             ctx.fillRect(cx - pw/2 + 1, cy - ph - 4, pw - 2, 4);
             ctx.globalAlpha = 1;
         }
@@ -1107,7 +1109,7 @@ function draw() {
             ctx.fillStyle = C.platform;
             // Small platform rectangle
             ctx.fillRect(previewX - 5, previewY, 10, 3);
-            ctx.fillStyle = '#ccc';
+            ctx.fillStyle = '#D0C0A0';
             ctx.fillRect(previewX - 5, previewY, 10, 1);
         } else if (player.nextCorpse === 'booster') {
             ctx.fillStyle = C.booster;
@@ -1138,13 +1140,13 @@ function draw() {
     ctx.fillStyle = 'rgba(255,255,255,0.4)';
     ctx.fillText(`best: ${player.bestDistance}m  deaths: ${player.deathCount}`, 4, 20);
 
-    // Invincibility bar
+    // Invincibility bar — diamond depleting
     if (player.invincible > 0) {
         const barW = 40;
         const fill = (player.invincible / INVINCIBLE_DURATION) * barW;
-        ctx.fillStyle = 'rgba(255,255,255,0.3)';
+        ctx.fillStyle = 'rgba(221,238,255,0.2)';
         ctx.fillRect(4, 24, barW, 3);
-        ctx.fillStyle = '#fff';
+        ctx.fillStyle = C.goal;
         ctx.fillRect(4, 24, fill, 3);
     }
 
@@ -1158,18 +1160,18 @@ function draw() {
 
     // Start screen
     if (!started) {
-        ctx.fillStyle = 'rgba(0, 0, 0, 0.85)';
+        ctx.fillStyle = 'rgba(13, 13, 26, 0.88)';
         ctx.fillRect(0, 0, W, H);
         ctx.textAlign = 'center';
-        ctx.fillStyle = '#fff';
+        ctx.fillStyle = C.player;
         ctx.font = '14px monospace';
         ctx.fillText('SEDIMENT', W/2, H/2 - 20);
-        ctx.fillStyle = 'rgba(255,255,255,0.5)';
+        ctx.fillStyle = 'rgba(240,160,48,0.45)';
         ctx.font = '7px monospace';
         ctx.fillText('your deaths build the way', W/2, H/2 - 4);
-        ctx.fillStyle = '#fff';
+        ctx.fillStyle = C.text;
         ctx.fillText('tap to start', W/2, H/2 + 16);
-        ctx.fillStyle = 'rgba(255,255,255,0.2)';
+        ctx.fillStyle = 'rgba(208,204,196,0.2)';
         ctx.font = '6px monospace';
         ctx.textAlign = 'right';
         ctx.fillText(VERSION, W - 4, H - 4);
@@ -1190,14 +1192,14 @@ function draw() {
 
     // Pause overlay
     if (paused) {
-        ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+        ctx.fillStyle = 'rgba(13, 13, 26, 0.8)';
         ctx.fillRect(0, 0, W, H);
-        ctx.fillStyle = '#fff';
+        ctx.fillStyle = C.text;
         ctx.font = '12px monospace';
         ctx.textAlign = 'center';
         ctx.fillText('PAUSED', W/2, H/2 - 8);
         ctx.font = '7px monospace';
-        ctx.fillStyle = 'rgba(255,255,255,0.5)';
+        ctx.fillStyle = 'rgba(208,204,196,0.5)';
         ctx.fillText('tap to resume', W/2, H/2 + 8);
         ctx.textAlign = 'left';
     }
