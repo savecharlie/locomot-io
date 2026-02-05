@@ -1,0 +1,48 @@
+SEDIMENT
+
+A platformer where the level is made of everyone's deaths.
+
+You auto-run through hell — chasms, spike fields, buzzsaws — and the terrain offers you nothing. No platforms, no help, no mercy. Just you and the void.
+
+When you die, your corpse becomes a tool. A spring. A platform. A booster. Random, permanent, yours. You restart from the beginning, but your corpses stay. Die enough times and the hell you're running through starts to have handholds.
+
+Now imagine everyone's playing the same level. Your deaths help strangers. A spring you left in a chasm saves someone across the world. Their platform bridges your impossible gap. The level fills with sediment — layers of collective failure becoming solid ground.
+
+Early in the day, the level is barren and brutal. By evening, it's thick with the fossils of everyone who struggled before you. The terrain itself is shaped by how people died.
+
+Every player is a geological force:
+- Builders place tools strategically
+- Trolls clog passages (which become new terrain)
+- AFKers slowly erode early obstacles through repetition
+- Artists leave beautiful custom pixel-art corpses behind
+
+There is no griefing because there is no subtraction. You can only add. Every action — helpful, chaotic, idle — deposits more sediment. The chemistry self-balances.
+
+New level seed daily. Your corpses carry your art. The archive preserves yesterday's geology forever.
+
+Every time you die, you make the game easier for someone else.
+
+
+── BUILD PLAN ──
+
+Done:
+- [x] Auto-runner core (jump, die, respawn)
+- [x] Corpse system (spring, platform, booster)
+- [x] Roguelike (restart from beginning, corpses persist)
+- [x] Hell terrain (chasms, spike fields, buzzsaws, no platforms)
+- [x] Invincibility pickups
+- [x] Pause button
+- [x] Mobile landscape layout + touch controls
+- [x] Welcome message ("future corpse #20501")
+
+Next:
+- [ ] Ghost players — see a few translucent silhouettes of other runners near you in the level, real-time or recent replays
+- [ ] Shared corpses — PartyKit backend, daily seed, everyone's deaths in one world
+- [ ] Lithification — dense corpse areas compress into permanent terrain (sedimentary rock)
+- [ ] Custom corpse skins — pixel art editor for your death aesthetic
+- [ ] Death timelapse replay — watch your run's deaths build up infrastructure
+- [ ] Daily seed (Wordle model) — same level for everyone, new each day
+- [ ] "Most helpful" stat — track how many players used your corpses
+- [ ] Gallery/archive — browse finished daily levels, see the sediment layers
+- [ ] Sound design
+- [ ] Art pass (Ivy draws real sprites)

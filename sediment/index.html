@@ -1,0 +1,1027 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<meta name="screen-orientation" content="landscape">
+<title>SEDIMENT</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+html, body {
+    width: 100%; height: 100%; overflow: hidden;
+    background: #14141e;
+    touch-action: none;
+    user-select: none;
+    -webkit-user-select: none;
+}
+/* Force landscape message */
+#rotate-msg {
+    display: none;
+    position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+    background: #14141e;
+    color: #e6e6f0;
+    font: 14px monospace;
+    z-index: 999;
+    align-items: center; justify-content: center;
+    text-align: center;
+}
+@media (orientation: portrait) {
+    #rotate-msg { display: flex; }
+    canvas, #ui { display: none !important; }
+}
+canvas { display: block; width: 100%; height: 100%; image-rendering: pixelated; }
+#ui {
+    position: fixed; bottom: 0; right: 0;
+    width: 80px; height: 160px;
+    display: flex; flex-direction: column; align-items: center; justify-content: flex-end;
+    padding-bottom: 12px; gap: 8px;
+    z-index: 10;
+}
+#deathBtn {
+    width: 56px; height: 56px;
+    border-radius: 50%;
+    background: rgba(230, 77, 100, 0.3);
+    border: 2px solid rgba(230, 77, 100, 0.6);
+    color: #e64d64;
+    font-size: 24px;
+    display: flex; align-items: center; justify-content: center;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+}
+#deathBtn:active { background: rgba(230, 77, 100, 0.6); }
+#pauseBtn {
+    position: fixed; top: 8px; right: 8px;
+    width: 36px; height: 36px;
+    border-radius: 8px;
+    background: rgba(230, 230, 240, 0.15);
+    border: 1px solid rgba(230, 230, 240, 0.3);
+    color: #e6e6f0;
+    font-size: 14px;
+    display: flex; align-items: center; justify-content: center;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+    z-index: 20;
+}
+#pauseBtn:active { background: rgba(230, 230, 240, 0.3); }
+</style>
+</head>
+<body>
+<div id="rotate-msg">rotate your phone</div>
+<canvas id="c"></canvas>
+<div id="ui">
+    <div id="pauseBtn">&#9646;&#9646;</div>
+    <div id="deathBtn">&#9760;</div>
+</div>
+<script>
+// ── SEDIMENT ──
+// Auto-runner where deaths leave tools
+// by Ivy & Iris
+
+const canvas = document.getElementById('c');
+const ctx = canvas.getContext('2d');
+
+// ── Config ──
+const TILE = 12;
+const GRAVITY = 700;
+const JUMP_FORCE = -280;
+const RUN_SPEED = 100;
+const WALL_SLIDE_SPEED = 40;
+
+// ── Colors ──
+const C = {
+    bg: '#14141e',
+    tile: '#3d3d59',
+    tileHL: '#52527a',
+    player: '#66ccdd',
+    playerDark: '#408899',
+    spike: '#e64d64',
+    saw: '#ff4444',
+    sawBlade: '#cc2222',
+    goal: '#4de68a',
+    spring: '#e6b333',
+    platform: '#8080b3',
+    booster: '#e6668a',
+    text: '#e6e6f0',
+    ghost: 'rgba(153,153,204,0.25)'
+};
+
+// ── Game resolution ──
+let W, H, scale;
+function resize() {
+    const dpr = window.devicePixelRatio || 1;
+    const sw = window.innerWidth;
+    const sh = window.innerHeight;
+    // Target ~320px wide game resolution
+    scale = Math.max(1, Math.floor(Math.min(sw, sh * 1.5) / 320));
+    W = Math.floor(sw / scale);
+    H = Math.floor(sh / scale);
+    canvas.width = W;
+    canvas.height = H;
+    canvas.style.imageRendering = 'pixelated';
+}
+resize();
+window.addEventListener('resize', resize);
+
+// ── Level generation ──
+const SEGMENT_W = 40; // tiles wide per segment
+let levelH = 0;
+let level = [];
+let segments = []; // track generated segments
+let corpses = [];
+let particles = [];
+
+// Buzzsaws (moving hazards)
+let buzzsaws = [];
+
+function generateSegment(segIndex, difficulty) {
+    const h = Math.min(Math.floor(H / TILE), 14); // tight ceiling — hell is cramped
+    levelH = h;
+    const startX = segIndex * SEGMENT_W;
+    const d = Math.min(10, 1 + segIndex * 0.5 + difficulty * 0.3);
+
+    // Basic structure: ceiling + floor, nothing else helpful
+    for (let y = 0; y < h; y++) {
+        if (!level[y]) level[y] = [];
+        for (let x = startX; x < startX + SEGMENT_W; x++) {
+            if (y === 0 || y === h - 1) {
+                level[y][x] = 1; // ceiling and floor
+            } else {
+                level[y][x] = 0;
+            }
+        }
+    }
+
+    // ── CHASMS (gaps in the floor) ──
+    const numChasms = 2 + Math.floor(d * 0.8);
+    const chasmMinX = segIndex === 0 ? 10 : 3; // keep spawn safe
+    for (let i = 0; i < numChasms; i++) {
+        const cx = startX + chasmMinX + Math.floor(Math.random() * (SEGMENT_W - chasmMinX - 4));
+        const cw = 2 + Math.floor(Math.random() * (1 + d * 0.4));
+        for (let dx = 0; dx < cw; dx++) {
+            level[h - 1][cx + dx] = 0; // remove floor = chasm
+        }
+    }
+
+    // ── SPIKE FIELDS (on floor) ──
+    const numSpikeFields = 2 + Math.floor(d * 0.7);
+    const spikeMinX = segIndex === 0 ? 10 : 3;
+    for (let i = 0; i < numSpikeFields; i++) {
+        const sx = startX + spikeMinX + Math.floor(Math.random() * (SEGMENT_W - spikeMinX - 3));
+        const sw = 2 + Math.floor(Math.random() * 3);
+        for (let dx = 0; dx < sw; dx++) {
+            if (level[h - 2] && level[h - 1][sx + dx] === 1) {
+                level[h - 2][sx + dx] = 2; // spike on floor
+            }
+        }
+    }
+
+    // ── CEILING SPIKES (dripping down) ──
+    const numCeilingSpikes = Math.floor(d * 0.6);
+    for (let i = 0; i < numCeilingSpikes; i++) {
+        const sx = startX + 2 + Math.floor(Math.random() * (SEGMENT_W - 4));
+        if (level[1]) level[1][sx] = 2;
+        // Some hang lower
+        if (d > 4 && Math.random() < 0.4 && level[2]) level[2][sx] = 2;
+    }
+
+    // ── SPIKE WALLS (vertical barriers) ──
+    const numWalls = Math.floor(d * 0.4);
+    for (let i = 0; i < numWalls; i++) {
+        const wx = startX + 6 + Math.floor(Math.random() * (SEGMENT_W - 12));
+        const wallH = 2 + Math.floor(Math.random() * 3);
+        const startY = h - 2 - wallH;
+        for (let dy = 0; dy < wallH; dy++) {
+            if (level[startY + dy]) level[startY + dy][wx] = 2;
+        }
+    }
+
+    // ── BUZZSAWS (moving circular blades) ──
+    const numSaws = Math.floor(d * 0.5);
+    for (let i = 0; i < numSaws; i++) {
+        const sawX = (startX + 8 + Math.floor(Math.random() * (SEGMENT_W - 16))) * TILE;
+        const sawY = (2 + Math.floor(Math.random() * (h - 5))) * TILE;
+        const vertical = Math.random() < 0.5;
+        const range = (2 + Math.floor(Math.random() * 3)) * TILE;
+        buzzsaws.push({
+            x: sawX, y: sawY,
+            baseX: sawX, baseY: sawY,
+            r: 6, // radius
+            vertical: vertical,
+            range: range,
+            speed: 30 + Math.random() * 40,
+            phase: Math.random() * Math.PI * 2,
+            spin: 0
+        });
+    }
+
+    // ── Ensure spawn area is safe ──
+    if (segIndex === 0) {
+        for (let y = 1; y < h - 1; y++) {
+            for (let x = 0; x < 10; x++) {
+                if (level[y] && level[y][x] === 2) level[y][x] = 0;
+            }
+        }
+        // Make sure there's floor at spawn
+        for (let x = 0; x < 10; x++) {
+            level[h - 1][x] = 1;
+        }
+    }
+
+    segments.push(segIndex);
+}
+
+// ── Player ──
+const player = {
+    x: 2 * TILE, y: 0,
+    vx: RUN_SPEED, vy: 0,
+    w: 9, h: 11,
+    onGround: false,
+    onWall: 0,
+    dead: false,
+    facing: 1,
+    squash: 1,
+    trail: [],
+    boostTimer: 0,
+    deathCount: 0,
+    distance: 0,
+    bestDistance: 0,
+    respawnX: 2 * TILE,
+    respawnY: 0,
+    loopStart: 0 // x position where current "loop" started
+};
+
+// ── Camera ──
+const cam = { x: 0, y: 0, sx: 0, sy: 0, shake: 0 };
+const flash = { a: 0, r: 1, g: 1, b: 1 };
+let paused = false;
+
+// ── Corpse types ──
+const CORPSE_TYPES = ['spring', 'platform', 'booster'];
+
+// ── Pickups ──
+let pickups = [];
+const INVINCIBLE_DURATION = 3.0; // seconds
+
+function spawnPickups() {
+    // Scatter invincibility pickups through generated terrain
+    // About 1 per 2 segments
+    for (let s = 0; s < segments.length; s++) {
+        const startX = segments[s] * SEGMENT_W;
+        // Check if we already have a pickup in this segment
+        const hasPickup = pickups.some(p => {
+            const px = Math.floor(p.x / TILE);
+            return px >= startX && px < startX + SEGMENT_W;
+        });
+        if (hasPickup) continue;
+        if (Math.random() < 0.5) continue; // 50% chance per segment
+
+        // Find a clear spot above a platform
+        const h = levelH;
+        for (let attempt = 0; attempt < 20; attempt++) {
+            const tx = startX + 3 + Math.floor(Math.random() * (SEGMENT_W - 6));
+            const ty = 2 + Math.floor(Math.random() * (h - 5));
+            if (level[ty] && level[ty][tx] === 0 && level[ty + 1] && level[ty + 1][tx] === 1) {
+                pickups.push({
+                    x: tx * TILE + 2, y: (ty) * TILE + 2,
+                    w: 8, h: 8, collected: false
+                });
+                break;
+            }
+        }
+    }
+}
+
+// Global corpse counter (simulates shared world)
+let globalCorpseNum = Math.floor(Math.random() * 50000) + 10000;
+let welcomeTimer = 0;
+let welcomeMsg = '';
+
+function init() {
+    level = [];
+    segments = [];
+    particles = [];
+    pickups = [];
+    buzzsaws = [];
+    // Corpses persist across deaths — only clear on hard reset
+    if (!player._hasRun) {
+        corpses = [];
+        globalCorpseNum += Math.floor(Math.random() * 200);
+        welcomeMsg = `welcome, future corpse #${globalCorpseNum}`;
+        welcomeTimer = 3.5;
+    }
+    generateSegment(0, 0);
+    generateSegment(1, 0);
+    spawnPickups();
+    const h = Math.min(Math.floor(H / TILE), 14);
+    player.x = 2 * TILE;
+    player.y = (h - 3) * TILE;
+    player.respawnX = player.x;
+    player.respawnY = player.y;
+    player.vx = RUN_SPEED;
+    player.vy = 0;
+    player.dead = false;
+    player.distance = 0;
+    player.squash = 1;
+    player.trail = [];
+    player.boostTimer = 0;
+    player.loopStart = 0;
+    player.invincible = 0;
+    player._hasRun = true;
+    cam.x = 0; cam.y = 0;
+}
+
+function hardReset() {
+    player._hasRun = false;
+    player.deathCount = 0;
+    player.bestDistance = 0;
+    corpses = [];
+    buzzsaws = [];
+    init();
+}
+
+// ── Collision ──
+function getTile(x, y) {
+    const tx = Math.floor(x / TILE);
+    const ty = Math.floor(y / TILE);
+    if (ty < 0 || ty >= levelH) return 1; // out of bounds = solid
+    if (level[ty] && level[ty][tx] !== undefined) return level[ty][tx];
+    return 0;
+}
+
+function solidAt(x, y, w, h) {
+    const l = Math.floor(x / TILE);
+    const r = Math.floor((x + w - 1) / TILE);
+    const t = Math.floor(y / TILE);
+    const b = Math.floor((y + h - 1) / TILE);
+    for (let ty = t; ty <= b; ty++) {
+        for (let tx = l; tx <= r; tx++) {
+            if (ty < 0) return true; // ceiling is solid
+            if (ty >= levelH) continue; // below level = void, not solid
+            if (level[ty] && level[ty][tx] === 1) return true;
+        }
+    }
+    // Platform corpses
+    for (const c of corpses) {
+        if (c.type === 'platform') {
+            if (x < c.x + c.w && x + w > c.x && y < c.y + c.h && y + h > c.y) return true;
+        }
+    }
+    return false;
+}
+
+function spikeAt(x, y, w, h) {
+    const l = Math.floor(x / TILE);
+    const r = Math.floor((x + w - 1) / TILE);
+    const t = Math.floor(y / TILE);
+    const b = Math.floor((y + h - 1) / TILE);
+    for (let ty = t; ty <= b; ty++) {
+        for (let tx = l; tx <= r; tx++) {
+            if (level[ty] && level[ty][tx] === 2) return true;
+        }
+    }
+    return false;
+}
+
+function overlap(x1, y1, w1, h1, x2, y2, w2, h2) {
+    return x1 < x2 + w2 && x1 + w1 > x2 && y1 < y2 + h2 && y1 + h1 > y2;
+}
+
+// ── Particles ──
+function spawnP(x, y, color, count, speed, life) {
+    for (let i = 0; i < count; i++) {
+        const a = Math.random() * Math.PI * 2;
+        const s = speed * (0.5 + Math.random() * 0.5);
+        particles.push({
+            x, y, vx: Math.cos(a) * s, vy: Math.sin(a) * s - speed * 0.3,
+            life: life * (0.5 + Math.random() * 0.5), maxLife: life,
+            color, size: 1 + Math.random()
+        });
+    }
+}
+
+// ── Die ──
+function die() {
+    if (player.dead) return;
+    player.dead = true;
+    player.deathTimer = 0;
+    player.deathCount++;
+
+    cam.shake = Math.max(cam.shake, 5);
+    flash.a = 0.6; flash.r = 0.9; flash.g = 0.2; flash.b = 0.25;
+    spawnP(player.x + player.w/2, player.y + player.h/2, C.player, 12, 80, 0.4);
+    spawnP(player.x + player.w/2, player.y + player.h/2, C.spike, 6, 50, 0.3);
+
+    // Leave corpse
+    const type = CORPSE_TYPES[Math.floor(Math.random() * CORPSE_TYPES.length)];
+    const c = { x: player.x, y: player.y, w: player.w, h: player.h, type, age: 0 };
+
+    if (type === 'spring') {
+        c.w = 11; c.h = 5;
+        c.y = c.y + player.h - c.h;
+    } else if (type === 'platform') {
+        c.w = 16; c.h = 5;
+        c.y = c.y + player.h - c.h;
+    } else if (type === 'booster') {
+        c.w = 9; c.h = 9;
+        c.dir = player.facing;
+        c.y = c.y + player.h/2 - c.h/2;
+    }
+
+    corpses.push(c);
+}
+
+function respawn() {
+    // Roguelike: restart from the very beginning, corpses stay
+    const h = Math.min(Math.floor(H / TILE), 14);
+    player.x = 2 * TILE;
+    player.y = (h - 3) * TILE;
+    player.vx = RUN_SPEED;
+    player.vy = 0;
+    player.dead = false;
+    player.onGround = false;
+    player.squash = 0.5;
+    player.trail = [];
+    player.boostTimer = 0;
+    player.invincible = 0;
+    player.distance = 0;
+    cam.x = 0; cam.y = 0;
+    // Re-enable pickups for this run
+    for (const p of pickups) p.collected = false;
+}
+
+// ── Input ──
+let jumpPressed = false;
+let jumpBuffered = false;
+
+function doJump() {
+    jumpBuffered = true;
+}
+
+function doDie() {
+    die();
+}
+
+// Touch
+canvas.addEventListener('touchstart', (e) => {
+    e.preventDefault();
+    for (const t of e.changedTouches) {
+        // Check if touch is in death button zone (bottom-right 80x80 in screen coords)
+        const sw = window.innerWidth;
+        const sh = window.innerHeight;
+        if (t.clientX > sw - 90 && t.clientY > sh - 90) {
+            doDie();
+        } else {
+            doJump();
+        }
+    }
+}, { passive: false });
+
+// Keyboard fallback
+document.addEventListener('keydown', (e) => {
+    if (e.code === 'Space' || e.code === 'ArrowUp' || e.code === 'KeyW' || e.code === 'KeyZ') doJump();
+    if (e.code === 'KeyK' || e.code === 'KeyQ') doDie();
+    if (e.code === 'KeyR') hardReset();
+    if (e.code === 'KeyP' || e.code === 'Escape') togglePause();
+    if (e.code === 'Escape') { /* nothing on web */ }
+});
+
+// Pause
+function togglePause() {
+    paused = !paused;
+    document.getElementById('pauseBtn').innerHTML = paused ? '&#9654;' : '&#9646;&#9646;';
+}
+
+document.getElementById('pauseBtn').addEventListener('touchstart', (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    togglePause();
+}, { passive: false });
+
+document.getElementById('pauseBtn').addEventListener('click', (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    togglePause();
+});
+
+// Death button
+document.getElementById('deathBtn').addEventListener('touchstart', (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    doDie();
+}, { passive: false });
+
+// ── Update ──
+let lastTime = 0;
+
+function update(dt) {
+    if (paused) return;
+
+    // Welcome timer
+    if (welcomeTimer > 0) welcomeTimer -= dt;
+
+    // Particles
+    for (let i = particles.length - 1; i >= 0; i--) {
+        const p = particles[i];
+        p.x += p.vx * dt;
+        p.y += p.vy * dt;
+        p.vy += 180 * dt;
+        p.life -= dt;
+        if (p.life <= 0) particles.splice(i, 1);
+    }
+
+    // Flash
+    if (flash.a > 0) flash.a -= dt * 4;
+
+    // Camera
+    const targetX = player.x + player.w/2 - W/2 + 40; // look ahead
+    const levelPixH = levelH * TILE;
+    let camTargetY;
+    if (levelPixH <= H) {
+        // Level fits on screen — lock camera to show exactly the level, no void
+        camTargetY = (levelPixH - H) / 2;
+    } else {
+        camTargetY = Math.max(0, Math.min(player.y + player.h/2 - H/2, levelPixH - H));
+    }
+    cam.x += (targetX - cam.x) * 6 * dt;
+    cam.y += (camTargetY - cam.y) * 6 * dt;
+    if (cam.shake > 0) {
+        cam.sx = (Math.random() * 2 - 1) * cam.shake;
+        cam.sy = (Math.random() * 2 - 1) * cam.shake;
+        cam.shake *= (1 - 10 * dt);
+        if (cam.shake < 0.3) { cam.shake = 0; cam.sx = 0; cam.sy = 0; }
+    }
+
+    if (player.dead) {
+        player.deathTimer += dt;
+        if (player.deathTimer > 0.35) respawn();
+        return;
+    }
+
+    // Squash lerp
+    player.squash += (1 - player.squash) * 10 * dt;
+
+    // Trail
+    player.trail.unshift({ x: player.x, y: player.y, life: 0.12 });
+    for (let i = player.trail.length - 1; i >= 0; i--) {
+        player.trail[i].life -= dt;
+        if (player.trail[i].life <= 0) player.trail.splice(i, 1);
+    }
+    while (player.trail.length > 4) player.trail.pop();
+
+    // Boost timer
+    if (player.boostTimer > 0) player.boostTimer -= dt;
+
+    // Auto-run (always moving right unless boosted)
+    if (player.boostTimer <= 0) {
+        player.vx = RUN_SPEED;
+        player.facing = 1;
+    }
+
+    // Gravity
+    player.vy += GRAVITY * dt;
+    if (player.vy > 400) player.vy = 400;
+
+    // Wall detection
+    player.onWall = 0;
+    if (!player.onGround) {
+        if (solidAt(player.x + player.w + 1, player.y + 2, 1, player.h - 4)) {
+            player.onWall = 1;
+        }
+    }
+
+    // Wall slide
+    if (player.onWall !== 0 && player.vy > 0) {
+        player.vy = Math.min(player.vy, WALL_SLIDE_SPEED);
+        if (Math.random() < 0.3) {
+            spawnP(player.x + player.w, player.y + player.h * 0.5, C.tile, 1, 15, 0.2);
+        }
+    }
+
+    // Jump buffer
+    if (jumpBuffered) {
+        jumpBuffered = false;
+        if (player.onGround) {
+            player.vy = JUMP_FORCE;
+            player.onGround = false;
+            player.squash = 1.3;
+            spawnP(player.x + player.w/2, player.y + player.h, C.player, 3, 25, 0.15);
+        } else if (player.onWall !== 0) {
+            player.vx = -player.onWall * 180;
+            player.vy = JUMP_FORCE * 0.9;
+            player.facing = -player.onWall;
+            player.boostTimer = 0.15;
+            player.squash = 1.3;
+            spawnP(player.x + player.w, player.y + player.h/2, C.tile, 4, 40, 0.2);
+        }
+    }
+
+    // Move X
+    const wasInAir = !player.onGround;
+    const dx = player.vx * dt;
+    if (dx !== 0) {
+        const sign = dx > 0 ? 1 : -1;
+        const steps = Math.ceil(Math.abs(dx));
+        for (let i = 0; i < steps; i++) {
+            const step = Math.min(1, Math.abs(dx) - i) * sign;
+            if (!solidAt(player.x + step, player.y, player.w, player.h)) {
+                player.x += step;
+            } else {
+                // Hit wall — in auto-runner, wall jump or slide
+                player.vx = 0;
+                break;
+            }
+        }
+    }
+
+    // Move Y
+    player.onGround = false;
+    const dy = player.vy * dt;
+    if (dy !== 0) {
+        const sign = dy > 0 ? 1 : -1;
+        const steps = Math.ceil(Math.abs(dy));
+        for (let i = 0; i < steps; i++) {
+            const step = Math.min(1, Math.abs(dy) - i) * sign;
+            if (!solidAt(player.x, player.y + step, player.w, player.h)) {
+                player.y += step;
+            } else {
+                if (player.vy > 0) {
+                    player.onGround = true;
+                    if (wasInAir && player.vy > 80) {
+                        player.squash = 0.6;
+                        spawnP(player.x + player.w/2, player.y + player.h, C.player, 3, 30, 0.2);
+                        if (player.vy > 250) cam.shake = Math.max(cam.shake, 2);
+                    }
+                }
+                player.vy = 0;
+                break;
+            }
+        }
+    }
+    if (solidAt(player.x, player.y + 1, player.w, player.h)) player.onGround = true;
+
+    // Void death (fell into chasm)
+    if (player.y > levelH * TILE + 20) {
+        die();
+        return;
+    }
+
+    // Update buzzsaws
+    for (const saw of buzzsaws) {
+        saw.spin += dt * 8;
+        const t = performance.now() / 1000;
+        if (saw.vertical) {
+            saw.y = saw.baseY + Math.sin(t * saw.speed * 0.05 + saw.phase) * saw.range;
+        } else {
+            saw.x = saw.baseX + Math.sin(t * saw.speed * 0.05 + saw.phase) * saw.range;
+        }
+    }
+
+    // Invincibility timer
+    if (player.invincible > 0) {
+        player.invincible -= dt;
+        // Sparkle particles while invincible
+        if (Math.random() < 0.4) {
+            spawnP(player.x + Math.random() * player.w, player.y + Math.random() * player.h,
+                '#fff', 1, 30, 0.2);
+        }
+    }
+
+    // Pickup check
+    for (const pk of pickups) {
+        if (pk.collected) continue;
+        if (overlap(player.x, player.y, player.w, player.h, pk.x, pk.y, pk.w, pk.h)) {
+            pk.collected = true;
+            player.invincible = INVINCIBLE_DURATION;
+            cam.shake = Math.max(cam.shake, 3);
+            flash.a = 0.5; flash.r = 1; flash.g = 1; flash.b = 1;
+            spawnP(pk.x + pk.w/2, pk.y + pk.h/2, '#fff', 10, 60, 0.4);
+            spawnP(pk.x + pk.w/2, pk.y + pk.h/2, C.goal, 6, 40, 0.3);
+        }
+    }
+
+    // Spike check (invincibility protects)
+    if (spikeAt(player.x + 2, player.y + 2, player.w - 4, player.h - 4)) {
+        if (player.invincible <= 0) {
+            die();
+            return;
+        } else {
+            // Plow through — sparks
+            if (Math.random() < 0.5) {
+                spawnP(player.x + player.w/2, player.y + player.h, C.spike, 2, 40, 0.2);
+            }
+        }
+    }
+
+    // Buzzsaw collision
+    const pcx = player.x + player.w/2;
+    const pcy = player.y + player.h/2;
+    for (const saw of buzzsaws) {
+        const dx = pcx - saw.x;
+        const dy = pcy - saw.y;
+        const dist = Math.sqrt(dx*dx + dy*dy);
+        if (dist < saw.r + 4) { // player ~4px effective radius
+            if (player.invincible <= 0) {
+                die();
+                return;
+            } else {
+                if (Math.random() < 0.5) spawnP(saw.x, saw.y, C.saw, 2, 50, 0.2);
+            }
+        }
+    }
+
+    // Corpse interactions
+    for (const c of corpses) {
+        if (!overlap(player.x, player.y, player.w, player.h, c.x, c.y, c.w, c.h)) continue;
+
+        if (c.type === 'spring' && player.vy > 0) {
+            player.vy = JUMP_FORCE * 1.5;
+            player.y = c.y - player.h;
+            player.squash = 1.4;
+            cam.shake = Math.max(cam.shake, 3);
+            spawnP(c.x + c.w/2, c.y, C.spring, 5, 60, 0.3);
+        } else if (c.type === 'booster') {
+            const now = performance.now() / 1000;
+            if (!c.cooldown || (now - c.cooldown) > 0.5) {
+                c.cooldown = now;
+                player.vx = (c.dir || 1) * 350;
+                player.vy = JUMP_FORCE * 0.5;
+                player.boostTimer = 0.25;
+                player.facing = c.dir || 1;
+                player.squash = 1.5;
+                cam.shake = Math.max(cam.shake, 4);
+                spawnP(c.x + c.w/2, c.y + c.h/2, C.booster, 7, 70, 0.3);
+            }
+        }
+    }
+
+    // Track distance
+    player.distance = Math.max(player.distance, Math.floor(player.x / TILE));
+    if (player.distance > player.bestDistance) player.bestDistance = player.distance;
+
+    // Generate new segments as player advances
+    const currentSeg = Math.floor(player.x / (SEGMENT_W * TILE));
+    const prevSegCount = segments.length;
+    while (segments.length < currentSeg + 3) {
+        generateSegment(segments.length, player.deathCount);
+    }
+    if (segments.length > prevSegCount) spawnPickups();
+}
+
+// ── Draw ──
+function draw() {
+    ctx.fillStyle = C.bg;
+    ctx.fillRect(0, 0, W, H);
+
+    ctx.save();
+    ctx.translate(-Math.floor(cam.x + cam.sx), -Math.floor(cam.y + cam.sy));
+
+    // Visible tile range
+    const tl = Math.max(0, Math.floor(cam.x / TILE) - 1);
+    const tr = Math.floor((cam.x + W) / TILE) + 1;
+    const tt = Math.max(0, Math.floor(cam.y / TILE) - 1);
+    const tb = Math.min(levelH - 1, Math.floor((cam.y + H) / TILE) + 1);
+
+    // Tiles
+    for (let y = tt; y <= tb; y++) {
+        for (let x = tl; x <= tr; x++) {
+            if (!level[y] || level[y][x] === undefined) continue;
+            const t = level[y][x];
+            const px = x * TILE;
+            const py = y * TILE;
+
+            if (t === 1) {
+                ctx.fillStyle = C.tile;
+                ctx.fillRect(px, py, TILE, TILE);
+                ctx.fillStyle = C.tileHL;
+                ctx.fillRect(px, py, TILE, 1);
+                ctx.fillRect(px, py, 1, TILE);
+            } else if (t === 2) {
+                ctx.fillStyle = C.spike;
+                ctx.beginPath();
+                ctx.moveTo(px + 1, py + TILE);
+                ctx.lineTo(px + TILE/2, py + 2);
+                ctx.lineTo(px + TILE - 1, py + TILE);
+                ctx.fill();
+            }
+        }
+    }
+
+    // Buzzsaws
+    for (const saw of buzzsaws) {
+        if (saw.x - saw.r < cam.x - 30 || saw.x + saw.r > cam.x + W + 30) continue;
+        // Blade circle
+        ctx.fillStyle = C.saw;
+        ctx.beginPath();
+        ctx.arc(saw.x, saw.y, saw.r, 0, Math.PI * 2);
+        ctx.fill();
+        // Spinning teeth
+        ctx.fillStyle = C.sawBlade;
+        for (let i = 0; i < 4; i++) {
+            const a = saw.spin + i * Math.PI / 2;
+            ctx.fillRect(
+                saw.x + Math.cos(a) * (saw.r - 2) - 1,
+                saw.y + Math.sin(a) * (saw.r - 2) - 1,
+                2, 2
+            );
+        }
+        // Center dot
+        ctx.fillStyle = '#333';
+        ctx.beginPath();
+        ctx.arc(saw.x, saw.y, 2, 0, Math.PI * 2);
+        ctx.fill();
+    }
+
+    // Corpses
+    for (const c of corpses) {
+        // Only draw visible
+        if (c.x + c.w < cam.x - 20 || c.x > cam.x + W + 20) continue;
+        c.age = Math.min(1, (c.age || 0) + 0.05);
+        const a = c.age;
+
+        if (c.type === 'spring') {
+            ctx.globalAlpha = a;
+            ctx.fillStyle = C.spring;
+            ctx.fillRect(c.x, c.y, c.w, c.h);
+            ctx.fillStyle = '#b38a1a';
+            for (let i = 0; i < 3; i++) {
+                ctx.fillRect(c.x + 1 + i * 3, c.y + 1, 1, c.h - 2);
+            }
+            ctx.globalAlpha = 1;
+        } else if (c.type === 'platform') {
+            ctx.globalAlpha = a;
+            ctx.fillStyle = C.platform;
+            ctx.fillRect(c.x, c.y, c.w, c.h);
+            ctx.fillStyle = '#9999c2';
+            ctx.fillRect(c.x, c.y, c.w, 1);
+            ctx.globalAlpha = 1;
+        } else if (c.type === 'booster') {
+            ctx.globalAlpha = a;
+            ctx.fillStyle = C.booster;
+            ctx.fillRect(c.x, c.y, c.w, c.h);
+            // Arrow
+            const cx = c.x + c.w/2;
+            const cy = c.y + c.h/2;
+            const d = c.dir || 1;
+            ctx.fillStyle = 'rgba(255,255,255,0.7)';
+            ctx.beginPath();
+            ctx.moveTo(cx + d * 3.5, cy);
+            ctx.lineTo(cx - d * 2, cy - 3);
+            ctx.lineTo(cx - d * 2, cy + 3);
+            ctx.fill();
+            ctx.globalAlpha = 1;
+        }
+    }
+
+    // Pickups
+    for (const pk of pickups) {
+        if (pk.collected) continue;
+        if (pk.x + pk.w < cam.x - 20 || pk.x > cam.x + W + 20) continue;
+        const pulse = Math.sin(performance.now() / 200) * 0.3 + 0.7;
+        ctx.globalAlpha = pulse;
+        ctx.fillStyle = '#fff';
+        // Diamond shape
+        const pcx = pk.x + pk.w/2;
+        const pcy = pk.y + pk.h/2;
+        ctx.beginPath();
+        ctx.moveTo(pcx, pcy - 4);
+        ctx.lineTo(pcx + 3, pcy);
+        ctx.lineTo(pcx, pcy + 4);
+        ctx.lineTo(pcx - 3, pcy);
+        ctx.fill();
+        // Inner glow
+        ctx.fillStyle = C.goal;
+        ctx.beginPath();
+        ctx.moveTo(pcx, pcy - 2);
+        ctx.lineTo(pcx + 1.5, pcy);
+        ctx.lineTo(pcx, pcy + 2);
+        ctx.lineTo(pcx - 1.5, pcy);
+        ctx.fill();
+        ctx.globalAlpha = 1;
+    }
+
+    // Player trail
+    for (const t of player.trail) {
+        const a = t.life / 0.12;
+        ctx.globalAlpha = a * 0.25;
+        ctx.fillStyle = C.player;
+        ctx.fillRect(t.x + 1, t.y + 1, player.w - 2, player.h - 2);
+    }
+    ctx.globalAlpha = 1;
+
+    // Player
+    if (!player.dead) {
+        const sx = 1 / player.squash;
+        const sy = player.squash;
+        const cx = player.x + player.w / 2;
+        const cy = player.y + player.h;
+        const pw = player.w * sx;
+        const ph = player.h * sy;
+
+        // Invincibility glow
+        if (player.invincible > 0) {
+            ctx.globalAlpha = 0.3 + Math.sin(performance.now() / 60) * 0.2;
+            ctx.fillStyle = '#fff';
+            ctx.fillRect(cx - pw/2 - 2, cy - ph - 2, pw + 4, ph + 4);
+            ctx.globalAlpha = 1;
+        }
+
+        ctx.fillStyle = player.invincible > 0 ? '#fff' : C.player;
+        ctx.fillRect(cx - pw/2, cy - ph, pw, ph);
+
+        // Eyes
+        const eyeShift = player.facing * 1.5;
+        const eyeY = cy - ph + 2 * sy;
+        ctx.fillStyle = C.bg;
+        ctx.fillRect(cx - 3 * sx + eyeShift, eyeY, 2, 2);
+        ctx.fillRect(cx + 1 * sx + eyeShift, eyeY, 2, 2);
+        // Pupils
+        ctx.fillStyle = '#fff';
+        ctx.fillRect(cx - 3 * sx + eyeShift + player.facing * 0.7 + 0.5, eyeY + 0.5, 1, 1);
+        ctx.fillRect(cx + 1 * sx + eyeShift + player.facing * 0.7 + 0.5, eyeY + 0.5, 1, 1);
+
+        // Wall slide indicator
+        if (player.onWall !== 0) {
+            ctx.globalAlpha = 0.4;
+            ctx.fillStyle = C.player;
+            const wx = player.onWall < 0 ? player.x - 2 : player.x + player.w;
+            ctx.fillRect(wx, player.y + 1, 2, player.h - 2);
+            ctx.globalAlpha = 1;
+        }
+    }
+
+    // Particles
+    for (const p of particles) {
+        ctx.globalAlpha = p.life / p.maxLife;
+        ctx.fillStyle = p.color;
+        ctx.fillRect(p.x, p.y, p.size, p.size);
+    }
+    ctx.globalAlpha = 1;
+
+    ctx.restore();
+
+    // ── UI ──
+    ctx.fillStyle = C.text;
+    ctx.font = '8px monospace';
+    ctx.fillText(`${player.distance}m`, 4, 10);
+    ctx.fillStyle = 'rgba(230,230,240,0.4)';
+    ctx.fillText(`best: ${player.bestDistance}m  deaths: ${player.deathCount}`, 4, 20);
+
+    // Invincibility bar
+    if (player.invincible > 0) {
+        const barW = 40;
+        const fill = (player.invincible / INVINCIBLE_DURATION) * barW;
+        ctx.fillStyle = 'rgba(255,255,255,0.3)';
+        ctx.fillRect(4, 24, barW, 3);
+        ctx.fillStyle = '#fff';
+        ctx.fillRect(4, 24, fill, 3);
+    }
+
+    // Flash
+    if (flash.a > 0) {
+        ctx.globalAlpha = flash.a * 0.3;
+        ctx.fillStyle = `rgb(${flash.r*255},${flash.g*255},${flash.b*255})`;
+        ctx.fillRect(0, 0, W, H);
+        ctx.globalAlpha = 1;
+    }
+
+    // Welcome message
+    if (welcomeTimer > 0) {
+        const wa = Math.min(1, welcomeTimer / 0.5) * Math.min(1, (3.5 - welcomeTimer + welcomeTimer) > 2.5 ? 1 : welcomeTimer / 1.0);
+        ctx.globalAlpha = Math.min(1, welcomeTimer < 1 ? welcomeTimer : 1);
+        ctx.fillStyle = C.spike;
+        ctx.font = '7px monospace';
+        ctx.textAlign = 'center';
+        ctx.fillText(welcomeMsg, W/2, H/2 - 4);
+        ctx.textAlign = 'left';
+        ctx.globalAlpha = 1;
+    }
+
+    // Pause overlay
+    if (paused) {
+        ctx.fillStyle = 'rgba(20, 20, 30, 0.7)';
+        ctx.fillRect(0, 0, W, H);
+        ctx.fillStyle = C.text;
+        ctx.font = '12px monospace';
+        ctx.textAlign = 'center';
+        ctx.fillText('PAUSED', W/2, H/2 - 8);
+        ctx.font = '7px monospace';
+        ctx.fillStyle = 'rgba(230,230,240,0.5)';
+        ctx.fillText('tap to resume', W/2, H/2 + 8);
+        ctx.textAlign = 'left';
+    }
+}
+
+// ── Loop ──
+function loop(time) {
+    const dt = Math.min((time - lastTime) / 1000, 1/20);
+    lastTime = time;
+    update(dt);
+    draw();
+    requestAnimationFrame(loop);
+}
+
+init();
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>
