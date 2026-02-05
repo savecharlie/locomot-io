@@ -9,7 +9,7 @@
 * { margin: 0; padding: 0; box-sizing: border-box; }
 html, body {
     width: 100%; height: 100%; overflow: hidden;
-    background: #000;
+    background: #1a1a2a;
     touch-action: none;
     user-select: none;
     -webkit-user-select: none;
@@ -18,7 +18,7 @@ html, body {
 #rotate-msg {
     display: none;
     position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-    background: #000;
+    background: #1a1a2a;
     z-index: 999;
     flex-direction: column;
     align-items: center; justify-content: center;
@@ -147,11 +147,12 @@ const C = {
 const LEVEL_H_TILES = 14;
 let W, H, scale;
 function resize() {
-    const sw = window.innerWidth;
-    const sh = window.innerHeight;
+    const sw = window.innerWidth || document.documentElement.clientWidth || screen.width;
+    const sh = window.innerHeight || document.documentElement.clientHeight || screen.height;
+    if (sw < 1 || sh < 1) return; // bail on zero dimensions
     // Scale so level height fills screen exactly
     scale = sh / (LEVEL_H_TILES * TILE);
-    W = Math.floor(sw / scale);
+    W = Math.max(1, Math.floor(sw / scale));
     H = LEVEL_H_TILES * TILE; // exact fit
     canvas.width = W;
     canvas.height = H;
@@ -159,6 +160,14 @@ function resize() {
 }
 resize();
 window.addEventListener('resize', resize);
+// Mobile rotation doesn't always fire 'resize'
+window.addEventListener('orientationchange', () => { setTimeout(resize, 100); setTimeout(resize, 300); });
+// Fallback: re-check every 500ms for the first few seconds
+let _resizeChecks = 0;
+const _resizeInterval = setInterval(() => {
+    resize();
+    if (++_resizeChecks > 10) clearInterval(_resizeInterval);
+}, 500);
 
 // ── Level generation ──
 const SEGMENT_W = 40; // tiles wide per segment
@@ -873,8 +882,13 @@ function update(dt) {
 }
 
 // ── Draw ──
+let _dbgF = 0;
 function draw() {
-    document.getElementById('dbg').textContent = VERSION;
+    if (_dbgF++ % 20 === 0) {
+        const tc = level[0] ? level[0].filter(t => t === 1).length : 0;
+        document.getElementById('dbg').textContent =
+            `${VERSION} vp:${window.innerWidth}x${window.innerHeight} cv:${W}x${H} p:${Math.floor(player.x)},${Math.floor(player.y)} t:${tc} go:${started}`;
+    }
     ctx.fillStyle = C.bg;
     ctx.fillRect(0, 0, W, H);
 
