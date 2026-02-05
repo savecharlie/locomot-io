@@ -118,7 +118,7 @@ const canvas = document.getElementById('c');
 const ctx = canvas.getContext('2d');
 
 // ── Config ──
-const VERSION = 'v15';
+const VERSION = 'v16';
 const TILE = 12;
 const GRAVITY = 700;
 const JUMP_FORCE = -280;
@@ -522,10 +522,7 @@ function respawn() {
 // ── Input ──
 let jumpPressed = false;
 let jumpBuffered = false;
-let holdingJump = false;
-let holdTime = 0;
 let canDive = false; // set after double jump, cleared on landing only
-const DIVE_HOLD_TIME = 0.15; // keyboard hold fallback
 const SWIPE_DIVE_PX = 30; // pixels of downward swipe to trigger dive
 let touchStartY = 0;
 
@@ -541,13 +538,6 @@ function triggerDive() {
 function doJump() {
     if (!started) { started = true; return; }
     jumpBuffered = true;
-    holdingJump = true;
-    holdTime = 0;
-}
-
-function releaseJump() {
-    holdingJump = false;
-    holdTime = 0;
 }
 
 function doDie() {
@@ -580,7 +570,7 @@ canvas.addEventListener('touchmove', (e) => {
 }, { passive: false });
 
 canvas.addEventListener('touchend', (e) => {
-    releaseJump();
+    e.preventDefault();
 }, { passive: false });
 
 // Keyboard fallback
@@ -590,8 +580,8 @@ document.addEventListener('keydown', (e) => {
     if (e.code === 'KeyR') hardReset();
     if (e.code === 'KeyP' || e.code === 'Escape') togglePause();
 });
-document.addEventListener('keyup', (e) => {
-    if (e.code === 'Space' || e.code === 'ArrowUp' || e.code === 'KeyW' || e.code === 'KeyZ') releaseJump();
+document.addEventListener('keydown', (e) => {
+    if ((e.code === 'ArrowDown' || e.code === 'KeyS') && canDive) triggerDive();
 });
 
 // Pause
@@ -703,7 +693,6 @@ function update(dt) {
         player.coyoteTimer = 0.06;
         player.jumpsLeft = 2;
         player.diving = false;
-        holdTime = 0;
         canDive = false;
     } else {
         player.coyoteTimer -= dt;
@@ -742,12 +731,6 @@ function update(dt) {
             spawnP(player.x + player.w/2, player.y + player.h, 'rgba(232,168,56,0.5)', 4, 35, 0.2);
             spawnP(player.x + player.w/2, player.y + player.h/2, '#E8C868', 2, 20, 0.15);
         }
-    }
-
-    // Hold-to-dive fallback (keyboard users)
-    if (holdingJump && canDive && !player.onGround && !player.diving) {
-        holdTime += dt;
-        if (holdTime >= DIVE_HOLD_TIME) triggerDive();
     }
 
     // Move X
