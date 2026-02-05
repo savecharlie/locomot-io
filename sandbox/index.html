@@ -2312,6 +2312,9 @@ function getChunk(x, y) { return chunkIdx(Math.floor(x / CHUNK_SIZE), Math.floor
 function resize() {
   w = canvas.width = window.innerWidth;
   h = canvas.height = window.innerHeight - 60;
+  // Force CSS to match pixel size (100vh != innerHeight on mobile)
+  canvas.style.width = w + 'px';
+  canvas.style.height = h + 'px';
   cellSize = Math.max(14, Math.min(w, h) / 35);
   cols = Math.ceil(w / cellSize);
   rows = Math.floor(h / cellSize);
