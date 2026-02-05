@@ -118,7 +118,7 @@ const canvas = document.getElementById('c');
 const ctx = canvas.getContext('2d');
 
 // ── Config ──
-const VERSION = 'v10';
+const VERSION = 'v11';
 const TILE = 12;
 const GRAVITY = 700;
 const JUMP_FORCE = -280;
@@ -524,21 +524,19 @@ let jumpPressed = false;
 let jumpBuffered = false;
 let holdingJump = false;
 let holdTime = 0;
-let canDive = false; // only true from the press that triggered double jump
-const DIVE_HOLD_TIME = 0.15; // seconds of hold to trigger dive
+let canDive = false; // set after double jump, cleared on landing only
+const DIVE_HOLD_TIME = 0.2; // seconds of hold on third tap to trigger dive
 
 function doJump() {
     if (!started) { started = true; return; }
     jumpBuffered = true;
     holdingJump = true;
     holdTime = 0;
-    canDive = false; // new press — not dive-eligible until double jump fires
 }
 
 function releaseJump() {
     holdingJump = false;
     holdTime = 0;
-    canDive = false; // released — any new press starts fresh
 }
 
 function doDie() {
