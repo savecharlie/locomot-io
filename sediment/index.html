@@ -118,7 +118,7 @@ const canvas = document.getElementById('c');
 const ctx = canvas.getContext('2d');
 
 // ── Config ──
-const VERSION = 'v9';
+const VERSION = 'v10';
 const TILE = 12;
 const GRAVITY = 700;
 const JUMP_FORCE = -280;
@@ -524,6 +524,7 @@ let jumpPressed = false;
 let jumpBuffered = false;
 let holdingJump = false;
 let holdTime = 0;
+let canDive = false; // only true from the press that triggered double jump
 const DIVE_HOLD_TIME = 0.15; // seconds of hold to trigger dive
 
 function doJump() {
@@ -531,11 +532,13 @@ function doJump() {
     jumpBuffered = true;
     holdingJump = true;
     holdTime = 0;
+    canDive = false; // new press — not dive-eligible until double jump fires
 }
 
 function releaseJump() {
     holdingJump = false;
     holdTime = 0;
+    canDive = false; // released — any new press starts fresh
 }
 
 function doDie() {
@@ -682,6 +685,7 @@ function update(dt) {
         player.jumpsLeft = 2;
         player.diving = false;
         holdTime = 0;
+        canDive = false;
     } else {
         player.coyoteTimer -= dt;
     }
@@ -715,15 +719,16 @@ function update(dt) {
             player.hasJumped = true;
             player.diving = false;
             player.squash = 1.2;
+            canDive = true; // this press can dive if held
             spawnP(player.x + player.w/2, player.y + player.h, 'rgba(232,168,56,0.5)', 4, 35, 0.2);
             spawnP(player.x + player.w/2, player.y + player.h/2, '#E8C868', 2, 20, 0.15);
         }
     }
 
-    // Hold-to-dive: accumulate hold time while airborne, dive when threshold met
-    if (holdingJump && !player.onGround && !player.diving) {
+    // Hold-to-dive: only from the same press that triggered double jump
+    if (holdingJump && canDive && !player.onGround && !player.diving) {
         holdTime += dt;
-        if (holdTime >= DIVE_HOLD_TIME && player.jumpsLeft === 0) {
+        if (holdTime >= DIVE_HOLD_TIME) {
             player.vy = 380;
             player.diving = true;
             player.squash = 0.7;
