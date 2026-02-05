@@ -14,16 +14,40 @@ html, body {
     user-select: none;
     -webkit-user-select: none;
 }
-/* Force landscape message */
+/* Rotate / splash screen */
 #rotate-msg {
     display: none;
     position: fixed; top: 0; left: 0; width: 100%; height: 100%;
     background: #14141e;
-    color: #e6e6f0;
-    font: 14px monospace;
     z-index: 999;
+    flex-direction: column;
     align-items: center; justify-content: center;
     text-align: center;
+    gap: 16px;
+    padding: 40px;
+}
+#rotate-msg .title {
+    color: #e64d64;
+    font: bold 28px monospace;
+    letter-spacing: 4px;
+}
+#rotate-msg .tagline {
+    color: rgba(230,230,240,0.4);
+    font: 10px monospace;
+    letter-spacing: 1px;
+}
+#rotate-msg .rotate-icon {
+    font-size: 40px;
+    animation: rock 1.5s ease-in-out infinite;
+}
+#rotate-msg .rotate-hint {
+    color: rgba(230,230,240,0.6);
+    font: 9px monospace;
+}
+@keyframes rock {
+    0%, 100% { transform: rotate(0deg); }
+    25% { transform: rotate(90deg); }
+    75% { transform: rotate(90deg); }
 }
 @media (orientation: portrait) {
     #rotate-msg { display: flex; }
@@ -66,7 +90,12 @@ canvas { display: block; width: 100%; height: 100%; image-rendering: pixelated; 
 </style>
 </head>
 <body>
-<div id="rotate-msg">rotate your phone</div>
+<div id="rotate-msg">
+    <div class="title">SEDIMENT</div>
+    <div class="tagline">every death builds the way</div>
+    <div class="rotate-icon">📱</div>
+    <div class="rotate-hint">rotate to play</div>
+</div>
 <canvas id="c"></canvas>
 <div id="ui">
     <div id="pauseBtn">&#9646;&#9646;</div>
