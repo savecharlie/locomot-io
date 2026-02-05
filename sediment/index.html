@@ -117,7 +117,7 @@ const canvas = document.getElementById('c');
 const ctx = canvas.getContext('2d');
 
 // ── Config ──
-const VERSION = 'v3';
+const VERSION = 'v4';
 const TILE = 12;
 const GRAVITY = 700;
 const JUMP_FORCE = -280;
@@ -126,20 +126,20 @@ const WALL_SLIDE_SPEED = 40;
 
 // ── Colors (B&W — shape is the vocabulary) ──
 const C = {
-    bg: '#000',
-    tile: '#fff',
-    tileHL: '#ddd',
-    player: '#fff',
-    playerDark: '#000',
-    spike: '#fff',
-    saw: '#fff',
-    sawBlade: '#000',
+    bg: '#0a0a0a',
+    tile: '#e0e0e0',
+    tileHL: '#f0f0f0',
+    player: '#ffffff',
+    playerDark: '#1a1a1a',
+    spike: '#888',
+    saw: '#bbb',
+    sawBlade: '#333',
     goal: '#fff',
-    spring: '#fff',
-    platform: '#fff',
-    booster: '#fff',
+    spring: '#ccc',
+    platform: '#aaa',
+    booster: '#ddd',
     text: '#fff',
-    ghost: 'rgba(255,255,255,0.25)'
+    ghost: 'rgba(255,255,255,0.18)'
 };
 
 // ── Game resolution ──
@@ -896,16 +896,25 @@ function draw() {
             if (t === 1) {
                 ctx.fillStyle = C.tile;
                 ctx.fillRect(px, py, TILE, TILE);
+                // Top and left edge highlight
                 ctx.fillStyle = C.tileHL;
                 ctx.fillRect(px, py, TILE, 1);
                 ctx.fillRect(px, py, 1, TILE);
+                // Bottom and right edge shadow
+                ctx.fillStyle = '#aaa';
+                ctx.fillRect(px, py + TILE - 1, TILE, 1);
+                ctx.fillRect(px + TILE - 1, py, 1, TILE);
             } else if (t === 2) {
+                // Spikes — darker gray, distinct from tiles
                 ctx.fillStyle = C.spike;
                 ctx.beginPath();
                 ctx.moveTo(px + 1, py + TILE);
                 ctx.lineTo(px + TILE/2, py + 2);
                 ctx.lineTo(px + TILE - 1, py + TILE);
                 ctx.fill();
+                // Bright tip
+                ctx.fillStyle = '#fff';
+                ctx.fillRect(px + TILE/2 - 0.5, py + 2, 1, 2);
             }
         }
     }
@@ -929,7 +938,7 @@ function draw() {
             );
         }
         // Center dot
-        ctx.fillStyle = '#333';
+        ctx.fillStyle = C.bg;
         ctx.beginPath();
         ctx.arc(saw.x, saw.y, 2, 0, Math.PI * 2);
         ctx.fill();
@@ -946,17 +955,23 @@ function draw() {
             ctx.globalAlpha = a;
             ctx.fillStyle = C.spring;
             ctx.fillRect(c.x, c.y, c.w, c.h);
-            ctx.fillStyle = '#000';
+            ctx.fillStyle = C.bg;
             for (let i = 0; i < 3; i++) {
                 ctx.fillRect(c.x + 1 + i * 3, c.y + 1, 1, c.h - 2);
             }
+            // Top highlight
+            ctx.fillStyle = '#fff';
+            ctx.fillRect(c.x, c.y, c.w, 1);
             ctx.globalAlpha = 1;
         } else if (c.type === 'platform') {
             ctx.globalAlpha = a;
             ctx.fillStyle = C.platform;
             ctx.fillRect(c.x, c.y, c.w, c.h);
-            ctx.fillStyle = '#ddd';
+            ctx.fillStyle = '#ccc';
             ctx.fillRect(c.x, c.y, c.w, 1);
+            // Bottom edge
+            ctx.fillStyle = '#777';
+            ctx.fillRect(c.x, c.y + c.h - 1, c.w, 1);
             ctx.globalAlpha = 1;
         } else if (c.type === 'booster') {
             ctx.globalAlpha = a;
@@ -966,7 +981,7 @@ function draw() {
             const cx = c.x + c.w/2;
             const cy = c.y + c.h/2;
             const d = c.dir || 1;
-            ctx.fillStyle = '#000';
+            ctx.fillStyle = C.bg;
             ctx.beginPath();
             ctx.moveTo(cx + d * 3.5, cy);
             ctx.lineTo(cx - d * 2, cy - 3);
@@ -1076,7 +1091,7 @@ function draw() {
             ctx.fillStyle = C.platform;
             // Small platform rectangle
             ctx.fillRect(previewX - 5, previewY, 10, 3);
-            ctx.fillStyle = '#ddd';
+            ctx.fillStyle = '#ccc';
             ctx.fillRect(previewX - 5, previewY, 10, 1);
         } else if (player.nextCorpse === 'booster') {
             ctx.fillStyle = C.booster;
