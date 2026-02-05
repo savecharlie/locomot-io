@@ -980,6 +980,10 @@ function draw() {
             // Bright top edge — the active surface
             ctx.fillStyle = '#60EEAD';
             ctx.fillRect(c.x, c.y, c.w, 1);
+            // Dead eyes — was once alive
+            ctx.fillStyle = '#1A6648';
+            ctx.fillRect(c.x + 3, c.y + 1, 1, 1);
+            ctx.fillRect(c.x + 6, c.y + 1, 1, 1);
             ctx.globalAlpha = 1;
         } else if (c.type === 'platform') {
             ctx.globalAlpha = a;
@@ -990,6 +994,10 @@ function draw() {
             // Shadow bottom
             ctx.fillStyle = '#8A7058';
             ctx.fillRect(c.x, c.y + c.h - 1, c.w, 1);
+            // Dead eyes — was once alive
+            ctx.fillStyle = '#8A7058';
+            ctx.fillRect(c.x + 3, c.y + 1, 1, 1);
+            ctx.fillRect(c.x + 6, c.y + 1, 1, 1);
             ctx.globalAlpha = 1;
         } else if (c.type === 'booster') {
             ctx.globalAlpha = a;
@@ -1005,6 +1013,10 @@ function draw() {
             ctx.lineTo(cx - d * 2, cy - 3);
             ctx.lineTo(cx - d * 2, cy + 3);
             ctx.fill();
+            // Dead eyes — was once alive
+            ctx.fillStyle = '#1A4466';
+            ctx.fillRect(c.x + 2, c.y + 2, 1, 1);
+            ctx.fillRect(c.x + 5, c.y + 2, 1, 1);
             ctx.globalAlpha = 1;
         }
     }
