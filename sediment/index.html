@@ -118,7 +118,7 @@ const canvas = document.getElementById('c');
 const ctx = canvas.getContext('2d');
 
 // ── Config ──
-const VERSION = 'v5';
+const VERSION = 'v6';
 const TILE = 12;
 const GRAVITY = 700;
 const JUMP_FORCE = -280;
@@ -268,6 +268,9 @@ function generateSegment(segIndex, difficulty) {
     segments.push(segIndex);
 }
 
+// ── Corpse types ──
+const CORPSE_TYPES = ['spring', 'platform', 'booster'];
+
 // ── Player ──
 const player = {
     x: 2 * TILE, y: 0,
@@ -300,9 +303,6 @@ const cam = { x: 0, y: 0, sx: 0, sy: 0, shake: 0 };
 const flash = { a: 0, r: 1, g: 1, b: 1 };
 let paused = false;
 let started = false;
-
-// ── Corpse types ──
-const CORPSE_TYPES = ['spring', 'platform', 'booster'];
 
 // ── Pickups ──
 let pickups = [];
