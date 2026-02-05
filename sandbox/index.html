@@ -2314,7 +2314,7 @@ function resize() {
   h = canvas.height = window.innerHeight - 60;
   cellSize = Math.max(14, Math.min(w, h) / 35);
   cols = Math.ceil(w / cellSize);
-  rows = Math.ceil(h / cellSize);
+  rows = Math.floor(h / cellSize);
 
   chunkCols = Math.ceil(cols / CHUNK_SIZE);
   chunkRows = Math.ceil(rows / CHUNK_SIZE);
