@@ -118,7 +118,7 @@ const canvas = document.getElementById('c');
 const ctx = canvas.getContext('2d');
 
 // ── Config ──
-const VERSION = 'v8';
+const VERSION = 'v9';
 const TILE = 12;
 const GRAVITY = 700;
 const JUMP_FORCE = -280;
@@ -522,10 +522,20 @@ function respawn() {
 // ── Input ──
 let jumpPressed = false;
 let jumpBuffered = false;
+let holdingJump = false;
+let holdTime = 0;
+const DIVE_HOLD_TIME = 0.15; // seconds of hold to trigger dive
 
 function doJump() {
     if (!started) { started = true; return; }
     jumpBuffered = true;
+    holdingJump = true;
+    holdTime = 0;
+}
+
+function releaseJump() {
+    holdingJump = false;
+    holdTime = 0;
 }
 
 function doDie() {
@@ -537,7 +547,6 @@ function doDie() {
 canvas.addEventListener('touchstart', (e) => {
     e.preventDefault();
     for (const t of e.changedTouches) {
-        // Check if touch is in death button zone (bottom-right 80x80 in screen coords)
         const sw = window.innerWidth;
         const sh = window.innerHeight;
         if (t.clientX > sw - 90 && t.clientY > sh - 90) {
@@ -548,13 +557,19 @@ canvas.addEventListener('touchstart', (e) => {
     }
 }, { passive: false });
 
+canvas.addEventListener('touchend', (e) => {
+    releaseJump();
+}, { passive: false });
+
 // Keyboard fallback
 document.addEventListener('keydown', (e) => {
     if (e.code === 'Space' || e.code === 'ArrowUp' || e.code === 'KeyW' || e.code === 'KeyZ') doJump();
     if (e.code === 'KeyK' || e.code === 'KeyQ') doDie();
     if (e.code === 'KeyR') hardReset();
     if (e.code === 'KeyP' || e.code === 'Escape') togglePause();
-    if (e.code === 'Escape') { /* nothing on web */ }
+});
+document.addEventListener('keyup', (e) => {
+    if (e.code === 'Space' || e.code === 'ArrowUp' || e.code === 'KeyW' || e.code === 'KeyZ') releaseJump();
 });
 
 // Pause
@@ -666,6 +681,7 @@ function update(dt) {
         player.coyoteTimer = 0.06;
         player.jumpsLeft = 2;
         player.diving = false;
+        holdTime = 0;
     } else {
         player.coyoteTimer -= dt;
     }
@@ -701,8 +717,13 @@ function update(dt) {
             player.squash = 1.2;
             spawnP(player.x + player.w/2, player.y + player.h, 'rgba(232,168,56,0.5)', 4, 35, 0.2);
             spawnP(player.x + player.w/2, player.y + player.h/2, '#E8C868', 2, 20, 0.15);
-        } else if (!player.onGround && player.vy > -50) {
-            // Dive — third tap while airborne, slams down
+        }
+    }
+
+    // Hold-to-dive: accumulate hold time while airborne, dive when threshold met
+    if (holdingJump && !player.onGround && !player.diving) {
+        holdTime += dt;
+        if (holdTime >= DIVE_HOLD_TIME && player.jumpsLeft === 0) {
             player.vy = 380;
             player.diving = true;
             player.squash = 0.7;
