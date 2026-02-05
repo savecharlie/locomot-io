@@ -108,6 +108,7 @@ canvas { display: block; width: 100%; height: 100%; image-rendering: pixelated; 
     <div id="pauseBtn">&#9646;&#9646;</div>
     <div id="deathBtn">&#9760;</div>
 </div>
+<div id="dbg" style="position:fixed;top:0;left:50%;transform:translateX(-50%);color:#ff0;font:10px monospace;z-index:100;pointer-events:none;text-align:center;"></div>
 <script>
 // ── SEDIMENT ──
 // Auto-runner where deaths leave tools
@@ -117,7 +118,7 @@ const canvas = document.getElementById('c');
 const ctx = canvas.getContext('2d');
 
 // ── Config ──
-const VERSION = 'v4';
+const VERSION = 'v5';
 const TILE = 12;
 const GRAVITY = 700;
 const JUMP_FORCE = -280;
@@ -126,7 +127,7 @@ const WALL_SLIDE_SPEED = 40;
 
 // ── Colors (B&W — shape is the vocabulary) ──
 const C = {
-    bg: '#0a0a0a',
+    bg: '#1a1a2a',
     tile: '#e0e0e0',
     tileHL: '#f0f0f0',
     player: '#ffffff',
@@ -872,7 +873,14 @@ function update(dt) {
 }
 
 // ── Draw ──
+let _dbgFrame = 0;
 function draw() {
+    // Debug: show canvas dims + game state every 30 frames
+    if (_dbgFrame++ % 30 === 0) {
+        const tileCount = level[0] ? level[0].filter(t => t === 1).length : 0;
+        document.getElementById('dbg').textContent =
+            `v5 | ${W}x${H} | cam:${Math.floor(cam.x)},${Math.floor(cam.y)} | p:${Math.floor(player.x)},${Math.floor(player.y)} | tiles:${tileCount} | started:${started}`;
+    }
     ctx.fillStyle = C.bg;
     ctx.fillRect(0, 0, W, H);
 
