@@ -223,7 +223,6 @@
         @keyframes fadeOut { 0% { opacity: 1; transform: translate(-50%, -50%) scale(1); } 100% { opacity: 0; transform: translate(-50%, -50%) scale(1.2); } }
     </style>
     <script src='https://storage.ko-fi.com/cdn/widget/Widget_2.js'></script>
-    <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-7560120281604459" crossorigin="anonymous"></script>
     <!-- TensorFlow.js for client-side bot training -->
     <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.17.0"></script>
 </head>
@@ -307,10 +306,6 @@
                     <a href="https://sandbox.locomot.io" target="_blank" class="game-link sandbox">🏖️ SANDBOX</a>
                     <a href="/pixel.html" class="game-link pixel">🎮 PIXEL ART</a>
                     <a href="/ice_skater/" class="game-link ice-skater">⛸️ ICE SKATER</a>
-                </div>
-                <div style="margin-top: 12px;">
-                    <ins class="adsbygoogle" style="display:block; width:320px; height:50px; margin:0 auto;" data-ad-client="ca-pub-7560120281604459" data-ad-slot="auto" data-ad-format="auto" data-full-width-responsive="true"></ins>
-                    <script>(adsbygoogle = window.adsbygoogle || []).push({});</script>
                 </div>
             </div>
         </div>
@@ -4210,6 +4205,167 @@
 
         // Expose for console testing: BotTrainer.testTraining()
         window.BotTrainer = BotTrainer;
+
+        // === BOT DEBUG PANEL - Visible debugging for mobile ===
+        const BotDebug = {
+            logs: [],
+            maxLogs: 50,
+            panelVisible: false,
+
+            log(stage, message, status = 'info') {
+                const entry = {
+                    time: new Date().toLocaleTimeString(),
+                    stage,
+                    message,
+                    status // 'ok', 'error', 'info', 'warn'
+                };
+                this.logs.unshift(entry);
+                if (this.logs.length > this.maxLogs) this.logs.pop();
+                console.log(`[BOT_DEBUG][${stage}] ${message}`);
+                this.updatePanel();
+            },
+
+            async getFullStatus() {
+                const status = {
+                    recording: {
+                        enabled: DataRecorder.enabled,
+                        hasSession: !!DataRecorder.session,
+                        sessionFrames: DataRecorder.session?.frames?.length || 0
+                    },
+                    sessions: {
+                        count: 0,
+                        error: null
+                    },
+                    training: {
+                        inProgress: BotTrainer.trainingInProgress,
+                        lastError: BotTrainer.lastError || null
+                    },
+                    bot: {
+                        exists: !!BotTracker.findMyBot(),
+                        name: BotTracker.findMyBot()?.name || null
+                    },
+                    servers: {
+                        bots: null,
+                        partykit: null
+                    }
+                };
+
+                // Get session count
+                try {
+                    status.sessions.count = await DataRecorder.getSessionCount();
+                } catch (e) {
+                    status.sessions.error = e.message;
+                }
+
+                // Check bots server
+                try {
+                    const resp = await fetch('https://bots.locomot.io/health', { method: 'GET', timeout: 3000 });
+                    status.servers.bots = resp.ok ? 'OK' : `Error: ${resp.status}`;
+                } catch (e) {
+                    status.servers.bots = `Unreachable: ${e.message}`;
+                }
+
+                return status;
+            },
+
+            createPanel() {
+                if (document.getElementById('botDebugPanel')) return;
+
+                const panel = document.createElement('div');
+                panel.id = 'botDebugPanel';
+                panel.style.cssText = `
+                    position: fixed; top: 50px; left: 10px; right: 10px;
+                    max-height: 70vh; overflow-y: auto;
+                    background: rgba(0,0,0,0.95); border: 2px solid #0ff;
+                    border-radius: 8px; padding: 10px; z-index: 10000;
+                    font-family: monospace; font-size: 10px; color: #0f0;
+                    display: none;
+                `;
+                panel.innerHTML = `
+                    <div style="display: flex; justify-content: space-between; margin-bottom: 10px;">
+                        <span style="color: #0ff; font-weight: bold;">🔧 BOT DEBUG</span>
+                        <button id="botDebugClose" style="background: #f55; border: none; color: white; padding: 2px 8px; cursor: pointer;">X</button>
+                    </div>
+                    <div id="botDebugStatus" style="margin-bottom: 10px; padding: 8px; background: #111; border-radius: 4px;"></div>
+                    <div id="botDebugLogs" style="max-height: 200px; overflow-y: auto;"></div>
+                    <div style="margin-top: 10px; display: flex; gap: 5px; flex-wrap: wrap;">
+                        <button id="botDebugRefresh" style="background: #0af; border: none; color: white; padding: 4px 8px; cursor: pointer; font-size: 9px;">Refresh</button>
+                        <button id="botDebugClear" style="background: #f80; border: none; color: white; padding: 4px 8px; cursor: pointer; font-size: 9px;">Clear Logs</button>
+                        <button id="botDebugTestUpload" style="background: #a0f; border: none; color: white; padding: 4px 8px; cursor: pointer; font-size: 9px;">Test Upload</button>
+                    </div>
+                `;
+                document.body.appendChild(panel);
+
+                document.getElementById('botDebugClose').onclick = () => this.hidePanel();
+                document.getElementById('botDebugRefresh').onclick = () => this.updatePanel();
+                document.getElementById('botDebugClear').onclick = () => { this.logs = []; this.updatePanel(); };
+                document.getElementById('botDebugTestUpload').onclick = () => this.testUpload();
+            },
+
+            async updatePanel() {
+                const statusDiv = document.getElementById('botDebugStatus');
+                const logsDiv = document.getElementById('botDebugLogs');
+                if (!statusDiv || !logsDiv) return;
+
+                const status = await this.getFullStatus();
+
+                const statusColor = (ok) => ok ? '#0f0' : '#f55';
+                statusDiv.innerHTML = `
+                    <div><b>📹 Recording:</b> <span style="color: ${statusColor(status.recording.enabled)}">${status.recording.enabled ? 'ON' : 'OFF'}</span>
+                        ${status.recording.hasSession ? ` (${status.recording.sessionFrames} frames)` : ''}</div>
+                    <div><b>💾 Sessions:</b> <span style="color: ${status.sessions.count >= 3 ? '#0f0' : '#ff0'}">${status.sessions.count}/3</span>
+                        ${status.sessions.error ? `<span style="color: #f55"> Error: ${status.sessions.error}</span>` : ''}</div>
+                    <div><b>🧠 Training:</b> <span style="color: ${statusColor(!status.training.inProgress)}">${status.training.inProgress ? 'IN PROGRESS' : 'Idle'}</span>
+                        ${status.training.lastError ? `<span style="color: #f55"> Last error: ${status.training.lastError}</span>` : ''}</div>
+                    <div><b>🤖 Bot:</b> <span style="color: ${statusColor(status.bot.exists)}">${status.bot.exists ? status.bot.name : 'None'}</span></div>
+                    <div><b>🌐 Bots Server:</b> <span style="color: ${status.servers.bots === 'OK' ? '#0f0' : '#f55'}">${status.servers.bots || 'Checking...'}</span></div>
+                `;
+
+                logsDiv.innerHTML = this.logs.map(l => {
+                    const color = { ok: '#0f0', error: '#f55', warn: '#ff0', info: '#0ff' }[l.status] || '#888';
+                    return `<div style="margin: 2px 0; color: ${color};">[${l.time}] <b>${l.stage}</b>: ${l.message}</div>`;
+                }).join('');
+            },
+
+            showPanel() {
+                this.createPanel();
+                document.getElementById('botDebugPanel').style.display = 'block';
+                this.panelVisible = true;
+                this.updatePanel();
+            },
+
+            hidePanel() {
+                const panel = document.getElementById('botDebugPanel');
+                if (panel) panel.style.display = 'none';
+                this.panelVisible = false;
+            },
+
+            togglePanel() {
+                if (this.panelVisible) this.hidePanel();
+                else this.showPanel();
+            },
+
+            async testUpload() {
+                this.log('TEST', 'Testing bots server upload...', 'info');
+                try {
+                    const resp = await fetch('https://bots.locomot.io/bots', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ id: 'test_' + Date.now(), weights: { test: true } })
+                    });
+                    if (resp.ok) {
+                        this.log('TEST', 'Upload test SUCCESS', 'ok');
+                    } else {
+                        this.log('TEST', `Upload failed: ${resp.status} ${resp.statusText}`, 'error');
+                    }
+                } catch (e) {
+                    this.log('TEST', `Upload error: ${e.message}`, 'error');
+                }
+            }
+        };
+
+        // Make debug panel accessible by tapping version text (bottom right)
+        window.BotDebug = BotDebug;
 
         // Mobile-friendly benchmark function
         async function runTFBenchmark() {
