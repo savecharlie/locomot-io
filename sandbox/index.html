@@ -3,7 +3,6 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-<meta name="screen-orientation" content="portrait">
 <title>Buddy - Interactive Sandbox Friend</title>
 <style>
 * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -65,34 +64,6 @@ canvas {
 }
 #permission-overlay .icon { font-size: 60px; margin-bottom: 20px; }
 
-/* Landscape orientation blocker */
-#rotate-message {
-  display: none;
-  position: fixed;
-  top: 0; left: 0; right: 0; bottom: 0;
-  background: #111;
-  z-index: 9999;
-  justify-content: center;
-  align-items: center;
-  flex-direction: column;
-  color: white;
-  font-size: 24px;
-  text-align: center;
-  padding: 40px;
-}
-#rotate-message .phone-icon {
-  font-size: 80px;
-  animation: rotate-phone 1.5s ease-in-out infinite;
-  margin-bottom: 20px;
-}
-@keyframes rotate-phone {
-  0%, 100% { transform: rotate(0deg); }
-  50% { transform: rotate(-90deg); }
-}
-@media (orientation: landscape) {
-  #rotate-message { display: flex; }
-  canvas, #toolbar { display: none; }
-}
 .element-btn {
   min-width: 44px;
   width: 44px;
@@ -137,10 +108,6 @@ canvas {
   <button id="enable-tilt-btn">Enable Tilt</button>
   <div id="permission-status" style="margin-top: 15px; font-size: 14px; color: #ff0; min-height: 40px;"></div>
   <div style="margin-top: 10px; font-size: 14px; color: #666;">tap anywhere else to skip</div>
-</div>
-<div id="rotate-message">
-  <div class="phone-icon">📱</div>
-  <div>Please rotate to portrait mode</div>
 </div>
 <canvas id="c"></canvas>
 <div id="toolbar"></div>
@@ -5038,9 +5005,16 @@ if (/iPhone|iPad|iPod|Android/i.test(navigator.userAgent)) {
   permissionOverlay.classList.add('show');
 }
 
-// Try to lock orientation to portrait
-if (screen.orientation && screen.orientation.lock) {
-  screen.orientation.lock('portrait').catch(() => {});
+// Desktop: mouse-based gravity (when no accelerometer)
+if (!/iPhone|iPad|iPod|Android/i.test(navigator.userAgent)) {
+  document.addEventListener('mousemove', (e) => {
+    if (hasAccelerometer) return;
+    const cx = window.innerWidth / 2;
+    const cy = window.innerHeight / 2;
+    gravityX = Math.max(-1, Math.min(1, (e.clientX - cx) / cx));
+    gravityY = Math.max(-1, Math.min(1, (e.clientY - cy) / cy));
+    updateGravityIndicator();
+  });
 }
 
 console.log('Starting init...');
