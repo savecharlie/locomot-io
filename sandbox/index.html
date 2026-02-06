@@ -5021,6 +5021,11 @@ console.log('Starting init...');
 resize();
 console.log('Resize done, cols:', cols, 'rows:', rows);
 buildToolbar();
+// Mouse wheel scrolls toolbar horizontally
+toolbar.addEventListener('wheel', (e) => {
+  e.preventDefault();
+  toolbar.scrollLeft += e.deltaY || e.deltaX;
+}, { passive: false });
 console.log('Toolbar built');
 
 // Create and spawn the buddy!
