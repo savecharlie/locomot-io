@@ -101,7 +101,7 @@ const canvas = document.getElementById('c');
 const ctx = canvas.getContext('2d');
 
 // ── Config ──
-const VERSION = 'v23';
+const VERSION = 'v24';
 const TILE = 12;
 const GRAVITY = 700;
 const JUMP_FORCE = -280;
@@ -483,19 +483,19 @@ function tetSpike(px, py, shapeName, rotation) {
 }
 
 // Monte Carlo escape check: can the player get past the obstacle to the right?
-// Simulates jump arcs and rotations to see if any escape route exists.
-// Returns true if escape is possible (player should wait, not die).
+// Pixel-by-pixel upward scan + rotation with SRS kicks.
+// Returns true if any escape route exists (player should wait, not die).
 function canEscapeRight() {
     const shape = player.shape;
     const rot = player.rotation;
-    const halfT = Math.floor(TILE / 2);
+    const maxUp = 8 * TILE; // jump + double jump reach
 
-    // 1) Scan upward from current position — can jumping clear the obstacle?
-    //    Max reachable: ~8 tiles (jump + double jump)
-    for (let dy = 0; dy >= -8 * TILE; dy -= halfT) {
+    // 1) Scan upward pixel-by-pixel — continuous reachability check
+    //    Must be contiguous: if any height is blocked, can't reach higher
+    for (let dy = -1; dy >= -maxUp; dy--) {
         const testY = player.y + dy;
-        // Hit ceiling? Stop scanning up
-        if (dy < 0 && tetSolid(player.x, testY, shape, rot)) break;
+        // Can the piece exist at this height? (continuous upward path)
+        if (tetSolid(player.x, testY, shape, rot)) break;
         // At this height, can we move right?
         if (!tetSolid(player.x + 1, testY, shape, rot)) return true;
     }
@@ -514,8 +514,8 @@ function canEscapeRight() {
             if (!tetSolid(testX, testY, shape, newRot)) {
                 // Can it move right from there?
                 if (!tetSolid(testX + 1, testY, shape, newRot)) return true;
-                // Can it jump and clear from there?
-                for (let dy = -halfT; dy >= -8 * TILE; dy -= halfT) {
+                // Can it jump and clear from there? (pixel-by-pixel)
+                for (let dy = -1; dy >= -maxUp; dy--) {
                     const jy = testY + dy;
                     if (tetSolid(testX, jy, shape, newRot)) break;
                     if (!tetSolid(testX + 1, jy, shape, newRot)) return true;
@@ -1239,10 +1239,9 @@ function update(dt) {
     }
 
     // Stuck detection — Monte Carlo look-ahead
-    // Check if ANY escape route exists (jump, double-jump, rotate)
-    // If no escape → die. If escape exists → wait forever (timing buzzsaws etc.)
-    const blockedRight = tetSolid(player.x + 1, player.y, player.shape, player.rotation);
-    if (blockedRight && !canEscapeRight()) {
+    // Uses hitWallX from actual movement (not re-check) + escape simulation
+    // If no escape route exists → die. If escape exists → wait forever (timing buzzsaws etc.)
+    if (hitWallX && dx > 0 && !canEscapeRight()) {
         player.stuckTimer += dt;
         if (player.stuckTimer > 0.5) {
             die();
