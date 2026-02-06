@@ -395,14 +395,47 @@ function generateSegment(segIndex, difficulty) {
 // ══════════════════════════════════════
 
 // Check if a single tile-aligned cell overlaps solid terrain or corpse blocks
+// ALL corpse blocks are solid (sandstone, spring, booster) — you can't walk through any of them
+// Interactions (bounce, boost) happen at collision boundaries
 function tileIsSolid(tx, ty) {
     if (ty < 0) return true; // ceiling
     if (ty >= levelH) return false; // void below
     if (level[ty] && level[ty][tx] === 1) return true;
-    // Only SOLID (sandstone) corpse blocks act as terrain
-    // Springs and boosters are pass-through triggers
-    if (corpseGrid[ty] && corpseGrid[ty][tx] && corpseGrid[ty][tx].mat === 'solid') return true;
+    if (corpseGrid[ty] && corpseGrid[ty][tx]) return true;
     return false;
+}
+
+// Check what corpse block is at a tile position (returns mat string or null)
+function corpseMatAt(tx, ty) {
+    if (ty < 0 || ty >= levelH) return null;
+    if (corpseGrid[ty] && corpseGrid[ty][tx]) return corpseGrid[ty][tx].mat;
+    return null;
+}
+
+// Check tiles adjacent to player's tetromino in a direction
+// Returns first matching material found, or null
+function checkAdjacentCorpse(px, py, shapeName, rotation, dir, mat) {
+    const cells = getCells(shapeName, rotation);
+    for (const [cx, cy] of cells) {
+        let checkTX, checkTY;
+        if (dir === 'below') {
+            checkTX = Math.floor((px + cx * TILE + TILE/2) / TILE);
+            checkTY = Math.floor((py + (cy + 1) * TILE) / TILE);
+        } else if (dir === 'above') {
+            checkTX = Math.floor((px + cx * TILE + TILE/2) / TILE);
+            checkTY = Math.floor((py + cy * TILE - 1) / TILE);
+        } else if (dir === 'right') {
+            checkTX = Math.floor((px + (cx + 1) * TILE) / TILE);
+            checkTY = Math.floor((py + cy * TILE + TILE/2) / TILE);
+        } else if (dir === 'left') {
+            checkTX = Math.floor((px + cx * TILE - 1) / TILE);
+            checkTY = Math.floor((py + cy * TILE + TILE/2) / TILE);
+        }
+        if (corpseMatAt(checkTX, checkTY) === mat) {
+            return { tx: checkTX, ty: checkTY };
+        }
+    }
+    return null;
 }
 
 function tileIsSpike(tx, ty) {
@@ -449,36 +482,7 @@ function tetSpike(px, py, shapeName, rotation) {
     return false;
 }
 
-// Check corpse grid interaction at pixel position
-function tetCorpseInteraction(px, py, shapeName, rotation) {
-    const cells = getCells(shapeName, rotation);
-    let springHit = false, boosterHit = null;
-    for (const [cx, cy] of cells) {
-        const worldX = px + cx * TILE;
-        const worldY = py + cy * TILE;
-        const l = Math.floor(worldX / TILE);
-        const r = Math.floor((worldX + TILE - 1) / TILE);
-        const t = Math.floor(worldY / TILE);
-        const b = Math.floor((worldY + TILE - 1) / TILE);
-        for (let ty = t; ty <= b; ty++) {
-            for (let tx = l; tx <= r; tx++) {
-                if (ty >= 0 && ty < levelH && corpseGrid[ty] && corpseGrid[ty][tx]) {
-                    const block = corpseGrid[ty][tx];
-                    if (block.mat === 'spring') springHit = { tx, ty };
-                    if (block.mat === 'booster') boosterHit = { tx, ty };
-                }
-            }
-        }
-    }
-    return { springHit, boosterHit };
-}
-
-// Wall detection for tetromino
-function tetWall(px, py, shapeName, rotation) {
-    // Check right side for wall
-    if (tetSolid(px + 1, py + 2, shapeName, rotation)) return 1;
-    return 0;
-}
+// (tetCorpseInteraction removed — interactions now use checkAdjacentCorpse at collision boundaries)
 
 // ══════════════════════════════════════
 // ── PLAYER ──
@@ -1069,6 +1073,7 @@ function update(dt) {
 
     // Move X
     const wasInAir = !player.onGround;
+    let hitWallX = false;
     const dx = player.vx * dt;
     if (dx !== 0) {
         const sign = dx > 0 ? 1 : -1;
@@ -1078,14 +1083,37 @@ function update(dt) {
             if (!tetSolid(player.x + step, player.y, player.shape, player.rotation)) {
                 player.x += step;
             } else {
+                hitWallX = true;
                 player.vx = 0;
                 break;
             }
         }
     }
 
+    // Booster: hit from side during X movement
+    if (hitWallX) {
+        const dir = dx > 0 ? 'right' : 'left';
+        const bh = checkAdjacentCorpse(player.x, player.y, player.shape, player.rotation, dir, 'booster');
+        if (bh) {
+            const now = performance.now() / 1000;
+            const key = `${bh.tx},${bh.ty}`;
+            if (!player._lastBoost || player._lastBoost.key !== key || (now - player._lastBoost.time) > 0.5) {
+                player._lastBoost = { key, time: now };
+                player.vx = (dx > 0 ? 1 : -1) * 350;
+                player.vy = JUMP_FORCE * 0.5;
+                player.jumpsLeft = 1;
+                player.boostTimer = 0.25;
+                player.squash = 1.5;
+                cam.shake = Math.max(cam.shake, 4);
+                spawnP(bh.tx * TILE + TILE/2, bh.ty * TILE + TILE/2, C.booster, 7, 70, 0.3);
+            }
+        }
+    }
+
     // Move Y
+    const prevVY = player.vy;
     player.onGround = false;
+    let hitCeiling = false;
     const dy = player.vy * dt;
     if (dy !== 0) {
         const sign = dy > 0 ? 1 : -1;
@@ -1104,6 +1132,8 @@ function update(dt) {
                         spawnP(cx, player.y + (bounds.maxR + 1) * TILE, C.player, 3, 30, 0.2);
                         if (player.vy > 250) cam.shake = Math.max(cam.shake, 2);
                     }
+                } else {
+                    hitCeiling = true;
                 }
                 player.vy = 0;
                 break;
@@ -1111,6 +1141,51 @@ function update(dt) {
         }
     }
     if (tetSolid(player.x, player.y + 1, player.shape, player.rotation)) player.onGround = true;
+
+    // ── Corpse block interactions (at collision boundaries) ──
+
+    // SPRING: landed on top → bounce UP
+    if (player.onGround && prevVY > 0) {
+        const sh = checkAdjacentCorpse(player.x, player.y, player.shape, player.rotation, 'below', 'spring');
+        if (sh) {
+            player.vy = JUMP_FORCE * 1.5;
+            player.onGround = false;
+            player.jumpsLeft = 1;
+            player.squash = 1.4;
+            cam.shake = Math.max(cam.shake, 3);
+            spawnP(sh.tx * TILE + TILE/2, sh.ty * TILE, C.spring, 5, 60, 0.3);
+        }
+    }
+
+    // SPRING: hit from below → bounce DOWN
+    if (hitCeiling && prevVY < 0) {
+        const sh = checkAdjacentCorpse(player.x, player.y, player.shape, player.rotation, 'above', 'spring');
+        if (sh) {
+            player.vy = Math.abs(JUMP_FORCE) * 1.2; // positive = downward
+            player.squash = 0.7;
+            cam.shake = Math.max(cam.shake, 2);
+            spawnP(sh.tx * TILE + TILE/2, (sh.ty + 1) * TILE, C.spring, 4, 50, 0.25);
+        }
+    }
+
+    // BOOSTER: standing on top → accelerate forward
+    if (player.onGround) {
+        const bh = checkAdjacentCorpse(player.x, player.y, player.shape, player.rotation, 'below', 'booster');
+        if (bh) {
+            const now = performance.now() / 1000;
+            const key = `${bh.tx},${bh.ty}`;
+            if (!player._lastBoost || player._lastBoost.key !== key || (now - player._lastBoost.time) > 0.5) {
+                player._lastBoost = { key, time: now };
+                player.vx = player.facing * 350;
+                player.vy = JUMP_FORCE * 0.3;
+                player.jumpsLeft = 1;
+                player.boostTimer = 0.25;
+                player.squash = 1.5;
+                cam.shake = Math.max(cam.shake, 4);
+                spawnP(bh.tx * TILE + TILE/2, bh.ty * TILE + TILE/2, C.booster, 7, 70, 0.3);
+            }
+        }
+    }
 
     // Void death
     if (player.y > levelH * TILE + 20) {
@@ -1145,37 +1220,6 @@ function update(dt) {
         if (dist < saw.r + 6) {
             die();
             return;
-        }
-    }
-
-    // Corpse block interactions (spring bounce, booster)
-    if (player.vy > 0) {
-        const interaction = tetCorpseInteraction(player.x, player.y, player.shape, player.rotation);
-        if (interaction.springHit) {
-            player.vy = JUMP_FORCE * 1.5;
-            player.jumpsLeft = 1;
-            player.squash = 1.4;
-            cam.shake = Math.max(cam.shake, 3);
-            const sh = interaction.springHit;
-            spawnP(sh.tx * TILE + TILE/2, sh.ty * TILE, C.spring, 5, 60, 0.3);
-        }
-    }
-    {
-        const interaction = tetCorpseInteraction(player.x, player.y, player.shape, player.rotation);
-        if (interaction.boosterHit) {
-            const bh = interaction.boosterHit;
-            const now = performance.now() / 1000;
-            const key = `${bh.tx},${bh.ty}`;
-            if (!player._lastBoost || player._lastBoost.key !== key || (now - player._lastBoost.time) > 0.5) {
-                player._lastBoost = { key, time: now };
-                player.vx = player.facing * 350;
-                player.vy = JUMP_FORCE * 0.5;
-                player.jumpsLeft = 1;
-                player.boostTimer = 0.25;
-                player.squash = 1.5;
-                cam.shake = Math.max(cam.shake, 4);
-                spawnP(bh.tx * TILE + TILE/2, bh.ty * TILE + TILE/2, C.booster, 7, 70, 0.3);
-            }
         }
     }
 
