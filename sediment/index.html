@@ -291,7 +291,7 @@ let corpseGrid = []; // placed blocks: null or {mat, age, eyes}
 let segments = [];
 let particles = [];
 let buzzsaws = [];
-let fallingBlocks = []; // blocks currently falling after death-snap
+let fallingGroup = null; // {cells: [{x,y,mat,eyes}], drop:0, targetDrop:N, fallSpeed:0}
 let clearingRows = [];  // rows currently flashing before clear
 
 function generateSegment(segIndex, difficulty) {
@@ -399,7 +399,9 @@ function tileIsSolid(tx, ty) {
     if (ty < 0) return true; // ceiling
     if (ty >= levelH) return false; // void below
     if (level[ty] && level[ty][tx] === 1) return true;
-    if (corpseGrid[ty] && corpseGrid[ty][tx]) return true;
+    // Only SOLID (sandstone) corpse blocks act as terrain
+    // Springs and boosters are pass-through triggers
+    if (corpseGrid[ty] && corpseGrid[ty][tx] && corpseGrid[ty][tx].mat === 'solid') return true;
     return false;
 }
 
@@ -520,7 +522,7 @@ function init() {
     segments = [];
     particles = [];
     buzzsaws = [];
-    fallingBlocks = [];
+    fallingGroup = null;
     clearingRows = [];
     if (!player._hasRun) {
         globalCorpseNum += Math.floor(Math.random() * 200);
@@ -595,36 +597,32 @@ function die() {
 
     if (distFromSpawn >= MIN_DISTANCE_FOR_CORPSE && !inChasm) {
         // Snap each cell to the grid
-        const placedCells = [];
-        for (const [cellC, cellR] of cells) {
+        const groupCells = [];
+        for (let i = 0; i < cells.length; i++) {
+            const [cellC, cellR] = cells[i];
             const worldPx = player.x + cellC * TILE;
             const worldPy = player.y + cellR * TILE;
             const gridX = Math.round(worldPx / TILE);
             const gridY = Math.round(worldPy / TILE);
-            placedCells.push({ gridX, gridY });
-        }
-
-        // Add as falling blocks (they'll drop with gravity)
-        const hasEyes = true;
-        let eyeCell = 0; // first cell gets the eyes
-        for (let i = 0; i < placedCells.length; i++) {
-            const { gridX, gridY } = placedCells[i];
             if (gridY >= 0 && gridY < levelH && gridX >= 0) {
-                fallingBlocks.push({
-                    x: gridX,
-                    y: gridY,
-                    fy: gridY, // floating y (for animation)
-                    mat: player.material,
-                    eyes: i === eyeCell,
-                    settled: false,
-                    fallSpeed: 0
-                });
+                groupCells.push({ x: gridX, y: gridY, mat: player.material, eyes: i === 0 });
             }
         }
 
+        // Compute how far this group can fall as a unit
+        const targetDrop = computeGroupDrop(groupCells);
+
+        // Create falling group — they fall together, maintaining shape
+        fallingGroup = {
+            cells: groupCells,
+            drop: 0,
+            targetDrop,
+            fallSpeed: 0
+        };
+
         // Snap particles at each cell
-        for (const { gridX, gridY } of placedCells) {
-            spawnP(gridX * TILE + TILE/2, gridY * TILE + TILE/2, matColor(player.material), 3, 40, 0.25);
+        for (const { x: gx, y: gy } of groupCells) {
+            spawnP(gx * TILE + TILE/2, gy * TILE + TILE/2, matColor(player.material), 3, 40, 0.25);
         }
     }
 }
@@ -643,61 +641,48 @@ function getShapeCenterY(shapeName, rotation) {
     return (sum / cells.length) * TILE + TILE / 2;
 }
 
-// Settle falling blocks
-function updateFallingBlocks(dt) {
-    let anyFalling = false;
-    for (const fb of fallingBlocks) {
-        if (fb.settled) continue;
-        fb.fallSpeed += 600 * dt; // gravity
-        fb.fy += fb.fallSpeed * dt;
-
-        // Check what's below
-        const targetY = Math.floor(fb.fy);
-        let landY = fb.y;
-
-        // Scan downward for landing spot
-        for (let ty = fb.y; ty < levelH; ty++) {
-            if (tileIsSolid(fb.x, ty) || (corpseGrid[ty] && corpseGrid[ty][fb.x])) {
-                landY = ty - 1;
-                break;
-            }
-            if (ty === levelH - 1) {
-                landY = ty; // bottom of level
-                break;
-            }
+// Compute how far a group of cells can fall as a unit
+function computeGroupDrop(cells) {
+    for (let drop = 0; drop < levelH; drop++) {
+        // Can the group drop one more tile?
+        for (const { x: gx, y: gy } of cells) {
+            const testY = gy + drop + 1;
+            if (testY >= levelH) return drop;
+            // Blocked by terrain or existing corpse?
+            const blocked = (level[testY] && level[testY][gx] === 1) ||
+                            (corpseGrid[testY] && corpseGrid[testY][gx]);
+            if (blocked) return drop;
         }
+    }
+    return 0;
+}
 
-        if (targetY >= landY) {
-            // Landed!
-            fb.fy = landY;
-            fb.y = landY;
-            fb.settled = true;
-            // Place in corpse grid
+// Update falling group — all cells fall together
+function updateFallingGroup(dt) {
+    if (!fallingGroup) return;
+
+    fallingGroup.fallSpeed += 600 * dt;
+    fallingGroup.drop += fallingGroup.fallSpeed * dt;
+
+    if (fallingGroup.drop >= fallingGroup.targetDrop) {
+        // Landed! Place all cells
+        fallingGroup.drop = fallingGroup.targetDrop;
+        for (const cell of fallingGroup.cells) {
+            const landY = cell.y + fallingGroup.targetDrop;
             if (landY >= 0 && landY < levelH) {
                 if (!corpseGrid[landY]) corpseGrid[landY] = [];
-                // Don't overwrite terrain
-                if (level[landY] && level[landY][fb.x] !== 1) {
-                    corpseGrid[landY][fb.x] = { mat: fb.mat, eyes: fb.eyes, age: 0 };
-                    // Neutralize spikes underneath
-                    if (level[landY][fb.x] === 2) {
-                        level[landY][fb.x] = 0;
+                if (!(level[landY] && level[landY][cell.x] === 1)) {
+                    corpseGrid[landY][cell.x] = { mat: cell.mat, eyes: cell.eyes, age: 0 };
+                    // Neutralize spikes
+                    if (level[landY] && level[landY][cell.x] === 2) {
+                        level[landY][cell.x] = 0;
                     }
                 }
             }
-            // Landing particles
-            spawnP(fb.x * TILE + TILE/2, landY * TILE + TILE, C.tile, 3, 25, 0.15);
-            cam.shake = Math.max(cam.shake, 1.5);
-        } else {
-            fb.y = targetY;
-            anyFalling = true;
+            spawnP(cell.x * TILE + TILE/2, (cell.y + fallingGroup.targetDrop) * TILE + TILE, C.tile, 3, 25, 0.15);
         }
-    }
-
-    // Remove settled blocks from falling list and check rows
-    const wasSettled = fallingBlocks.some(fb => fb.settled);
-    fallingBlocks = fallingBlocks.filter(fb => !fb.settled);
-
-    if (wasSettled && fallingBlocks.length === 0) {
+        cam.shake = Math.max(cam.shake, 2);
+        fallingGroup = null;
         checkRowClears();
     }
 }
@@ -972,8 +957,8 @@ function update(dt) {
     // Flash
     if (flash.a > 0) flash.a -= dt * 4;
 
-    // Falling blocks
-    updateFallingBlocks(dt);
+    // Falling group
+    updateFallingGroup(dt);
 
     // Camera — use bounding box center of shape
     const shapeCX = player.x + getShapeCenterX(player.shape, player.rotation);
@@ -1316,16 +1301,26 @@ function draw() {
         }
     }
 
-    // Falling blocks (not yet in grid)
-    for (const fb of fallingBlocks) {
-        const px = fb.x * TILE;
-        const py = fb.fy * TILE;
-        ctx.fillStyle = matColor(fb.mat);
-        ctx.fillRect(px, py, TILE, TILE);
-        ctx.fillStyle = matHL(fb.mat);
-        ctx.fillRect(px, py, TILE, 1);
-        ctx.fillStyle = matDark(fb.mat);
-        ctx.fillRect(px, py + TILE - 1, TILE, 1);
+    // Falling group (tetromino shape falling as a unit)
+    if (fallingGroup) {
+        for (const cell of fallingGroup.cells) {
+            const px = cell.x * TILE;
+            const py = (cell.y + fallingGroup.drop) * TILE;
+            ctx.fillStyle = matColor(cell.mat);
+            ctx.fillRect(px, py, TILE, TILE);
+            ctx.fillStyle = matHL(cell.mat);
+            ctx.fillRect(px, py, TILE, 1);
+            ctx.fillRect(px, py, 1, TILE);
+            ctx.fillStyle = matDark(cell.mat);
+            ctx.fillRect(px, py + TILE - 1, TILE, 1);
+            ctx.fillRect(px + TILE - 1, py, 1, TILE);
+            // Eyes on the falling piece
+            if (cell.eyes) {
+                ctx.fillStyle = matDark(cell.mat);
+                ctx.fillRect(px + 3, py + 2, 2, 2);
+                ctx.fillRect(px + 7, py + 2, 2, 2);
+            }
+        }
     }
 
     // Buzzsaws
