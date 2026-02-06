@@ -101,7 +101,7 @@ const canvas = document.getElementById('c');
 const ctx = canvas.getContext('2d');
 
 // ── Config ──
-const VERSION = 'v25';
+const VERSION = 'v26';
 const TILE = 12;
 const GRAVITY = 700;
 const JUMP_FORCE = -280;
@@ -606,16 +606,10 @@ function initLevel(lvl) {
         generateSegment(i, lvl);
     }
 
-    // Goal line at the end of the last segment
-    goalX = SEGMENTS_PER_LEVEL * SEGMENT_W * TILE - 2 * TILE;
+    // Goal line near the end of the last segment
+    goalX = (SEGMENTS_PER_LEVEL * SEGMENT_W - 4) * TILE;
 
-    // Add a goal wall — solid column with gap to run through
-    const endX = SEGMENTS_PER_LEVEL * SEGMENT_W - 1;
     const h = LEVEL_H_TILES;
-    for (let y = 0; y < h; y++) {
-        if (!level[y]) level[y] = [];
-        level[y][endX] = 1; // solid wall at the very end
-    }
 
     const spawnH = h;
     player.shape = nextShape();
@@ -1353,8 +1347,10 @@ function update(dt) {
     player.distance = Math.max(player.distance, Math.floor(player.x / TILE));
     if (player.distance > player.bestDistance) player.bestDistance = player.distance;
 
-    // Goal detection — reached the finish line?
-    if (!levelComplete && player.x >= goalX) {
+    // Goal detection — any cell crosses the finish line?
+    const bounds = shapeBounds(player.shape, player.rotation);
+    const rightmostX = player.x + (bounds.maxC + 1) * TILE;
+    if (!levelComplete && rightmostX >= goalX) {
         levelComplete = true;
         levelTransitionTimer = 3.0;
         cam.shake = Math.max(cam.shake, 10);
