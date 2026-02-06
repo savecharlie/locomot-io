@@ -4,10 +4,10 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <meta name="screen-orientation" content="landscape">
-<title>SEDIMENT - Your Deaths Build the Way | LOCOMOT.IO</title>
-<meta name="description" content="A platformer where every death leaves a tool for your next attempt. Springs, platforms, boosters — you become the level.">
-<meta property="og:title" content="SEDIMENT - Your Deaths Build the Way">
-<meta property="og:description" content="A platformer where every death leaves a tool for your next attempt. You become the level.">
+<title>SEDIMENT - You ARE the Tetris Piece | LOCOMOT.IO</title>
+<meta name="description" content="A multiplayer auto-runner where you ARE a Tetris piece. When you die, your body snaps to the grid and becomes terrain. Completed rows clear.">
+<meta property="og:title" content="SEDIMENT - You ARE the Tetris Piece">
+<meta property="og:description" content="When you die, your body becomes the floor. Completed rows clear. Every player shapes the level.">
 <meta property="og:type" content="website">
 <meta property="og:url" content="https://locomot.io/sediment/">
 <style>
@@ -19,7 +19,6 @@ html, body {
     user-select: none;
     -webkit-user-select: none;
 }
-/* Rotate / splash screen */
 #rotate-msg {
     display: none;
     position: fixed; top: 0; left: 0; width: 100%; height: 100%;
@@ -62,28 +61,9 @@ html, body {
 }
 @media (orientation: portrait) {
     #rotate-msg { display: flex; }
-    canvas, #ui { display: none !important; }
+    canvas { display: none !important; }
 }
 canvas { display: block; width: 100%; height: 100%; image-rendering: pixelated; }
-#ui {
-    position: fixed; bottom: 0; right: 0;
-    width: 80px; height: 160px;
-    display: flex; flex-direction: column; align-items: center; justify-content: flex-end;
-    padding-bottom: 12px; gap: 8px;
-    z-index: 10;
-}
-#deathBtn {
-    width: 56px; height: 56px;
-    border-radius: 50%;
-    background: rgba(255, 255, 255, 0.1);
-    border: 2px solid rgba(255, 255, 255, 0.4);
-    color: #fff;
-    font-size: 24px;
-    display: flex; align-items: center; justify-content: center;
-    cursor: pointer;
-    -webkit-tap-highlight-color: transparent;
-}
-#deathBtn:active { background: rgba(255, 255, 255, 0.3); }
 #pauseBtn {
     position: fixed; top: 8px; right: 8px;
     width: 36px; height: 36px;
@@ -103,51 +83,72 @@ canvas { display: block; width: 100%; height: 100%; image-rendering: pixelated; 
 <body>
 <div id="rotate-msg">
     <div class="title">SEDIMENT</div>
-    <div class="tagline">every death builds the way</div>
+    <div class="tagline">you are the tetris piece</div>
     <div class="rotate-icon">📱</div>
     <div class="rotate-hint">rotate to play</div>
     <div class="version" id="splash-version"></div>
 </div>
 <canvas id="c"></canvas>
-<div id="ui">
-    <div id="pauseBtn">&#9646;&#9646;</div>
-    <div id="deathBtn">&#9760;</div>
-</div>
+<div id="pauseBtn">&#9646;&#9646;</div>
 <div id="dbg" style="position:fixed;bottom:4px;left:4px;color:rgba(216,208,192,0.3);font:8px monospace;z-index:100;pointer-events:none;"></div>
 <script>
-// ── SEDIMENT ──
-// Auto-runner where deaths leave tools
+// ── SEDIMENT v2 ──
+// You ARE a Tetris piece. When you die, your body snaps to the grid.
+// Completed rows clear. Every player shapes the level.
 // by Ivy & Iris
 
 const canvas = document.getElementById('c');
 const ctx = canvas.getContext('2d');
 
 // ── Config ──
-const VERSION = 'v16';
+const VERSION = 'v20';
 const TILE = 12;
 const GRAVITY = 700;
 const JUMP_FORCE = -280;
 const RUN_SPEED = 100;
 const WALL_SLIDE_SPEED = 40;
+const MIN_DISTANCE_FOR_CORPSE = 5; // tiles from spawn before death leaves blocks
 
-// ── Colors (16-bit Strata — darks push blue, lights push warm) ──
+// ── Colors ──
 const C = {
-    bg: '#10101E',          // deep indigo void
-    tile: '#38344E',         // blue-gray stone
-    tileHL: '#504A68',       // warm-shifted stone highlight
-    tileSH: '#242038',       // blue-shifted stone shadow
-    player: '#E8A838',       // warm gold (particles/effects)
-    playerDark: '#302818',   // dark warm
-    spike: '#C83848',        // warm red danger
-    saw: '#E05838',          // hot orange danger
-    sawBlade: '#582830',     // plum blade teeth (blue-shifted)
-    goal: '#E8E0F0',         // lavender-white diamond
-    spring: '#48B880',       // sage green
-    platform: '#B8A078',     // warm sandstone
-    booster: '#5898C8',      // steel blue
-    text: '#D8D0C0',         // warm cream text
-    ghost: 'rgba(232,168,56,0.18)' // warm trail
+    bg: '#10101E',
+    tile: '#38344E',
+    tileHL: '#504A68',
+    tileSH: '#242038',
+    player: '#E8A838',
+    playerDark: '#302818',
+    spike: '#C83848',
+    saw: '#E05838',
+    sawBlade: '#582830',
+    solid: '#B8A078',       // sandstone
+    solidHL: '#E0D0A0',
+    solidSH: '#685060',
+    spring: '#48B880',      // sage green
+    springHL: '#80E8B0',
+    springDark: '#284050',
+    booster: '#5898C8',     // steel blue
+    boosterHL: '#88C0E0',
+    boosterDark: '#283850',
+    text: '#D8D0C0',
+    ghost: 'rgba(232,168,56,0.18)'
 };
+
+// Material color lookup
+function matColor(mat) {
+    if (mat === 'spring') return C.spring;
+    if (mat === 'booster') return C.booster;
+    return C.solid;
+}
+function matHL(mat) {
+    if (mat === 'spring') return C.springHL;
+    if (mat === 'booster') return C.boosterHL;
+    return C.solidHL;
+}
+function matDark(mat) {
+    if (mat === 'spring') return C.springDark;
+    if (mat === 'booster') return C.boosterDark;
+    return C.solidSH;
+}
 
 // ── Game resolution ──
 const LEVEL_H_TILES = 14;
@@ -155,36 +156,143 @@ let W, H, scale;
 function resize() {
     const sw = window.innerWidth || document.documentElement.clientWidth || screen.width;
     const sh = window.innerHeight || document.documentElement.clientHeight || screen.height;
-    if (sw < 1 || sh < 1) return; // bail on zero dimensions
-    // Scale so level height fills screen exactly
+    if (sw < 1 || sh < 1) return;
     scale = sh / (LEVEL_H_TILES * TILE);
     W = Math.max(1, Math.floor(sw / scale));
-    H = LEVEL_H_TILES * TILE; // exact fit
+    H = LEVEL_H_TILES * TILE;
     canvas.width = W;
     canvas.height = H;
     canvas.style.imageRendering = 'pixelated';
 }
 resize();
 window.addEventListener('resize', resize);
-// Mobile rotation doesn't always fire 'resize'
 window.addEventListener('orientationchange', () => { setTimeout(resize, 100); setTimeout(resize, 300); });
-// Fallback: re-check every 500ms for the first few seconds
 let _resizeChecks = 0;
 const _resizeInterval = setInterval(() => {
     resize();
     if (++_resizeChecks > 10) clearInterval(_resizeInterval);
 }, 500);
 
-// ── Level generation ──
-const SEGMENT_W = 40; // tiles wide per segment
-let levelH = 0;
-let level = [];
-let segments = []; // track generated segments
-let corpses = [];
-let particles = [];
+// ══════════════════════════════════════
+// ── TETROMINO SYSTEM ──
+// ══════════════════════════════════════
 
-// Buzzsaws (moving hazards)
+// Shapes defined as cell offsets [col, row] from origin
+// 4 rotation states each, pre-computed for speed
+const SHAPES = {
+    I: [
+        [[0,1],[1,1],[2,1],[3,1]],
+        [[2,0],[2,1],[2,2],[2,3]],
+        [[0,2],[1,2],[2,2],[3,2]],
+        [[1,0],[1,1],[1,2],[1,3]]
+    ],
+    O: [
+        [[0,0],[1,0],[0,1],[1,1]],
+        [[0,0],[1,0],[0,1],[1,1]],
+        [[0,0],[1,0],[0,1],[1,1]],
+        [[0,0],[1,0],[0,1],[1,1]]
+    ],
+    T: [
+        [[0,0],[1,0],[2,0],[1,1]],
+        [[1,0],[1,1],[1,2],[0,1]],
+        [[1,1],[0,2],[1,2],[2,2]],
+        [[1,0],[1,1],[1,2],[2,1]]
+    ],
+    S: [
+        [[1,0],[2,0],[0,1],[1,1]],
+        [[0,0],[0,1],[1,1],[1,2]],
+        [[1,1],[2,1],[0,2],[1,2]],
+        [[1,0],[1,1],[2,1],[2,2]]
+    ],
+    Z: [
+        [[0,0],[1,0],[1,1],[2,1]],
+        [[2,0],[1,1],[2,1],[1,2]],
+        [[0,1],[1,1],[1,2],[2,2]],
+        [[1,0],[0,1],[1,1],[0,2]]
+    ],
+    L: [
+        [[0,0],[1,0],[2,0],[0,1]],
+        [[0,0],[1,0],[1,1],[1,2]],
+        [[2,1],[0,2],[1,2],[2,2]],
+        [[1,0],[1,1],[1,2],[2,2]]
+    ],
+    J: [
+        [[0,0],[1,0],[2,0],[2,1]],
+        [[1,0],[1,1],[0,2],[1,2]],
+        [[0,1],[0,2],[1,2],[2,2]],
+        [[1,0],[2,0],[1,1],[1,2]]
+    ]
+};
+
+const SHAPE_NAMES = ['I', 'O', 'T', 'S', 'Z', 'L', 'J'];
+const MATERIAL_TYPES = ['solid', 'spring', 'booster'];
+
+// SRS wall kick data (for non-I pieces)
+const KICK_DATA = [
+    // 0→1
+    [[0,0],[-1,0],[-1,-1],[0,2],[-1,2]],
+    // 1→2
+    [[0,0],[1,0],[1,1],[0,-2],[1,-2]],
+    // 2→3
+    [[0,0],[1,0],[1,-1],[0,2],[1,2]],
+    // 3→0
+    [[0,0],[-1,0],[-1,1],[0,-2],[-1,-2]]
+];
+const KICK_DATA_I = [
+    // 0→1
+    [[0,0],[-2,0],[1,0],[-2,1],[1,-2]],
+    // 1→2
+    [[0,0],[-1,0],[2,0],[-1,-2],[2,1]],
+    // 2→3
+    [[0,0],[2,0],[-1,0],[2,-1],[-1,2]],
+    // 3→0
+    [[0,0],[1,0],[-2,0],[1,2],[-2,-1]]
+];
+
+// Bag of 7 — all shapes before repeating
+let shapeBag = [];
+function nextShape() {
+    if (shapeBag.length === 0) {
+        shapeBag = [...SHAPE_NAMES];
+        // Fisher-Yates shuffle
+        for (let i = shapeBag.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [shapeBag[i], shapeBag[j]] = [shapeBag[j], shapeBag[i]];
+        }
+    }
+    return shapeBag.pop();
+}
+
+function getCells(shapeName, rotation) {
+    return SHAPES[shapeName][rotation];
+}
+
+// Bounding box of a shape rotation
+function shapeBounds(shapeName, rotation) {
+    const cells = getCells(shapeName, rotation);
+    let minC = 99, maxC = -99, minR = 99, maxR = -99;
+    for (const [c, r] of cells) {
+        if (c < minC) minC = c;
+        if (c > maxC) maxC = c;
+        if (r < minR) minR = r;
+        if (r > maxR) maxR = r;
+    }
+    return { minC, maxC, minR, maxR, w: maxC - minC + 1, h: maxR - minR + 1 };
+}
+
+// ══════════════════════════════════════
+// ── LEVEL ──
+// ══════════════════════════════════════
+
+const SEGMENT_W = 40;
+let levelH = 0;
+let level = [];      // terrain grid: 0=empty, 1=solid, 2=spike
+let corpseGrid = []; // placed blocks: null or {mat, age, eyes}
+let segments = [];
+let particles = [];
 let buzzsaws = [];
+let fallingBlocks = []; // blocks currently falling after death-snap
+let clearingRows = [];  // rows currently flashing before clear
 
 function generateSegment(segIndex, difficulty) {
     const h = LEVEL_H_TILES;
@@ -192,30 +300,31 @@ function generateSegment(segIndex, difficulty) {
     const startX = segIndex * SEGMENT_W;
     const d = Math.min(10, 1 + segIndex * 0.5 + difficulty * 0.3);
 
-    // Basic structure: ceiling + floor, nothing else helpful
     for (let y = 0; y < h; y++) {
         if (!level[y]) level[y] = [];
+        if (!corpseGrid[y]) corpseGrid[y] = [];
         for (let x = startX; x < startX + SEGMENT_W; x++) {
             if (y === 0 || y === h - 1) {
-                level[y][x] = 1; // ceiling and floor
+                level[y][x] = 1;
             } else {
                 level[y][x] = 0;
             }
+            corpseGrid[y][x] = null;
         }
     }
 
-    // ── CHASMS (gaps in the floor) ──
+    // Chasms
     const numChasms = 2 + Math.floor(d * 0.8);
-    const chasmMinX = segIndex === 0 ? 10 : 3; // keep spawn safe
+    const chasmMinX = segIndex === 0 ? 10 : 3;
     for (let i = 0; i < numChasms; i++) {
         const cx = startX + chasmMinX + Math.floor(Math.random() * (SEGMENT_W - chasmMinX - 4));
         const cw = 2 + Math.floor(Math.random() * (1 + d * 0.4));
         for (let dx = 0; dx < cw; dx++) {
-            level[h - 1][cx + dx] = 0; // remove floor = chasm
+            level[h - 1][cx + dx] = 0;
         }
     }
 
-    // ── SPIKE FIELDS (on floor) ──
+    // Spike fields on floor
     const numSpikeFields = 2 + Math.floor(d * 0.7);
     const spikeMinX = segIndex === 0 ? 10 : 3;
     for (let i = 0; i < numSpikeFields; i++) {
@@ -223,21 +332,20 @@ function generateSegment(segIndex, difficulty) {
         const sw = 2 + Math.floor(Math.random() * 3);
         for (let dx = 0; dx < sw; dx++) {
             if (level[h - 2] && level[h - 1][sx + dx] === 1) {
-                level[h - 2][sx + dx] = 2; // spike on floor
+                level[h - 2][sx + dx] = 2;
             }
         }
     }
 
-    // ── CEILING SPIKES (dripping down) ──
+    // Ceiling spikes
     const numCeilingSpikes = Math.floor(d * 0.6);
     for (let i = 0; i < numCeilingSpikes; i++) {
         const sx = startX + 2 + Math.floor(Math.random() * (SEGMENT_W - 4));
         if (level[1]) level[1][sx] = 2;
-        // Some hang lower
         if (d > 4 && Math.random() < 0.4 && level[2]) level[2][sx] = 2;
     }
 
-    // ── SPIKE WALLS (vertical barriers) ──
+    // Spike walls
     const numWalls = Math.floor(d * 0.4);
     for (let i = 0; i < numWalls; i++) {
         const wx = startX + 6 + Math.floor(Math.random() * (SEGMENT_W - 12));
@@ -248,7 +356,7 @@ function generateSegment(segIndex, difficulty) {
         }
     }
 
-    // ── BUZZSAWS (moving circular blades) ──
+    // Buzzsaws
     const numSaws = Math.floor(d * 0.5);
     for (let i = 0; i < numSaws; i++) {
         const sawX = (startX + 8 + Math.floor(Math.random() * (SEGMENT_W - 16))) * TILE;
@@ -258,23 +366,22 @@ function generateSegment(segIndex, difficulty) {
         buzzsaws.push({
             x: sawX, y: sawY,
             baseX: sawX, baseY: sawY,
-            r: 6, // radius
-            vertical: vertical,
-            range: range,
+            r: 6,
+            vertical,
+            range,
             speed: 30 + Math.random() * 40,
             phase: Math.random() * Math.PI * 2,
             spin: 0
         });
     }
 
-    // ── Ensure spawn area is safe ──
+    // Safe spawn
     if (segIndex === 0) {
         for (let y = 1; y < h - 1; y++) {
             for (let x = 0; x < 10; x++) {
                 if (level[y] && level[y][x] === 2) level[y][x] = 0;
             }
         }
-        // Make sure there's floor at spawn
         for (let x = 0; x < 10; x++) {
             level[h - 1][x] = 1;
         }
@@ -283,14 +390,104 @@ function generateSegment(segIndex, difficulty) {
     segments.push(segIndex);
 }
 
-// ── Corpse types ──
-const CORPSE_TYPES = ['spring', 'platform', 'booster'];
+// ══════════════════════════════════════
+// ── COLLISION (tetromino-aware) ──
+// ══════════════════════════════════════
 
-// ── Player ──
+// Check if a single tile-aligned cell overlaps solid terrain or corpse blocks
+function tileIsSolid(tx, ty) {
+    if (ty < 0) return true; // ceiling
+    if (ty >= levelH) return false; // void below
+    if (level[ty] && level[ty][tx] === 1) return true;
+    if (corpseGrid[ty] && corpseGrid[ty][tx]) return true;
+    return false;
+}
+
+function tileIsSpike(tx, ty) {
+    if (ty < 0 || ty >= levelH) return false;
+    return level[ty] && level[ty][tx] === 2;
+}
+
+// Check if a tetromino at pixel position (px, py) collides with solids
+// px, py is top-left of cell grid origin
+function tetSolid(px, py, shapeName, rotation) {
+    const cells = getCells(shapeName, rotation);
+    for (const [cx, cy] of cells) {
+        const worldX = px + cx * TILE;
+        const worldY = py + cy * TILE;
+        // Check all grid tiles this cell touches
+        const l = Math.floor(worldX / TILE);
+        const r = Math.floor((worldX + TILE - 1) / TILE);
+        const t = Math.floor(worldY / TILE);
+        const b = Math.floor((worldY + TILE - 1) / TILE);
+        for (let ty = t; ty <= b; ty++) {
+            for (let tx = l; tx <= r; tx++) {
+                if (tileIsSolid(tx, ty)) return true;
+            }
+        }
+    }
+    return false;
+}
+
+function tetSpike(px, py, shapeName, rotation) {
+    const cells = getCells(shapeName, rotation);
+    for (const [cx, cy] of cells) {
+        const worldX = px + cx * TILE + 1; // slight inset
+        const worldY = py + cy * TILE + 1;
+        const l = Math.floor(worldX / TILE);
+        const r = Math.floor((worldX + TILE - 3) / TILE);
+        const t = Math.floor(worldY / TILE);
+        const b = Math.floor((worldY + TILE - 3) / TILE);
+        for (let ty = t; ty <= b; ty++) {
+            for (let tx = l; tx <= r; tx++) {
+                if (tileIsSpike(tx, ty)) return true;
+            }
+        }
+    }
+    return false;
+}
+
+// Check corpse grid interaction at pixel position
+function tetCorpseInteraction(px, py, shapeName, rotation) {
+    const cells = getCells(shapeName, rotation);
+    let springHit = false, boosterHit = null;
+    for (const [cx, cy] of cells) {
+        const worldX = px + cx * TILE;
+        const worldY = py + cy * TILE;
+        const l = Math.floor(worldX / TILE);
+        const r = Math.floor((worldX + TILE - 1) / TILE);
+        const t = Math.floor(worldY / TILE);
+        const b = Math.floor((worldY + TILE - 1) / TILE);
+        for (let ty = t; ty <= b; ty++) {
+            for (let tx = l; tx <= r; tx++) {
+                if (ty >= 0 && ty < levelH && corpseGrid[ty] && corpseGrid[ty][tx]) {
+                    const block = corpseGrid[ty][tx];
+                    if (block.mat === 'spring') springHit = { tx, ty };
+                    if (block.mat === 'booster') boosterHit = { tx, ty };
+                }
+            }
+        }
+    }
+    return { springHit, boosterHit };
+}
+
+// Wall detection for tetromino
+function tetWall(px, py, shapeName, rotation) {
+    // Check right side for wall
+    if (tetSolid(px + 1, py + 2, shapeName, rotation)) return 1;
+    return 0;
+}
+
+// ══════════════════════════════════════
+// ── PLAYER ──
+// ══════════════════════════════════════
+
 const player = {
     x: 2 * TILE, y: 0,
     vx: RUN_SPEED, vy: 0,
-    w: 9, h: 11,
+    shape: 'T',
+    rotation: 0,
+    material: 'solid',
     onGround: false,
     onWall: 0,
     dead: false,
@@ -298,86 +495,47 @@ const player = {
     squash: 1,
     trail: [],
     boostTimer: 0,
-    hasJumped: false, // must jump at least once to leave a corpse
     deathCount: 0,
     distance: 0,
     bestDistance: 0,
-    respawnX: 2 * TILE,
-    respawnY: 0,
-    loopStart: 0, // x position where current "loop" started
-    // Double jump + dive
+    spawnX: 2 * TILE,
+    // Double jump
     jumpsLeft: 2,
     coyoteTimer: 0,
-    diving: false,
-    // Corpse preview
-    nextCorpse: CORPSE_TYPES[Math.floor(Math.random() * 3)]
+    deathTimer: 0
 };
 
-// ── Camera ──
 const cam = { x: 0, y: 0, sx: 0, sy: 0, shake: 0 };
 const flash = { a: 0, r: 1, g: 1, b: 1 };
 let paused = false;
 let started = false;
 
-// ── Pickups ──
-let pickups = [];
-const INVINCIBLE_DURATION = 3.0; // seconds
-
-function spawnPickups() {
-    // Scatter invincibility pickups through generated terrain
-    // About 1 per 2 segments
-    for (let s = 0; s < segments.length; s++) {
-        const startX = segments[s] * SEGMENT_W;
-        // Check if we already have a pickup in this segment
-        const hasPickup = pickups.some(p => {
-            const px = Math.floor(p.x / TILE);
-            return px >= startX && px < startX + SEGMENT_W;
-        });
-        if (hasPickup) continue;
-        if (Math.random() < 0.5) continue; // 50% chance per segment
-
-        // Find a clear spot above a platform
-        const h = levelH;
-        for (let attempt = 0; attempt < 20; attempt++) {
-            const tx = startX + 3 + Math.floor(Math.random() * (SEGMENT_W - 6));
-            const ty = 2 + Math.floor(Math.random() * (h - 5));
-            if (level[ty] && level[ty][tx] === 0 && level[ty + 1] && level[ty + 1][tx] === 1) {
-                pickups.push({
-                    x: tx * TILE + 2, y: (ty) * TILE + 2,
-                    w: 8, h: 8, collected: false
-                });
-                break;
-            }
-        }
-    }
-}
-
-// Global corpse counter (simulates shared world)
 let globalCorpseNum = Math.floor(Math.random() * 50000) + 10000;
 let welcomeTimer = 0;
 let welcomeMsg = '';
 
 function init() {
     level = [];
+    corpseGrid = [];
     segments = [];
     particles = [];
-    pickups = [];
     buzzsaws = [];
-    // Corpses persist across deaths — only clear on hard reset
+    fallingBlocks = [];
+    clearingRows = [];
     if (!player._hasRun) {
-        corpses = [];
         globalCorpseNum += Math.floor(Math.random() * 200);
         welcomeMsg = `welcome, future corpse #${globalCorpseNum}`;
         welcomeTimer = 3.5;
     }
     generateSegment(0, 0);
     generateSegment(1, 0);
-    spawnPickups();
     const h = LEVEL_H_TILES;
+    player.shape = nextShape();
+    player.rotation = 0;
+    player.material = MATERIAL_TYPES[Math.floor(Math.random() * 3)];
     player.x = 2 * TILE;
     player.y = (h - 3) * TILE;
-    player.respawnX = player.x;
-    player.respawnY = player.y;
+    player.spawnX = player.x;
     player.vx = RUN_SPEED;
     player.vy = 0;
     player.dead = false;
@@ -385,12 +543,8 @@ function init() {
     player.squash = 1;
     player.trail = [];
     player.boostTimer = 0;
-    player.loopStart = 0;
-    player.invincible = 0;
     player.jumpsLeft = 2;
     player.coyoteTimer = 0;
-    player.diving = false;
-    player.nextCorpse = CORPSE_TYPES[Math.floor(Math.random() * 3)];
     player._hasRun = true;
     cam.x = 0; cam.y = 0;
 }
@@ -399,56 +553,8 @@ function hardReset() {
     player._hasRun = false;
     player.deathCount = 0;
     player.bestDistance = 0;
-    corpses = [];
-    buzzsaws = [];
+    shapeBag = [];
     init();
-}
-
-// ── Collision ──
-function getTile(x, y) {
-    const tx = Math.floor(x / TILE);
-    const ty = Math.floor(y / TILE);
-    if (ty < 0 || ty >= levelH) return 1; // out of bounds = solid
-    if (level[ty] && level[ty][tx] !== undefined) return level[ty][tx];
-    return 0;
-}
-
-function solidAt(x, y, w, h) {
-    const l = Math.floor(x / TILE);
-    const r = Math.floor((x + w - 1) / TILE);
-    const t = Math.floor(y / TILE);
-    const b = Math.floor((y + h - 1) / TILE);
-    for (let ty = t; ty <= b; ty++) {
-        for (let tx = l; tx <= r; tx++) {
-            if (ty < 0) return true; // ceiling is solid
-            if (ty >= levelH) continue; // below level = void, not solid
-            if (level[ty] && level[ty][tx] === 1) return true;
-        }
-    }
-    // Platform corpses
-    for (const c of corpses) {
-        if (c.type === 'platform') {
-            if (x < c.x + c.w && x + w > c.x && y < c.y + c.h && y + h > c.y) return true;
-        }
-    }
-    return false;
-}
-
-function spikeAt(x, y, w, h) {
-    const l = Math.floor(x / TILE);
-    const r = Math.floor((x + w - 1) / TILE);
-    const t = Math.floor(y / TILE);
-    const b = Math.floor((y + h - 1) / TILE);
-    for (let ty = t; ty <= b; ty++) {
-        for (let tx = l; tx <= r; tx++) {
-            if (level[ty] && level[ty][tx] === 2) return true;
-        }
-    }
-    return false;
-}
-
-function overlap(x1, y1, w1, h1, x2, y2, w2, h2) {
-    return x1 < x2 + w2 && x1 + w1 > x2 && y1 < y2 + h2 && y1 + h1 > y2;
 }
 
 // ── Particles ──
@@ -464,48 +570,273 @@ function spawnP(x, y, color, count, speed, life) {
     }
 }
 
-// ── Die ──
+// ══════════════════════════════════════
+// ── DEATH + GRID SNAP + GRAVITY ──
+// ══════════════════════════════════════
+
 function die() {
     if (player.dead) return;
     player.dead = true;
     player.deathTimer = 0;
     player.deathCount++;
 
-    cam.shake = Math.max(cam.shake, 5);
+    cam.shake = Math.max(cam.shake, 6);
     flash.a = 0.6; flash.r = 0.91; flash.g = 0.66; flash.b = 0.22;
-    spawnP(player.x + player.w/2, player.y + player.h/2, C.player, 12, 80, 0.4);
-    spawnP(player.x + player.w/2, player.y + player.h/2, C.spike, 6, 50, 0.3);
 
-    // Only leave corpse if player actually tried (jumped at least once)
-    // and didn't die in a chasm (below the floor)
+    const cells = getCells(player.shape, player.rotation);
+    const cx = player.x + getShapeCenterX(player.shape, player.rotation);
+    const cy = player.y + getShapeCenterY(player.shape, player.rotation);
+    spawnP(cx, cy, C.player, 12, 80, 0.4);
+    spawnP(cx, cy, C.spike, 6, 50, 0.3);
+
+    // Check minimum distance
+    const distFromSpawn = Math.floor((player.x - player.spawnX) / TILE);
     const inChasm = player.y > (LEVEL_H_TILES - 1) * TILE;
-    if (player.hasJumped && !inChasm) {
-        const type = player.nextCorpse;
-        // Advance to next corpse type for next life
-        player.nextCorpse = CORPSE_TYPES[Math.floor(Math.random() * CORPSE_TYPES.length)];
-        const c = { x: player.x, y: player.y, w: player.w, h: player.h, type, age: 0 };
 
-        if (type === 'spring') {
-            c.w = 11; c.h = 5;
-            c.y = c.y + player.h - c.h;
-        } else if (type === 'platform') {
-            c.w = 16; c.h = 5;
-            c.y = c.y + player.h - c.h;
-        } else if (type === 'booster') {
-            c.w = 9; c.h = 9;
-            c.dir = player.facing;
-            c.y = c.y + player.h/2 - c.h/2;
+    if (distFromSpawn >= MIN_DISTANCE_FOR_CORPSE && !inChasm) {
+        // Snap each cell to the grid
+        const placedCells = [];
+        for (const [cellC, cellR] of cells) {
+            const worldPx = player.x + cellC * TILE;
+            const worldPy = player.y + cellR * TILE;
+            const gridX = Math.round(worldPx / TILE);
+            const gridY = Math.round(worldPy / TILE);
+            placedCells.push({ gridX, gridY });
         }
 
-        corpses.push(c);
+        // Add as falling blocks (they'll drop with gravity)
+        const hasEyes = true;
+        let eyeCell = 0; // first cell gets the eyes
+        for (let i = 0; i < placedCells.length; i++) {
+            const { gridX, gridY } = placedCells[i];
+            if (gridY >= 0 && gridY < levelH && gridX >= 0) {
+                fallingBlocks.push({
+                    x: gridX,
+                    y: gridY,
+                    fy: gridY, // floating y (for animation)
+                    mat: player.material,
+                    eyes: i === eyeCell,
+                    settled: false,
+                    fallSpeed: 0
+                });
+            }
+        }
+
+        // Snap particles at each cell
+        for (const { gridX, gridY } of placedCells) {
+            spawnP(gridX * TILE + TILE/2, gridY * TILE + TILE/2, matColor(player.material), 3, 40, 0.25);
+        }
     }
 }
 
+function getShapeCenterX(shapeName, rotation) {
+    const cells = getCells(shapeName, rotation);
+    let sum = 0;
+    for (const [c, r] of cells) sum += c;
+    return (sum / cells.length) * TILE + TILE / 2;
+}
+
+function getShapeCenterY(shapeName, rotation) {
+    const cells = getCells(shapeName, rotation);
+    let sum = 0;
+    for (const [c, r] of cells) sum += r;
+    return (sum / cells.length) * TILE + TILE / 2;
+}
+
+// Settle falling blocks
+function updateFallingBlocks(dt) {
+    let anyFalling = false;
+    for (const fb of fallingBlocks) {
+        if (fb.settled) continue;
+        fb.fallSpeed += 600 * dt; // gravity
+        fb.fy += fb.fallSpeed * dt;
+
+        // Check what's below
+        const targetY = Math.floor(fb.fy);
+        let landY = fb.y;
+
+        // Scan downward for landing spot
+        for (let ty = fb.y; ty < levelH; ty++) {
+            if (tileIsSolid(fb.x, ty) || (corpseGrid[ty] && corpseGrid[ty][fb.x])) {
+                landY = ty - 1;
+                break;
+            }
+            if (ty === levelH - 1) {
+                landY = ty; // bottom of level
+                break;
+            }
+        }
+
+        if (targetY >= landY) {
+            // Landed!
+            fb.fy = landY;
+            fb.y = landY;
+            fb.settled = true;
+            // Place in corpse grid
+            if (landY >= 0 && landY < levelH) {
+                if (!corpseGrid[landY]) corpseGrid[landY] = [];
+                // Don't overwrite terrain
+                if (level[landY] && level[landY][fb.x] !== 1) {
+                    corpseGrid[landY][fb.x] = { mat: fb.mat, eyes: fb.eyes, age: 0 };
+                    // Neutralize spikes underneath
+                    if (level[landY][fb.x] === 2) {
+                        level[landY][fb.x] = 0;
+                    }
+                }
+            }
+            // Landing particles
+            spawnP(fb.x * TILE + TILE/2, landY * TILE + TILE, C.tile, 3, 25, 0.15);
+            cam.shake = Math.max(cam.shake, 1.5);
+        } else {
+            fb.y = targetY;
+            anyFalling = true;
+        }
+    }
+
+    // Remove settled blocks from falling list and check rows
+    const wasSettled = fallingBlocks.some(fb => fb.settled);
+    fallingBlocks = fallingBlocks.filter(fb => !fb.settled);
+
+    if (wasSettled && fallingBlocks.length === 0) {
+        checkRowClears();
+    }
+}
+
+// ══════════════════════════════════════
+// ── ROW CLEARING ──
+// ══════════════════════════════════════
+
+function checkRowClears() {
+    // VERTICAL column clearing — from ceiling (y=0) to floor (y=levelH-1)
+    // A column clears when EVERY cell top-to-bottom is filled (terrain OR corpse)
+    // Only corpse blocks vanish — terrain stays
+    const maxGenX = segments.length * SEGMENT_W;
+    let cleared = false;
+
+    for (let x = 0; x < maxGenX; x++) {
+        let full = true;
+        let hasCorpse = false;
+
+        for (let y = 0; y < levelH; y++) {
+            const isTerrain = level[y] && level[y][x] === 1;
+            const isCorpse = corpseGrid[y] && corpseGrid[y][x];
+            if (!isTerrain && !isCorpse) {
+                full = false;
+                break;
+            }
+            if (isCorpse) hasCorpse = true;
+        }
+
+        if (full && hasCorpse) {
+            clearColumn(x);
+            cleared = true;
+        }
+    }
+
+    if (cleared) {
+        // After clearing, apply gravity to remaining blocks
+        applyCorpseGravity();
+    }
+}
+
+function clearColumn(x) {
+    // Flash effect
+    cam.shake = Math.max(cam.shake, 8);
+    flash.a = 0.8; flash.r = 1; flash.g = 0.94; flash.b = 0.82;
+
+    // Particles along the column + remove corpse blocks
+    for (let y = 0; y < levelH; y++) {
+        if (corpseGrid[y] && corpseGrid[y][x]) {
+            const block = corpseGrid[y][x];
+            spawnP(x * TILE + TILE/2, y * TILE + TILE/2, matColor(block.mat), 2, 60, 0.3);
+            corpseGrid[y][x] = null; // remove corpse block — terrain stays
+        }
+    }
+
+    // Big burst in the center of the column
+    spawnP(x * TILE + TILE/2, (levelH / 2) * TILE, C.player, 10, 100, 0.5);
+}
+
+function applyCorpseGravity() {
+    // For each column, drop corpse blocks down into empty spaces
+    const maxX = segments.length * SEGMENT_W;
+    let dropped = false;
+
+    // Work bottom to top
+    for (let x = 0; x < maxX; x++) {
+        for (let y = levelH - 2; y >= 1; y--) {
+            if (!corpseGrid[y] || !corpseGrid[y][x]) continue;
+            // This cell has a corpse block — check if it can fall
+            let newY = y;
+            for (let ty = y + 1; ty < levelH; ty++) {
+                const isSolid = (level[ty] && level[ty][x] === 1) || (corpseGrid[ty] && corpseGrid[ty][x]);
+                if (isSolid) break;
+                newY = ty;
+            }
+            if (newY !== y) {
+                if (!corpseGrid[newY]) corpseGrid[newY] = [];
+                corpseGrid[newY][x] = corpseGrid[y][x];
+                corpseGrid[y][x] = null;
+                dropped = true;
+            }
+        }
+    }
+
+    // If blocks dropped, check for cascading clears
+    if (dropped) {
+        checkRowClears();
+    }
+}
+
+// ══════════════════════════════════════
+// ── ROTATION ──
+// ══════════════════════════════════════
+
+function tryRotate(dir) {
+    // dir: 1 = clockwise, -1 = counter-clockwise
+    const oldRot = player.rotation;
+    const newRot = (oldRot + dir + 4) % 4;
+    const kicks = player.shape === 'I' ? KICK_DATA_I : KICK_DATA;
+
+    // Determine kick table index
+    let kickIdx;
+    if (dir === 1) {
+        kickIdx = oldRot; // 0→1, 1→2, 2→3, 3→0
+    } else {
+        // Reverse: use the target→old kicks, but negated
+        kickIdx = newRot;
+    }
+
+    const kickTests = kicks[kickIdx];
+    for (const [kx, ky] of kickTests) {
+        const testX = player.x + (dir === 1 ? kx : -kx) * TILE;
+        const testY = player.y + (dir === 1 ? -ky : ky) * TILE;
+        if (!tetSolid(testX, testY, player.shape, newRot)) {
+            player.x = testX;
+            player.y = testY;
+            player.rotation = newRot;
+            player.squash = 1.15;
+            const cx = player.x + getShapeCenterX(player.shape, player.rotation);
+            const cy = player.y + getShapeCenterY(player.shape, player.rotation);
+            spawnP(cx, cy, matColor(player.material), 3, 20, 0.1);
+            return true;
+        }
+    }
+    return false; // rotation failed
+}
+
+// ══════════════════════════════════════
+// ── RESPAWN ──
+// ══════════════════════════════════════
+
 function respawn() {
-    // Roguelike: restart from the very beginning, corpses stay
     const h = LEVEL_H_TILES;
+    player.shape = nextShape();
+    player.rotation = 0;
+    player.material = MATERIAL_TYPES[Math.floor(Math.random() * 3)];
     player.x = 2 * TILE;
     player.y = (h - 3) * TILE;
+    player.spawnX = player.x;
     player.vx = RUN_SPEED;
     player.vy = 0;
     player.dead = false;
@@ -513,32 +844,21 @@ function respawn() {
     player.squash = 0.5;
     player.trail = [];
     player.boostTimer = 0;
-    player.invincible = 0;
-    player.hasJumped = false;
     player.jumpsLeft = 2;
     player.coyoteTimer = 0;
-    player.diving = false;
     player.distance = 0;
     cam.x = 0; cam.y = 0;
-    // Re-enable pickups for this run
-    for (const p of pickups) p.collected = false;
 }
 
-// ── Input ──
-let jumpPressed = false;
+// ══════════════════════════════════════
+// ── INPUT ──
+// ══════════════════════════════════════
+
 let jumpBuffered = false;
-let canDive = false; // set after double jump, cleared on landing only
-const SWIPE_DIVE_PX = 30; // pixels of downward swipe to trigger dive
-let touchStartY = 0;
-
-function triggerDive() {
-    if (!canDive || player.onGround || player.diving) return;
-    player.vy = 380;
-    player.diving = true;
-    player.squash = 0.7;
-    canDive = false;
-    spawnP(player.x + player.w/2, player.y, C.player, 3, 30, 0.15);
-}
+let touchStartX = 0, touchStartY = 0;
+let touchStartTime = 0;
+let touchHandled = false;
+const SWIPE_THRESHOLD = 25; // pixels
 
 function doJump() {
     if (!started) { started = true; return; }
@@ -546,47 +866,68 @@ function doJump() {
 }
 
 function doDie() {
-    player.hasJumped = true; // intentional sacrifice always counts
+    if (!started) { started = true; return; }
     die();
 }
 
-// Touch
+function doRotateCW() {
+    if (!started || player.dead) return;
+    tryRotate(1);
+}
+
+function doRotateCCW() {
+    if (!started || player.dead) return;
+    tryRotate(-1);
+}
+
+// Touch input — tap=jump, swipe down=die, swipe left/right=rotate
 canvas.addEventListener('touchstart', (e) => {
     e.preventDefault();
-    for (const t of e.changedTouches) {
-        touchStartY = t.clientY;
-        const sw = window.innerWidth;
-        const sh = window.innerHeight;
-        if (t.clientX > sw - 90 && t.clientY > sh - 90) {
-            doDie();
-        } else {
-            doJump();
-        }
-    }
+    const t = e.changedTouches[0];
+    touchStartX = t.clientX;
+    touchStartY = t.clientY;
+    touchStartTime = performance.now();
+    touchHandled = false;
 }, { passive: false });
 
 canvas.addEventListener('touchmove', (e) => {
     e.preventDefault();
-    for (const t of e.changedTouches) {
-        if (canDive && t.clientY - touchStartY > SWIPE_DIVE_PX) {
-            triggerDive();
-        }
+    if (touchHandled) return;
+    const t = e.changedTouches[0];
+    const dx = t.clientX - touchStartX;
+    const dy = t.clientY - touchStartY;
+
+    if (Math.abs(dy) > SWIPE_THRESHOLD && dy > 0 && Math.abs(dy) > Math.abs(dx)) {
+        // Swipe down = voluntary death
+        touchHandled = true;
+        doDie();
+    } else if (Math.abs(dx) > SWIPE_THRESHOLD && Math.abs(dx) > Math.abs(dy)) {
+        touchHandled = true;
+        if (dx > 0) doRotateCW();
+        else doRotateCCW();
     }
 }, { passive: false });
 
 canvas.addEventListener('touchend', (e) => {
     e.preventDefault();
+    if (!touchHandled) {
+        // Short tap = jump
+        const elapsed = performance.now() - touchStartTime;
+        if (elapsed < 300) {
+            doJump();
+        }
+    }
 }, { passive: false });
 
-// Keyboard fallback
+// Keyboard
 document.addEventListener('keydown', (e) => {
-    if (e.code === 'Space' || e.code === 'ArrowUp' || e.code === 'KeyW' || e.code === 'KeyZ') doJump();
-    if (e.code === 'KeyK' || e.code === 'KeyQ') doDie();
+    if (e.repeat) return;
+    if (e.code === 'Space' || e.code === 'ArrowUp' || e.code === 'KeyW') doJump();
+    if (e.code === 'ArrowDown' || e.code === 'KeyS' || e.code === 'KeyX') doDie();
+    if (e.code === 'ArrowRight' || e.code === 'KeyD') doRotateCW();
+    if (e.code === 'ArrowLeft' || e.code === 'KeyA') doRotateCCW();
     if (e.code === 'KeyR') hardReset();
     if (e.code === 'KeyP' || e.code === 'Escape') togglePause();
-});
-document.addEventListener('keydown', (e) => {
-    if ((e.code === 'ArrowDown' || e.code === 'KeyS') && canDive) triggerDive();
 });
 
 // Pause
@@ -607,20 +948,15 @@ document.getElementById('pauseBtn').addEventListener('click', (e) => {
     togglePause();
 });
 
-// Death button
-document.getElementById('deathBtn').addEventListener('touchstart', (e) => {
-    e.preventDefault();
-    e.stopPropagation();
-    doDie();
-}, { passive: false });
+// ══════════════════════════════════════
+// ── UPDATE ──
+// ══════════════════════════════════════
 
-// ── Update ──
 let lastTime = 0;
 
 function update(dt) {
     if (paused || !started) return;
 
-    // Welcome timer
     if (welcomeTimer > 0) welcomeTimer -= dt;
 
     // Particles
@@ -636,10 +972,14 @@ function update(dt) {
     // Flash
     if (flash.a > 0) flash.a -= dt * 4;
 
-    // Camera
-    const targetX = player.x + player.w/2 - W/2 + 40; // look ahead
+    // Falling blocks
+    updateFallingBlocks(dt);
+
+    // Camera — use bounding box center of shape
+    const shapeCX = player.x + getShapeCenterX(player.shape, player.rotation);
+    const targetX = shapeCX - W / 2 + 40;
     cam.x += (targetX - cam.x) * 6 * dt;
-    cam.y = 0; // level fits screen exactly — no vertical scroll
+    cam.y = 0;
     if (cam.shake > 0) {
         cam.sx = (Math.random() * 2 - 1) * cam.shake;
         cam.sy = (Math.random() * 2 - 1) * cam.shake;
@@ -649,7 +989,7 @@ function update(dt) {
 
     if (player.dead) {
         player.deathTimer += dt;
-        if (player.deathTimer > 0.35) respawn();
+        if (player.deathTimer > 0.5) respawn();
         return;
     }
 
@@ -667,21 +1007,31 @@ function update(dt) {
     // Boost timer
     if (player.boostTimer > 0) player.boostTimer -= dt;
 
-    // Auto-run (always moving right unless boosted)
+    // Auto-run
     if (player.boostTimer <= 0) {
         player.vx = RUN_SPEED;
         player.facing = 1;
     }
 
-    // Gravity (faster when diving)
-    player.vy += GRAVITY * (player.diving ? 2.0 : 1.0) * dt;
-    if (player.vy > (player.diving ? 500 : 400)) player.vy = player.diving ? 500 : 400;
+    // Gravity
+    player.vy += GRAVITY * dt;
+    if (player.vy > 400) player.vy = 400;
 
     // Wall detection
     player.onWall = 0;
     if (!player.onGround) {
-        if (solidAt(player.x + player.w + 1, player.y + 2, 1, player.h - 4)) {
-            player.onWall = 1;
+        // Check right side of bounding box
+        const bounds = shapeBounds(player.shape, player.rotation);
+        const rightEdge = player.x + (bounds.maxC + 1) * TILE;
+        // Check if any cell has solid to its right
+        const cells = getCells(player.shape, player.rotation);
+        for (const [cx, cy] of cells) {
+            const checkX = player.x + (cx + 1) * TILE;
+            const checkY = player.y + cy * TILE;
+            if (tileIsSolid(Math.floor(checkX / TILE), Math.floor((checkY + TILE/2) / TILE))) {
+                player.onWall = 1;
+                break;
+            }
         }
     }
 
@@ -689,52 +1039,47 @@ function update(dt) {
     if (player.onWall !== 0 && player.vy > 0) {
         player.vy = Math.min(player.vy, WALL_SLIDE_SPEED);
         if (Math.random() < 0.3) {
-            spawnP(player.x + player.w, player.y + player.h * 0.5, C.tile, 1, 15, 0.2);
+            const bounds = shapeBounds(player.shape, player.rotation);
+            spawnP(player.x + (bounds.maxC + 1) * TILE, player.y + bounds.h * TILE / 2, C.tile, 1, 15, 0.2);
         }
     }
 
-    // Coyote time (grace period after leaving ground)
+    // Coyote time
     if (player.onGround) {
         player.coyoteTimer = 0.06;
         player.jumpsLeft = 2;
-        player.diving = false;
-        canDive = false;
     } else {
         player.coyoteTimer -= dt;
     }
 
-    // Jump buffer — double jump + dive
+    // Jump
     if (jumpBuffered) {
         jumpBuffered = false;
         if (player.onWall !== 0) {
-            // Wall jump (independent of double jump system)
             player.vx = -player.onWall * 180;
             player.vy = JUMP_FORCE * 0.9;
             player.facing = -player.onWall;
-            player.hasJumped = true;
-            player.jumpsLeft = 1; // wall jump restores one air jump
+            player.jumpsLeft = 1;
             player.boostTimer = 0.15;
             player.squash = 1.3;
-            spawnP(player.x + player.w, player.y + player.h/2, C.tile, 4, 40, 0.2);
+            const bounds = shapeBounds(player.shape, player.rotation);
+            spawnP(player.x + (bounds.maxC + 1) * TILE, player.y + bounds.h * TILE / 2, C.tile, 4, 40, 0.2);
         } else if (player.onGround || player.coyoteTimer > 0) {
-            // Ground jump (first jump)
             player.vy = JUMP_FORCE;
             player.onGround = false;
             player.coyoteTimer = 0;
-            player.jumpsLeft = 1; // one air jump remaining
-            player.hasJumped = true;
+            player.jumpsLeft = 1;
             player.squash = 1.3;
-            spawnP(player.x + player.w/2, player.y + player.h, C.player, 3, 25, 0.15);
+            const cx = player.x + getShapeCenterX(player.shape, player.rotation);
+            const bounds = shapeBounds(player.shape, player.rotation);
+            spawnP(cx, player.y + (bounds.maxR + 1) * TILE, C.player, 3, 25, 0.15);
         } else if (player.jumpsLeft > 0) {
-            // Double jump (70% strength, different particles)
             player.vy = JUMP_FORCE * 0.7;
             player.jumpsLeft = 0;
-            player.hasJumped = true;
-            player.diving = false;
             player.squash = 1.2;
-            canDive = true; // this press can dive if held
-            spawnP(player.x + player.w/2, player.y + player.h, 'rgba(232,168,56,0.5)', 4, 35, 0.2);
-            spawnP(player.x + player.w/2, player.y + player.h/2, '#E8C868', 2, 20, 0.15);
+            const cx = player.x + getShapeCenterX(player.shape, player.rotation);
+            const bounds = shapeBounds(player.shape, player.rotation);
+            spawnP(cx, player.y + (bounds.maxR + 1) * TILE, 'rgba(232,168,56,0.5)', 4, 35, 0.2);
         }
     }
 
@@ -746,10 +1091,9 @@ function update(dt) {
         const steps = Math.ceil(Math.abs(dx));
         for (let i = 0; i < steps; i++) {
             const step = Math.min(1, Math.abs(dx) - i) * sign;
-            if (!solidAt(player.x + step, player.y, player.w, player.h)) {
+            if (!tetSolid(player.x + step, player.y, player.shape, player.rotation)) {
                 player.x += step;
             } else {
-                // Hit wall — in auto-runner, wall jump or slide
                 player.vx = 0;
                 break;
             }
@@ -764,24 +1108,17 @@ function update(dt) {
         const steps = Math.ceil(Math.abs(dy));
         for (let i = 0; i < steps; i++) {
             const step = Math.min(1, Math.abs(dy) - i) * sign;
-            if (!solidAt(player.x, player.y + step, player.w, player.h)) {
+            if (!tetSolid(player.x, player.y + step, player.shape, player.rotation)) {
                 player.y += step;
             } else {
                 if (player.vy > 0) {
                     player.onGround = true;
                     if (wasInAir && player.vy > 80) {
-                        if (player.diving) {
-                            // Dive impact — big slam, stone dust + amber force
-                            player.squash = 0.4;
-                            cam.shake = Math.max(cam.shake, 4);
-                            spawnP(player.x + player.w/2, player.y + player.h, C.tile, 6, 50, 0.25);
-                            spawnP(player.x + player.w/2, player.y + player.h, C.player, 4, 35, 0.2);
-                            player.diving = false;
-                        } else {
-                            player.squash = 0.6;
-                            spawnP(player.x + player.w/2, player.y + player.h, C.player, 3, 30, 0.2);
-                            if (player.vy > 250) cam.shake = Math.max(cam.shake, 2);
-                        }
+                        player.squash = 0.6;
+                        const cx = player.x + getShapeCenterX(player.shape, player.rotation);
+                        const bounds = shapeBounds(player.shape, player.rotation);
+                        spawnP(cx, player.y + (bounds.maxR + 1) * TILE, C.player, 3, 30, 0.2);
+                        if (player.vy > 250) cam.shake = Math.max(cam.shake, 2);
                     }
                 }
                 player.vy = 0;
@@ -789,9 +1126,9 @@ function update(dt) {
             }
         }
     }
-    if (solidAt(player.x, player.y + 1, player.w, player.h)) player.onGround = true;
+    if (tetSolid(player.x, player.y + 1, player.shape, player.rotation)) player.onGround = true;
 
-    // Void death (fell into chasm)
+    // Void death
     if (player.y > levelH * TILE + 20) {
         die();
         return;
@@ -808,91 +1145,52 @@ function update(dt) {
         }
     }
 
-    // Dive particles (amber downward streak)
-    if (player.diving && !player.onGround) {
-        if (Math.random() < 0.6) {
-            spawnP(player.x + Math.random() * player.w, player.y, C.player, 1, 15, 0.12);
-        }
-    }
-
-    // Invincibility timer
-    if (player.invincible > 0) {
-        player.invincible -= dt;
-        // Sparkle particles while invincible
-        if (Math.random() < 0.4) {
-            spawnP(player.x + Math.random() * player.w, player.y + Math.random() * player.h,
-                '#FFF0D0', 1, 30, 0.2);
-        }
-    }
-
-    // Pickup check
-    for (const pk of pickups) {
-        if (pk.collected) continue;
-        if (overlap(player.x, player.y, player.w, player.h, pk.x, pk.y, pk.w, pk.h)) {
-            pk.collected = true;
-            player.invincible = INVINCIBLE_DURATION;
-            cam.shake = Math.max(cam.shake, 3);
-            flash.a = 0.5; flash.r = 0.91; flash.g = 0.88; flash.b = 0.94;
-            spawnP(pk.x + pk.w/2, pk.y + pk.h/2, '#FFF0D0', 10, 60, 0.4);
-            spawnP(pk.x + pk.w/2, pk.y + pk.h/2, C.goal, 6, 40, 0.3);
-        }
-    }
-
-    // Spike check (invincibility protects)
-    if (spikeAt(player.x + 2, player.y + 2, player.w - 4, player.h - 4)) {
-        if (player.invincible <= 0) {
-            die();
-            return;
-        } else {
-            // Plow through — sparks
-            if (Math.random() < 0.5) {
-                spawnP(player.x + player.w/2, player.y + player.h, C.spike, 2, 40, 0.2);
-            }
-        }
+    // Spike check
+    if (tetSpike(player.x, player.y, player.shape, player.rotation)) {
+        die();
+        return;
     }
 
     // Buzzsaw collision
-    const pcx = player.x + player.w/2;
-    const pcy = player.y + player.h/2;
+    const pcx = player.x + getShapeCenterX(player.shape, player.rotation);
+    const pcy = player.y + getShapeCenterY(player.shape, player.rotation);
     for (const saw of buzzsaws) {
-        const dx = pcx - saw.x;
-        const dy = pcy - saw.y;
-        const dist = Math.sqrt(dx*dx + dy*dy);
-        if (dist < saw.r + 4) { // player ~4px effective radius
-            if (player.invincible <= 0) {
-                die();
-                return;
-            } else {
-                if (Math.random() < 0.5) spawnP(saw.x, saw.y, C.saw, 2, 50, 0.2);
-            }
+        const ddx = pcx - saw.x;
+        const ddy = pcy - saw.y;
+        const dist = Math.sqrt(ddx * ddx + ddy * ddy);
+        if (dist < saw.r + 6) {
+            die();
+            return;
         }
     }
 
-    // Corpse interactions
-    for (const c of corpses) {
-        if (!overlap(player.x, player.y, player.w, player.h, c.x, c.y, c.w, c.h)) continue;
-
-        if (c.type === 'spring' && player.vy > 0) {
+    // Corpse block interactions (spring bounce, booster)
+    if (player.vy > 0) {
+        const interaction = tetCorpseInteraction(player.x, player.y, player.shape, player.rotation);
+        if (interaction.springHit) {
             player.vy = JUMP_FORCE * 1.5;
-            player.y = c.y - player.h;
-            player.jumpsLeft = 1; // spring restores air jump
-            player.diving = false;
+            player.jumpsLeft = 1;
             player.squash = 1.4;
             cam.shake = Math.max(cam.shake, 3);
-            spawnP(c.x + c.w/2, c.y, C.spring, 5, 60, 0.3);
-        } else if (c.type === 'booster') {
+            const sh = interaction.springHit;
+            spawnP(sh.tx * TILE + TILE/2, sh.ty * TILE, C.spring, 5, 60, 0.3);
+        }
+    }
+    {
+        const interaction = tetCorpseInteraction(player.x, player.y, player.shape, player.rotation);
+        if (interaction.boosterHit) {
+            const bh = interaction.boosterHit;
             const now = performance.now() / 1000;
-            if (!c.cooldown || (now - c.cooldown) > 0.5) {
-                c.cooldown = now;
-                player.vx = (c.dir || 1) * 350;
+            const key = `${bh.tx},${bh.ty}`;
+            if (!player._lastBoost || player._lastBoost.key !== key || (now - player._lastBoost.time) > 0.5) {
+                player._lastBoost = { key, time: now };
+                player.vx = player.facing * 350;
                 player.vy = JUMP_FORCE * 0.5;
-                player.jumpsLeft = 1; // booster restores air jump
-                player.diving = false;
+                player.jumpsLeft = 1;
                 player.boostTimer = 0.25;
-                player.facing = c.dir || 1;
                 player.squash = 1.5;
                 cam.shake = Math.max(cam.shake, 4);
-                spawnP(c.x + c.w/2, c.y + c.h/2, C.booster, 7, 70, 0.3);
+                spawnP(bh.tx * TILE + TILE/2, bh.ty * TILE + TILE/2, C.booster, 7, 70, 0.3);
             }
         }
     }
@@ -901,22 +1199,22 @@ function update(dt) {
     player.distance = Math.max(player.distance, Math.floor(player.x / TILE));
     if (player.distance > player.bestDistance) player.bestDistance = player.distance;
 
-    // Generate new segments as player advances
+    // Generate new segments
     const currentSeg = Math.floor(player.x / (SEGMENT_W * TILE));
-    const prevSegCount = segments.length;
     while (segments.length < currentSeg + 3) {
         generateSegment(segments.length, player.deathCount);
     }
-    if (segments.length > prevSegCount) spawnPickups();
 }
 
-// ── Draw ──
+// ══════════════════════════════════════
+// ── DRAW ──
+// ══════════════════════════════════════
+
 let _dbgF = 0;
 function draw() {
     if (_dbgF++ % 20 === 0) {
-        const tc = level[0] ? level[0].filter(t => t === 1).length : 0;
         document.getElementById('dbg').textContent =
-            `${VERSION} vp:${window.innerWidth}x${window.innerHeight} cv:${W}x${H} p:${Math.floor(player.x)},${Math.floor(player.y)} t:${tc} go:${started}`;
+            `${VERSION} ${player.shape}${player.rotation} ${player.material} p:${Math.floor(player.x)},${Math.floor(player.y)} d:${player.distance}`;
     }
     ctx.fillStyle = C.bg;
     ctx.fillRect(0, 0, W, H);
@@ -930,7 +1228,7 @@ function draw() {
     const tt = Math.max(0, Math.floor(cam.y / TILE) - 1);
     const tb = Math.min(levelH - 1, Math.floor((cam.y + H) / TILE) + 1);
 
-    // Tiles
+    // Terrain tiles
     for (let y = tt; y <= tb; y++) {
         for (let x = tl; x <= tr; x++) {
             if (!level[y] || level[y][x] === undefined) continue;
@@ -941,38 +1239,102 @@ function draw() {
             if (t === 1) {
                 ctx.fillStyle = C.tile;
                 ctx.fillRect(px, py, TILE, TILE);
-                // Top and left edge highlight
                 ctx.fillStyle = C.tileHL;
                 ctx.fillRect(px, py, TILE, 1);
                 ctx.fillRect(px, py, 1, TILE);
-                // Bottom and right edge shadow
                 ctx.fillStyle = C.tileSH;
                 ctx.fillRect(px, py + TILE - 1, TILE, 1);
                 ctx.fillRect(px + TILE - 1, py, 1, TILE);
             } else if (t === 2) {
-                // Spikes — magma red triangles
                 ctx.fillStyle = C.spike;
                 ctx.beginPath();
                 ctx.moveTo(px + 1, py + TILE);
                 ctx.lineTo(px + TILE/2, py + 2);
                 ctx.lineTo(px + TILE - 1, py + TILE);
                 ctx.fill();
-                // Warm bright tip
                 ctx.fillStyle = '#F08060';
                 ctx.fillRect(px + TILE/2 - 0.5, py + 2, 1, 2);
             }
         }
     }
 
+    // Corpse grid blocks
+    for (let y = tt; y <= tb; y++) {
+        for (let x = tl; x <= tr; x++) {
+            if (!corpseGrid[y] || !corpseGrid[y][x]) continue;
+            const block = corpseGrid[y][x];
+            const px = x * TILE;
+            const py = y * TILE;
+            block.age = Math.min(1, (block.age || 0) + 0.02);
+
+            ctx.globalAlpha = block.age;
+            // Block body
+            ctx.fillStyle = matColor(block.mat);
+            ctx.fillRect(px, py, TILE, TILE);
+            // Highlight top/left
+            ctx.fillStyle = matHL(block.mat);
+            ctx.fillRect(px, py, TILE, 1);
+            ctx.fillRect(px, py, 1, TILE);
+            // Shadow bottom/right
+            ctx.fillStyle = matDark(block.mat);
+            ctx.fillRect(px, py + TILE - 1, TILE, 1);
+            ctx.fillRect(px + TILE - 1, py, 1, TILE);
+
+            // Material decoration
+            if (block.mat === 'spring') {
+                ctx.fillStyle = C.springDark;
+                for (let i = 0; i < 3; i++) {
+                    ctx.fillRect(px + 2 + i * 3, py + 4, 1, 5);
+                }
+            } else if (block.mat === 'booster') {
+                ctx.fillStyle = C.boosterDark;
+                ctx.beginPath();
+                ctx.moveTo(px + 9, py + TILE/2);
+                ctx.lineTo(px + 4, py + TILE/2 - 3);
+                ctx.lineTo(px + 4, py + TILE/2 + 3);
+                ctx.fill();
+            }
+
+            // Dead eyes
+            if (block.eyes) {
+                ctx.fillStyle = matDark(block.mat);
+                ctx.fillRect(px + 3, py + 2, 2, 2);
+                ctx.fillRect(px + 7, py + 2, 2, 2);
+                // X eyes (dead)
+                ctx.fillStyle = matHL(block.mat);
+                ctx.fillRect(px + 3, py + 2, 1, 1);
+                ctx.fillRect(px + 4, py + 3, 1, 1);
+                ctx.fillRect(px + 4, py + 2, 1, 1);
+                ctx.fillRect(px + 3, py + 3, 1, 1);
+                ctx.fillRect(px + 7, py + 2, 1, 1);
+                ctx.fillRect(px + 8, py + 3, 1, 1);
+                ctx.fillRect(px + 8, py + 2, 1, 1);
+                ctx.fillRect(px + 7, py + 3, 1, 1);
+            }
+
+            ctx.globalAlpha = 1;
+        }
+    }
+
+    // Falling blocks (not yet in grid)
+    for (const fb of fallingBlocks) {
+        const px = fb.x * TILE;
+        const py = fb.fy * TILE;
+        ctx.fillStyle = matColor(fb.mat);
+        ctx.fillRect(px, py, TILE, TILE);
+        ctx.fillStyle = matHL(fb.mat);
+        ctx.fillRect(px, py, TILE, 1);
+        ctx.fillStyle = matDark(fb.mat);
+        ctx.fillRect(px, py + TILE - 1, TILE, 1);
+    }
+
     // Buzzsaws
     for (const saw of buzzsaws) {
         if (saw.x - saw.r < cam.x - 30 || saw.x + saw.r > cam.x + W + 30) continue;
-        // Blade circle
         ctx.fillStyle = C.saw;
         ctx.beginPath();
         ctx.arc(saw.x, saw.y, saw.r, 0, Math.PI * 2);
         ctx.fill();
-        // Spinning teeth
         ctx.fillStyle = C.sawBlade;
         for (let i = 0; i < 4; i++) {
             const a = saw.spin + i * Math.PI / 2;
@@ -982,191 +1344,114 @@ function draw() {
                 2, 2
             );
         }
-        // Center dot
         ctx.fillStyle = '#281820';
         ctx.beginPath();
         ctx.arc(saw.x, saw.y, 2, 0, Math.PI * 2);
         ctx.fill();
     }
 
-    // Corpses
-    for (const c of corpses) {
-        // Only draw visible
-        if (c.x + c.w < cam.x - 20 || c.x > cam.x + W + 20) continue;
-        c.age = Math.min(1, (c.age || 0) + 0.05);
-        const a = c.age;
-
-        if (c.type === 'spring') {
-            ctx.globalAlpha = a;
-            ctx.fillStyle = C.spring;
-            ctx.fillRect(c.x, c.y, c.w, c.h);
-            ctx.fillStyle = '#284050';
-            for (let i = 0; i < 3; i++) {
-                ctx.fillRect(c.x + 1 + i * 3, c.y + 1, 1, c.h - 2);
-            }
-            // Bright top edge — the active surface
-            ctx.fillStyle = '#80E8B0';
-            ctx.fillRect(c.x, c.y, c.w, 1);
-            // Dead eyes — was once alive
-            ctx.fillStyle = '#284050';
-            ctx.fillRect(c.x + 3, c.y + 1, 1, 1);
-            ctx.fillRect(c.x + 6, c.y + 1, 1, 1);
-            ctx.globalAlpha = 1;
-        } else if (c.type === 'platform') {
-            ctx.globalAlpha = a;
-            ctx.fillStyle = C.platform;
-            ctx.fillRect(c.x, c.y, c.w, c.h);
-            ctx.fillStyle = '#E0D0A0';
-            ctx.fillRect(c.x, c.y, c.w, 1);
-            // Shadow bottom
-            ctx.fillStyle = '#685060';
-            ctx.fillRect(c.x, c.y + c.h - 1, c.w, 1);
-            // Dead eyes — was once alive
-            ctx.fillStyle = '#685060';
-            ctx.fillRect(c.x + 3, c.y + 1, 1, 1);
-            ctx.fillRect(c.x + 6, c.y + 1, 1, 1);
-            ctx.globalAlpha = 1;
-        } else if (c.type === 'booster') {
-            ctx.globalAlpha = a;
-            ctx.fillStyle = C.booster;
-            ctx.fillRect(c.x, c.y, c.w, c.h);
-            // Dark directional arrow
-            const cx = c.x + c.w/2;
-            const cy = c.y + c.h/2;
-            const d = c.dir || 1;
-            ctx.fillStyle = '#283850';
-            ctx.beginPath();
-            ctx.moveTo(cx + d * 3.5, cy);
-            ctx.lineTo(cx - d * 2, cy - 3);
-            ctx.lineTo(cx - d * 2, cy + 3);
-            ctx.fill();
-            // Dead eyes — was once alive
-            ctx.fillStyle = '#283850';
-            ctx.fillRect(c.x + 2, c.y + 2, 1, 1);
-            ctx.fillRect(c.x + 5, c.y + 2, 1, 1);
-            ctx.globalAlpha = 1;
+    // Ghost preview — where your piece would snap on death
+    if (!player.dead && started) {
+        const cells = getCells(player.shape, player.rotation);
+        ctx.globalAlpha = 0.15;
+        for (const [cx, cy] of cells) {
+            const worldPx = player.x + cx * TILE;
+            const worldPy = player.y + cy * TILE;
+            const gridX = Math.round(worldPx / TILE);
+            const gridY = Math.round(worldPy / TILE);
+            ctx.fillStyle = matColor(player.material);
+            ctx.fillRect(gridX * TILE, gridY * TILE, TILE, TILE);
         }
-    }
-
-    // Pickups
-    for (const pk of pickups) {
-        if (pk.collected) continue;
-        if (pk.x + pk.w < cam.x - 20 || pk.x > cam.x + W + 20) continue;
-        const pulse = Math.sin(performance.now() / 200) * 0.3 + 0.7;
-        ctx.globalAlpha = pulse;
-        ctx.fillStyle = '#FFF0D0';
-        // Diamond shape
-        const pcx = pk.x + pk.w/2;
-        const pcy = pk.y + pk.h/2;
-        ctx.beginPath();
-        ctx.moveTo(pcx, pcy - 4);
-        ctx.lineTo(pcx + 3, pcy);
-        ctx.lineTo(pcx, pcy + 4);
-        ctx.lineTo(pcx - 3, pcy);
-        ctx.fill();
-        // Inner glow
-        ctx.fillStyle = C.goal;
-        ctx.beginPath();
-        ctx.moveTo(pcx, pcy - 2);
-        ctx.lineTo(pcx + 1.5, pcy);
-        ctx.lineTo(pcx, pcy + 2);
-        ctx.lineTo(pcx - 1.5, pcy);
-        ctx.fill();
         ctx.globalAlpha = 1;
     }
 
-    // Player trail — matches your current tool color
+    // Player trail
     if (!player.dead) {
-        const trailColor = player.nextCorpse === 'spring' ? C.spring : player.nextCorpse === 'platform' ? C.platform : C.booster;
+        const cells = getCells(player.shape, player.rotation);
         for (const t of player.trail) {
             const a = t.life / 0.12;
-            ctx.globalAlpha = a * 0.25;
-            ctx.fillStyle = trailColor;
-            ctx.fillRect(t.x + 1, t.y + 1, player.w - 2, player.h - 2);
+            ctx.globalAlpha = a * 0.2;
+            ctx.fillStyle = matColor(player.material);
+            for (const [cx, cy] of cells) {
+                ctx.fillRect(t.x + cx * TILE + 1, t.y + cy * TILE + 1, TILE - 2, TILE - 2);
+            }
         }
         ctx.globalAlpha = 1;
     }
 
-    // Player — you ARE the tool you'll become
+    // Player tetromino
     if (!player.dead) {
-        const sx = 1 / player.squash;
-        const sy = player.squash;
-        const cx = player.x + player.w / 2;
-        const cy = player.y + player.h;
-        const pw = player.w * sx;
-        const ph = player.h * sy;
+        const cells = getCells(player.shape, player.rotation);
+        const mat = player.material;
 
-        const invincible = player.invincible > 0;
-        const nc = player.nextCorpse;
-        // You ARE the tool — same color
-        const toolColor = nc === 'spring' ? C.spring : nc === 'platform' ? C.platform : C.booster;
-        const toolDark = nc === 'spring' ? '#284050' : nc === 'platform' ? '#685060' : '#283850';
-        const toolHL = nc === 'spring' ? '#80E8B0' : nc === 'platform' ? '#E0D0A0' : '#88C0E0';
+        for (let i = 0; i < cells.length; i++) {
+            const [cx, cy] = cells[i];
+            const px = player.x + cx * TILE;
+            const py = player.y + cy * TILE;
 
-        // Draw invincible outline if needed
-        if (invincible) {
-            ctx.fillStyle = C.goal;
-            ctx.fillRect(cx - pw/2 - 1, cy - ph - 1, pw + 2, ph + 2);
-        }
+            // Squash/stretch around center
+            const centerX = player.x + getShapeCenterX(player.shape, player.rotation);
+            const centerY = player.y + getShapeCenterY(player.shape, player.rotation);
+            const sx = 1 / player.squash;
+            const sy = player.squash;
+            const drawX = centerX + (px - centerX) * sx + (TILE * (1 - sx)) / 2;
+            const drawY = centerY + (py - centerY) * sy + (TILE * (1 - sy)) / 2;
+            const drawW = TILE * sx;
+            const drawH = TILE * sy;
 
-        // Body — same color as the tool you'll become
-        ctx.fillStyle = invincible ? C.bg : toolColor;
-        ctx.fillRect(cx - pw/2, cy - ph, pw, ph);
+            // Body
+            ctx.fillStyle = matColor(mat);
+            ctx.fillRect(drawX, drawY, drawW, drawH);
 
-        if (!invincible) {
-            if (nc === 'spring') {
-                // Coil lines
-                ctx.fillStyle = toolDark;
-                for (let i = 0; i < 3; i++) {
-                    ctx.fillRect(cx - pw/2 + 1 + i * 3, cy - ph + ph * 0.5, 1, ph * 0.4);
-                }
-                // Bright top edge
-                ctx.fillStyle = toolHL;
-                ctx.fillRect(cx - pw/2, cy - ph, pw, 1);
-            } else if (nc === 'platform') {
-                // Top highlight
-                ctx.fillStyle = toolHL;
-                ctx.fillRect(cx - pw/2, cy - ph, pw, 1);
-                // Bottom shadow
-                ctx.fillStyle = toolDark;
-                ctx.fillRect(cx - pw/2, cy - 1, pw, 1);
-            } else if (nc === 'booster') {
-                // Directional arrow
-                const d = player.facing;
-                ctx.fillStyle = toolDark;
-                ctx.beginPath();
-                ctx.moveTo(cx + d * 3.5, cy - ph/2);
-                ctx.lineTo(cx - d * 1.5, cy - ph/2 - 2.5);
-                ctx.lineTo(cx - d * 1.5, cy - ph/2 + 2.5);
-                ctx.fill();
+            // Highlight top/left
+            ctx.fillStyle = matHL(mat);
+            ctx.fillRect(drawX, drawY, drawW, 1);
+            ctx.fillRect(drawX, drawY, 1, drawH);
+
+            // Shadow bottom/right
+            ctx.fillStyle = matDark(mat);
+            ctx.fillRect(drawX, drawY + drawH - 1, drawW, 1);
+            ctx.fillRect(drawX + drawW - 1, drawY, 1, drawH);
+
+            // Eyes on first cell — alive!
+            if (i === 0) {
+                const eyeY = drawY + 2 * sy;
+                const shift = player.facing * 1;
+                ctx.fillStyle = matDark(mat);
+                ctx.fillRect(drawX + 2 + shift, eyeY, 2, 2);
+                ctx.fillRect(drawX + 7 + shift, eyeY, 2, 2);
+                // Pupils (spark of life)
+                ctx.fillStyle = '#FFF0D0';
+                ctx.fillRect(drawX + 2 + shift + player.facing * 0.7 + 0.5, eyeY + 0.5, 1, 1);
+                ctx.fillRect(drawX + 7 + shift + player.facing * 0.7 + 0.5, eyeY + 0.5, 1, 1);
             }
-        }
 
-        // Eyes — the only difference between alive and dead
-        const eyeShift = player.facing * 1.5;
-        const eyeY = cy - ph + 2 * sy;
-        ctx.fillStyle = invincible ? C.goal : toolDark;
-        ctx.fillRect(cx - 3 * sx + eyeShift, eyeY, 2, 2);
-        ctx.fillRect(cx + 1 * sx + eyeShift, eyeY, 2, 2);
-        // Pupils — the spark of life
-        ctx.fillStyle = invincible ? C.bg : '#FFF0D0';
-        ctx.fillRect(cx - 3 * sx + eyeShift + player.facing * 0.7 + 0.5, eyeY + 0.5, 1, 1);
-        ctx.fillRect(cx + 1 * sx + eyeShift + player.facing * 0.7 + 0.5, eyeY + 0.5, 1, 1);
-
-        // Dive visual — streak above when diving
-        if (player.diving) {
-            ctx.globalAlpha = 0.3;
-            ctx.fillStyle = C.player;
-            ctx.fillRect(cx - pw/2 + 1, cy - ph - 4, pw - 2, 4);
-            ctx.globalAlpha = 1;
+            // Material decoration on other cells
+            if (i > 0) {
+                if (mat === 'spring') {
+                    ctx.fillStyle = C.springDark;
+                    for (let j = 0; j < 3; j++) {
+                        ctx.fillRect(drawX + 2 + j * 3, drawY + 4, 1, drawH - 6);
+                    }
+                } else if (mat === 'booster') {
+                    ctx.fillStyle = C.boosterDark;
+                    ctx.beginPath();
+                    const d = player.facing;
+                    ctx.moveTo(drawX + drawW/2 + d * 3.5, drawY + drawH/2);
+                    ctx.lineTo(drawX + drawW/2 - d * 2, drawY + drawH/2 - 2.5);
+                    ctx.lineTo(drawX + drawW/2 - d * 2, drawY + drawH/2 + 2.5);
+                    ctx.fill();
+                }
+            }
         }
 
         // Wall slide indicator
         if (player.onWall !== 0) {
             ctx.globalAlpha = 0.4;
             ctx.fillStyle = C.player;
-            const wx = player.onWall < 0 ? player.x - 2 : player.x + player.w;
-            ctx.fillRect(wx, player.y + 1, 2, player.h - 2);
+            const bounds = shapeBounds(player.shape, player.rotation);
+            const wx = player.onWall > 0 ? player.x + (bounds.maxC + 1) * TILE : player.x + bounds.minC * TILE - 2;
+            ctx.fillRect(wx, player.y + bounds.minR * TILE + 1, 2, bounds.h * TILE - 2);
             ctx.globalAlpha = 1;
         }
     }
@@ -1181,21 +1466,27 @@ function draw() {
 
     ctx.restore();
 
-    // ── UI ──
+    // ── HUD ──
     ctx.fillStyle = C.text;
     ctx.font = '8px monospace';
     ctx.fillText(`${player.distance}m`, 4, 10);
     ctx.fillStyle = 'rgba(255,255,255,0.4)';
     ctx.fillText(`best: ${player.bestDistance}m  deaths: ${player.deathCount}`, 4, 20);
 
-    // Invincibility bar — diamond depleting
-    if (player.invincible > 0) {
-        const barW = 40;
-        const fill = (player.invincible / INVINCIBLE_DURATION) * barW;
-        ctx.fillStyle = 'rgba(232,224,240,0.15)';
-        ctx.fillRect(4, 24, barW, 3);
-        ctx.fillStyle = C.goal;
-        ctx.fillRect(4, 24, fill, 3);
+    // Shape + material indicator
+    ctx.fillStyle = matColor(player.material);
+    ctx.font = '7px monospace';
+    ctx.fillText(`${player.shape}-piece  ${player.material}`, 4, 32);
+
+    // Controls hint (fades after first few seconds)
+    if (player.deathCount < 3 && started) {
+        ctx.globalAlpha = Math.max(0, 1 - player.distance / 20);
+        ctx.fillStyle = 'rgba(216,208,192,0.35)';
+        ctx.font = '6px monospace';
+        ctx.textAlign = 'center';
+        ctx.fillText('tap=jump  swipe \u2193=die  swipe \u2190\u2192=rotate', W/2, H - 6);
+        ctx.textAlign = 'left';
+        ctx.globalAlpha = 1;
     }
 
     // Flash
@@ -1213,14 +1504,17 @@ function draw() {
         ctx.textAlign = 'center';
         ctx.fillStyle = C.player;
         ctx.font = '14px monospace';
-        ctx.fillText('SEDIMENT', W/2, H/2 - 20);
+        ctx.fillText('SEDIMENT', W/2, H/2 - 28);
         ctx.fillStyle = 'rgba(232,168,56,0.45)';
         ctx.font = '7px monospace';
-        ctx.fillText('your deaths build the way', W/2, H/2 - 4);
+        ctx.fillText('you are the tetris piece', W/2, H/2 - 12);
         ctx.fillStyle = C.text;
-        ctx.fillText('tap to start', W/2, H/2 + 16);
-        ctx.fillStyle = 'rgba(208,204,196,0.2)';
+        ctx.font = '7px monospace';
+        ctx.fillText('tap to start', W/2, H/2 + 10);
+        ctx.fillStyle = 'rgba(216,208,192,0.3)';
         ctx.font = '6px monospace';
+        ctx.fillText('tap=jump  swipe \u2193=die  swipe \u2190\u2192=rotate', W/2, H/2 + 24);
+        ctx.fillStyle = 'rgba(208,204,196,0.2)';
         ctx.textAlign = 'right';
         ctx.fillText(VERSION, W - 4, H - 4);
         ctx.textAlign = 'left';
@@ -1228,7 +1522,6 @@ function draw() {
 
     // Welcome message
     if (welcomeTimer > 0 && started) {
-        const wa = Math.min(1, welcomeTimer / 0.5) * Math.min(1, (3.5 - welcomeTimer + welcomeTimer) > 2.5 ? 1 : welcomeTimer / 1.0);
         ctx.globalAlpha = Math.min(1, welcomeTimer < 1 ? welcomeTimer : 1);
         ctx.fillStyle = C.spike;
         ctx.font = '7px monospace';
@@ -1238,7 +1531,7 @@ function draw() {
         ctx.globalAlpha = 1;
     }
 
-    // Pause overlay
+    // Pause
     if (paused) {
         ctx.fillStyle = 'rgba(16, 16, 30, 0.8)';
         ctx.fillRect(0, 0, W, H);
@@ -1262,7 +1555,6 @@ function loop(time) {
     requestAnimationFrame(loop);
 }
 
-// Set splash version
 document.getElementById('splash-version').textContent = VERSION;
 
 init();
