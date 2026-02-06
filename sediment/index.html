@@ -593,18 +593,17 @@ function die() {
 
     // Check minimum distance
     const distFromSpawn = Math.floor((player.x - player.spawnX) / TILE);
-    const inChasm = player.y > (LEVEL_H_TILES - 1) * TILE;
 
-    if (distFromSpawn >= MIN_DISTANCE_FOR_CORPSE && !inChasm) {
-        // Snap each cell to the grid
+    if (distFromSpawn >= MIN_DISTANCE_FOR_CORPSE) {
+        // Snap each cell to the grid — clamp to valid range so chasm deaths still place blocks
         const groupCells = [];
         for (let i = 0; i < cells.length; i++) {
             const [cellC, cellR] = cells[i];
             const worldPx = player.x + cellC * TILE;
             const worldPy = player.y + cellR * TILE;
             const gridX = Math.round(worldPx / TILE);
-            const gridY = Math.round(worldPy / TILE);
-            if (gridY >= 0 && gridY < levelH && gridX >= 0) {
+            const gridY = Math.max(0, Math.min(Math.round(worldPy / TILE), levelH - 1));
+            if (gridX >= 0) {
                 groupCells.push({ x: gridX, y: gridY, mat: player.material, eyes: i === 0 });
             }
         }
