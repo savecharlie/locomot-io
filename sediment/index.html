@@ -101,7 +101,7 @@ const canvas = document.getElementById('c');
 const ctx = canvas.getContext('2d');
 
 // ── Config ──
-const VERSION = 'v24';
+const VERSION = 'v25';
 const TILE = 12;
 const GRAVITY = 700;
 const JUMP_FORCE = -280;
@@ -285,6 +285,7 @@ function shapeBounds(shapeName, rotation) {
 // ══════════════════════════════════════
 
 const SEGMENT_W = 40;
+const SEGMENTS_PER_LEVEL = 5;
 let levelH = 0;
 let level = [];      // terrain grid: 0=empty, 1=solid, 2=spike
 let corpseGrid = []; // placed blocks: null or {mat, age, eyes}
@@ -294,11 +295,25 @@ let buzzsaws = [];
 let fallingGroup = null; // {cells: [{x,y,mat,eyes}], drop:0, targetDrop:N, fallSpeed:0}
 let clearingRows = [];  // rows currently flashing before clear
 
-function generateSegment(segIndex, difficulty) {
+// ── Level system ──
+let currentLevel = 1;
+let levelDeaths = 0;
+let levelComplete = false;
+let levelTransitionTimer = 0;
+let levelTitleTimer = 0;
+let goalX = 0; // pixel X of the finish line
+
+function getLevelDifficulty(lvl) {
+    return Math.min(10, 1 + (lvl - 1) * 1.5);
+}
+
+function generateSegment(segIndex, lvl) {
     const h = LEVEL_H_TILES;
     levelH = h;
     const startX = segIndex * SEGMENT_W;
-    const d = Math.min(10, 1 + segIndex * 0.5 + difficulty * 0.3);
+    const baseDiff = getLevelDifficulty(lvl);
+    // Ramp within level: later segments slightly harder
+    const d = Math.min(10, baseDiff + segIndex * 0.3);
 
     for (let y = 0; y < h; y++) {
         if (!level[y]) level[y] = [];
@@ -567,7 +582,7 @@ let globalCorpseNum = Math.floor(Math.random() * 50000) + 10000;
 let welcomeTimer = 0;
 let welcomeMsg = '';
 
-function init() {
+function initLevel(lvl) {
     level = [];
     corpseGrid = [];
     segments = [];
@@ -575,19 +590,39 @@ function init() {
     buzzsaws = [];
     fallingGroup = null;
     clearingRows = [];
+    levelComplete = false;
+    levelTransitionTimer = 0;
+    levelDeaths = 0;
+    levelTitleTimer = 3.0;
+
     if (!player._hasRun) {
         globalCorpseNum += Math.floor(Math.random() * 200);
         welcomeMsg = `welcome, future corpse #${globalCorpseNum}`;
         welcomeTimer = 3.5;
     }
-    generateSegment(0, 0);
-    generateSegment(1, 0);
+
+    // Generate all segments for this level
+    for (let i = 0; i < SEGMENTS_PER_LEVEL; i++) {
+        generateSegment(i, lvl);
+    }
+
+    // Goal line at the end of the last segment
+    goalX = SEGMENTS_PER_LEVEL * SEGMENT_W * TILE - 2 * TILE;
+
+    // Add a goal wall — solid column with gap to run through
+    const endX = SEGMENTS_PER_LEVEL * SEGMENT_W - 1;
     const h = LEVEL_H_TILES;
+    for (let y = 0; y < h; y++) {
+        if (!level[y]) level[y] = [];
+        level[y][endX] = 1; // solid wall at the very end
+    }
+
+    const spawnH = h;
     player.shape = nextShape();
     player.rotation = 0;
     player.material = MATERIAL_TYPES[Math.floor(Math.random() * 3)];
     player.x = 2 * TILE;
-    player.y = (h - 3) * TILE;
+    player.y = (spawnH - 3) * TILE;
     player.spawnX = player.x;
     player.vx = RUN_SPEED;
     player.vy = 0;
@@ -604,11 +639,17 @@ function init() {
     cam.x = 0; cam.y = 0;
 }
 
+function init() {
+    currentLevel = 1;
+    initLevel(currentLevel);
+}
+
 function hardReset() {
     player._hasRun = false;
     player.deathCount = 0;
     player.bestDistance = 0;
     shapeBag = [];
+    currentLevel = 1;
     init();
 }
 
@@ -634,6 +675,7 @@ function die() {
     player.dead = true;
     player.deathTimer = 0;
     player.deathCount++;
+    levelDeaths++;
 
     cam.shake = Math.max(cam.shake, 6);
     flash.a = 0.6; flash.r = 0.91; flash.g = 0.66; flash.b = 0.22;
@@ -997,6 +1039,26 @@ function update(dt) {
     if (paused || !started) return;
 
     if (welcomeTimer > 0) welcomeTimer -= dt;
+    if (levelTitleTimer > 0) levelTitleTimer -= dt;
+
+    // Level complete — freeze gameplay, count down to next level
+    if (levelComplete) {
+        levelTransitionTimer -= dt;
+        // Keep particles alive during transition
+        for (let i = particles.length - 1; i >= 0; i--) {
+            const p = particles[i];
+            p.x += p.vx * dt; p.y += p.vy * dt;
+            p.vy += 180 * dt; p.life -= dt;
+            if (p.life <= 0) particles.splice(i, 1);
+        }
+        if (flash.a > 0) flash.a -= dt * 2; // slower flash fade
+        if (cam.shake > 0) { cam.sx = (Math.random()*2-1)*cam.shake; cam.sy = (Math.random()*2-1)*cam.shake; cam.shake *= (1-6*dt); if (cam.shake < 0.3) cam.shake = 0; }
+        if (levelTransitionTimer <= 0) {
+            currentLevel++;
+            initLevel(currentLevel);
+        }
+        return;
+    }
 
     // Particles
     for (let i = particles.length - 1; i >= 0; i--) {
@@ -1291,10 +1353,17 @@ function update(dt) {
     player.distance = Math.max(player.distance, Math.floor(player.x / TILE));
     if (player.distance > player.bestDistance) player.bestDistance = player.distance;
 
-    // Generate new segments
-    const currentSeg = Math.floor(player.x / (SEGMENT_W * TILE));
-    while (segments.length < currentSeg + 3) {
-        generateSegment(segments.length, player.deathCount);
+    // Goal detection — reached the finish line?
+    if (!levelComplete && player.x >= goalX) {
+        levelComplete = true;
+        levelTransitionTimer = 3.0;
+        cam.shake = Math.max(cam.shake, 10);
+        flash.a = 1.0; flash.r = 0.91; flash.g = 0.84; flash.b = 0.42;
+        // Big celebration particles
+        const cx = player.x + getShapeCenterX(player.shape, player.rotation);
+        const cy = player.y + getShapeCenterY(player.shape, player.rotation);
+        spawnP(cx, cy, C.player, 30, 120, 0.6);
+        spawnP(cx, cy, '#FFF0D0', 20, 80, 0.5);
     }
 }
 
@@ -1306,7 +1375,7 @@ let _dbgF = 0;
 function draw() {
     if (_dbgF++ % 20 === 0) {
         document.getElementById('dbg').textContent =
-            `${VERSION} ${player.shape}${player.rotation} ${player.material} p:${Math.floor(player.x)},${Math.floor(player.y)} d:${player.distance}`;
+            `${VERSION} L${currentLevel} ${player.shape}${player.rotation} ${player.material} p:${Math.floor(player.x)},${Math.floor(player.y)} d:${player.distance}`;
     }
     ctx.fillStyle = C.bg;
     ctx.fillRect(0, 0, W, H);
@@ -1428,6 +1497,18 @@ function draw() {
                 ctx.fillRect(px + 7, py + 2, 2, 2);
             }
         }
+    }
+
+    // Goal line — golden finish
+    if (goalX > cam.x - 20 && goalX < cam.x + W + 20) {
+        const pulse = 0.6 + 0.4 * Math.sin(performance.now() / 200);
+        ctx.globalAlpha = pulse * 0.7;
+        ctx.fillStyle = C.player;
+        ctx.fillRect(goalX, 0, 3, H);
+        // Glow effect
+        ctx.globalAlpha = pulse * 0.15;
+        ctx.fillRect(goalX - 4, 0, 11, H);
+        ctx.globalAlpha = 1;
     }
 
     // Buzzsaws
@@ -1569,11 +1650,14 @@ function draw() {
     ctx.restore();
 
     // ── HUD ──
-    ctx.fillStyle = C.text;
+    ctx.fillStyle = C.player;
     ctx.font = '8px monospace';
-    ctx.fillText(`${player.distance}m`, 4, 10);
-    ctx.fillStyle = 'rgba(255,255,255,0.4)';
-    ctx.fillText(`best: ${player.bestDistance}m  deaths: ${player.deathCount}`, 4, 20);
+    ctx.fillText(`LEVEL ${currentLevel}`, 4, 10);
+    ctx.fillStyle = C.text;
+    ctx.font = '7px monospace';
+    const totalDist = SEGMENTS_PER_LEVEL * SEGMENT_W;
+    const progress = Math.min(100, Math.floor(player.distance / totalDist * 100));
+    ctx.fillText(`${progress}%  deaths: ${player.deathCount}`, 4, 20);
 
     // Shape + material indicator
     ctx.fillStyle = matColor(player.material);
@@ -1629,6 +1713,52 @@ function draw() {
         ctx.font = '7px monospace';
         ctx.textAlign = 'center';
         ctx.fillText(welcomeMsg, W/2, H/2 - 4);
+        ctx.textAlign = 'left';
+        ctx.globalAlpha = 1;
+    }
+
+    // Level title (fades in at start of each level)
+    if (levelTitleTimer > 0 && started && !levelComplete) {
+        const fade = levelTitleTimer < 1 ? levelTitleTimer : Math.min(1, (3 - levelTitleTimer) * 2);
+        ctx.globalAlpha = fade;
+        ctx.textAlign = 'center';
+        ctx.fillStyle = C.player;
+        ctx.font = '14px monospace';
+        ctx.fillText(`LEVEL ${currentLevel}`, W/2, H/2 - 16);
+        ctx.fillStyle = 'rgba(232,168,56,0.5)';
+        ctx.font = '7px monospace';
+        const diff = getLevelDifficulty(currentLevel);
+        const hellName = currentLevel === 1 ? 'the shallows' :
+                         currentLevel === 2 ? 'bone garden' :
+                         currentLevel === 3 ? 'the grinder' :
+                         currentLevel === 4 ? 'narrow hell' :
+                         currentLevel === 5 ? 'the furnace' :
+                         currentLevel === 6 ? 'sawdust' :
+                         `circle ${currentLevel}`;
+        ctx.fillText(hellName, W/2, H/2);
+        ctx.textAlign = 'left';
+        ctx.globalAlpha = 1;
+    }
+
+    // Level complete overlay
+    if (levelComplete) {
+        const fade = Math.min(1, (3 - levelTransitionTimer) * 3);
+        ctx.globalAlpha = fade * 0.7;
+        ctx.fillStyle = C.bg;
+        ctx.fillRect(0, 0, W, H);
+        ctx.globalAlpha = fade;
+        ctx.textAlign = 'center';
+        ctx.fillStyle = C.player;
+        ctx.font = '14px monospace';
+        ctx.fillText(`LEVEL ${currentLevel} CLEAR`, W/2, H/2 - 20);
+        ctx.fillStyle = C.text;
+        ctx.font = '7px monospace';
+        ctx.fillText(`deaths: ${levelDeaths}`, W/2, H/2);
+        ctx.fillStyle = 'rgba(216,208,192,0.5)';
+        ctx.font = '6px monospace';
+        if (levelTransitionTimer > 0) {
+            ctx.fillText(`next level in ${Math.ceil(levelTransitionTimer)}...`, W/2, H/2 + 14);
+        }
         ctx.textAlign = 'left';
         ctx.globalAlpha = 1;
     }
