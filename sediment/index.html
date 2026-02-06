@@ -101,7 +101,7 @@ const canvas = document.getElementById('c');
 const ctx = canvas.getContext('2d');
 
 // ── Config ──
-const VERSION = 'v21';
+const VERSION = 'v22';
 const TILE = 12;
 const GRAVITY = 700;
 const JUMP_FORCE = -280;
@@ -509,7 +509,8 @@ const player = {
     jumpsLeft: 2,
     coyoteTimer: 0,
     deathTimer: 0,
-    stuckTimer: 0
+    stuckTimer: 0,
+    stuckHighX: 0
 };
 
 const cam = { x: 0, y: 0, sx: 0, sy: 0, shake: 0 };
@@ -552,6 +553,8 @@ function init() {
     player.boostTimer = 0;
     player.jumpsLeft = 2;
     player.coyoteTimer = 0;
+    player.stuckTimer = 0;
+    player.stuckHighX = player.x;
     player._hasRun = true;
     cam.x = 0; cam.y = 0;
 }
@@ -837,6 +840,7 @@ function respawn() {
     player.coyoteTimer = 0;
     player.distance = 0;
     player.stuckTimer = 0;
+    player.stuckHighX = player.x;
     cam.x = 0; cam.y = 0;
 }
 
@@ -1189,19 +1193,17 @@ function update(dt) {
         }
     }
 
-    // Stuck detection — if you can't move in any direction, auto-die
-    const cantRight = tetSolid(player.x + 1, player.y, player.shape, player.rotation);
-    const cantLeft  = tetSolid(player.x - 1, player.y, player.shape, player.rotation);
-    const cantUp    = tetSolid(player.x, player.y - 1, player.shape, player.rotation);
-    const cantDown  = tetSolid(player.x, player.y + 1, player.shape, player.rotation);
-    if (cantRight && cantLeft && cantUp && cantDown) {
+    // Stuck detection — track rightward progress. Auto-runner should always be moving right.
+    // If X hasn't advanced in 1 second, you're stuck. Covers wedged-in-gaps, blocked by walls, etc.
+    if (player.x > player.stuckHighX + TILE) {
+        player.stuckHighX = player.x;
+        player.stuckTimer = 0;
+    } else {
         player.stuckTimer += dt;
-        if (player.stuckTimer > 0.3) {
+        if (player.stuckTimer > 1.0) {
             die();
             return;
         }
-    } else {
-        player.stuckTimer = 0;
     }
 
     // Void death
