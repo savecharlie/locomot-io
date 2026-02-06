@@ -101,7 +101,7 @@ const canvas = document.getElementById('c');
 const ctx = canvas.getContext('2d');
 
 // ── Config ──
-const VERSION = 'v22';
+const VERSION = 'v23';
 const TILE = 12;
 const GRAVITY = 700;
 const JUMP_FORCE = -280;
@@ -480,6 +480,51 @@ function tetSpike(px, py, shapeName, rotation) {
         }
     }
     return false;
+}
+
+// Monte Carlo escape check: can the player get past the obstacle to the right?
+// Simulates jump arcs and rotations to see if any escape route exists.
+// Returns true if escape is possible (player should wait, not die).
+function canEscapeRight() {
+    const shape = player.shape;
+    const rot = player.rotation;
+    const halfT = Math.floor(TILE / 2);
+
+    // 1) Scan upward from current position — can jumping clear the obstacle?
+    //    Max reachable: ~8 tiles (jump + double jump)
+    for (let dy = 0; dy >= -8 * TILE; dy -= halfT) {
+        const testY = player.y + dy;
+        // Hit ceiling? Stop scanning up
+        if (dy < 0 && tetSolid(player.x, testY, shape, rot)) break;
+        // At this height, can we move right?
+        if (!tetSolid(player.x + 1, testY, shape, rot)) return true;
+    }
+
+    // 2) Check each rotation (CW and CCW) with SRS wall kicks
+    for (const dir of [1, -1]) {
+        const newRot = (rot + dir + 4) % 4;
+        const kicks = shape === 'I' ? KICK_DATA_I : KICK_DATA;
+        const kickIdx = dir === 1 ? rot : newRot;
+        const kickTests = kicks[kickIdx];
+
+        for (const [kx, ky] of kickTests) {
+            const testX = player.x + (dir === 1 ? kx : -kx) * TILE;
+            const testY = player.y + (dir === 1 ? -ky : ky) * TILE;
+            // Can rotated piece fit here?
+            if (!tetSolid(testX, testY, shape, newRot)) {
+                // Can it move right from there?
+                if (!tetSolid(testX + 1, testY, shape, newRot)) return true;
+                // Can it jump and clear from there?
+                for (let dy = -halfT; dy >= -8 * TILE; dy -= halfT) {
+                    const jy = testY + dy;
+                    if (tetSolid(testX, jy, shape, newRot)) break;
+                    if (!tetSolid(testX + 1, jy, shape, newRot)) return true;
+                }
+            }
+        }
+    }
+
+    return false; // truly stuck — no escape route found
 }
 
 // (tetCorpseInteraction removed — interactions now use checkAdjacentCorpse at collision boundaries)
@@ -1193,17 +1238,18 @@ function update(dt) {
         }
     }
 
-    // Stuck detection — track rightward progress. Auto-runner should always be moving right.
-    // If X hasn't advanced in 1 second, you're stuck. Covers wedged-in-gaps, blocked by walls, etc.
-    if (player.x > player.stuckHighX + TILE) {
-        player.stuckHighX = player.x;
-        player.stuckTimer = 0;
-    } else {
+    // Stuck detection — Monte Carlo look-ahead
+    // Check if ANY escape route exists (jump, double-jump, rotate)
+    // If no escape → die. If escape exists → wait forever (timing buzzsaws etc.)
+    const blockedRight = tetSolid(player.x + 1, player.y, player.shape, player.rotation);
+    if (blockedRight && !canEscapeRight()) {
         player.stuckTimer += dt;
-        if (player.stuckTimer > 1.0) {
+        if (player.stuckTimer > 0.5) {
             die();
             return;
         }
+    } else {
+        player.stuckTimer = 0;
     }
 
     // Void death
