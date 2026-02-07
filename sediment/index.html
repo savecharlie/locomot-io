@@ -101,7 +101,7 @@ const canvas = document.getElementById('c');
 const ctx = canvas.getContext('2d');
 
 // ── Config ──
-const VERSION = 'v32';
+const VERSION = 'v33';
 const TILE = 12;
 const GRAVITY = 700;
 const JUMP_FORCE = -280;
@@ -596,6 +596,15 @@ let globalCorpseNum = Math.floor(Math.random() * 50000) + 10000;
 let welcomeTimer = 0;
 let welcomeMsg = '';
 
+// Next piece preview
+let nextPieceShape = null;
+let nextPieceMaterial = null;
+
+function rollNextPiece() {
+    nextPieceShape = nextShape();
+    nextPieceMaterial = pickMaterial(currentLevel);
+}
+
 function initLevel(lvl) {
     level = [];
     corpseGrid = [];
@@ -626,9 +635,16 @@ function initLevel(lvl) {
     const h = LEVEL_H_TILES;
 
     const spawnH = h;
-    player.shape = nextShape();
+    // Use pre-rolled next piece if available, otherwise roll fresh
+    if (nextPieceShape) {
+        player.shape = nextPieceShape;
+        player.material = nextPieceMaterial;
+    } else {
+        player.shape = nextShape();
+        player.material = pickMaterial(currentLevel);
+    }
     player.rotation = 0;
-    player.material = pickMaterial(currentLevel);
+    rollNextPiece(); // pre-roll for preview
     player.x = 2 * TILE;
     player.y = (spawnH - 3) * TILE;
     player.spawnX = player.x;
@@ -797,27 +813,39 @@ function checkRowClears() {
     const maxGenX = segments.length * SEGMENT_W;
     let cleared = false;
 
-    // VERTICAL column clearing — 6+ non-spike corpse blocks in a column
+    // VERTICAL column clearing — 6+ CONSECUTIVE non-spike corpse blocks
     for (let x = 0; x < maxGenX; x++) {
-        let corpseCount = 0;
+        let run = 0;
         for (let y = 0; y < levelH; y++) {
-            if (corpseGrid[y] && corpseGrid[y][x] && corpseGrid[y][x].mat !== 'spike') corpseCount++;
-        }
-        if (corpseCount >= COLUMN_CLEAR_THRESHOLD) {
-            clearColumn(x);
-            cleared = true;
+            if (corpseGrid[y] && corpseGrid[y][x] && corpseGrid[y][x].mat !== 'spike') {
+                run++;
+                if (run >= COLUMN_CLEAR_THRESHOLD) {
+                    clearColumn(x);
+                    cleared = true;
+                    break;
+                }
+            } else {
+                run = 0;
+            }
         }
     }
 
-    // HORIZONTAL row clearing — 6+ non-spike corpse blocks in a row
+    // HORIZONTAL row clearing — 6+ CONSECUTIVE non-spike corpse blocks
     for (let y = 1; y < levelH - 1; y++) {
-        let corpseCount = 0;
+        let run = 0;
+        let runStart = 0;
         for (let x = 0; x < maxGenX; x++) {
-            if (corpseGrid[y] && corpseGrid[y][x] && corpseGrid[y][x].mat !== 'spike') corpseCount++;
-        }
-        if (corpseCount >= COLUMN_CLEAR_THRESHOLD) {
-            clearRow(y);
-            cleared = true;
+            if (corpseGrid[y] && corpseGrid[y][x] && corpseGrid[y][x].mat !== 'spike') {
+                if (run === 0) runStart = x;
+                run++;
+                if (run >= COLUMN_CLEAR_THRESHOLD) {
+                    clearRowSegment(y, runStart, x);
+                    cleared = true;
+                    run = 0; // reset to find more runs
+                }
+            } else {
+                run = 0;
+            }
         }
     }
 
@@ -844,14 +872,13 @@ function clearColumn(x) {
     spawnP(x * TILE + TILE/2, (levelH / 2) * TILE, C.player, 10, 100, 0.5);
 }
 
-function clearRow(y) {
+function clearRowSegment(y, startX, endX) {
     // Flash effect
     cam.shake = Math.max(cam.shake, 8);
     flash.a = 0.8; flash.r = 1; flash.g = 0.94; flash.b = 0.82;
 
-    const maxX = segments.length * SEGMENT_W;
-    // Particles along the row + remove corpse blocks
-    for (let x = 0; x < maxX; x++) {
+    // Clear the consecutive run (+ any spike blocks within it)
+    for (let x = startX; x <= endX; x++) {
         if (corpseGrid[y] && corpseGrid[y][x]) {
             const block = corpseGrid[y][x];
             spawnP(x * TILE + TILE/2, y * TILE + TILE/2, matColor(block.mat), 2, 60, 0.3);
@@ -859,8 +886,8 @@ function clearRow(y) {
         }
     }
 
-    // Big burst in the center of the row
-    const centerX = Math.floor(cam.x + W / 2);
+    // Big burst in the center of the segment
+    const centerX = ((startX + endX) / 2) * TILE + TILE/2;
     spawnP(centerX, y * TILE + TILE/2, C.player, 10, 100, 0.5);
 }
 
@@ -938,9 +965,10 @@ function tryRotate(dir) {
 
 function respawn() {
     const h = LEVEL_H_TILES;
-    player.shape = nextShape();
+    player.shape = nextPieceShape;
+    player.material = nextPieceMaterial;
     player.rotation = 0;
-    player.material = pickMaterial(currentLevel);
+    rollNextPiece(); // pre-roll for preview
     player.x = 2 * TILE;
     player.y = (h - 3) * TILE;
     player.spawnX = player.x;
@@ -1764,6 +1792,30 @@ function draw() {
     ctx.fillStyle = matColor(player.material);
     ctx.font = '7px monospace';
     ctx.fillText(`${player.shape}-piece  ${player.material}`, 4, 32);
+
+    // Next piece preview (top-right, left of pause button)
+    if (nextPieceShape && started && !player.dead) {
+        const previewX = W - 52;
+        const previewY = 4;
+        ctx.globalAlpha = 0.4;
+        ctx.fillStyle = C.text;
+        ctx.font = '6px monospace';
+        ctx.textAlign = 'right';
+        ctx.fillText('NEXT', previewX - 2, previewY + 6);
+        ctx.textAlign = 'left';
+        ctx.globalAlpha = 0.7;
+        // Draw mini tetromino (half-size tiles)
+        const miniTile = 5;
+        const nextCells = getCells(nextPieceShape, 0);
+        const nextBounds = shapeBounds(nextPieceShape, 0);
+        const offsetX = previewX - nextBounds.minC * miniTile;
+        const offsetY = previewY - nextBounds.minR * miniTile + 1;
+        for (const [cx, cy] of nextCells) {
+            ctx.fillStyle = matColor(nextPieceMaterial);
+            ctx.fillRect(offsetX + cx * miniTile, offsetY + cy * miniTile, miniTile - 1, miniTile - 1);
+        }
+        ctx.globalAlpha = 1;
+    }
 
     // Controls hint (fades after first few seconds)
     if (player.deathCount < 3 && started) {
