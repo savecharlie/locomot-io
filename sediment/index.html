@@ -101,7 +101,7 @@ const canvas = document.getElementById('c');
 const ctx = canvas.getContext('2d');
 
 // ── Config ──
-const VERSION = 'v26';
+const VERSION = 'v27';
 const TILE = 12;
 const GRAVITY = 700;
 const JUMP_FORCE = -280;
@@ -930,6 +930,7 @@ function respawn() {
 // ══════════════════════════════════════
 
 let jumpBuffered = false;
+let _skipBtnBounds = null; // {x,y,w,h} in game pixels when pause menu is showing
 let touchStartX = 0, touchStartY = 0;
 let touchStartTime = 0;
 let touchHandled = false;
@@ -986,9 +987,20 @@ canvas.addEventListener('touchmove', (e) => {
 canvas.addEventListener('touchend', (e) => {
     e.preventDefault();
     if (!touchHandled) {
-        // Short tap = jump
         const elapsed = performance.now() - touchStartTime;
         if (elapsed < 300) {
+            // Check if tapping the skip button in pause menu
+            if (paused && _skipBtnBounds) {
+                const t = e.changedTouches[0];
+                const rect = canvas.getBoundingClientRect();
+                const tapX = (t.clientX - rect.left) / rect.width * W;
+                const tapY = (t.clientY - rect.top) / rect.height * H;
+                const b = _skipBtnBounds;
+                if (tapX >= b.x && tapX <= b.x + b.w && tapY >= b.y && tapY <= b.y + b.h) {
+                    skipLevel();
+                    return;
+                }
+            }
             doJump();
         }
     }
@@ -1003,12 +1015,21 @@ document.addEventListener('keydown', (e) => {
     if (e.code === 'ArrowLeft' || e.code === 'KeyA') doRotateCCW();
     if (e.code === 'KeyR') hardReset();
     if (e.code === 'KeyP' || e.code === 'Escape') togglePause();
+    if (e.code === 'KeyN' && paused) skipLevel();
 });
 
 // Pause
 function togglePause() {
     paused = !paused;
     document.getElementById('pauseBtn').innerHTML = paused ? '&#9654;' : '&#9646;&#9646;';
+}
+
+function skipLevel() {
+    if (!paused) return;
+    paused = false;
+    document.getElementById('pauseBtn').innerHTML = '&#9646;&#9646;';
+    currentLevel++;
+    initLevel(currentLevel);
 }
 
 document.getElementById('pauseBtn').addEventListener('touchstart', (e) => {
@@ -1021,6 +1042,19 @@ document.getElementById('pauseBtn').addEventListener('click', (e) => {
     e.preventDefault();
     e.stopPropagation();
     togglePause();
+});
+
+// Click on skip button (desktop)
+canvas.addEventListener('click', (e) => {
+    if (paused && _skipBtnBounds) {
+        const rect = canvas.getBoundingClientRect();
+        const clickX = (e.clientX - rect.left) / rect.width * W;
+        const clickY = (e.clientY - rect.top) / rect.height * H;
+        const b = _skipBtnBounds;
+        if (clickX >= b.x && clickX <= b.x + b.w && clickY >= b.y && clickY <= b.y + b.h) {
+            skipLevel();
+        }
+    }
 });
 
 // ══════════════════════════════════════
@@ -1766,11 +1800,29 @@ function draw() {
         ctx.fillStyle = C.text;
         ctx.font = '12px monospace';
         ctx.textAlign = 'center';
-        ctx.fillText('PAUSED', W/2, H/2 - 8);
+        ctx.fillText('PAUSED', W/2, H/2 - 24);
         ctx.font = '7px monospace';
         ctx.fillStyle = 'rgba(216,208,192,0.5)';
-        ctx.fillText('tap to resume', W/2, H/2 + 8);
+        ctx.fillText('tap to resume', W/2, H/2 - 8);
+
+        // Skip level button
+        const skipY = H/2 + 12;
+        const skipW = 70, skipH = 16;
+        const skipX = W/2 - skipW/2;
+        ctx.fillStyle = 'rgba(232,168,56,0.2)';
+        ctx.fillRect(skipX, skipY - skipH/2, skipW, skipH);
+        ctx.strokeStyle = 'rgba(232,168,56,0.5)';
+        ctx.lineWidth = 1;
+        ctx.strokeRect(skipX, skipY - skipH/2, skipW, skipH);
+        ctx.fillStyle = C.player;
+        ctx.font = '7px monospace';
+        ctx.fillText('SKIP LEVEL', W/2, skipY + 3);
+
+        // Store button bounds for tap detection (in screen coords)
+        _skipBtnBounds = { x: skipX, y: skipY - skipH/2, w: skipW, h: skipH };
         ctx.textAlign = 'left';
+    } else {
+        _skipBtnBounds = null;
     }
 }
 
