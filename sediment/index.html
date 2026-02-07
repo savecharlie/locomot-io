@@ -101,7 +101,7 @@ const canvas = document.getElementById('c');
 const ctx = canvas.getContext('2d');
 
 // ── Config ──
-const VERSION = 'v39';
+const VERSION = 'v40';
 const TILE = 12;
 const GRAVITY = 700;
 const JUMP_FORCE = -280;
@@ -654,6 +654,8 @@ const cam = { x: 0, y: 0, sx: 0, sy: 0, shake: 0 };
 const flash = { a: 0, r: 1, g: 1, b: 1 };
 let paused = false;
 let started = false;
+let tutorialStep = 3; // 0=jump, 1=rotate, 2=place, 3=done
+let tutorialComplete = false;
 
 let globalCorpseNum = Math.floor(Math.random() * 50000) + 10000;
 let welcomeTimer = 0;
@@ -681,6 +683,13 @@ function initLevel(lvl) {
     levelTransitionTimer = 0;
     levelDeaths = 0;
     levelTitleTimer = 3.0;
+
+    // Tutorial on level 1 (first time only)
+    if (lvl === 1 && !tutorialComplete) {
+        tutorialStep = 0;
+    } else {
+        tutorialStep = 3;
+    }
 
     if (!player._hasRun) {
         globalCorpseNum += Math.floor(Math.random() * 200);
@@ -739,6 +748,7 @@ function hardReset() {
     player.bestDistance = 0;
     shapeBag = [];
     currentLevel = 1;
+    tutorialComplete = false;
     init();
 }
 
@@ -1073,21 +1083,28 @@ const SWIPE_THRESHOLD = 25; // pixels
 
 function doJump() {
     if (!started) { started = true; return; }
+    if (tutorialStep === 0) tutorialStep = 1;
     jumpBuffered = true;
 }
 
 function doDie() {
     if (!started) { started = true; return; }
+    if (tutorialStep === 0) return; // blocked until jump
+    if (tutorialStep === 2) { tutorialStep = 3; tutorialComplete = true; }
     die();
 }
 
 function doRotateCW() {
     if (!started || player.dead) return;
+    if (tutorialStep === 0) return; // blocked until jump
+    if (tutorialStep === 1) tutorialStep = 2;
     tryRotate(1);
 }
 
 function doRotateCCW() {
     if (!started || player.dead) return;
+    if (tutorialStep === 0) return; // blocked until jump
+    if (tutorialStep === 1) tutorialStep = 2;
     tryRotate(-1);
 }
 
@@ -1270,8 +1287,10 @@ function update(dt) {
     // Boost timer
     if (player.boostTimer > 0) player.boostTimer -= dt;
 
-    // Auto-run
-    if (player.boostTimer <= 0) {
+    // Auto-run (frozen during tutorial step 0)
+    if (tutorialStep === 0) {
+        player.vx = 0;
+    } else if (player.boostTimer <= 0) {
         player.vx = RUN_SPEED;
         player.facing = 1;
     }
@@ -1938,8 +1957,19 @@ function draw() {
         ctx.globalAlpha = 1;
     }
 
-    // Controls hint (fades after first few seconds)
-    if (player.deathCount < 3 && started) {
+    // Tutorial prompts (level 1) or controls hint
+    if (tutorialStep < 3 && started) {
+        const pulse = 0.6 + 0.3 * Math.sin(performance.now() / 400);
+        ctx.globalAlpha = pulse;
+        ctx.fillStyle = C.player;
+        ctx.font = '8px monospace';
+        ctx.textAlign = 'center';
+        if (tutorialStep === 0) ctx.fillText('jump to move', W/2, H/2 + 8);
+        else if (tutorialStep === 1) ctx.fillText('swipe \u2190 \u2192 to rotate', W/2, H/2 + 8);
+        else if (tutorialStep === 2) ctx.fillText('swipe \u2193 to place', W/2, H/2 + 8);
+        ctx.textAlign = 'left';
+        ctx.globalAlpha = 1;
+    } else if (player.deathCount < 3 && started) {
         ctx.globalAlpha = Math.max(0, 1 - player.distance / 20);
         ctx.fillStyle = 'rgba(216,208,192,0.35)';
         ctx.font = '6px monospace';
