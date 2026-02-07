@@ -101,7 +101,7 @@ const canvas = document.getElementById('c');
 const ctx = canvas.getContext('2d');
 
 // ── Config ──
-const VERSION = 'v29';
+const VERSION = 'v30';
 const TILE = 12;
 const GRAVITY = 700;
 const JUMP_FORCE = -280;
@@ -801,17 +801,13 @@ function checkRowClears() {
     let cleared = false;
 
     for (let x = 0; x < maxGenX; x++) {
-        let filledCount = 0;
-        let hasCorpse = false;
+        let corpseCount = 0;
 
         for (let y = 0; y < levelH; y++) {
-            const isTerrain = level[y] && level[y][x] === 1;
-            const isCorpse = corpseGrid[y] && corpseGrid[y][x];
-            if (isTerrain || isCorpse) filledCount++;
-            if (isCorpse) hasCorpse = true;
+            if (corpseGrid[y] && corpseGrid[y][x]) corpseCount++;
         }
 
-        if (filledCount >= COLUMN_CLEAR_THRESHOLD && hasCorpse) {
+        if (corpseCount >= COLUMN_CLEAR_THRESHOLD) {
             clearColumn(x);
             cleared = true;
         }
