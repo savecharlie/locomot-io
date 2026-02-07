@@ -101,7 +101,7 @@ const canvas = document.getElementById('c');
 const ctx = canvas.getContext('2d');
 
 // ── Config ──
-const VERSION = 'v36';
+const VERSION = 'v37';
 const TILE = 12;
 const GRAVITY = 700;
 const JUMP_FORCE = -280;
@@ -273,7 +273,7 @@ function nextShape() {
 
 // Pick material — spike is a possible material (25% chance)
 function pickMaterial(lvl) {
-    if (Math.random() < 0.25) return 'spike';
+    if (lvl >= 2 && Math.random() < 0.25) return 'spike';
     return MATERIAL_TYPES[Math.floor(Math.random() * 3)];
 }
 
