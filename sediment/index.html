@@ -662,9 +662,6 @@ let started = false;
 let tutorialStep = 3; // 0=jump, 1=rotate, 2=place, 3=done
 let tutorialComplete = false;
 
-let globalCorpseNum = Math.floor(Math.random() * 50000) + 10000;
-let welcomeTimer = 0;
-let welcomeMsg = '';
 
 // Next piece preview
 let nextPieceShape = null;
@@ -699,9 +696,6 @@ function initLevel(lvl) {
     }
 
     if (!player._hasRun) {
-        globalCorpseNum += Math.floor(Math.random() * 200);
-        welcomeMsg = `welcome, future corpse #${globalCorpseNum}`;
-        welcomeTimer = 3.5;
     }
 
     // Generate all segments for this level
@@ -1268,7 +1262,6 @@ let lastTime = 0;
 function update(dt) {
     if (paused || !started) return;
 
-    if (welcomeTimer > 0) welcomeTimer -= dt;
     if (levelTitleTimer > 0) levelTitleTimer -= dt;
 
     // Level complete — freeze gameplay, count down to next level
@@ -2135,16 +2128,6 @@ function draw() {
         ctx.textAlign = 'left';
     }
 
-    // Welcome message
-    if (welcomeTimer > 0 && started) {
-        ctx.globalAlpha = Math.min(1, welcomeTimer < 1 ? welcomeTimer : 1);
-        ctx.fillStyle = C.spike;
-        ctx.font = '7px monospace';
-        ctx.textAlign = 'center';
-        ctx.fillText(welcomeMsg, W/2, H/2 - 4);
-        ctx.textAlign = 'left';
-        ctx.globalAlpha = 1;
-    }
 
     // Level title (fades in at start of each level)
     if (levelTitleTimer > 0 && started && !levelComplete) {
