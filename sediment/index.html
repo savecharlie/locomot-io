@@ -82,6 +82,7 @@ canvas { display: block; width: 100%; height: 100%; image-rendering: pixelated; 
 </head>
 <body>
 <div id="rotate-msg">
+    <canvas id="splash-logo" width="48" height="48" style="image-rendering:pixelated;width:96px;height:96px;"></canvas>
     <div class="title">SEDIMENT</div>
     <div class="tagline">you are the tetris piece</div>
     <div class="rotate-icon">📱</div>
@@ -101,7 +102,7 @@ const canvas = document.getElementById('c');
 const ctx = canvas.getContext('2d');
 
 // ── Config ──
-const VERSION = 'v43';
+const VERSION = 'v44';
 const TILE = 12;
 const GRAVITY = 700;
 const JUMP_FORCE = -280;
@@ -1719,21 +1720,26 @@ function draw() {
                 ctx.fill();
             }
 
-            // Dead eyes
+            // Dead kawaii eyes (X marks the end)
             if (block.eyes) {
+                // Dark eye sockets 3x3
                 ctx.fillStyle = matDark(block.mat);
-                ctx.fillRect(px + 3, py + 2, 2, 2);
-                ctx.fillRect(px + 7, py + 2, 2, 2);
-                // X eyes (dead)
+                ctx.fillRect(px + 1, py + 1, 3, 3);
+                ctx.fillRect(px + 7, py + 1, 3, 3);
+                // X pattern in highlight
                 ctx.fillStyle = matHL(block.mat);
-                ctx.fillRect(px + 3, py + 2, 1, 1);
-                ctx.fillRect(px + 4, py + 3, 1, 1);
-                ctx.fillRect(px + 4, py + 2, 1, 1);
+                // Left eye X
+                ctx.fillRect(px + 1, py + 1, 1, 1);
+                ctx.fillRect(px + 3, py + 1, 1, 1);
+                ctx.fillRect(px + 2, py + 2, 1, 1);
+                ctx.fillRect(px + 1, py + 3, 1, 1);
                 ctx.fillRect(px + 3, py + 3, 1, 1);
-                ctx.fillRect(px + 7, py + 2, 1, 1);
-                ctx.fillRect(px + 8, py + 3, 1, 1);
+                // Right eye X
+                ctx.fillRect(px + 7, py + 1, 1, 1);
+                ctx.fillRect(px + 9, py + 1, 1, 1);
                 ctx.fillRect(px + 8, py + 2, 1, 1);
                 ctx.fillRect(px + 7, py + 3, 1, 1);
+                ctx.fillRect(px + 9, py + 3, 1, 1);
             }
 
             ctx.globalAlpha = 1;
@@ -1753,11 +1759,15 @@ function draw() {
             ctx.fillStyle = matDark(cell.mat);
             ctx.fillRect(px, py + TILE - 1, TILE, 1);
             ctx.fillRect(px + TILE - 1, py, 1, TILE);
-            // Eyes on the falling piece
+            // Kawaii eyes on the falling piece
             if (cell.eyes) {
                 ctx.fillStyle = matDark(cell.mat);
-                ctx.fillRect(px + 3, py + 2, 2, 2);
-                ctx.fillRect(px + 7, py + 2, 2, 2);
+                ctx.fillRect(px + 1, py + 2, 3, 3);
+                ctx.fillRect(px + 7, py + 2, 3, 3);
+                // Catchlight (looking down — scared!)
+                ctx.fillStyle = '#FFFFF0';
+                ctx.fillRect(px + 2, py + 2, 1, 1);
+                ctx.fillRect(px + 8, py + 2, 1, 1);
             }
         }
     }
@@ -1891,17 +1901,23 @@ function draw() {
             ctx.fillRect(drawX, drawY + drawH - 1, drawW, 1);
             ctx.fillRect(drawX + drawW - 1, drawY, 1, drawH);
 
-            // Eyes on first cell — alive!
+            // Eyes on first cell — kawaii alive!
             if (i === 0) {
-                const eyeY = drawY + 2 * sy;
-                const shift = player.facing * 1;
+                const ey = drawY + 2 * sy;
+                const sh = player.facing * 1;
+                // Dark eye sockets 3x2
                 ctx.fillStyle = matDark(mat);
-                ctx.fillRect(drawX + 2 + shift, eyeY, 2, 2);
-                ctx.fillRect(drawX + 7 + shift, eyeY, 2, 2);
-                // Pupils (spark of life)
-                ctx.fillStyle = '#FFF0D0';
-                ctx.fillRect(drawX + 2 + shift + player.facing * 0.7 + 0.5, eyeY + 0.5, 1, 1);
-                ctx.fillRect(drawX + 7 + shift + player.facing * 0.7 + 0.5, eyeY + 0.5, 1, 1);
+                ctx.fillRect(drawX + 1 + sh, ey, 3, 3);
+                ctx.fillRect(drawX + 7 + sh, ey, 3, 3);
+                // Catchlight sparkle (top corner, shifts with facing)
+                const cx = player.facing >= 0 ? 2 : 0;
+                ctx.fillStyle = '#FFFFF0';
+                ctx.fillRect(drawX + 1 + sh + cx, ey, 1, 1);
+                ctx.fillRect(drawX + 7 + sh + cx, ey, 1, 1);
+                // Lower gleam (subtle life)
+                ctx.fillStyle = 'rgba(255,255,240,0.35)';
+                ctx.fillRect(drawX + 2 + sh, ey + 2, 1, 1);
+                ctx.fillRect(drawX + 8 + sh, ey + 2, 1, 1);
             }
 
             // Material decoration on other cells
@@ -2142,6 +2158,40 @@ function loop(time) {
 }
 
 document.getElementById('splash-version').textContent = VERSION;
+
+// Draw splash logo: S-piece with kawaii eyes
+(function() {
+    const lc = document.getElementById('splash-logo');
+    if (!lc) return;
+    const cx = lc.getContext('2d');
+    cx.imageSmoothingEnabled = false;
+    const t = 12; // tile size in logo
+    // S-tetromino: (1,0)(2,0) top, (0,1)(1,1) bottom
+    const cells = [[1,0],[2,0],[0,1],[1,1]];
+    const ox = 0, oy = 0;
+    for (const [gx,gy] of cells) {
+        const x = ox + gx * t, y = oy + gy * t;
+        cx.fillStyle = C.solid;
+        cx.fillRect(x, y, t, t);
+        cx.fillStyle = C.solidHL;
+        cx.fillRect(x, y, t, 1);
+        cx.fillRect(x, y, 1, t);
+        cx.fillStyle = C.solidSH;
+        cx.fillRect(x, y + t - 1, t, 1);
+        cx.fillRect(x + t - 1, y, 1, t);
+    }
+    // Kawaii eyes on cell (1,0)
+    const ex = ox + 1 * t, ey = oy + 0 * t;
+    cx.fillStyle = C.solidSH;
+    cx.fillRect(ex + 1, ey + 2, 3, 3);
+    cx.fillRect(ex + 7, ey + 2, 3, 3);
+    cx.fillStyle = '#FFFFF0';
+    cx.fillRect(ex + 2, ey + 2, 1, 1);
+    cx.fillRect(ex + 8, ey + 2, 1, 1);
+    cx.fillStyle = 'rgba(255,255,240,0.35)';
+    cx.fillRect(ex + 2, ey + 4, 1, 1);
+    cx.fillRect(ex + 8, ey + 4, 1, 1);
+})();
 
 init();
 requestAnimationFrame(loop);

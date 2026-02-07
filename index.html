@@ -255,7 +255,7 @@
     </a>
 
     <a href="sediment/" class="game-card">
-      <canvas class="pixel-icon" data-emoji="💀"></canvas>
+      <canvas class="pixel-icon" id="sediment-logo"></canvas>
       <div>
         <h2>SEDIMENT</h2>
         <p>Your deaths build the way</p>
@@ -302,6 +302,44 @@
     const kofiIcon = document.getElementById('kofi-icon');
     if (kofiIcon) {
       pixelateEmoji(kofiIcon, '☕', 12, 24);
+    }
+
+    // Sediment logo: S-piece with kawaii eyes
+    const sedLogo = document.getElementById('sediment-logo');
+    if (sedLogo) {
+      const S = 16; // canvas resolution
+      sedLogo.width = S;
+      sedLogo.height = S;
+      const sc = sedLogo.getContext('2d');
+      sc.imageSmoothingEnabled = false;
+      const isMob = window.innerWidth < 600;
+      sedLogo.style.width = (isMob ? 48 : 64) + 'px';
+      sedLogo.style.height = (isMob ? 48 : 64) + 'px';
+      const t = 4; // tile size in logo pixels
+      // S-tetromino: top row (1,0)(2,0), bottom row (0,1)(1,1)
+      const cells = [[1,0],[2,0],[0,1],[1,1]];
+      const col = '#B8A078', hl = '#E0D0A0', sh = '#685060';
+      const ox = 2, oy = 3; // offset to center
+      for (const [cx,cy] of cells) {
+        const x = ox + cx * t, y = oy + cy * t;
+        sc.fillStyle = col;
+        sc.fillRect(x, y, t, t);
+        sc.fillStyle = hl;
+        sc.fillRect(x, y, t, 1);
+        sc.fillRect(x, y, 1, t);
+        sc.fillStyle = sh;
+        sc.fillRect(x, y + t - 1, t, 1);
+        sc.fillRect(x + t - 1, y, 1, t);
+      }
+      // Kawaii eyes on cell (1,0) — the face
+      const ex = ox + 1 * t, ey = oy + 0 * t;
+      sc.fillStyle = sh;
+      sc.fillRect(ex + 0, ey + 1, 2, 2);
+      sc.fillRect(ex + 2, ey + 1, 2, 2);
+      // Catchlights
+      sc.fillStyle = '#FFFFF0';
+      sc.fillRect(ex + 1, ey + 1, 1, 1);
+      sc.fillRect(ex + 3, ey + 1, 1, 1);
     }
 
     // Register service worker
