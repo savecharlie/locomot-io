@@ -2166,9 +2166,9 @@ document.getElementById('splash-version').textContent = VERSION;
     const cx = lc.getContext('2d');
     cx.imageSmoothingEnabled = false;
     const t = 12; // tile size in logo
-    // S-tetromino: (1,0)(2,0) top, (0,1)(1,1) bottom
-    const cells = [[1,0],[2,0],[0,1],[1,1]];
-    const ox = 0, oy = 0;
+    // S-tetromino upright: (0,0)(0,1) left, (1,1)(1,2) right
+    const cells = [[0,0],[0,1],[1,1],[1,2]];
+    const ox = 12, oy = 0;
     for (const [gx,gy] of cells) {
         const x = ox + gx * t, y = oy + gy * t;
         cx.fillStyle = C.solid;
@@ -2180,8 +2180,8 @@ document.getElementById('splash-version').textContent = VERSION;
         cx.fillRect(x, y + t - 1, t, 1);
         cx.fillRect(x + t - 1, y, 1, t);
     }
-    // Kawaii eyes on cell (1,0)
-    const ex = ox + 1 * t, ey = oy + 0 * t;
+    // Kawaii eyes on cell (0,0)
+    const ex = ox, ey = oy;
     cx.fillStyle = C.solidSH;
     cx.fillRect(ex + 1, ey + 2, 3, 3);
     cx.fillRect(ex + 7, ey + 2, 3, 3);
