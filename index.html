@@ -20,6 +20,7 @@
   <meta property="og:image" content="https://locomot.io/og-image.png">
 
   <meta name="theme-color" content="#1D2B30">
+  <meta name="app-version" content="355">
   <link rel="manifest" href="manifest.json">
 
   <!-- Pixel Font -->
@@ -344,7 +345,22 @@
       sc.fillRect(ex + 8, ey + 4, 1, 1);
     }
 
-    // Register service worker + force update check
+    // Auto-update: fetch version from server, reload if stale
+    fetch('version.txt?' + Date.now()).then(r => r.text()).then(v => {
+      const serverVer = v.trim();
+      const localVer = document.querySelector('meta[name="app-version"]')?.content;
+      if (localVer && serverVer !== localVer) {
+        // Nuke old SW and caches, then reload
+        if ('serviceWorker' in navigator) {
+          navigator.serviceWorker.getRegistrations().then(regs => {
+            regs.forEach(r => r.unregister());
+          });
+          caches.keys().then(keys => keys.forEach(k => caches.delete(k)));
+        }
+        setTimeout(() => location.reload(true), 300);
+      }
+    }).catch(() => {});
+    // Register service worker
     if ('serviceWorker' in navigator) {
       navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' }).then(reg => {
         reg.update();

@@ -9,6 +9,10 @@
 /index.html
   Cache-Control: no-cache
 
+# No cache for version check
+/version.txt
+  Cache-Control: no-cache, no-store, must-revalidate
+
 # No cache for JSON level files
 /ice_skater/*.json
   Cache-Control: no-cache, no-store, must-revalidate
