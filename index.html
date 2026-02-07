@@ -223,7 +223,7 @@
     </a>
 
     <a href="ice_skater/" class="game-card">
-      <canvas class="pixel-icon" data-emoji="⛸️"></canvas>
+      <img src="ice_skater/skater_side_skating_16x24.png" class="pixel-icon" alt="Figure ∞" style="object-fit:contain">
       <div>
         <h2>FIGURE ∞</h2>
         <p>Slide & solve puzzles</p>
@@ -291,8 +291,8 @@
       canvas.style.height = displaySize + 'px';
     }
 
-    // Initialize all pixel icons
-    document.querySelectorAll('.pixel-icon').forEach(canvas => {
+    // Initialize all pixel icons (skip custom-drawn ones)
+    document.querySelectorAll('.pixel-icon[data-emoji]').forEach(canvas => {
       const emoji = canvas.dataset.emoji;
       const isMobile = window.innerWidth < 600;
       pixelateEmoji(canvas, emoji, 16, isMobile ? 48 : 64);
