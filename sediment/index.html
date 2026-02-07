@@ -101,7 +101,7 @@ const canvas = document.getElementById('c');
 const ctx = canvas.getContext('2d');
 
 // ── Config ──
-const VERSION = 'v38';
+const VERSION = 'v39';
 const TILE = 12;
 const GRAVITY = 700;
 const JUMP_FORCE = -280;
@@ -274,9 +274,9 @@ function nextShape() {
     return shapeBag.pop();
 }
 
-// Pick material — spike is a possible material (25% chance)
+// Pick material — spike is a possible material (level 4+, 25% chance)
 function pickMaterial(lvl) {
-    if (lvl >= 2 && Math.random() < 0.25) return 'spike';
+    if (lvl >= 4 && Math.random() < 0.25) return 'spike';
     return MATERIAL_TYPES[Math.floor(Math.random() * 3)];
 }
 
@@ -302,7 +302,6 @@ function shapeBounds(shapeName, rotation) {
 // ══════════════════════════════════════
 
 const SEGMENT_W = 40;
-const SEGMENTS_PER_LEVEL = 5;
 let levelH = 0;
 let level = [];      // terrain grid: 0=empty, 1=solid, 2=spike
 let corpseGrid = []; // placed blocks: null or {mat, age, eyes}
@@ -322,7 +321,11 @@ let levelTitleTimer = 0;
 let goalX = 0; // pixel X of the finish line
 
 function getLevelDifficulty(lvl) {
-    return Math.min(10, 1 + (lvl - 1) * 1.5);
+    return Math.min(10, 1 + (lvl - 1) * 0.82);
+}
+
+function getSegmentsForLevel(lvl) {
+    return Math.min(7, 3 + Math.floor((lvl - 1) * 0.4));
 }
 
 function generateSegment(segIndex, lvl) {
@@ -346,96 +349,94 @@ function generateSegment(segIndex, lvl) {
         }
     }
 
-    // Chasms — later levels fill them with spikes
+    // ── Mechanic gating by level number ──
+    // L1: chasms only | L2: floor spikes | L3: ceiling spikes
+    // L4: spike material | L5: static platforms | L6: buzzsaws
+    // L7: moving platforms (H) | L8: spiked chasms | L9: spike walls
+    // L10: moving platforms (V) | L11-12: intensity
+
+    // Chasms (always)
     const numChasms = 2 + Math.floor(d * 0.8);
     const chasmMinX = segIndex === 0 ? 10 : 3;
-    const spikedChasms = d >= 4; // level 3+ gets spiked chasms
     for (let i = 0; i < numChasms; i++) {
         const cx = startX + chasmMinX + Math.floor(Math.random() * (SEGMENT_W - chasmMinX - 4));
         const cw = 2 + Math.floor(Math.random() * (1 + d * 0.4));
         for (let dx = 0; dx < cw; dx++) {
-            if (spikedChasms && Math.random() < Math.min(0.8, d * 0.1)) {
-                // Keep the floor, add spikes on it — a spike pit instead of a void
+            if (lvl >= 8 && Math.random() < Math.min(0.8, d * 0.1)) {
+                // Spiked chasms (level 8+)
                 level[h - 2][cx + dx] = 2;
             } else {
-                level[h - 1][cx + dx] = 0; // normal chasm (void)
+                level[h - 1][cx + dx] = 0;
             }
         }
     }
 
-    // Spike fields on floor
-    const numSpikeFields = 2 + Math.floor(d * 0.7);
-    const spikeMinX = segIndex === 0 ? 10 : 3;
-    for (let i = 0; i < numSpikeFields; i++) {
-        const sx = startX + spikeMinX + Math.floor(Math.random() * (SEGMENT_W - spikeMinX - 3));
-        const sw = 2 + Math.floor(Math.random() * 3);
-        for (let dx = 0; dx < sw; dx++) {
-            if (level[h - 2] && level[h - 1][sx + dx] === 1) {
-                level[h - 2][sx + dx] = 2;
+    // Floor spikes (level 2+)
+    if (lvl >= 2) {
+        const numSpikeFields = 1 + Math.floor(d * 0.6);
+        const spikeMinX = segIndex === 0 ? 10 : 3;
+        for (let i = 0; i < numSpikeFields; i++) {
+            const sx = startX + spikeMinX + Math.floor(Math.random() * (SEGMENT_W - spikeMinX - 3));
+            const sw = 2 + Math.floor(Math.random() * 3);
+            for (let dx = 0; dx < sw; dx++) {
+                if (level[h - 2] && level[h - 1][sx + dx] === 1) {
+                    level[h - 2][sx + dx] = 2;
+                }
             }
         }
     }
 
-    // Ceiling spikes
-    const numCeilingSpikes = Math.floor(d * 0.6);
-    for (let i = 0; i < numCeilingSpikes; i++) {
-        const sx = startX + 2 + Math.floor(Math.random() * (SEGMENT_W - 4));
-        if (level[1]) level[1][sx] = 2;
-        if (d > 4 && Math.random() < 0.4 && level[2]) level[2][sx] = 2;
-    }
-
-    // Spike walls
-    const numWalls = Math.floor(d * 0.4);
-    for (let i = 0; i < numWalls; i++) {
-        const wx = startX + 6 + Math.floor(Math.random() * (SEGMENT_W - 12));
-        const wallH = 2 + Math.floor(Math.random() * 3);
-        const startY = h - 2 - wallH;
-        for (let dy = 0; dy < wallH; dy++) {
-            if (level[startY + dy]) level[startY + dy][wx] = 2;
+    // Ceiling spikes (level 3+)
+    if (lvl >= 3) {
+        const numCeilingSpikes = Math.max(1, Math.floor(d * 0.5));
+        for (let i = 0; i < numCeilingSpikes; i++) {
+            const sx = startX + 2 + Math.floor(Math.random() * (SEGMENT_W - 4));
+            if (level[1]) level[1][sx] = 2;
+            if (d > 6 && Math.random() < 0.4 && level[2]) level[2][sx] = 2;
         }
     }
 
-    // Buzzsaws
-    const numSaws = Math.floor(d * 0.5);
-    for (let i = 0; i < numSaws; i++) {
-        const sawX = (startX + 8 + Math.floor(Math.random() * (SEGMENT_W - 16))) * TILE;
-        const sawY = (2 + Math.floor(Math.random() * (h - 5))) * TILE;
-        const vertical = Math.random() < 0.5;
-        const range = (2 + Math.floor(Math.random() * 3)) * TILE;
-        buzzsaws.push({
-            x: sawX, y: sawY,
-            baseX: sawX, baseY: sawY,
-            r: 6,
-            vertical,
-            range,
-            speed: 30 + Math.random() * 40,
-            phase: Math.random() * Math.PI * 2,
-            spin: 0
-        });
-    }
-
-    // Static platforms (level 2+, d >= 2.5)
-    if (d >= 2.5) {
-        const numPlats = 1 + Math.floor(d * 0.4);
+    // Static platforms (level 5+)
+    if (lvl >= 5) {
+        const numPlats = 1 + Math.floor(d * 0.3);
         const platMinX = segIndex === 0 ? 14 : 4;
         for (let i = 0; i < numPlats; i++) {
             const px = startX + platMinX + Math.floor(Math.random() * (SEGMENT_W - platMinX - 6));
             const pw = 2 + Math.floor(Math.random() * 3);
-            const py = 3 + Math.floor(Math.random() * (h - 6)); // mid-tunnel
+            const py = 3 + Math.floor(Math.random() * (h - 6));
             for (let dx = 0; dx < pw; dx++) {
                 if (level[py]) level[py][px + dx] = 1;
             }
         }
     }
 
-    // Moving platforms (level 3+, d >= 4)
-    if (d >= 4) {
-        const numMoving = 1 + Math.floor((d - 4) * 0.5);
+    // Buzzsaws (level 6+)
+    if (lvl >= 6) {
+        const numSaws = Math.max(1, Math.floor((d - 4) * 0.6));
+        for (let i = 0; i < numSaws; i++) {
+            const sawX = (startX + 8 + Math.floor(Math.random() * (SEGMENT_W - 16))) * TILE;
+            const sawY = (2 + Math.floor(Math.random() * (h - 5))) * TILE;
+            const vertical = Math.random() < 0.5;
+            const range = (2 + Math.floor(Math.random() * 3)) * TILE;
+            buzzsaws.push({
+                x: sawX, y: sawY,
+                baseX: sawX, baseY: sawY,
+                r: 6, vertical, range,
+                speed: 30 + Math.random() * 40,
+                phase: Math.random() * Math.PI * 2,
+                spin: 0
+            });
+        }
+    }
+
+    // Moving platforms — horizontal (level 7+)
+    if (lvl >= 7) {
+        const numMoving = 1 + Math.floor((d - 5) * 0.4);
         const movMinX = segIndex === 0 ? 16 : 5;
         for (let i = 0; i < numMoving; i++) {
             const mx = (startX + movMinX + Math.floor(Math.random() * (SEGMENT_W - movMinX - 8))) * TILE;
             const my = (3 + Math.floor(Math.random() * (h - 6))) * TILE;
-            const vert = d >= 6 && Math.random() < 0.4; // vertical only at higher difficulty
+            const vert = lvl >= 10 && Math.random() < 0.4; // vertical only level 10+
             movingPlatforms.push({
                 x: mx, y: my, w: 3,
                 baseX: mx, baseY: my,
@@ -444,6 +445,19 @@ function generateSegment(segIndex, lvl) {
                 speed: 20 + Math.random() * 30,
                 phase: Math.random() * Math.PI * 2
             });
+        }
+    }
+
+    // Spike walls (level 9+)
+    if (lvl >= 9) {
+        const numWalls = Math.max(1, Math.floor((d - 6) * 0.5));
+        for (let i = 0; i < numWalls; i++) {
+            const wx = startX + 6 + Math.floor(Math.random() * (SEGMENT_W - 12));
+            const wallH = 2 + Math.floor(Math.random() * 3);
+            const startY = h - 2 - wallH;
+            for (let dy = 0; dy < wallH; dy++) {
+                if (level[startY + dy]) level[startY + dy][wx] = 2;
+            }
         }
     }
 
@@ -675,12 +689,13 @@ function initLevel(lvl) {
     }
 
     // Generate all segments for this level
-    for (let i = 0; i < SEGMENTS_PER_LEVEL; i++) {
+    const numSegments = getSegmentsForLevel(lvl);
+    for (let i = 0; i < numSegments; i++) {
         generateSegment(i, lvl);
     }
 
     // Goal line near the end of the last segment
-    goalX = (SEGMENTS_PER_LEVEL * SEGMENT_W - 4) * TILE;
+    goalX = (numSegments * SEGMENT_W - 4) * TILE;
 
     const h = LEVEL_H_TILES;
 
@@ -1890,7 +1905,7 @@ function draw() {
     ctx.fillText(`LEVEL ${currentLevel}`, 4, 10);
     ctx.fillStyle = C.text;
     ctx.font = '7px monospace';
-    const totalDist = SEGMENTS_PER_LEVEL * SEGMENT_W;
+    const totalDist = getSegmentsForLevel(currentLevel) * SEGMENT_W;
     const progress = Math.min(100, Math.floor(player.distance / totalDist * 100));
     ctx.fillText(`${progress}%  deaths: ${player.deathCount}`, 4, 20);
 
@@ -1986,14 +2001,12 @@ function draw() {
         ctx.fillText(`LEVEL ${currentLevel}`, W/2, H/2 - 16);
         ctx.fillStyle = 'rgba(232,168,56,0.5)';
         ctx.font = '7px monospace';
-        const diff = getLevelDifficulty(currentLevel);
-        const hellName = currentLevel === 1 ? 'the shallows' :
-                         currentLevel === 2 ? 'bone garden' :
-                         currentLevel === 3 ? 'the grinder' :
-                         currentLevel === 4 ? 'narrow hell' :
-                         currentLevel === 5 ? 'the furnace' :
-                         currentLevel === 6 ? 'sawdust' :
-                         `circle ${currentLevel}`;
+        const LEVEL_NAMES = [
+            '', 'the shallows', 'the thorns', 'the overhang', 'blood stone',
+            'the scaffolding', 'sawdust', 'the conveyor', 'the pit',
+            'the gauntlet', 'vertigo', 'the furnace', 'the core'
+        ];
+        const hellName = LEVEL_NAMES[currentLevel] || `circle ${currentLevel}`;
         ctx.fillText(hellName, W/2, H/2);
         ctx.textAlign = 'left';
         ctx.globalAlpha = 1;
