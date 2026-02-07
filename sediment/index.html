@@ -101,7 +101,7 @@ const canvas = document.getElementById('c');
 const ctx = canvas.getContext('2d');
 
 // ── Config ──
-const VERSION = 'v34';
+const VERSION = 'v35';
 const TILE = 12;
 const GRAVITY = 700;
 const JUMP_FORCE = -280;
@@ -795,7 +795,7 @@ function updateFallingGroup(dt) {
                         if (!level[landY]) level[landY] = [];
                         level[landY][cell.x] = 2;
                     } else {
-                        corpseGrid[landY][cell.x] = { mat: cell.mat, eyes: cell.eyes, age: 0 };
+                        corpseGrid[landY][cell.x] = { mat: cell.mat, eyes: cell.eyes, age: 0, deathNum: player.deathCount };
                         // Non-spike corpses neutralize terrain spikes
                         if (level[landY] && level[landY][cell.x] === 2) {
                             level[landY][cell.x] = 0;
@@ -819,11 +819,13 @@ function checkRowClears() {
     const maxGenX = segments.length * SEGMENT_W;
     let cleared = false;
 
-    // VERTICAL column clearing — 6+ CONSECUTIVE non-spike corpse blocks
+    // VERTICAL column clearing — 6+ CONSECUTIVE non-spike corpse blocks (excludes latest corpse)
+    const latestDeath = player.deathCount;
     for (let x = 0; x < maxGenX; x++) {
         let run = 0;
         for (let y = 0; y < levelH; y++) {
-            if (corpseGrid[y] && corpseGrid[y][x] && corpseGrid[y][x].mat !== 'spike') {
+            const b = corpseGrid[y] && corpseGrid[y][x];
+            if (b && b.mat !== 'spike' && b.deathNum !== latestDeath) {
                 run++;
                 if (run >= COLUMN_CLEAR_THRESHOLD) {
                     clearColumn(x);
@@ -836,12 +838,13 @@ function checkRowClears() {
         }
     }
 
-    // HORIZONTAL row clearing — 6+ CONSECUTIVE non-spike corpse blocks
+    // HORIZONTAL row clearing — 6+ CONSECUTIVE non-spike corpse blocks (excludes latest corpse)
     for (let y = 1; y < levelH - 1; y++) {
         let run = 0;
         let runStart = 0;
         for (let x = 0; x < maxGenX; x++) {
-            if (corpseGrid[y] && corpseGrid[y][x] && corpseGrid[y][x].mat !== 'spike') {
+            const b = corpseGrid[y] && corpseGrid[y][x];
+            if (b && b.mat !== 'spike' && b.deathNum !== latestDeath) {
                 if (run === 0) runStart = x;
                 run++;
                 if (run >= COLUMN_CLEAR_THRESHOLD) {
