@@ -1720,13 +1720,8 @@ function draw() {
                 ctx.fill();
             }
 
-            // Dead kawaii eyes (X marks the end)
+            // Dead eyes — just dark X, no socket
             if (block.eyes) {
-                // Light eye sockets 3x3
-                ctx.fillStyle = matHL(block.mat);
-                ctx.fillRect(px + 1, py + 1, 3, 3);
-                ctx.fillRect(px + 7, py + 1, 3, 3);
-                // X pattern in dark
                 ctx.fillStyle = matDark(block.mat);
                 // Left eye X
                 ctx.fillRect(px + 1, py + 1, 1, 1);
