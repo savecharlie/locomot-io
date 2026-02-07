@@ -101,13 +101,14 @@ const canvas = document.getElementById('c');
 const ctx = canvas.getContext('2d');
 
 // ── Config ──
-const VERSION = 'v28';
+const VERSION = 'v29';
 const TILE = 12;
 const GRAVITY = 700;
 const JUMP_FORCE = -280;
 const RUN_SPEED = 100;
 const WALL_SLIDE_SPEED = 40;
 const MIN_DISTANCE_FOR_CORPSE = 5; // tiles from spawn before death leaves blocks
+const COLUMN_CLEAR_THRESHOLD = 6; // filled tiles needed to clear a column (Tetris=10, tunnel=14)
 
 // ── Colors ──
 const C = {
@@ -129,6 +130,9 @@ const C = {
     booster: '#5898C8',     // steel blue
     boosterHL: '#88C0E0',
     boosterDark: '#283850',
+    corpseSpike: '#A83040',     // darker red for corpse spikes
+    corpseSpikeHL: '#D05060',
+    corpseSpikeDark: '#581828',
     text: '#D8D0C0',
     ghost: 'rgba(232,168,56,0.18)'
 };
@@ -137,16 +141,19 @@ const C = {
 function matColor(mat) {
     if (mat === 'spring') return C.spring;
     if (mat === 'booster') return C.booster;
+    if (mat === 'spike') return C.corpseSpike;
     return C.solid;
 }
 function matHL(mat) {
     if (mat === 'spring') return C.springHL;
     if (mat === 'booster') return C.boosterHL;
+    if (mat === 'spike') return C.corpseSpikeHL;
     return C.solidHL;
 }
 function matDark(mat) {
     if (mat === 'spring') return C.springDark;
     if (mat === 'booster') return C.boosterDark;
+    if (mat === 'spike') return C.corpseSpikeDark;
     return C.solidSH;
 }
 
@@ -226,6 +233,7 @@ const SHAPES = {
 
 const SHAPE_NAMES = ['I', 'O', 'T', 'S', 'Z', 'L', 'J'];
 const MATERIAL_TYPES = ['solid', 'spring', 'booster'];
+// Spike material added in later levels — see pickMaterial()
 
 // SRS wall kick data (for non-I pieces)
 const KICK_DATA = [
@@ -261,6 +269,12 @@ function nextShape() {
         }
     }
     return shapeBag.pop();
+}
+
+// Pick material — spike is a possible material (25% chance)
+function pickMaterial(lvl) {
+    if (Math.random() < 0.25) return 'spike';
+    return MATERIAL_TYPES[Math.floor(Math.random() * 3)];
 }
 
 function getCells(shapeName, rotation) {
@@ -614,7 +628,7 @@ function initLevel(lvl) {
     const spawnH = h;
     player.shape = nextShape();
     player.rotation = 0;
-    player.material = MATERIAL_TYPES[Math.floor(Math.random() * 3)];
+    player.material = pickMaterial(currentLevel);
     player.x = 2 * TILE;
     player.y = (spawnH - 3) * TILE;
     player.spawnX = player.x;
@@ -780,27 +794,24 @@ function updateFallingGroup(dt) {
 // ══════════════════════════════════════
 
 function checkRowClears() {
-    // VERTICAL column clearing — from ceiling (y=0) to floor (y=levelH-1)
-    // A column clears when EVERY cell top-to-bottom is filled (terrain OR corpse)
+    // VERTICAL column clearing — count filled tiles in each column
+    // A column clears when >= COLUMN_CLEAR_THRESHOLD cells are filled (terrain OR corpse)
     // Only corpse blocks vanish — terrain stays
     const maxGenX = segments.length * SEGMENT_W;
     let cleared = false;
 
     for (let x = 0; x < maxGenX; x++) {
-        let full = true;
+        let filledCount = 0;
         let hasCorpse = false;
 
         for (let y = 0; y < levelH; y++) {
             const isTerrain = level[y] && level[y][x] === 1;
             const isCorpse = corpseGrid[y] && corpseGrid[y][x];
-            if (!isTerrain && !isCorpse) {
-                full = false;
-                break;
-            }
+            if (isTerrain || isCorpse) filledCount++;
             if (isCorpse) hasCorpse = true;
         }
 
-        if (full && hasCorpse) {
+        if (filledCount >= COLUMN_CLEAR_THRESHOLD && hasCorpse) {
             clearColumn(x);
             cleared = true;
         }
@@ -906,7 +917,7 @@ function respawn() {
     const h = LEVEL_H_TILES;
     player.shape = nextShape();
     player.rotation = 0;
-    player.material = MATERIAL_TYPES[Math.floor(Math.random() * 3)];
+    player.material = pickMaterial(currentLevel);
     player.x = 2 * TILE;
     player.y = (h - 3) * TILE;
     player.spawnX = player.x;
@@ -1327,6 +1338,14 @@ function update(dt) {
         }
     }
 
+    // SPIKE CORPSE: lethal on any contact — check all 4 directions
+    for (const dir of ['below', 'above', 'right', 'left']) {
+        if (checkAdjacentCorpse(player.x, player.y, player.shape, player.rotation, dir, 'spike')) {
+            die();
+            return;
+        }
+    }
+
     // Stuck detection — Monte Carlo look-ahead
     // Uses hitWallX from actual movement (not re-check) + escape simulation
     // If no escape route exists → die. If escape exists → wait forever (timing buzzsaws etc.)
@@ -1471,7 +1490,29 @@ function draw() {
             ctx.fillRect(px + TILE - 1, py, 1, TILE);
 
             // Material decoration
-            if (block.mat === 'spring') {
+            if (block.mat === 'spike') {
+                // Spike corpse — draw directional triangle overlay
+                // Ceiling (y<=1): point down, Floor (y>=levelH-2): point up, Floating: point left
+                ctx.fillStyle = C.corpseSpikeHL;
+                ctx.beginPath();
+                if (y <= 1) {
+                    // Ceiling spike → point DOWN
+                    ctx.moveTo(px + 1, py);
+                    ctx.lineTo(px + TILE/2, py + TILE - 2);
+                    ctx.lineTo(px + TILE - 1, py);
+                } else if (y >= levelH - 2) {
+                    // Floor spike → point UP
+                    ctx.moveTo(px + 1, py + TILE);
+                    ctx.lineTo(px + TILE/2, py + 2);
+                    ctx.lineTo(px + TILE - 1, py + TILE);
+                } else {
+                    // Floating spike → point LEFT (toward player)
+                    ctx.moveTo(px + TILE, py + 1);
+                    ctx.lineTo(px + 2, py + TILE/2);
+                    ctx.lineTo(px + TILE, py + TILE - 1);
+                }
+                ctx.fill();
+            } else if (block.mat === 'spring') {
                 ctx.fillStyle = C.springDark;
                 for (let i = 0; i < 3; i++) {
                     ctx.fillRect(px + 2 + i * 3, py + 4, 1, 5);
@@ -1485,8 +1526,8 @@ function draw() {
                 ctx.fill();
             }
 
-            // Dead eyes
-            if (block.eyes) {
+            // Dead eyes (not on spike corpses — they're just pointy death)
+            if (block.eyes && block.mat !== 'spike') {
                 ctx.fillStyle = matDark(block.mat);
                 ctx.fillRect(px + 3, py + 2, 2, 2);
                 ctx.fillRect(px + 7, py + 2, 2, 2);
@@ -1640,7 +1681,15 @@ function draw() {
 
             // Material decoration on other cells
             if (i > 0) {
-                if (mat === 'spring') {
+                if (mat === 'spike') {
+                    // Warning spikes on the live piece — small triangles pointing right (forward)
+                    ctx.fillStyle = C.corpseSpikeHL;
+                    ctx.beginPath();
+                    ctx.moveTo(drawX + drawW, drawY + 1);
+                    ctx.lineTo(drawX + 2, drawY + drawH/2);
+                    ctx.lineTo(drawX + drawW, drawY + drawH - 1);
+                    ctx.fill();
+                } else if (mat === 'spring') {
                     ctx.fillStyle = C.springDark;
                     for (let j = 0; j < 3; j++) {
                         ctx.fillRect(drawX + 2 + j * 3, drawY + 4, 1, drawH - 6);
