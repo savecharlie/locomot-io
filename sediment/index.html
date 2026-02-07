@@ -101,7 +101,7 @@ const canvas = document.getElementById('c');
 const ctx = canvas.getContext('2d');
 
 // ── Config ──
-const VERSION = 'v37';
+const VERSION = 'v38';
 const TILE = 12;
 const GRAVITY = 700;
 const JUMP_FORCE = -280;
@@ -134,7 +134,10 @@ const C = {
     corpseSpikeHL: '#D05060',
     corpseSpikeDark: '#581828',
     text: '#D8D0C0',
-    ghost: 'rgba(232,168,56,0.18)'
+    ghost: 'rgba(232,168,56,0.18)',
+    platform: '#6878A8',       // moving platform
+    platformHL: '#8898C8',
+    platformSH: '#384060'
 };
 
 // Material color lookup
@@ -306,6 +309,7 @@ let corpseGrid = []; // placed blocks: null or {mat, age, eyes}
 let segments = [];
 let particles = [];
 let buzzsaws = [];
+let movingPlatforms = [];
 let fallingGroup = null; // {cells: [{x,y,mat,eyes}], drop:0, targetDrop:N, fallSpeed:0}
 let clearingRows = [];  // rows currently flashing before clear
 
@@ -410,6 +414,39 @@ function generateSegment(segIndex, lvl) {
         });
     }
 
+    // Static platforms (level 2+, d >= 2.5)
+    if (d >= 2.5) {
+        const numPlats = 1 + Math.floor(d * 0.4);
+        const platMinX = segIndex === 0 ? 14 : 4;
+        for (let i = 0; i < numPlats; i++) {
+            const px = startX + platMinX + Math.floor(Math.random() * (SEGMENT_W - platMinX - 6));
+            const pw = 2 + Math.floor(Math.random() * 3);
+            const py = 3 + Math.floor(Math.random() * (h - 6)); // mid-tunnel
+            for (let dx = 0; dx < pw; dx++) {
+                if (level[py]) level[py][px + dx] = 1;
+            }
+        }
+    }
+
+    // Moving platforms (level 3+, d >= 4)
+    if (d >= 4) {
+        const numMoving = 1 + Math.floor((d - 4) * 0.5);
+        const movMinX = segIndex === 0 ? 16 : 5;
+        for (let i = 0; i < numMoving; i++) {
+            const mx = (startX + movMinX + Math.floor(Math.random() * (SEGMENT_W - movMinX - 8))) * TILE;
+            const my = (3 + Math.floor(Math.random() * (h - 6))) * TILE;
+            const vert = d >= 6 && Math.random() < 0.4; // vertical only at higher difficulty
+            movingPlatforms.push({
+                x: mx, y: my, w: 3,
+                baseX: mx, baseY: my,
+                vertical: vert,
+                range: (2 + Math.floor(Math.random() * 2)) * TILE,
+                speed: 20 + Math.random() * 30,
+                phase: Math.random() * Math.PI * 2
+            });
+        }
+    }
+
     // Safe spawn
     if (segIndex === 0) {
         for (let y = 1; y < h - 1; y++) {
@@ -437,6 +474,12 @@ function tileIsSolid(tx, ty) {
     if (ty >= levelH) return false; // void below
     if (level[ty] && level[ty][tx] === 1) return true;
     if (corpseGrid[ty] && corpseGrid[ty][tx]) return true;
+    // Moving platforms
+    for (const p of movingPlatforms) {
+        const px1 = Math.floor(p.x / TILE);
+        const py = Math.floor(p.y / TILE);
+        if (ty === py && tx >= px1 && tx < px1 + p.w) return true;
+    }
     return false;
 }
 
@@ -617,6 +660,7 @@ function initLevel(lvl) {
     segments = [];
     particles = [];
     buzzsaws = [];
+    movingPlatforms = [];
     fallingGroup = null;
     clearingRows = [];
     levelComplete = false;
@@ -1422,6 +1466,32 @@ function update(dt) {
         return;
     }
 
+    // Update moving platforms + carry player
+    for (const p of movingPlatforms) {
+        const prevX = p.x, prevY = p.y;
+        const t = performance.now() / 1000;
+        if (p.vertical) {
+            p.y = p.baseY + Math.sin(t * p.speed * 0.05 + p.phase) * p.range;
+        } else {
+            p.x = p.baseX + Math.sin(t * p.speed * 0.05 + p.phase) * p.range;
+        }
+        // Carry player if standing on this platform
+        if (!player.dead) {
+            const cells = getCells(player.shape, player.rotation);
+            for (const [cx, cy] of cells) {
+                const footTX = Math.floor((player.x + cx * TILE + TILE/2) / TILE);
+                const footTY = Math.floor((player.y + (cy + 1) * TILE) / TILE);
+                const px1 = Math.floor(prevX / TILE);
+                const ppy = Math.floor(prevY / TILE);
+                if (footTY === ppy && footTX >= px1 && footTX < px1 + p.w) {
+                    player.x += (p.x - prevX);
+                    player.y += (p.y - prevY);
+                    break;
+                }
+            }
+        }
+    }
+
     // Update buzzsaws
     for (const saw of buzzsaws) {
         saw.spin += dt * 8;
@@ -1656,6 +1726,38 @@ function draw() {
         ctx.beginPath();
         ctx.arc(saw.x, saw.y, 2, 0, Math.PI * 2);
         ctx.fill();
+    }
+
+    // Moving platforms
+    for (const p of movingPlatforms) {
+        const px1 = Math.floor(p.x / TILE) * TILE;
+        const py = Math.floor(p.y / TILE) * TILE;
+        if (px1 + p.w * TILE < cam.x - 20 || px1 > cam.x + W + 20) continue;
+        for (let dx = 0; dx < p.w; dx++) {
+            const bx = px1 + dx * TILE;
+            ctx.fillStyle = C.platform;
+            ctx.fillRect(bx, py, TILE, TILE);
+            ctx.fillStyle = C.platformHL;
+            ctx.fillRect(bx, py, TILE, 1);
+            ctx.fillRect(bx, py, 1, TILE);
+            ctx.fillStyle = C.platformSH;
+            ctx.fillRect(bx, py + TILE - 1, TILE, 1);
+            ctx.fillRect(bx + TILE - 1, py, 1, TILE);
+        }
+        // Direction indicator — small arrow
+        const centerX = px1 + (p.w * TILE) / 2;
+        ctx.fillStyle = C.platformHL;
+        ctx.globalAlpha = 0.5;
+        if (p.vertical) {
+            ctx.fillRect(centerX - 1, py + 3, 2, TILE - 6);
+            ctx.fillRect(centerX - 2, py + 4, 4, 1);
+            ctx.fillRect(centerX - 2, py + TILE - 5, 4, 1);
+        } else {
+            ctx.fillRect(px1 + 3, py + TILE/2, p.w * TILE - 6, 1);
+            ctx.fillRect(px1 + 4, py + TILE/2 - 1, 1, 3);
+            ctx.fillRect(px1 + p.w * TILE - 5, py + TILE/2 - 1, 1, 3);
+        }
+        ctx.globalAlpha = 1;
     }
 
     // Ghost preview — where your piece would snap on death
