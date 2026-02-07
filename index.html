@@ -344,9 +344,11 @@
       sc.fillRect(ex + 8, ey + 4, 1, 1);
     }
 
-    // Register service worker
+    // Register service worker + force update check
     if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.register('sw.js');
+      navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' }).then(reg => {
+        reg.update();
+      });
     }
   </script>
 </body>
