@@ -101,7 +101,7 @@ const canvas = document.getElementById('c');
 const ctx = canvas.getContext('2d');
 
 // ── Config ──
-const VERSION = 'v31';
+const VERSION = 'v32';
 const TILE = 12;
 const GRAVITY = 700;
 const JUMP_FORCE = -280;
@@ -797,11 +797,11 @@ function checkRowClears() {
     const maxGenX = segments.length * SEGMENT_W;
     let cleared = false;
 
-    // VERTICAL column clearing — 6+ corpse blocks in a column
+    // VERTICAL column clearing — 6+ non-spike corpse blocks in a column
     for (let x = 0; x < maxGenX; x++) {
         let corpseCount = 0;
         for (let y = 0; y < levelH; y++) {
-            if (corpseGrid[y] && corpseGrid[y][x]) corpseCount++;
+            if (corpseGrid[y] && corpseGrid[y][x] && corpseGrid[y][x].mat !== 'spike') corpseCount++;
         }
         if (corpseCount >= COLUMN_CLEAR_THRESHOLD) {
             clearColumn(x);
@@ -809,11 +809,11 @@ function checkRowClears() {
         }
     }
 
-    // HORIZONTAL row clearing — 6+ corpse blocks in a row
+    // HORIZONTAL row clearing — 6+ non-spike corpse blocks in a row
     for (let y = 1; y < levelH - 1; y++) {
         let corpseCount = 0;
         for (let x = 0; x < maxGenX; x++) {
-            if (corpseGrid[y] && corpseGrid[y][x]) corpseCount++;
+            if (corpseGrid[y] && corpseGrid[y][x] && corpseGrid[y][x].mat !== 'spike') corpseCount++;
         }
         if (corpseCount >= COLUMN_CLEAR_THRESHOLD) {
             clearRow(y);
