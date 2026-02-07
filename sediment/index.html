@@ -316,6 +316,8 @@ let pendingClears = []; // {cells:[{x,y}], timer:0.35} — flash before delete
 // ── Level system ──
 let currentLevel = 1;
 let levelDeaths = 0;
+let levelCrunches = 0;
+let crunchFlash = 0; // timer for "-N" flash on HUD
 let levelComplete = false;
 let levelTransitionTimer = 0;
 let levelTitleTimer = 0;
@@ -640,6 +642,8 @@ const player = {
     trail: [],
     boostTimer: 0,
     deathCount: 0,
+    crunchCount: 0,
+    deathsErased: 0,
     distance: 0,
     bestDistance: 0,
     spawnX: 2 * TILE,
@@ -683,6 +687,8 @@ function initLevel(lvl) {
     levelComplete = false;
     levelTransitionTimer = 0;
     levelDeaths = 0;
+    levelCrunches = 0;
+    crunchFlash = 0;
     levelTitleTimer = 3.0;
 
     // Tutorial on level 1 (first time only)
@@ -746,6 +752,8 @@ function init() {
 function hardReset() {
     player._hasRun = false;
     player.deathCount = 0;
+    player.crunchCount = 0;
+    player.deathsErased = 0;
     player.bestDistance = 0;
     shapeBag = [];
     currentLevel = 1;
@@ -944,6 +952,24 @@ function checkRowClears() {
     // Gravity now applied when pendingClears timers expire
 }
 
+function onCrunch() {
+    player.crunchCount++;
+    levelCrunches++;
+    // Each crunch erases half your current net deaths (rounded up)
+    const netDeaths = Math.max(0, player.deathCount - player.deathsErased);
+    const eraseAmount = Math.ceil(netDeaths / 2);
+    if (eraseAmount > 0) {
+        player.deathsErased += eraseAmount;
+        crunchFlash = 1.2; // show "-N" for 1.2 seconds
+        crunchFlashAmount = eraseAmount;
+    } else {
+        crunchFlash = 1.2;
+        crunchFlashAmount = 0;
+    }
+}
+
+let crunchFlashAmount = 0;
+
 function clearColumn(x) {
     const cells = [];
     for (let y = 0; y < levelH; y++) {
@@ -952,7 +978,10 @@ function clearColumn(x) {
             corpseGrid[y][x].clearing = true;
         }
     }
-    if (cells.length) pendingClears.push({ cells, timer: 0.35 });
+    if (cells.length) {
+        pendingClears.push({ cells, timer: 0.35 });
+        onCrunch();
+    }
 }
 
 function clearRowSegment(y, startX, endX) {
@@ -963,7 +992,10 @@ function clearRowSegment(y, startX, endX) {
             corpseGrid[y][x].clearing = true;
         }
     }
-    if (cells.length) pendingClears.push({ cells, timer: 0.35 });
+    if (cells.length) {
+        pendingClears.push({ cells, timer: 0.35 });
+        onCrunch();
+    }
 }
 
 function updatePendingClears(dt) {
@@ -1270,6 +1302,7 @@ function update(dt) {
 
     // Flash
     if (flash.a > 0) flash.a -= dt * 4;
+    if (crunchFlash > 0) crunchFlash -= dt;
 
     // Falling group
     updateFallingGroup(dt);
@@ -1707,12 +1740,12 @@ function draw() {
 
             // Material decoration (spike material becomes terrain, never a corpse block)
             if (block.mat === 'spring') {
-                ctx.fillStyle = C.springDark;
+                ctx.fillStyle = C.springHL;
                 for (let i = 0; i < 3; i++) {
                     ctx.fillRect(px + 2 + i * 3, py + 4, 1, 5);
                 }
             } else if (block.mat === 'booster') {
-                ctx.fillStyle = C.boosterDark;
+                ctx.fillStyle = C.boosterHL;
                 ctx.beginPath();
                 ctx.moveTo(px + 9, py + TILE/2);
                 ctx.lineTo(px + 4, py + TILE/2 - 3);
@@ -1953,12 +1986,12 @@ function draw() {
                     ctx.lineTo(drawX + drawW, drawY + drawH - 1);
                     ctx.fill();
                 } else if (mat === 'spring') {
-                    ctx.fillStyle = C.springDark;
+                    ctx.fillStyle = C.springHL;
                     for (let j = 0; j < 3; j++) {
                         ctx.fillRect(drawX + 2 + j * 3, drawY + 4, 1, drawH - 6);
                     }
                 } else if (mat === 'booster') {
-                    ctx.fillStyle = C.boosterDark;
+                    ctx.fillStyle = C.boosterHL;
                     ctx.beginPath();
                     const d = player.facing;
                     ctx.moveTo(drawX + drawW/2 + d * 3.5, drawY + drawH/2);
@@ -1998,7 +2031,27 @@ function draw() {
     ctx.font = '7px monospace';
     const totalDist = getSegmentsForLevel(currentLevel) * SEGMENT_W;
     const progress = Math.min(100, Math.floor(player.distance / totalDist * 100));
-    ctx.fillText(`${progress}%  deaths: ${player.deathCount}`, 4, 20);
+    const netDeaths = Math.max(0, player.deathCount - player.deathsErased);
+    const deathStr = `${progress}%  deaths: ${netDeaths}`;
+    // Flash death counter green during crunch
+    if (crunchFlash > 0) {
+        ctx.fillStyle = `rgba(100,255,140,${Math.min(1, crunchFlash)})`;
+    }
+    ctx.fillText(deathStr, 4, 20);
+    // Show crunch count
+    if (player.crunchCount > 0) {
+        const deathTextW = ctx.measureText(deathStr).width;
+        ctx.fillStyle = '#FFD080';
+        ctx.fillText(`  crunches: ${player.crunchCount}`, 4 + deathTextW, 20);
+    }
+    // Floating "-N" when crunch erases deaths
+    if (crunchFlash > 0 && crunchFlashAmount > 0) {
+        const floatY = 20 - (1.2 - crunchFlash) * 12;
+        ctx.fillStyle = `rgba(100,255,140,${Math.min(1, crunchFlash)})`;
+        ctx.font = '8px monospace';
+        ctx.fillText(`-${crunchFlashAmount}`, 4 + ctx.measureText(`${progress}%  deaths: `).width, floatY);
+        ctx.font = '7px monospace';
+    }
 
     // Shape + material indicator
     ctx.fillStyle = matColor(player.material);
@@ -2127,7 +2180,8 @@ function draw() {
         ctx.fillText(`LEVEL ${currentLevel} CLEAR`, W/2, H/2 - 20);
         ctx.fillStyle = C.text;
         ctx.font = '7px monospace';
-        ctx.fillText(`deaths: ${levelDeaths}`, W/2, H/2);
+        const levelNetDeaths = Math.max(0, levelDeaths - levelCrunches * Math.ceil(levelDeaths / Math.max(1, levelCrunches * 2)));
+        ctx.fillText(`deaths: ${levelDeaths}${levelCrunches > 0 ? `  crunches: ${levelCrunches}` : ''}`, W/2, H/2);
         ctx.fillStyle = 'rgba(216,208,192,0.5)';
         ctx.font = '6px monospace';
         if (levelTransitionTimer > 0) {
