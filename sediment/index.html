@@ -122,12 +122,12 @@ const C = {
     spike: '#C83848',
     saw: '#E05838',
     sawBlade: '#582830',
-    solid: '#B8A078',       // sandstone
-    solidHL: '#E0D0A0',
-    solidSH: '#685060',
-    spring: '#48B880',      // sage green
-    springHL: '#80E8B0',
-    springDark: '#284050',
+    solid: '#B0A098',       // warm gray stone
+    solidHL: '#D0C0B0',
+    solidSH: '#807068',
+    spring: '#D8B840',      // golden yellow
+    springHL: '#F8F0C0',
+    springDark: '#483808',
     booster: '#5898C8',     // steel blue
     boosterHL: '#88C0E0',
     boosterDark: '#283850',
@@ -1733,10 +1733,11 @@ function draw() {
 
             // Material decoration (spike material becomes terrain, never a corpse block)
             if (block.mat === 'spring') {
+                // Zigzag spring coil — chunky 2px-tall rungs
                 ctx.fillStyle = C.springHL;
-                for (let i = 0; i < 3; i++) {
-                    ctx.fillRect(px + 2 + i * 3, py + 4, 1, 5);
-                }
+                ctx.fillRect(px + 2, py + 2, 4, 2);
+                ctx.fillRect(px + 6, py + 5, 4, 2);
+                ctx.fillRect(px + 2, py + 8, 4, 2);
             } else if (block.mat === 'booster') {
                 ctx.fillStyle = C.boosterHL;
                 ctx.beginPath();
@@ -1979,10 +1980,11 @@ function draw() {
                     ctx.lineTo(drawX + drawW, drawY + drawH - 1);
                     ctx.fill();
                 } else if (mat === 'spring') {
+                    // Zigzag spring coil — chunky 2px-tall rungs
                     ctx.fillStyle = C.springHL;
-                    for (let j = 0; j < 3; j++) {
-                        ctx.fillRect(drawX + 2 + j * 3, drawY + 4, 1, drawH - 6);
-                    }
+                    ctx.fillRect(drawX + 2, drawY + 2, 4, 2);
+                    ctx.fillRect(drawX + 6, drawY + 5, 4, 2);
+                    ctx.fillRect(drawX + 2, drawY + 8, 4, 2);
                 } else if (mat === 'booster') {
                     ctx.fillStyle = C.boosterHL;
                     ctx.beginPath();
