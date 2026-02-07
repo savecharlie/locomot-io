@@ -1722,12 +1722,12 @@ function draw() {
 
             // Dead kawaii eyes (X marks the end)
             if (block.eyes) {
-                // Dark eye sockets 3x3
-                ctx.fillStyle = matDark(block.mat);
+                // Light eye sockets 3x3
+                ctx.fillStyle = matHL(block.mat);
                 ctx.fillRect(px + 1, py + 1, 3, 3);
                 ctx.fillRect(px + 7, py + 1, 3, 3);
-                // X pattern in highlight
-                ctx.fillStyle = matHL(block.mat);
+                // X pattern in dark
+                ctx.fillStyle = matDark(block.mat);
                 // Left eye X
                 ctx.fillRect(px + 1, py + 1, 1, 1);
                 ctx.fillRect(px + 3, py + 1, 1, 1);
