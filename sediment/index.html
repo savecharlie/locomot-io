@@ -101,7 +101,7 @@ const canvas = document.getElementById('c');
 const ctx = canvas.getContext('2d');
 
 // ── Config ──
-const VERSION = 'v30';
+const VERSION = 'v31';
 const TILE = 12;
 const GRAVITY = 700;
 const JUMP_FORCE = -280;
@@ -794,27 +794,34 @@ function updateFallingGroup(dt) {
 // ══════════════════════════════════════
 
 function checkRowClears() {
-    // VERTICAL column clearing — count filled tiles in each column
-    // A column clears when >= COLUMN_CLEAR_THRESHOLD cells are filled (terrain OR corpse)
-    // Only corpse blocks vanish — terrain stays
     const maxGenX = segments.length * SEGMENT_W;
     let cleared = false;
 
+    // VERTICAL column clearing — 6+ corpse blocks in a column
     for (let x = 0; x < maxGenX; x++) {
         let corpseCount = 0;
-
         for (let y = 0; y < levelH; y++) {
             if (corpseGrid[y] && corpseGrid[y][x]) corpseCount++;
         }
-
         if (corpseCount >= COLUMN_CLEAR_THRESHOLD) {
             clearColumn(x);
             cleared = true;
         }
     }
 
+    // HORIZONTAL row clearing — 6+ corpse blocks in a row
+    for (let y = 1; y < levelH - 1; y++) {
+        let corpseCount = 0;
+        for (let x = 0; x < maxGenX; x++) {
+            if (corpseGrid[y] && corpseGrid[y][x]) corpseCount++;
+        }
+        if (corpseCount >= COLUMN_CLEAR_THRESHOLD) {
+            clearRow(y);
+            cleared = true;
+        }
+    }
+
     if (cleared) {
-        // After clearing, apply gravity to remaining blocks
         applyCorpseGravity();
     }
 }
@@ -835,6 +842,26 @@ function clearColumn(x) {
 
     // Big burst in the center of the column
     spawnP(x * TILE + TILE/2, (levelH / 2) * TILE, C.player, 10, 100, 0.5);
+}
+
+function clearRow(y) {
+    // Flash effect
+    cam.shake = Math.max(cam.shake, 8);
+    flash.a = 0.8; flash.r = 1; flash.g = 0.94; flash.b = 0.82;
+
+    const maxX = segments.length * SEGMENT_W;
+    // Particles along the row + remove corpse blocks
+    for (let x = 0; x < maxX; x++) {
+        if (corpseGrid[y] && corpseGrid[y][x]) {
+            const block = corpseGrid[y][x];
+            spawnP(x * TILE + TILE/2, y * TILE + TILE/2, matColor(block.mat), 2, 60, 0.3);
+            corpseGrid[y][x] = null;
+        }
+    }
+
+    // Big burst in the center of the row
+    const centerX = Math.floor(cam.x + W / 2);
+    spawnP(centerX, y * TILE + TILE/2, C.player, 10, 100, 0.5);
 }
 
 function applyCorpseGravity() {
