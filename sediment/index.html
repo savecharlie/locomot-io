@@ -1859,7 +1859,7 @@ function draw() {
         ctx.globalAlpha = 1;
     }
 
-    // Player trail
+    // Player trail (only behind the player)
     if (!player.dead) {
         const cells = getCells(player.shape, player.rotation);
         for (const t of player.trail) {
@@ -1867,6 +1867,8 @@ function draw() {
             ctx.globalAlpha = a * 0.2;
             ctx.fillStyle = matColor(player.material);
             for (const [cx, cy] of cells) {
+                const cellRight = t.x + cx * TILE + TILE;
+                if (cellRight > player.x) continue;
                 ctx.fillRect(t.x + cx * TILE + 1, t.y + cy * TILE + 1, TILE - 2, TILE - 2);
             }
         }
