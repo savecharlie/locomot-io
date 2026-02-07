@@ -101,7 +101,7 @@ const canvas = document.getElementById('c');
 const ctx = canvas.getContext('2d');
 
 // ── Config ──
-const VERSION = 'v42';
+const VERSION = 'v43';
 const TILE = 12;
 const GRAVITY = 700;
 const JUMP_FORCE = -280;
@@ -895,24 +895,28 @@ function checkRowClears() {
     let cleared = false;
 
     // VERTICAL column clearing — 6+ CONSECUTIVE non-spike corpse blocks
+    // clearColumn already clears the whole column, so just need to detect threshold
     for (let x = 0; x < maxGenX; x++) {
         let run = 0;
+        let found = false;
         for (let y = 0; y < levelH; y++) {
             const b = corpseGrid[y] && corpseGrid[y][x];
             if (b && b.mat !== 'spike') {
                 run++;
-                if (run >= COLUMN_CLEAR_THRESHOLD) {
-                    clearColumn(x);
-                    cleared = true;
-                    break;
-                }
             } else {
+                if (run >= COLUMN_CLEAR_THRESHOLD) { found = true; break; }
                 run = 0;
             }
+        }
+        if (run >= COLUMN_CLEAR_THRESHOLD) found = true;
+        if (found) {
+            clearColumn(x);
+            cleared = true;
         }
     }
 
     // HORIZONTAL row clearing — 6+ CONSECUTIVE non-spike corpse blocks
+    // Let runs grow past 6 — clear the full segment when it ends
     for (let y = 1; y < levelH - 1; y++) {
         let run = 0;
         let runStart = 0;
@@ -921,14 +925,18 @@ function checkRowClears() {
             if (b && b.mat !== 'spike') {
                 if (run === 0) runStart = x;
                 run++;
-                if (run >= COLUMN_CLEAR_THRESHOLD) {
-                    clearRowSegment(y, runStart, x);
-                    cleared = true;
-                    run = 0; // reset to find more runs
-                }
             } else {
+                if (run >= COLUMN_CLEAR_THRESHOLD) {
+                    clearRowSegment(y, runStart, runStart + run - 1);
+                    cleared = true;
+                }
                 run = 0;
             }
+        }
+        // Check run at end of row
+        if (run >= COLUMN_CLEAR_THRESHOLD) {
+            clearRowSegment(y, runStart, runStart + run - 1);
+            cleared = true;
         }
     }
 
