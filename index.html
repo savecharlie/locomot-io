@@ -223,7 +223,7 @@
     </a>
 
     <a href="ice_skater/" class="game-card">
-      <img src="ice_skater/skater_side_skating_16x24.png" class="pixel-icon" alt="Figure ∞" style="object-fit:contain">
+      <img src="ice_skater/skater_side_skating_16x24.png" class="pixel-icon" alt="Figure ∞" style="object-fit:contain;transform:scaleX(-1)">
       <div>
         <h2>FIGURE ∞</h2>
         <p>Slide & solve puzzles</p>
@@ -317,9 +317,9 @@
       sedLogo.style.height = (isMob ? 48 : 64) + 'px';
       sedLogo.style.imageRendering = 'pixelated';
       const t = 12;
-      const cells = [[1,0],[2,0],[0,1],[1,1]];
+      const cells = [[0,0],[0,1],[1,1],[1,2]]; // upright S
       const col = '#B8A078', hl = '#E0D0A0', sh = '#685060';
-      const ox = 6, oy = 12;
+      const ox = 12, oy = 6;
       for (const [cx,cy] of cells) {
         const x = ox + cx * t, y = oy + cy * t;
         sc.fillStyle = col;
@@ -331,8 +331,8 @@
         sc.fillRect(x, y + t - 1, t, 1);
         sc.fillRect(x + t - 1, y, 1, t);
       }
-      // Kawaii eyes on cell (1,0)
-      const ex = ox + 1 * t, ey = oy;
+      // Kawaii eyes on cell (0,0)
+      const ex = ox, ey = oy;
       sc.fillStyle = sh;
       sc.fillRect(ex + 1, ey + 2, 3, 3);
       sc.fillRect(ex + 7, ey + 2, 3, 3);
