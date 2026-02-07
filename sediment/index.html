@@ -101,7 +101,7 @@ const canvas = document.getElementById('c');
 const ctx = canvas.getContext('2d');
 
 // ── Config ──
-const VERSION = 'v27';
+const VERSION = 'v28';
 const TILE = 12;
 const GRAVITY = 700;
 const JUMP_FORCE = -280;
@@ -997,7 +997,7 @@ canvas.addEventListener('touchend', (e) => {
                 const tapY = (t.clientY - rect.top) / rect.height * H;
                 const b = _skipBtnBounds;
                 if (tapX >= b.x && tapX <= b.x + b.w && tapY >= b.y && tapY <= b.y + b.h) {
-                    skipLevel();
+                    restartLevel();
                     return;
                 }
             }
@@ -1015,7 +1015,7 @@ document.addEventListener('keydown', (e) => {
     if (e.code === 'ArrowLeft' || e.code === 'KeyA') doRotateCCW();
     if (e.code === 'KeyR') hardReset();
     if (e.code === 'KeyP' || e.code === 'Escape') togglePause();
-    if (e.code === 'KeyN' && paused) skipLevel();
+    if (e.code === 'KeyN' && paused) restartLevel();
 });
 
 // Pause
@@ -1024,11 +1024,10 @@ function togglePause() {
     document.getElementById('pauseBtn').innerHTML = paused ? '&#9654;' : '&#9646;&#9646;';
 }
 
-function skipLevel() {
+function restartLevel() {
     if (!paused) return;
     paused = false;
     document.getElementById('pauseBtn').innerHTML = '&#9646;&#9646;';
-    currentLevel++;
     initLevel(currentLevel);
 }
 
@@ -1052,7 +1051,7 @@ canvas.addEventListener('click', (e) => {
         const clickY = (e.clientY - rect.top) / rect.height * H;
         const b = _skipBtnBounds;
         if (clickX >= b.x && clickX <= b.x + b.w && clickY >= b.y && clickY <= b.y + b.h) {
-            skipLevel();
+            restartLevel();
         }
     }
 });
@@ -1816,7 +1815,7 @@ function draw() {
         ctx.strokeRect(skipX, skipY - skipH/2, skipW, skipH);
         ctx.fillStyle = C.player;
         ctx.font = '7px monospace';
-        ctx.fillText('SKIP LEVEL', W/2, skipY + 3);
+        ctx.fillText('CLEAR LEVEL', W/2, skipY + 3);
 
         // Store button bounds for tap detection (in screen coords)
         _skipBtnBounds = { x: skipX, y: skipY - skipH/2, w: skipW, h: skipH };
