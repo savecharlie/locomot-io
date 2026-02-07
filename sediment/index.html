@@ -101,7 +101,7 @@ const canvas = document.getElementById('c');
 const ctx = canvas.getContext('2d');
 
 // ── Config ──
-const VERSION = 'v33';
+const VERSION = 'v34';
 const TILE = 12;
 const GRAVITY = 700;
 const JUMP_FORCE = -280;
@@ -790,10 +790,16 @@ function updateFallingGroup(dt) {
             if (landY >= 0 && landY < levelH) {
                 if (!corpseGrid[landY]) corpseGrid[landY] = [];
                 if (!(level[landY] && level[landY][cell.x] === 1)) {
-                    corpseGrid[landY][cell.x] = { mat: cell.mat, eyes: cell.eyes, age: 0 };
-                    // Neutralize spikes
-                    if (level[landY] && level[landY][cell.x] === 2) {
-                        level[landY][cell.x] = 0;
+                    if (cell.mat === 'spike') {
+                        // Spike material → becomes permanent terrain spike
+                        if (!level[landY]) level[landY] = [];
+                        level[landY][cell.x] = 2;
+                    } else {
+                        corpseGrid[landY][cell.x] = { mat: cell.mat, eyes: cell.eyes, age: 0 };
+                        // Non-spike corpses neutralize terrain spikes
+                        if (level[landY] && level[landY][cell.x] === 2) {
+                            level[landY][cell.x] = 0;
+                        }
                     }
                 }
             }
@@ -1389,14 +1395,6 @@ function update(dt) {
         }
     }
 
-    // SPIKE CORPSE: lethal on any contact — check all 4 directions
-    for (const dir of ['below', 'above', 'right', 'left']) {
-        if (checkAdjacentCorpse(player.x, player.y, player.shape, player.rotation, dir, 'spike')) {
-            die();
-            return;
-        }
-    }
-
     // Stuck detection — Monte Carlo look-ahead
     // Uses hitWallX from actual movement (not re-check) + escape simulation
     // If no escape route exists → die. If escape exists → wait forever (timing buzzsaws etc.)
@@ -1506,14 +1504,34 @@ function draw() {
                 ctx.fillRect(px, py + TILE - 1, TILE, 1);
                 ctx.fillRect(px + TILE - 1, py, 1, TILE);
             } else if (t === 2) {
+                // Directional spikes based on position
                 ctx.fillStyle = C.spike;
                 ctx.beginPath();
-                ctx.moveTo(px + 1, py + TILE);
-                ctx.lineTo(px + TILE/2, py + 2);
-                ctx.lineTo(px + TILE - 1, py + TILE);
-                ctx.fill();
-                ctx.fillStyle = '#F08060';
-                ctx.fillRect(px + TILE/2 - 0.5, py + 2, 1, 2);
+                if (y <= 1) {
+                    // Ceiling → point DOWN
+                    ctx.moveTo(px + 1, py);
+                    ctx.lineTo(px + TILE/2, py + TILE - 2);
+                    ctx.lineTo(px + TILE - 1, py);
+                    ctx.fill();
+                    ctx.fillStyle = '#F08060';
+                    ctx.fillRect(px + TILE/2 - 0.5, py + TILE - 4, 1, 2);
+                } else if (y >= levelH - 2) {
+                    // Floor → point UP
+                    ctx.moveTo(px + 1, py + TILE);
+                    ctx.lineTo(px + TILE/2, py + 2);
+                    ctx.lineTo(px + TILE - 1, py + TILE);
+                    ctx.fill();
+                    ctx.fillStyle = '#F08060';
+                    ctx.fillRect(px + TILE/2 - 0.5, py + 2, 1, 2);
+                } else {
+                    // Floating → point LEFT (toward player)
+                    ctx.moveTo(px + TILE, py + 1);
+                    ctx.lineTo(px + 2, py + TILE/2);
+                    ctx.lineTo(px + TILE, py + TILE - 1);
+                    ctx.fill();
+                    ctx.fillStyle = '#F08060';
+                    ctx.fillRect(px + 2, py + TILE/2 - 0.5, 2, 1);
+                }
             }
         }
     }
@@ -1540,30 +1558,8 @@ function draw() {
             ctx.fillRect(px, py + TILE - 1, TILE, 1);
             ctx.fillRect(px + TILE - 1, py, 1, TILE);
 
-            // Material decoration
-            if (block.mat === 'spike') {
-                // Spike corpse — draw directional triangle overlay
-                // Ceiling (y<=1): point down, Floor (y>=levelH-2): point up, Floating: point left
-                ctx.fillStyle = C.corpseSpikeHL;
-                ctx.beginPath();
-                if (y <= 1) {
-                    // Ceiling spike → point DOWN
-                    ctx.moveTo(px + 1, py);
-                    ctx.lineTo(px + TILE/2, py + TILE - 2);
-                    ctx.lineTo(px + TILE - 1, py);
-                } else if (y >= levelH - 2) {
-                    // Floor spike → point UP
-                    ctx.moveTo(px + 1, py + TILE);
-                    ctx.lineTo(px + TILE/2, py + 2);
-                    ctx.lineTo(px + TILE - 1, py + TILE);
-                } else {
-                    // Floating spike → point LEFT (toward player)
-                    ctx.moveTo(px + TILE, py + 1);
-                    ctx.lineTo(px + 2, py + TILE/2);
-                    ctx.lineTo(px + TILE, py + TILE - 1);
-                }
-                ctx.fill();
-            } else if (block.mat === 'spring') {
+            // Material decoration (spike material becomes terrain, never a corpse block)
+            if (block.mat === 'spring') {
                 ctx.fillStyle = C.springDark;
                 for (let i = 0; i < 3; i++) {
                     ctx.fillRect(px + 2 + i * 3, py + 4, 1, 5);
@@ -1577,8 +1573,8 @@ function draw() {
                 ctx.fill();
             }
 
-            // Dead eyes (not on spike corpses — they're just pointy death)
-            if (block.eyes && block.mat !== 'spike') {
+            // Dead eyes
+            if (block.eyes) {
                 ctx.fillStyle = matDark(block.mat);
                 ctx.fillRect(px + 3, py + 2, 2, 2);
                 ctx.fillRect(px + 7, py + 2, 2, 2);
