@@ -101,7 +101,7 @@ const canvas = document.getElementById('c');
 const ctx = canvas.getContext('2d');
 
 // ── Config ──
-const VERSION = 'v40';
+const VERSION = 'v41';
 const TILE = 12;
 const GRAVITY = 700;
 const JUMP_FORCE = -280;
@@ -1543,16 +1543,21 @@ function update(dt) {
         return;
     }
 
-    // Buzzsaw collision
-    const pcx = player.x + getShapeCenterX(player.shape, player.rotation);
-    const pcy = player.y + getShapeCenterY(player.shape, player.rotation);
+    // Buzzsaw collision — circle vs each cell rect
+    const sawCells = getCells(player.shape, player.rotation);
     for (const saw of buzzsaws) {
-        const ddx = pcx - saw.x;
-        const ddy = pcy - saw.y;
-        const dist = Math.sqrt(ddx * ddx + ddy * ddy);
-        if (dist < saw.r + 6) {
-            die();
-            return;
+        for (const [cx, cy] of sawCells) {
+            const cellX = player.x + cx * TILE;
+            const cellY = player.y + cy * TILE;
+            // Nearest point on cell rect to saw center
+            const nearX = Math.max(cellX, Math.min(saw.x, cellX + TILE));
+            const nearY = Math.max(cellY, Math.min(saw.y, cellY + TILE));
+            const ddx = nearX - saw.x;
+            const ddy = nearY - saw.y;
+            if (ddx * ddx + ddy * ddy < saw.r * saw.r) {
+                die();
+                return;
+            }
         }
     }
 
