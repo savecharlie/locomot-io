@@ -101,7 +101,7 @@ const canvas = document.getElementById('c');
 const ctx = canvas.getContext('2d');
 
 // ── Config ──
-const VERSION = 'v41';
+const VERSION = 'v42';
 const TILE = 12;
 const GRAVITY = 700;
 const JUMP_FORCE = -280;
@@ -310,7 +310,7 @@ let particles = [];
 let buzzsaws = [];
 let movingPlatforms = [];
 let fallingGroup = null; // {cells: [{x,y,mat,eyes}], drop:0, targetDrop:N, fallSpeed:0}
-let clearingRows = [];  // rows currently flashing before clear
+let pendingClears = []; // {cells:[{x,y}], timer:0.35} — flash before delete
 
 // ── Level system ──
 let currentLevel = 1;
@@ -678,7 +678,7 @@ function initLevel(lvl) {
     buzzsaws = [];
     movingPlatforms = [];
     fallingGroup = null;
-    clearingRows = [];
+    pendingClears = [];
     levelComplete = false;
     levelTransitionTimer = 0;
     levelDeaths = 0;
@@ -932,46 +932,56 @@ function checkRowClears() {
         }
     }
 
-    if (cleared) {
-        applyCorpseGravity();
-    }
+    // Gravity now applied when pendingClears timers expire
 }
 
 function clearColumn(x) {
-    // Flash effect
-    cam.shake = Math.max(cam.shake, 8);
-    flash.a = 0.8; flash.r = 1; flash.g = 0.94; flash.b = 0.82;
-
-    // Particles along the column + remove corpse blocks
+    const cells = [];
     for (let y = 0; y < levelH; y++) {
         if (corpseGrid[y] && corpseGrid[y][x]) {
-            const block = corpseGrid[y][x];
-            spawnP(x * TILE + TILE/2, y * TILE + TILE/2, matColor(block.mat), 2, 60, 0.3);
-            corpseGrid[y][x] = null; // remove corpse block — terrain stays
+            cells.push({ x, y });
+            corpseGrid[y][x].clearing = true;
         }
     }
-
-    // Big burst in the center of the column
-    spawnP(x * TILE + TILE/2, (levelH / 2) * TILE, C.player, 10, 100, 0.5);
+    if (cells.length) pendingClears.push({ cells, timer: 0.35 });
 }
 
 function clearRowSegment(y, startX, endX) {
-    // Flash effect
-    cam.shake = Math.max(cam.shake, 8);
-    flash.a = 0.8; flash.r = 1; flash.g = 0.94; flash.b = 0.82;
-
-    // Clear the consecutive run (+ any spike blocks within it)
+    const cells = [];
     for (let x = startX; x <= endX; x++) {
         if (corpseGrid[y] && corpseGrid[y][x]) {
-            const block = corpseGrid[y][x];
-            spawnP(x * TILE + TILE/2, y * TILE + TILE/2, matColor(block.mat), 2, 60, 0.3);
-            corpseGrid[y][x] = null;
+            cells.push({ x, y });
+            corpseGrid[y][x].clearing = true;
         }
     }
+    if (cells.length) pendingClears.push({ cells, timer: 0.35 });
+}
 
-    // Big burst in the center of the segment
-    const centerX = ((startX + endX) / 2) * TILE + TILE/2;
-    spawnP(centerX, y * TILE + TILE/2, C.player, 10, 100, 0.5);
+function updatePendingClears(dt) {
+    for (let i = pendingClears.length - 1; i >= 0; i--) {
+        const pc = pendingClears[i];
+        pc.timer -= dt;
+        if (pc.timer <= 0) {
+            // Actually delete + particles
+            cam.shake = Math.max(cam.shake, 8);
+            flash.a = 0.6; flash.r = 1; flash.g = 0.94; flash.b = 0.82;
+            for (const c of pc.cells) {
+                if (corpseGrid[c.y] && corpseGrid[c.y][c.x]) {
+                    const block = corpseGrid[c.y][c.x];
+                    spawnP(c.x * TILE + TILE/2, c.y * TILE + TILE/2, matColor(block.mat), 3, 80, 0.4);
+                    corpseGrid[c.y][c.x] = null;
+                }
+            }
+            // Big burst at center of group
+            let cx = 0, cy = 0;
+            for (const c of pc.cells) { cx += c.x; cy += c.y; }
+            cx = (cx / pc.cells.length) * TILE + TILE/2;
+            cy = (cy / pc.cells.length) * TILE + TILE/2;
+            spawnP(cx, cy, C.player, 10, 100, 0.5);
+            pendingClears.splice(i, 1);
+            applyCorpseGravity();
+        }
+    }
 }
 
 function applyCorpseGravity() {
@@ -1254,6 +1264,9 @@ function update(dt) {
 
     // Falling group
     updateFallingGroup(dt);
+
+    // Clear animations
+    updatePendingClears(dt);
 
     // Camera — use bounding box center of shape
     const shapeCX = player.x + getShapeCenterX(player.shape, player.rotation);
@@ -1663,6 +1676,14 @@ function draw() {
             block.age = Math.min(1, (block.age || 0) + 0.02);
 
             ctx.globalAlpha = block.age;
+            // Clearing flash — blink white
+            if (block.clearing) {
+                const blink = Math.sin(performance.now() / 40) > 0;
+                ctx.fillStyle = blink ? '#FFFFF0' : matColor(block.mat);
+                ctx.fillRect(px, py, TILE, TILE);
+                ctx.globalAlpha = 1;
+                continue;
+            }
             // Block body
             ctx.fillStyle = matColor(block.mat);
             ctx.fillRect(px, py, TILE, TILE);
