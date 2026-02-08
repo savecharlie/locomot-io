@@ -30,9 +30,9 @@ export async function onRequestGet(context) {
             date_leq: "${untilStr}"
           }
           limit: 50
-          orderBy: [count_DESC]
+          orderBy: [sum_visits_DESC]
         ) {
-          count
+          sum { visits }
           dimensions {
             clientRequestPath
           }
@@ -63,7 +63,7 @@ export async function onRequestGet(context) {
     const counts = {};
     for (const g of groups) {
       const path = g.dimensions.clientRequestPath;
-      const count = g.count;
+      const count = g.sum.visits;
 
       // Normalize: /sediment/ and /sediment/index.html both count for sediment
       // Match game paths from homepage hrefs
