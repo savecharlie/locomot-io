@@ -2560,6 +2560,22 @@ function draw() {
         }
     }
 
+    // Golden tint overlay during quake invincibility (drawn ON TOP of player)
+    if (!player.dead && player.quakeTimer > 0) {
+        const cells = getCells(player.shape, player.rotation);
+        const pulse = 0.3 + 0.25 * Math.sin(performance.now() / 100);
+        const expiring = player.quakeTimer < 1.0;
+        const tint = expiring ? (Math.sin(performance.now() / 50) > 0 ? pulse : 0.05) : pulse;
+        ctx.globalAlpha = tint;
+        ctx.fillStyle = '#FFD040'; // bright gold tint
+        for (const [cx, cy] of cells) {
+            const px = player.x + cx * TILE;
+            const py = player.y + cy * TILE;
+            ctx.fillRect(px, py, TILE, TILE);
+        }
+        ctx.globalAlpha = 1;
+    }
+
     // Particles
     for (const p of particles) {
         ctx.globalAlpha = p.life / p.maxLife;
