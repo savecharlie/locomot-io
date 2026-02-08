@@ -102,7 +102,7 @@ const canvas = document.getElementById('c');
 const ctx = canvas.getContext('2d');
 
 // ── Config ──
-const VERSION = 'v44';
+const VERSION = 'v45';
 const TILE = 12;
 const GRAVITY = 700;
 const JUMP_FORCE = -280;
@@ -159,6 +159,268 @@ function matDark(mat) {
     if (mat === 'booster') return C.boosterDark;
     if (mat === 'spike') return C.corpseSpikeDark;
     return C.solidSH;
+}
+
+// ══════════════════════════════════════
+// ── SOUND EFFECTS (procedural Web Audio) ──
+// ══════════════════════════════════════
+
+let audioCtx = null;
+function ensureAudio() {
+    if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    if (audioCtx.state === 'suspended') audioCtx.resume();
+    return audioCtx;
+}
+
+const SFX = {
+    jump() {
+        const ctx = ensureAudio();
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.connect(gain); gain.connect(ctx.destination);
+        osc.type = 'square';
+        osc.frequency.setValueAtTime(280, ctx.currentTime);
+        osc.frequency.exponentialRampToValueAtTime(560, ctx.currentTime + 0.08);
+        gain.gain.setValueAtTime(0.12, ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.1);
+        osc.start(ctx.currentTime);
+        osc.stop(ctx.currentTime + 0.1);
+    },
+    doubleJump() {
+        const ctx = ensureAudio();
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.connect(gain); gain.connect(ctx.destination);
+        osc.type = 'square';
+        osc.frequency.setValueAtTime(400, ctx.currentTime);
+        osc.frequency.exponentialRampToValueAtTime(800, ctx.currentTime + 0.07);
+        gain.gain.setValueAtTime(0.1, ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.09);
+        osc.start(ctx.currentTime);
+        osc.stop(ctx.currentTime + 0.09);
+    },
+    death() {
+        const ctx = ensureAudio();
+        // Low thud
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.connect(gain); gain.connect(ctx.destination);
+        osc.type = 'sawtooth';
+        osc.frequency.setValueAtTime(150, ctx.currentTime);
+        osc.frequency.exponentialRampToValueAtTime(40, ctx.currentTime + 0.2);
+        gain.gain.setValueAtTime(0.15, ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.25);
+        osc.start(ctx.currentTime);
+        osc.stop(ctx.currentTime + 0.25);
+        // Noise burst
+        const buf = ctx.createBuffer(1, ctx.sampleRate * 0.1, ctx.sampleRate);
+        const data = buf.getChannelData(0);
+        for (let i = 0; i < data.length; i++) data[i] = (Math.random() * 2 - 1) * (1 - i / data.length);
+        const noise = ctx.createBufferSource();
+        noise.buffer = buf;
+        const ng = ctx.createGain();
+        noise.connect(ng); ng.connect(ctx.destination);
+        ng.gain.setValueAtTime(0.08, ctx.currentTime);
+        ng.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.1);
+        noise.start(ctx.currentTime);
+    },
+    spring() {
+        const ctx = ensureAudio();
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.connect(gain); gain.connect(ctx.destination);
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(220, ctx.currentTime);
+        osc.frequency.exponentialRampToValueAtTime(880, ctx.currentTime + 0.12);
+        osc.frequency.exponentialRampToValueAtTime(660, ctx.currentTime + 0.2);
+        gain.gain.setValueAtTime(0.15, ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.25);
+        osc.start(ctx.currentTime);
+        osc.stop(ctx.currentTime + 0.25);
+    },
+    booster() {
+        const ctx = ensureAudio();
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.connect(gain); gain.connect(ctx.destination);
+        osc.type = 'sawtooth';
+        osc.frequency.setValueAtTime(200, ctx.currentTime);
+        osc.frequency.exponentialRampToValueAtTime(600, ctx.currentTime + 0.15);
+        gain.gain.setValueAtTime(0.1, ctx.currentTime);
+        gain.gain.linearRampToValueAtTime(0.12, ctx.currentTime + 0.05);
+        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.2);
+        osc.start(ctx.currentTime);
+        osc.stop(ctx.currentTime + 0.2);
+    },
+    crunch() {
+        const ctx = ensureAudio();
+        // Satisfying chunky clear — layered
+        // Bass hit
+        const osc1 = ctx.createOscillator();
+        const g1 = ctx.createGain();
+        osc1.connect(g1); g1.connect(ctx.destination);
+        osc1.type = 'square';
+        osc1.frequency.setValueAtTime(120, ctx.currentTime);
+        osc1.frequency.exponentialRampToValueAtTime(60, ctx.currentTime + 0.15);
+        g1.gain.setValueAtTime(0.12, ctx.currentTime);
+        g1.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.2);
+        osc1.start(ctx.currentTime);
+        osc1.stop(ctx.currentTime + 0.2);
+        // High sparkle
+        const osc2 = ctx.createOscillator();
+        const g2 = ctx.createGain();
+        osc2.connect(g2); g2.connect(ctx.destination);
+        osc2.type = 'sine';
+        osc2.frequency.setValueAtTime(800, ctx.currentTime + 0.05);
+        osc2.frequency.exponentialRampToValueAtTime(1200, ctx.currentTime + 0.15);
+        g2.gain.setValueAtTime(0.001, ctx.currentTime);
+        g2.gain.linearRampToValueAtTime(0.08, ctx.currentTime + 0.05);
+        g2.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.25);
+        osc2.start(ctx.currentTime);
+        osc2.stop(ctx.currentTime + 0.25);
+        // Noise crunch
+        const buf = ctx.createBuffer(1, ctx.sampleRate * 0.08, ctx.sampleRate);
+        const data = buf.getChannelData(0);
+        for (let i = 0; i < data.length; i++) data[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / data.length, 2);
+        const noise = ctx.createBufferSource();
+        noise.buffer = buf;
+        const ng = ctx.createGain();
+        noise.connect(ng); ng.connect(ctx.destination);
+        ng.gain.setValueAtTime(0.1, ctx.currentTime);
+        ng.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.08);
+        noise.start(ctx.currentTime);
+    },
+    levelComplete() {
+        const ctx = ensureAudio();
+        // Short fanfare — ascending arpeggio
+        const notes = [523, 659, 784, 1047]; // C5 E5 G5 C6
+        notes.forEach((freq, i) => {
+            const osc = ctx.createOscillator();
+            const gain = ctx.createGain();
+            osc.connect(gain); gain.connect(ctx.destination);
+            osc.type = 'square';
+            const t = ctx.currentTime + i * 0.1;
+            osc.frequency.setValueAtTime(freq, t);
+            gain.gain.setValueAtTime(0.001, ctx.currentTime);
+            gain.gain.linearRampToValueAtTime(0.1, t);
+            gain.gain.setValueAtTime(0.1, t);
+            gain.gain.exponentialRampToValueAtTime(0.001, t + 0.2);
+            osc.start(t);
+            osc.stop(t + 0.2);
+        });
+        // Final chord
+        [1047, 1319, 1568].forEach(freq => {
+            const osc = ctx.createOscillator();
+            const gain = ctx.createGain();
+            osc.connect(gain); gain.connect(ctx.destination);
+            osc.type = 'sine';
+            const t = ctx.currentTime + 0.4;
+            osc.frequency.setValueAtTime(freq, t);
+            gain.gain.setValueAtTime(0.001, ctx.currentTime);
+            gain.gain.linearRampToValueAtTime(0.06, t);
+            gain.gain.setValueAtTime(0.06, t);
+            gain.gain.exponentialRampToValueAtTime(0.001, t + 0.5);
+            osc.start(t);
+            osc.stop(t + 0.5);
+        });
+    },
+    wallSlide() {
+        const ctx = ensureAudio();
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.connect(gain); gain.connect(ctx.destination);
+        osc.type = 'triangle';
+        osc.frequency.setValueAtTime(100 + Math.random() * 50, ctx.currentTime);
+        gain.gain.setValueAtTime(0.03, ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.05);
+        osc.start(ctx.currentTime);
+        osc.stop(ctx.currentTime + 0.05);
+    },
+    rotate() {
+        const ctx = ensureAudio();
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.connect(gain); gain.connect(ctx.destination);
+        osc.type = 'square';
+        osc.frequency.setValueAtTime(440, ctx.currentTime);
+        osc.frequency.setValueAtTime(520, ctx.currentTime + 0.03);
+        gain.gain.setValueAtTime(0.06, ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.06);
+        osc.start(ctx.currentTime);
+        osc.stop(ctx.currentTime + 0.06);
+    },
+    land() {
+        const ctx = ensureAudio();
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.connect(gain); gain.connect(ctx.destination);
+        osc.type = 'triangle';
+        osc.frequency.setValueAtTime(160, ctx.currentTime);
+        osc.frequency.exponentialRampToValueAtTime(80, ctx.currentTime + 0.06);
+        gain.gain.setValueAtTime(0.08, ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.08);
+        osc.start(ctx.currentTime);
+        osc.stop(ctx.currentTime + 0.08);
+    },
+    win() {
+        const ctx = ensureAudio();
+        // Triumphant fanfare for beating the game
+        const melody = [523, 659, 784, 1047, 1319, 1568, 2093];
+        melody.forEach((freq, i) => {
+            const osc = ctx.createOscillator();
+            const gain = ctx.createGain();
+            osc.connect(gain); gain.connect(ctx.destination);
+            osc.type = i < 4 ? 'square' : 'sine';
+            const t = ctx.currentTime + i * 0.12;
+            osc.frequency.setValueAtTime(freq, t);
+            gain.gain.setValueAtTime(0.001, ctx.currentTime);
+            gain.gain.linearRampToValueAtTime(0.1, t);
+            gain.gain.setValueAtTime(0.1, t);
+            gain.gain.exponentialRampToValueAtTime(0.001, t + 0.3);
+            osc.start(t);
+            osc.stop(t + 0.3);
+        });
+    }
+};
+
+// ══════════════════════════════════════
+// ── SAVE / LOAD (localStorage) ──
+// ══════════════════════════════════════
+
+const SAVE_KEY = 'sediment_save';
+
+function saveProgress() {
+    try {
+        const data = {
+            highestLevel: player._highestLevel || currentLevel,
+            totalDeaths: player._totalDeaths || 0,
+            totalCrunches: player._totalCrunches || 0,
+            bestRun: player._bestRun || 0,
+            hasWon: player._hasWon || false
+        };
+        localStorage.setItem(SAVE_KEY, JSON.stringify(data));
+    } catch (e) { /* localStorage may be blocked */ }
+}
+
+function loadProgress() {
+    try {
+        const raw = localStorage.getItem(SAVE_KEY);
+        if (raw) {
+            const data = JSON.parse(raw);
+            player._highestLevel = data.highestLevel || 1;
+            player._totalDeaths = data.totalDeaths || 0;
+            player._totalCrunches = data.totalCrunches || 0;
+            player._bestRun = data.bestRun || 0;
+            player._hasWon = data.hasWon || false;
+            return data;
+        }
+    } catch (e) {}
+    player._highestLevel = 1;
+    player._totalDeaths = 0;
+    player._totalCrunches = 0;
+    player._bestRun = 0;
+    player._hasWon = false;
+    return null;
 }
 
 // ── Game resolution ──
@@ -312,6 +574,12 @@ let buzzsaws = [];
 let movingPlatforms = [];
 let fallingGroup = null; // {cells: [{x,y,mat,eyes}], drop:0, targetDrop:N, fallSpeed:0}
 let pendingClears = []; // {cells:[{x,y}], timer:0.35} — flash before delete
+let timeSlowTimer = 0; // brief time-slow for crunch juice
+let encounterLabels = []; // [{text, x, y, color, timer}] — first-encounter pop-ups
+
+function encounterLabel(text, x, y, color) {
+    encounterLabels.push({ text, x, y, color, timer: 1.5 });
+}
 
 // ── Level system ──
 let currentLevel = 1;
@@ -322,6 +590,9 @@ let levelComplete = false;
 let levelTransitionTimer = 0;
 let levelTitleTimer = 0;
 let goalX = 0; // pixel X of the finish line
+let gameWon = false;
+let winTimer = 0;
+let winParticleTimer = 0;
 
 function getLevelDifficulty(lvl) {
     return Math.min(10, 1 + (lvl - 1) * 0.82);
@@ -739,6 +1010,7 @@ function initLevel(lvl) {
 }
 
 function init() {
+    loadProgress();
     currentLevel = 1;
     initLevel(currentLevel);
 }
@@ -749,9 +1021,13 @@ function hardReset() {
     player.crunchCount = 0;
     player.deathsErased = 0;
     player.bestDistance = 0;
+    player._hitSpring = false;
+    player._hitBooster = false;
     shapeBag = [];
     currentLevel = 1;
     tutorialComplete = false;
+    gameWon = false;
+    encounterLabels = [];
     init();
 }
 
@@ -778,9 +1054,11 @@ function die() {
     player.deathTimer = 0;
     player.deathCount++;
     levelDeaths++;
+    player._totalDeaths = (player._totalDeaths || 0) + 1;
 
     cam.shake = Math.max(cam.shake, 6);
     flash.a = 0.6; flash.r = 0.91; flash.g = 0.66; flash.b = 0.22;
+    SFX.death();
 
     const cells = getCells(player.shape, player.rotation);
     const cx = player.x + getShapeCenterX(player.shape, player.rotation);
@@ -949,6 +1227,9 @@ function checkRowClears() {
 function onCrunch() {
     player.crunchCount++;
     levelCrunches++;
+    player._totalCrunches = (player._totalCrunches || 0) + 1;
+    SFX.crunch();
+    timeSlowTimer = 0.3; // brief time-slow for juice
     // Each crunch erases half your current net deaths (rounded up)
     const netDeaths = Math.max(0, player.deathCount - player.deathsErased);
     const eraseAmount = Math.ceil(netDeaths / 2);
@@ -1007,12 +1288,14 @@ function updatePendingClears(dt) {
                     corpseGrid[c.y][c.x] = null;
                 }
             }
-            // Big burst at center of group
+            // Big burst at center of group — extra juice
             let cx = 0, cy = 0;
             for (const c of pc.cells) { cx += c.x; cy += c.y; }
             cx = (cx / pc.cells.length) * TILE + TILE/2;
             cy = (cy / pc.cells.length) * TILE + TILE/2;
-            spawnP(cx, cy, C.player, 10, 100, 0.5);
+            spawnP(cx, cy, C.player, 20, 140, 0.6);
+            spawnP(cx, cy, '#FFF0D0', 8, 100, 0.4);
+            spawnP(cx, cy, C.spring, 5, 80, 0.3);
             pendingClears.splice(i, 1);
             applyCorpseGravity();
         }
@@ -1081,6 +1364,7 @@ function tryRotate(dir) {
             const cx = player.x + getShapeCenterX(player.shape, player.rotation);
             const cy = player.y + getShapeCenterY(player.shape, player.rotation);
             spawnP(cx, cy, matColor(player.material), 3, 20, 0.1);
+            SFX.rotate();
             return true;
         }
     }
@@ -1126,6 +1410,24 @@ let touchStartTime = 0;
 let touchHandled = false;
 const SWIPE_THRESHOLD = 25; // pixels
 
+// Input method detection — desktop vs touch
+let isTouch = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0);
+let lastInputWasTouch = isTouch;
+
+function ctrlHint(action) {
+    if (lastInputWasTouch) {
+        if (action === 'jump') return 'tap = jump';
+        if (action === 'die') return 'swipe \u2193 = die';
+        if (action === 'rotate') return 'swipe \u2190\u2192 = rotate';
+        return 'tap=jump  swipe \u2193=die  swipe \u2190\u2192=rotate';
+    } else {
+        if (action === 'jump') return 'SPACE / W = jump';
+        if (action === 'die') return 'X / S = die';
+        if (action === 'rotate') return 'A / D = rotate';
+        return 'SPACE=jump  X=die  A/D=rotate';
+    }
+}
+
 function doJump() {
     if (!started) { started = true; return; }
     if (tutorialStep === 0) tutorialStep = 1;
@@ -1156,6 +1458,7 @@ function doRotateCCW() {
 // Touch input — tap=jump, swipe down=die, swipe left/right=rotate
 canvas.addEventListener('touchstart', (e) => {
     e.preventDefault();
+    lastInputWasTouch = true;
     const t = e.changedTouches[0];
     touchStartX = t.clientX;
     touchStartY = t.clientY;
@@ -1206,6 +1509,7 @@ canvas.addEventListener('touchend', (e) => {
 // Keyboard
 document.addEventListener('keydown', (e) => {
     if (e.repeat) return;
+    lastInputWasTouch = false;
     if (e.code === 'Space' || e.code === 'ArrowUp' || e.code === 'KeyW') doJump();
     if (e.code === 'ArrowDown' || e.code === 'KeyS' || e.code === 'KeyX') doDie();
     if (e.code === 'ArrowRight' || e.code === 'KeyD') doRotateCW();
@@ -1262,6 +1566,47 @@ let lastTime = 0;
 function update(dt) {
     if (paused || !started) return;
 
+    // Win screen — just tick timer and spawn celebration particles
+    if (gameWon) {
+        winTimer += dt;
+        winParticleTimer -= dt;
+        if (winParticleTimer <= 0) {
+            winParticleTimer = 0.15;
+            const px = Math.random() * W;
+            const py = H * 0.3 + Math.random() * H * 0.2;
+            const colors = [C.player, C.spring, C.booster, '#FFF0D0', '#FFD080'];
+            spawnP(px + cam.x, py + cam.y, colors[Math.floor(Math.random() * colors.length)], 3, 50, 0.8);
+        }
+        // Allow tap/key to continue to endless mode
+        if (winTimer > 2 && jumpBuffered) {
+            jumpBuffered = false;
+            gameWon = false;
+            currentLevel = 13;
+            initLevel(currentLevel);
+        }
+        // Keep particles alive
+        for (let i = particles.length - 1; i >= 0; i--) {
+            const p = particles[i];
+            p.x += p.vx * dt; p.y += p.vy * dt;
+            p.vy += 60 * dt; p.life -= dt;
+            if (p.life <= 0) particles.splice(i, 1);
+        }
+        return;
+    }
+
+    // Time-slow effect (crunch juice)
+    if (timeSlowTimer > 0) {
+        timeSlowTimer -= dt;
+        dt *= 0.3; // slow everything to 30% speed
+    }
+
+    // Update encounter labels
+    for (let i = encounterLabels.length - 1; i >= 0; i--) {
+        encounterLabels[i].timer -= dt;
+        encounterLabels[i].y -= 20 * dt; // float upward
+        if (encounterLabels[i].timer <= 0) encounterLabels.splice(i, 1);
+    }
+
     if (levelTitleTimer > 0) levelTitleTimer -= dt;
 
     // Level complete — freeze gameplay, count down to next level
@@ -1277,7 +1622,23 @@ function update(dt) {
         if (flash.a > 0) flash.a -= dt * 2; // slower flash fade
         if (cam.shake > 0) { cam.sx = (Math.random()*2-1)*cam.shake; cam.sy = (Math.random()*2-1)*cam.shake; cam.shake *= (1-6*dt); if (cam.shake < 0.3) cam.shake = 0; }
         if (levelTransitionTimer <= 0) {
+            if (currentLevel >= 12 && !player._hasWon) {
+                // BEAT THE GAME!
+                player._hasWon = true;
+                player._highestLevel = Math.max(player._highestLevel || 1, 13);
+                player._bestRun = Math.max(player._bestRun || 0, 12);
+                saveProgress();
+                gameWon = true;
+                winTimer = 0;
+                winParticleTimer = 0;
+                return;
+            }
             currentLevel++;
+            if (currentLevel > (player._highestLevel || 1)) {
+                player._highestLevel = currentLevel;
+            }
+            player._bestRun = Math.max(player._bestRun || 0, currentLevel - 1);
+            saveProgress();
             initLevel(currentLevel);
         }
         return;
@@ -1394,6 +1755,7 @@ function update(dt) {
             player.squash = 1.3;
             const bounds = shapeBounds(player.shape, player.rotation);
             spawnP(player.x + (bounds.maxC + 1) * TILE, player.y + bounds.h * TILE / 2, C.tile, 4, 40, 0.2);
+            SFX.jump();
         } else if (player.onGround || player.coyoteTimer > 0) {
             player.vy = JUMP_FORCE;
             player.onGround = false;
@@ -1403,6 +1765,7 @@ function update(dt) {
             const cx = player.x + getShapeCenterX(player.shape, player.rotation);
             const bounds = shapeBounds(player.shape, player.rotation);
             spawnP(cx, player.y + (bounds.maxR + 1) * TILE, C.player, 3, 25, 0.15);
+            SFX.jump();
         } else if (player.jumpsLeft > 0) {
             player.vy = JUMP_FORCE * 0.7;
             player.jumpsLeft = 0;
@@ -1410,6 +1773,7 @@ function update(dt) {
             const cx = player.x + getShapeCenterX(player.shape, player.rotation);
             const bounds = shapeBounds(player.shape, player.rotation);
             spawnP(cx, player.y + (bounds.maxR + 1) * TILE, 'rgba(232,168,56,0.5)', 4, 35, 0.2);
+            SFX.doubleJump();
         }
     }
 
@@ -1448,6 +1812,8 @@ function update(dt) {
                 player.squash = 1.5;
                 cam.shake = Math.max(cam.shake, 4);
                 spawnP(bh.tx * TILE + TILE/2, bh.ty * TILE + TILE/2, C.booster, 7, 70, 0.3);
+                SFX.booster();
+                if (!player._hitBooster) { player._hitBooster = true; encounterLabel('BOOST!', bh.tx * TILE + TILE/2, bh.ty * TILE + TILE/2, C.booster); }
             }
         }
     }
@@ -1473,6 +1839,7 @@ function update(dt) {
                         const bounds = shapeBounds(player.shape, player.rotation);
                         spawnP(cx, player.y + (bounds.maxR + 1) * TILE, C.player, 3, 30, 0.2);
                         if (player.vy > 250) cam.shake = Math.max(cam.shake, 2);
+                        SFX.land();
                     }
                 } else {
                     hitCeiling = true;
@@ -1496,6 +1863,8 @@ function update(dt) {
             player.squash = 1.4;
             cam.shake = Math.max(cam.shake, 3);
             spawnP(sh.tx * TILE + TILE/2, sh.ty * TILE, C.spring, 5, 60, 0.3);
+            SFX.spring();
+            if (!player._hitSpring) { player._hitSpring = true; encounterLabel('BOUNCE!', sh.tx * TILE + TILE/2, sh.ty * TILE, C.spring); }
         }
     }
 
@@ -1507,6 +1876,7 @@ function update(dt) {
             player.squash = 0.7;
             cam.shake = Math.max(cam.shake, 2);
             spawnP(sh.tx * TILE + TILE/2, (sh.ty + 1) * TILE, C.spring, 4, 50, 0.25);
+            SFX.spring();
         }
     }
 
@@ -1525,6 +1895,8 @@ function update(dt) {
                 player.squash = 1.5;
                 cam.shake = Math.max(cam.shake, 4);
                 spawnP(bh.tx * TILE + TILE/2, bh.ty * TILE + TILE/2, C.booster, 7, 70, 0.3);
+                SFX.booster();
+                if (!player._hitBooster) { player._hitBooster = true; encounterLabel('BOOST!', bh.tx * TILE + TILE/2, bh.ty * TILE + TILE/2, C.booster); }
             }
         }
     }
@@ -1626,6 +1998,11 @@ function update(dt) {
         const cy = player.y + getShapeCenterY(player.shape, player.rotation);
         spawnP(cx, cy, C.player, 30, 120, 0.6);
         spawnP(cx, cy, '#FFF0D0', 20, 80, 0.5);
+        if (currentLevel >= 12) {
+            SFX.win();
+        } else {
+            SFX.levelComplete();
+        }
     }
 }
 
@@ -2016,6 +2393,19 @@ function draw() {
     }
     ctx.globalAlpha = 1;
 
+    // First-encounter labels
+    for (const lbl of encounterLabels) {
+        const fade = Math.min(1, lbl.timer * 2);
+        const scale = 1 + (1.5 - lbl.timer) * 0.3;
+        ctx.globalAlpha = fade;
+        ctx.fillStyle = lbl.color;
+        ctx.font = `bold ${Math.round(8 * scale)}px monospace`;
+        ctx.textAlign = 'center';
+        ctx.fillText(lbl.text, lbl.x, lbl.y);
+        ctx.textAlign = 'left';
+    }
+    ctx.globalAlpha = 1;
+
     ctx.restore();
 
     // ── HUD ──
@@ -2084,9 +2474,9 @@ function draw() {
         ctx.fillStyle = C.player;
         ctx.font = '8px monospace';
         ctx.textAlign = 'center';
-        if (tutorialStep === 0) ctx.fillText('jump to move', W/2, H/2 + 8);
-        else if (tutorialStep === 1) ctx.fillText('swipe \u2190 \u2192 to rotate', W/2, H/2 + 8);
-        else if (tutorialStep === 2) ctx.fillText('swipe \u2193 to place', W/2, H/2 + 8);
+        if (tutorialStep === 0) ctx.fillText(lastInputWasTouch ? 'tap to jump' : 'SPACE to jump', W/2, H/2 + 8);
+        else if (tutorialStep === 1) ctx.fillText(lastInputWasTouch ? 'swipe \u2190 \u2192 to rotate' : 'A / D to rotate', W/2, H/2 + 8);
+        else if (tutorialStep === 2) ctx.fillText(lastInputWasTouch ? 'swipe \u2193 to place' : 'X to place', W/2, H/2 + 8);
         ctx.textAlign = 'left';
         ctx.globalAlpha = 1;
     } else if (player.deathCount < 3 && started) {
@@ -2094,7 +2484,7 @@ function draw() {
         ctx.fillStyle = 'rgba(216,208,192,0.35)';
         ctx.font = '6px monospace';
         ctx.textAlign = 'center';
-        ctx.fillText('tap=jump  swipe \u2193=die  swipe \u2190\u2192=rotate', W/2, H - 6);
+        ctx.fillText(ctrlHint('all'), W/2, H - 6);
         ctx.textAlign = 'left';
         ctx.globalAlpha = 1;
     }
@@ -2120,11 +2510,49 @@ function draw() {
         ctx.fillText('you are the tetris piece', W/2, H/2 - 12);
         ctx.fillStyle = C.text;
         ctx.font = '7px monospace';
-        ctx.fillText('tap to start', W/2, H/2 + 10);
+        ctx.fillText(lastInputWasTouch ? 'tap to start' : 'press any key', W/2, H/2 + 10);
         ctx.fillStyle = 'rgba(216,208,192,0.3)';
         ctx.font = '6px monospace';
-        ctx.fillText('tap=jump  swipe \u2193=die  swipe \u2190\u2192=rotate', W/2, H/2 + 24);
-        ctx.fillStyle = 'rgba(208,204,196,0.2)';
+        ctx.fillText(ctrlHint('all'), W/2, H/2 + 24);
+
+        // Animated kawaii T-piece running across
+        const runT = performance.now() / 1000;
+        const runX = ((runT * 40) % (W + 60)) - 30;
+        const runY = H/2 + 42;
+        const bounce = Math.abs(Math.sin(runT * 8)) * 4;
+        const tileS = 6; // mini tile size
+        const tCells = [[0,0],[1,0],[2,0],[1,1]]; // T-piece
+        ctx.globalAlpha = 0.5;
+        for (let i = 0; i < tCells.length; i++) {
+            const [cx, cy] = tCells[i];
+            const px = runX + cx * tileS;
+            const py = runY - bounce + cy * tileS;
+            ctx.fillStyle = C.solid;
+            ctx.fillRect(px, py, tileS - 1, tileS - 1);
+            // Eyes on first cell
+            if (i === 0) {
+                ctx.fillStyle = C.solidSH;
+                ctx.fillRect(px, py, 1, 1);
+                ctx.fillRect(px + 3, py, 1, 1);
+                ctx.fillStyle = '#FFFFF0';
+                ctx.fillRect(px + 1, py, 1, 1);
+                ctx.fillRect(px + 4, py, 1, 1);
+            }
+        }
+        ctx.globalAlpha = 1;
+
+        // Saved progress hint
+        if (player._highestLevel > 1) {
+            ctx.fillStyle = 'rgba(216,208,192,0.3)';
+            ctx.font = '6px monospace';
+            ctx.fillText(`best: level ${player._bestRun || player._highestLevel - 1}`, W/2, H/2 + 38);
+        }
+
+        // locomot.io link
+        ctx.fillStyle = 'rgba(208,204,196,0.15)';
+        ctx.font = '6px monospace';
+        ctx.textAlign = 'left';
+        ctx.fillText('locomot.io', 4, H - 4);
         ctx.textAlign = 'right';
         ctx.fillText(VERSION, W - 4, H - 4);
         ctx.textAlign = 'left';
@@ -2176,6 +2604,57 @@ function draw() {
         ctx.globalAlpha = 1;
     }
 
+    // Win screen
+    if (gameWon) {
+        const fade = Math.min(1, winTimer * 2);
+        ctx.fillStyle = `rgba(16, 16, 30, ${fade * 0.9})`;
+        ctx.fillRect(0, 0, W, H);
+
+        ctx.globalAlpha = fade;
+        ctx.textAlign = 'center';
+
+        // Title
+        const titlePulse = 1 + Math.sin(winTimer * 3) * 0.05;
+        ctx.fillStyle = C.player;
+        ctx.font = `${Math.round(16 * titlePulse)}px monospace`;
+        ctx.fillText('CONGRATULATIONS', W/2, H/2 - 40);
+
+        // Subtitle
+        ctx.fillStyle = '#FFF0D0';
+        ctx.font = '8px monospace';
+        ctx.fillText('you escaped the sediment', W/2, H/2 - 20);
+
+        // Stats
+        ctx.fillStyle = C.text;
+        ctx.font = '7px monospace';
+        const netDeaths = Math.max(0, player.deathCount - player.deathsErased);
+        ctx.fillText(`total deaths: ${player.deathCount}  crunches: ${player.crunchCount}`, W/2, H/2 + 4);
+        ctx.fillText(`net deaths: ${netDeaths}`, W/2, H/2 + 16);
+
+        // Continue hint
+        if (winTimer > 2) {
+            const blink = Math.sin(winTimer * 4) > 0;
+            if (blink) {
+                ctx.fillStyle = 'rgba(216,208,192,0.5)';
+                ctx.font = '6px monospace';
+                ctx.fillText(lastInputWasTouch ? 'tap to enter endless mode' : 'press any key for endless mode', W/2, H/2 + 36);
+            }
+        }
+
+        // Render floating particles on win screen
+        ctx.save();
+        ctx.translate(-Math.floor(cam.x + cam.sx), -Math.floor(cam.y + cam.sy));
+        for (const p of particles) {
+            ctx.globalAlpha = p.life / p.maxLife;
+            ctx.fillStyle = p.color;
+            ctx.fillRect(p.x, p.y, p.size, p.size);
+        }
+        ctx.restore();
+
+        ctx.textAlign = 'left';
+        ctx.globalAlpha = 1;
+    }
+
     // Pause
     if (paused) {
         ctx.fillStyle = 'rgba(16, 16, 30, 0.8)';
@@ -2199,7 +2678,7 @@ function draw() {
         ctx.strokeRect(skipX, skipY - skipH/2, skipW, skipH);
         ctx.fillStyle = C.player;
         ctx.font = '7px monospace';
-        ctx.fillText('CLEAR LEVEL', W/2, skipY + 3);
+        ctx.fillText('RESTART', W/2, skipY + 3);
 
         // Store button bounds for tap detection (in screen coords)
         _skipBtnBounds = { x: skipX, y: skipY - skipH/2, w: skipW, h: skipH };
