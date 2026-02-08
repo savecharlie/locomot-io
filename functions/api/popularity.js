@@ -1,5 +1,5 @@
 // Cloudflare Pages Function — queries zone analytics for page popularity
-// Env secrets needed: CF_API_TOKEN, CF_ZONE_ID (set in Cloudflare Pages dashboard)
+// Env secrets: CF_API_TOKEN, CF_ZONE_ID (set via wrangler pages secret put)
 
 export async function onRequestGet(context) {
   const headers = {
