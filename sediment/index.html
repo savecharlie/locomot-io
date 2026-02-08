@@ -1509,7 +1509,7 @@ function respawn() {
     player.squash = 0.5;
     player.trail = [];
     player.boostTimer = 0;
-    player.quakeTimer = 0;
+    // NOTE: quakeTimer is NOT reset here — invincibility persists through respawn
     player.jumpsLeft = 2;
     player.coyoteTimer = 0;
     player.distance = 0;
