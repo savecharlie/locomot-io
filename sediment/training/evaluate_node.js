@@ -1,141 +1,155 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
-<meta name="screen-orientation" content="landscape">
+// ══════════════════════════════════════════════════════════════
+// Sediment Headless Evaluator for NN Training
+// Runs the EXACT game JS from index.html in Node.js
+// Zero sim-to-game divergence guaranteed
+// ══════════════════════════════════════════════════════════════
 
-<!-- SEO -->
-<title>SEDIMENT - Die-to-Build Platformer | Free Browser Game</title>
-<meta name="description" content="You ARE a shape in this free browser platformer. Die and your body becomes the level. Clear rows to crunch away deaths. Play instantly — no download.">
-<meta name="keywords" content="sediment game, shape platformer, die to build, browser game, free platformer, pixel art game, auto-runner, indie game, io game">
-<meta name="robots" content="index, follow">
-<link rel="canonical" href="https://locomot.io/sediment/">
+'use strict';
 
-<!-- Open Graph -->
-<meta property="og:title" content="SEDIMENT - Die-to-Build Platformer">
-<meta property="og:description" content="You ARE a shape. Die and your body becomes the level. Clear rows to crunch away deaths. Free in your browser.">
-<meta property="og:type" content="website">
-<meta property="og:url" content="https://locomot.io/sediment/">
-<meta property="og:image" content="https://locomot.io/sediment/og-image.png">
-<meta property="og:site_name" content="LOCOMOT.IO">
+// ── Simulation time (controlled by evaluator) ──
+var _simTime = 0;
 
-<!-- Twitter Card -->
-<meta name="twitter:card" content="summary_large_image">
-<meta name="twitter:title" content="SEDIMENT - Die-to-Build Platformer">
-<meta name="twitter:description" content="You ARE a shape. Die and your body becomes the level. Free browser game.">
-<meta name="twitter:image" content="https://locomot.io/sediment/og-image.png">
+// ── Browser API Stubs ──
+// These must be declared before the game code loads so that
+// browser-only APIs don't crash in Node.js
 
-<!-- Structured Data -->
-<script type="application/ld+json">
-{
-  "@context": "https://schema.org",
-  "@type": "VideoGame",
-  "name": "Sediment",
-  "description": "A die-to-build platformer where you ARE the shape. When you die, your body snaps to the grid and becomes terrain for future runs. Clear completed rows to crunch away deaths.",
-  "url": "https://locomot.io/sediment/",
-  "image": "https://locomot.io/sediment/og-image.png",
-  "genre": ["Platformer", "Puzzle", "Auto-runner"],
-  "gamePlatform": "Web Browser",
-  "operatingSystem": "Any",
-  "applicationCategory": "Game",
-  "playMode": "SinglePlayer",
-  "offers": {
-    "@type": "Offer",
-    "price": "0",
-    "priceCurrency": "USD"
-  },
-  "author": {
-    "@type": "Organization",
-    "name": "LOCOMOT.IO",
-    "url": "https://locomot.io"
-  }
-}
-</script>
+var _noop = function() {};
 
-<style>
-* { margin: 0; padding: 0; box-sizing: border-box; }
-html, body {
-    width: 100%; height: 100%; overflow: hidden;
-    background: #10101E;
-    touch-action: none;
-    user-select: none;
-    -webkit-user-select: none;
+// Gain node stub (used by Web Audio)
+function _makeGainNode() {
+    return {
+        connect: _noop,
+        gain: {
+            value: 0,
+            setValueAtTime: _noop,
+            exponentialRampToValueAtTime: _noop,
+            linearRampToValueAtTime: _noop
+        }
+    };
 }
-#rotate-msg {
-    display: none;
-    position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-    background: #10101E;
-    z-index: 999;
-    flex-direction: column;
-    align-items: center; justify-content: center;
-    text-align: center;
-    gap: 16px;
-    padding: 40px;
+
+// Oscillator stub
+function _makeOscillator() {
+    return {
+        connect: _noop,
+        start: _noop,
+        stop: _noop,
+        type: '',
+        frequency: {
+            value: 0,
+            setValueAtTime: _noop,
+            exponentialRampToValueAtTime: _noop,
+            linearRampToValueAtTime: _noop
+        }
+    };
 }
-#rotate-msg .title {
-    color: #E8A838;
-    font: bold 28px monospace;
-    letter-spacing: 4px;
+
+// Buffer source stub
+function _makeBufferSource() {
+    return {
+        connect: _noop,
+        start: _noop,
+        stop: _noop,
+        buffer: null
+    };
 }
-#rotate-msg .tagline {
-    color: rgba(232,168,56,0.4);
-    font: 10px monospace;
-    letter-spacing: 1px;
+
+// AudioContext stub
+function _MockAudioContext() {
+    this.state = 'running';
+    this.sampleRate = 44100;
+    this.currentTime = 0;
+    this.destination = {};
 }
-#rotate-msg .rotate-icon {
-    font-size: 40px;
-    animation: rock 1.5s ease-in-out infinite;
+_MockAudioContext.prototype.resume = _noop;
+_MockAudioContext.prototype.createOscillator = _makeOscillator;
+_MockAudioContext.prototype.createGain = _makeGainNode;
+_MockAudioContext.prototype.createBuffer = function(ch, len, sr) {
+    return { getChannelData: function() { return new Float32Array(len || 1); } };
+};
+_MockAudioContext.prototype.createBufferSource = _makeBufferSource;
+
+// DOM element stub factory
+function _makeEl() {
+    var el = {
+        addEventListener: _noop,
+        removeEventListener: _noop,
+        appendChild: _noop,
+        getBoundingClientRect: function() { return {left:0,top:0,width:400,height:168}; },
+        getContext: function() { return _ctxProxy; },
+        style: {},
+        width: 400,
+        height: 168,
+        canPlayType: function() { return ''; },
+        play: function() { return Promise.resolve(); },
+        pause: _noop
+    };
+    // Setters that silently accept values
+    Object.defineProperty(el, 'innerHTML', { get: function(){return '';}, set: _noop, configurable: true });
+    Object.defineProperty(el, 'textContent', { get: function(){return '';}, set: _noop, configurable: true });
+    Object.defineProperty(el, 'loop', { get: function(){return false;}, set: _noop, configurable: true });
+    Object.defineProperty(el, 'src', { get: function(){return '';}, set: _noop, configurable: true });
+    Object.defineProperty(el, 'volume', { get: function(){return 0;}, set: _noop, configurable: true });
+    Object.defineProperty(el, 'muted', { get: function(){return false;}, set: _noop, configurable: true });
+    return el;
 }
-#rotate-msg .rotate-hint {
-    color: rgba(216,208,192,0.5);
-    font: 9px monospace;
-}
-#rotate-msg .version {
-    position: absolute;
-    bottom: 12px; right: 14px;
-    color: rgba(216,208,192,0.2);
-    font: 8px monospace;
-}
-@keyframes rock {
-    0%, 100% { transform: rotate(0deg); }
-    25% { transform: rotate(90deg); }
-    75% { transform: rotate(90deg); }
-}
-@media (orientation: portrait) {
-    #rotate-msg { display: flex; }
-    canvas { display: none !important; }
-}
-canvas { display: block; width: 100%; height: 100%; image-rendering: pixelated; }
-#pauseBtn {
-    position: fixed; top: 8px; right: 8px;
-    width: 36px; height: 36px;
-    border-radius: 8px;
-    background: rgba(255, 255, 255, 0.1);
-    border: 1px solid rgba(255, 255, 255, 0.3);
-    color: #fff;
-    font-size: 14px;
-    display: flex; align-items: center; justify-content: center;
-    cursor: pointer;
-    -webkit-tap-highlight-color: transparent;
-    z-index: 20;
-}
-#pauseBtn:active { background: rgba(255, 255, 255, 0.3); }
-</style>
-</head>
-<body>
-<div id="rotate-msg">
-    <canvas id="splash-logo" width="48" height="48" style="image-rendering:pixelated;width:96px;height:96px;"></canvas>
-    <div class="title">SEDIMENT</div>
-    <div class="tagline">you are the shape</div>
-    <div class="rotate-icon">📱</div>
-    <div class="rotate-hint">rotate to play</div>
-    <div class="version" id="splash-version"></div>
-</div>
-<canvas id="c"></canvas>
-<div id="pauseBtn">&#9646;&#9646;</div>
-<div id="dbg" style="position:fixed;bottom:4px;left:4px;color:rgba(216,208,192,0.3);font:8px monospace;z-index:100;pointer-events:none;"></div>
-<script>
+
+// Canvas 2D context proxy — all draw calls are no-ops
+var _ctxProxy = new Proxy({}, {
+    get: function(target, prop) {
+        if (prop === 'fillStyle' || prop === 'strokeStyle' || prop === 'globalAlpha' ||
+            prop === 'font' || prop === 'textAlign' || prop === 'textBaseline' ||
+            prop === 'lineWidth' || prop === 'lineCap' || prop === 'shadowColor' ||
+            prop === 'shadowBlur' || prop === 'imageSmoothingEnabled') {
+            return '';
+        }
+        return _noop;
+    },
+    set: function(target, prop, value) { return true; }
+});
+
+// ── Global browser API stubs ──
+var document = {
+    getElementById: function(id) { return _makeEl(); },
+    createElement: function(tag) { return _makeEl(); },
+    addEventListener: _noop,
+    documentElement: { clientWidth: 400, clientHeight: 168 }
+};
+
+var window = {
+    innerWidth: 400,
+    innerHeight: 168,
+    addEventListener: _noop,
+    AudioContext: _MockAudioContext,
+    webkitAudioContext: _MockAudioContext
+};
+
+var screen = { width: 400, height: 168 };
+
+var performance = { now: function() { return _simTime * 1000; } };
+
+var localStorage = {
+    getItem: function() { return null; },
+    setItem: _noop,
+    removeItem: _noop
+};
+
+var navigator = { maxTouchPoints: 0 };
+
+var Audio = function() { return _makeEl(); };
+
+var requestAnimationFrame = _noop;
+var setTimeout = function(fn, ms) { return 0; };
+var setInterval = function(fn, ms) { return 0; };
+var clearInterval = _noop;
+var clearTimeout = _noop;
+var alert = _noop;
+
+
+// ══════════════════════════════════════════════════════════════
+// ── GAME CODE (verbatim from index.html lines 139-2223) ──
+// ══════════════════════════════════════════════════════════════
+
 // ── SEDIMENT v2 ──
 // You ARE the shape. When you die, your body snaps to the grid.
 // Completed rows clear. Every player shapes the level.
@@ -402,32 +416,6 @@ const SFX = {
         gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.06);
         osc.start(ctx.currentTime);
         osc.stop(ctx.currentTime + 0.06);
-    },
-    spinBoost() {
-        const ctx = ensureAudio();
-        const osc = ctx.createOscillator();
-        const gain = ctx.createGain();
-        osc.connect(gain); gain.connect(sfxDest());
-        osc.type = 'sine';
-        osc.frequency.setValueAtTime(300, ctx.currentTime);
-        osc.frequency.exponentialRampToValueAtTime(500, ctx.currentTime + 0.1);
-        gain.gain.setValueAtTime(0.08, ctx.currentTime);
-        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.12);
-        osc.start(ctx.currentTime);
-        osc.stop(ctx.currentTime + 0.12);
-    },
-    spinBrake() {
-        const ctx = ensureAudio();
-        const osc = ctx.createOscillator();
-        const gain = ctx.createGain();
-        osc.connect(gain); gain.connect(sfxDest());
-        osc.type = 'triangle';
-        osc.frequency.setValueAtTime(400, ctx.currentTime);
-        osc.frequency.exponentialRampToValueAtTime(200, ctx.currentTime + 0.1);
-        gain.gain.setValueAtTime(0.07, ctx.currentTime);
-        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.12);
-        osc.start(ctx.currentTime);
-        osc.stop(ctx.currentTime + 0.12);
     },
     land() {
         const ctx = ensureAudio();
@@ -1059,6 +1047,7 @@ const player = {
     trail: [],
     boostTimer: 0,
     deathCount: 0,
+    chasmDeaths: 0,
     quakeCount: 0,
     quakeTimer: 0,
     distance: 0,
@@ -1215,7 +1204,7 @@ function die() {
     // Check minimum distance
     const distFromSpawn = Math.floor((player.x - player.spawnX) / TILE);
 
-    if (distFromSpawn >= MIN_DISTANCE_FOR_CORPSE) {
+    if (distFromSpawn >= MIN_DISTANCE_FOR_CORPSE && !_evalNoCorpses) {
         // Snap each cell to the grid — clamp to valid range so chasm deaths still place blocks
         const groupCells = [];
         for (let i = 0; i < cells.length; i++) {
@@ -1507,24 +1496,18 @@ function tryRotate(dir) {
             player.squash = 1.15;
             const cx = player.x + getShapeCenterX(player.shape, player.rotation);
             const cy = player.y + getShapeCenterY(player.shape, player.rotation);
+            spawnP(cx, cy, matColor(player.material), 3, 20, 0.1);
             // Spin boost/brake (with cooldown)
             if (!player.spinCooldown || player.spinCooldown <= 0) {
-                spawnP(cx, cy, matColor(player.material), 3, 20, 0.1);
                 if (dir === 1) {
-                    // CW = boost forward
-                    player.vx = 160;
-                    player.boostTimer = 0.15;
-                    SFX.spinBoost();
+                    player.vx = 160;  // CW = boost forward
                 } else {
-                    // CCW = brake to dodge
-                    player.vx = 40;
-                    player.boostTimer = 0.15;
-                    SFX.spinBrake();
+                    player.vx = 40;   // CCW = brake to dodge
                 }
+                player.boostTimer = 0.15;
                 player.spinCooldown = 1.0;
-            } else {
-                SFX.rotate();
             }
+            SFX.rotate();
             return true;
         }
     }
@@ -1919,22 +1902,14 @@ function update(dt) {
     // NN agent: inject actions when in bot mode (rate-limited to ~8 actions/sec)
     if (typeof nnAgent !== 'undefined' && nnAgent.active) {
         if (!nnAgent._cooldown) nnAgent._cooldown = 0;
-        if (!nnAgent._jumpCD) nnAgent._jumpCD = 0;
-        // Reset jump cooldown on landing
-        if (player.onGround && !nnAgent._wasGround) nnAgent._jumpCD = 0;
-        nnAgent._wasGround = player.onGround;
-        if (nnAgent._jumpCD > 0) nnAgent._jumpCD -= dt;
         nnAgent._cooldown -= dt;
         if (nnAgent._cooldown <= 0) {
             const act = nnAgent.getAction();
-            if (act === 1 && nnAgent._jumpCD <= 0) {
-                jumpBuffered = true;
-                nnAgent._jumpCD = 0.25;
-            }
+            if (act === 1) jumpBuffered = true;
             else if (act === 2) tryRotate(1);
             else if (act === 3) tryRotate(-1);
             else if (act === 4) die();
-            nnAgent._cooldown = 0.12;
+            nnAgent._cooldown = 0.12; // ~8 decisions per second
         }
     }
 
@@ -2182,6 +2157,7 @@ function update(dt) {
             cam.shake = Math.max(cam.shake, 6);
             SFX.spring();
         } else {
+            player.chasmDeaths++;
             die();
             return;
         }
@@ -2274,838 +2250,393 @@ function update(dt) {
     }
 }
 
-// ══════════════════════════════════════
-// ── DRAW ──
-// ══════════════════════════════════════
 
-let _dbgF = 0;
-function draw() {
-    if (_dbgF++ % 20 === 0) {
-        document.getElementById('dbg').textContent =
-            `${VERSION} L${currentLevel} ${player.shape}${player.rotation} ${player.material} p:${Math.floor(player.x)},${Math.floor(player.y)} d:${player.distance}`;
+// ══════════════════════════════════════════════════════════════
+// ── SEEDED PRNG ──
+// ══════════════════════════════════════════════════════════════
+
+function mulberry32(a) {
+    return function() {
+        a |= 0;
+        a = a + 0x6D2B79F5 | 0;
+        var t = Math.imul(a ^ a >>> 15, 1 | a);
+        t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+        return ((t ^ t >>> 14) >>> 0) / 4294967296;
+    };
+}
+
+
+// ══════════════════════════════════════════════════════════════
+// ── SMALL NN (72 → 48 → 32 → 5, ReLU, argmax) ──
+// ══════════════════════════════════════════════════════════════
+
+class SmallNN {
+    constructor(flat) {
+        // Architecture: 72 input → 48 hidden → 32 hidden → 5 output
+        // Flat layout: w1(48*72), b1(48), w2(32*48), b2(32), w3(5*32), b3(5)
+        // Total: 3456 + 48 + 1536 + 32 + 160 + 5 = 5237
+        if (!flat || flat.length < 5237) {
+            this.valid = false;
+            return;
+        }
+        this.valid = true;
+        let idx = 0;
+
+        // Layer 1: 48 x 72
+        this.w1 = [];
+        for (let i = 0; i < 48; i++) {
+            this.w1.push(new Float32Array(flat.slice(idx, idx + 72)));
+            idx += 72;
+        }
+        this.b1 = new Float32Array(flat.slice(idx, idx + 48));
+        idx += 48;
+
+        // Layer 2: 32 x 48
+        this.w2 = [];
+        for (let i = 0; i < 32; i++) {
+            this.w2.push(new Float32Array(flat.slice(idx, idx + 48)));
+            idx += 48;
+        }
+        this.b2 = new Float32Array(flat.slice(idx, idx + 32));
+        idx += 32;
+
+        // Layer 3: 5 x 32
+        this.w3 = [];
+        for (let i = 0; i < 5; i++) {
+            this.w3.push(new Float32Array(flat.slice(idx, idx + 32)));
+            idx += 32;
+        }
+        this.b3 = new Float32Array(flat.slice(idx, idx + 5));
     }
-    ctx.fillStyle = C.bg;
-    ctx.fillRect(0, 0, W, H);
 
-    ctx.save();
-    ctx.translate(-Math.floor(cam.x + cam.sx), -Math.floor(cam.y + cam.sy));
+    forward(inputs) {
+        if (!this.valid) return 0;
 
-    // Visible tile range
-    const tl = Math.max(0, Math.floor(cam.x / TILE) - 1);
-    const tr = Math.floor((cam.x + W) / TILE) + 1;
-    const tt = Math.max(0, Math.floor(cam.y / TILE) - 1);
-    const tb = Math.min(levelH - 1, Math.floor((cam.y + H) / TILE) + 1);
+        // Layer 1: ReLU(w1 * x + b1)
+        const h1 = new Float32Array(48);
+        for (let i = 0; i < 48; i++) {
+            let sum = this.b1[i];
+            const row = this.w1[i];
+            for (let j = 0; j < 72; j++) sum += row[j] * inputs[j];
+            h1[i] = sum > 0 ? sum : 0; // ReLU
+        }
 
-    // Terrain tiles
-    for (let y = tt; y <= tb; y++) {
-        for (let x = tl; x <= tr; x++) {
-            if (!level[y] || level[y][x] === undefined) continue;
-            const t = level[y][x];
-            const px = x * TILE;
-            const py = y * TILE;
+        // Layer 2: ReLU(w2 * h1 + b2)
+        const h2 = new Float32Array(32);
+        for (let i = 0; i < 32; i++) {
+            let sum = this.b2[i];
+            const row = this.w2[i];
+            for (let j = 0; j < 48; j++) sum += row[j] * h1[j];
+            h2[i] = sum > 0 ? sum : 0; // ReLU
+        }
 
-            if (t === 1) {
-                ctx.fillStyle = C.tile;
-                ctx.fillRect(px, py, TILE, TILE);
-                ctx.fillStyle = C.tileHL;
-                ctx.fillRect(px, py, TILE, 1);
-                ctx.fillRect(px, py, 1, TILE);
-                ctx.fillStyle = C.tileSH;
-                ctx.fillRect(px, py + TILE - 1, TILE, 1);
-                ctx.fillRect(px + TILE - 1, py, 1, TILE);
-            } else if (t === 2) {
-                // Directional spikes based on position
-                ctx.fillStyle = C.spike;
-                ctx.beginPath();
-                if (y <= 1) {
-                    // Ceiling → point DOWN
-                    ctx.moveTo(px + 1, py);
-                    ctx.lineTo(px + TILE/2, py + TILE - 2);
-                    ctx.lineTo(px + TILE - 1, py);
-                    ctx.fill();
-                    ctx.fillStyle = '#F08060';
-                    ctx.fillRect(px + TILE/2 - 0.5, py + TILE - 4, 1, 2);
-                } else if (y >= levelH - 2) {
-                    // Floor → point UP
-                    ctx.moveTo(px + 1, py + TILE);
-                    ctx.lineTo(px + TILE/2, py + 2);
-                    ctx.lineTo(px + TILE - 1, py + TILE);
-                    ctx.fill();
-                    ctx.fillStyle = '#F08060';
-                    ctx.fillRect(px + TILE/2 - 0.5, py + 2, 1, 2);
-                } else {
-                    // Floating → point LEFT (toward player)
-                    ctx.moveTo(px + TILE, py + 1);
-                    ctx.lineTo(px + 2, py + TILE/2);
-                    ctx.lineTo(px + TILE, py + TILE - 1);
-                    ctx.fill();
-                    ctx.fillStyle = '#F08060';
-                    ctx.fillRect(px + 2, py + TILE/2 - 0.5, 2, 1);
+        // Layer 3: w3 * h2 + b3 (no activation — raw logits)
+        const out = new Float32Array(5);
+        for (let i = 0; i < 5; i++) {
+            let sum = this.b3[i];
+            const row = this.w3[i];
+            for (let j = 0; j < 32; j++) sum += row[j] * h2[j];
+            out[i] = sum;
+        }
+
+        // Argmax
+        let best = 0;
+        for (let i = 1; i < 5; i++) {
+            if (out[i] > out[best]) best = i;
+        }
+        return best;
+    }
+}
+
+
+// ══════════════════════════════════════════════════════════════
+// ── NN INPUT EXTRACTION (from nn_agent.js, adapted for Node) ──
+// ══════════════════════════════════════════════════════════════
+
+function getInputs() {
+    const p = player;
+    const inputs = new Float32Array(72);
+    let idx = 0;
+    const lW = segments.length * SEGMENT_W;
+    const lH = levelH || level.length;
+
+    // A. Player state (9)
+    inputs[idx++] = p.vy / 400.0;
+    inputs[idx++] = (p.jumpsLeft || 0) / 2.0;
+    inputs[idx++] = p.onGround ? 1.0 : 0.0;
+    inputs[idx++] = ((p.onWall || 0) + 1) / 2.0;
+    inputs[idx++] = p.y / (lH * TILE);
+    inputs[idx++] = (p.boostTimer || 0) > 0 ? 1.0 : 0.0;
+    inputs[idx++] = (p.quakeTimer || p.crunchTimer || 0) > 0 ? 1.0 : 0.0;
+    inputs[idx++] = Math.min(1.0, (p.stuckTimer || 0) / 0.5);
+    inputs[idx++] = Math.min(1.0, (p.distance || 0) / Math.max(1, goalX));
+
+    // B. Shape geometry 4x4 (16)
+    const cells = getCells(p.shape, p.rotation);
+    let minC = 99, minR = 99;
+    for (const [c, r] of cells) {
+        if (c < minC) minC = c;
+        if (r < minR) minR = r;
+    }
+    const grid = new Float32Array(16);
+    for (const [c, r] of cells) {
+        const gc = c - minC;
+        const gr = r - minR;
+        if (gc >= 0 && gc < 4 && gr >= 0 && gr < 4) {
+            grid[gr * 4 + gc] = 1.0;
+        }
+    }
+    for (let i = 0; i < 16; i++) inputs[idx++] = grid[i];
+
+    // C. Material (3)
+    inputs[idx++] = p.material === 'spring' ? 1.0 : 0.0;
+    inputs[idx++] = p.material === 'booster' ? 1.0 : 0.0;
+    inputs[idx++] = p.material === 'spike' ? 1.0 : 0.0;
+
+    // D. Terrain lookahead: 10 columns x 4 features (40)
+    // Log-spaced: dense near, sparse far — see as far as the player can
+    const _colOffsets = [1, 2, 3, 5, 7, 10, 15, 20, 28, 38];
+    const playerCol = Math.floor(p.x / TILE);
+    for (let ci = 0; ci < 10; ci++) {
+        const col = playerCol + _colOffsets[ci];
+        let groundH = 0.0;
+        let ceilingH = 0.0;
+        let hasSpike = 0.0;
+        let hasGap = 1.0;
+
+        // Scan top to bottom for ceiling
+        for (let y = 0; y < lH; y++) {
+            let solid = false;
+            if (col >= 0 && col < lW) {
+                if (level[y] && level[y][col] === 1) solid = true;
+                else if (level[y] && level[y][col] === 2) hasSpike = 1.0;
+                const c = corpseGrid[y] && corpseGrid[y][col];
+                if (c) {
+                    solid = true;
+                    if (c.mat === 'spike') hasSpike = 1.0;
+                }
+            }
+            if (solid && ceilingH === 0.0 && y > 0) {
+                ceilingH = y / lH;
+            }
+        }
+
+        // Scan bottom to top for ground
+        for (let y = lH - 1; y >= 0; y--) {
+            if (col >= 0 && col < lW) {
+                if ((level[y] && level[y][col] === 1) ||
+                    (corpseGrid[y] && corpseGrid[y][col] !== null)) {
+                    groundH = (lH - y) / lH;
+                    hasGap = 0.0;
+                    break;
                 }
             }
         }
+
+        inputs[idx++] = groundH;
+        inputs[idx++] = ceilingH;
+        inputs[idx++] = hasSpike;
+        inputs[idx++] = hasGap;
     }
 
-    // Corpse grid blocks
-    for (let y = tt; y <= tb; y++) {
-        for (let x = tl; x <= tr; x++) {
-            if (!corpseGrid[y] || !corpseGrid[y][x]) continue;
-            const block = corpseGrid[y][x];
-            const px = x * TILE;
-            const py = y * TILE;
-            block.age = Math.min(1, (block.age || 0) + 0.02);
-
-            ctx.globalAlpha = block.age;
-            // Clearing flash — blink white
-            if (block.clearing) {
-                const blink = Math.sin(performance.now() / 40) > 0;
-                ctx.fillStyle = blink ? '#FFFFF0' : matColor(block.mat);
-                ctx.fillRect(px, py, TILE, TILE);
-                ctx.globalAlpha = 1;
-                continue;
-            }
-            // Block body
-            ctx.fillStyle = matColor(block.mat);
-            ctx.fillRect(px, py, TILE, TILE);
-            // Highlight top/left
-            ctx.fillStyle = matHL(block.mat);
-            ctx.fillRect(px, py, TILE, 1);
-            ctx.fillRect(px, py, 1, TILE);
-            // Shadow bottom/right
-            ctx.fillStyle = matDark(block.mat);
-            ctx.fillRect(px, py + TILE - 1, TILE, 1);
-            ctx.fillRect(px + TILE - 1, py, 1, TILE);
-
-            // Material decoration (spike material becomes terrain, never a corpse block)
-            if (block.mat === 'spring') {
-                // Zigzag spring coil — chunky 2px-tall rungs
-                ctx.fillStyle = C.springHL;
-                ctx.fillRect(px + 2, py + 2, 4, 2);
-                ctx.fillRect(px + 6, py + 5, 4, 2);
-                ctx.fillRect(px + 2, py + 8, 4, 2);
-            } else if (block.mat === 'booster') {
-                ctx.fillStyle = C.boosterHL;
-                ctx.beginPath();
-                ctx.moveTo(px + 9, py + TILE/2);
-                ctx.lineTo(px + 4, py + TILE/2 - 3);
-                ctx.lineTo(px + 4, py + TILE/2 + 3);
-                ctx.fill();
-            }
-
-            // Dead face — X eyes + tongue out
-            if (block.eyes) {
-                ctx.fillStyle = matDark(block.mat);
-                // Left eye X
-                ctx.fillRect(px + 1, py + 1, 1, 1);
-                ctx.fillRect(px + 3, py + 1, 1, 1);
-                ctx.fillRect(px + 2, py + 2, 1, 1);
-                ctx.fillRect(px + 1, py + 3, 1, 1);
-                ctx.fillRect(px + 3, py + 3, 1, 1);
-                // Right eye X
-                ctx.fillRect(px + 7, py + 1, 1, 1);
-                ctx.fillRect(px + 9, py + 1, 1, 1);
-                ctx.fillRect(px + 8, py + 2, 1, 1);
-                ctx.fillRect(px + 7, py + 3, 1, 1);
-                ctx.fillRect(px + 9, py + 3, 1, 1);
-                // Mouth line
-                ctx.fillRect(px + 3, py + 6, 5, 1);
-                // Tongue blep
-                ctx.fillStyle = '#E07080';
-                ctx.fillRect(px + 6, py + 7, 2, 2);
-            }
-
-            ctx.globalAlpha = 1;
-        }
-    }
-
-    // Falling group (tetromino shape falling as a unit)
-    if (fallingGroup) {
-        for (const cell of fallingGroup.cells) {
-            const px = cell.x * TILE;
-            const py = (cell.y + fallingGroup.drop) * TILE;
-            ctx.fillStyle = matColor(cell.mat);
-            ctx.fillRect(px, py, TILE, TILE);
-            ctx.fillStyle = matHL(cell.mat);
-            ctx.fillRect(px, py, TILE, 1);
-            ctx.fillRect(px, py, 1, TILE);
-            ctx.fillStyle = matDark(cell.mat);
-            ctx.fillRect(px, py + TILE - 1, TILE, 1);
-            ctx.fillRect(px + TILE - 1, py, 1, TILE);
-            // Kawaii face on the falling piece (scared!)
-            if (cell.eyes) {
-                ctx.fillStyle = matDark(cell.mat);
-                ctx.fillRect(px + 1, py + 2, 3, 3);
-                ctx.fillRect(px + 7, py + 2, 3, 3);
-                // Catchlight
-                ctx.fillStyle = '#FFFFF0';
-                ctx.fillRect(px + 2, py + 2, 1, 1);
-                ctx.fillRect(px + 8, py + 2, 1, 1);
-                // Scared O mouth (rounded)
-                ctx.fillStyle = matDark(cell.mat);
-                ctx.fillRect(px + 5, py + 7, 1, 1);
-                ctx.fillRect(px + 4, py + 8, 1, 1);
-                ctx.fillRect(px + 6, py + 8, 1, 1);
-                ctx.fillRect(px + 5, py + 9, 1, 1);
-            }
-        }
-    }
-
-    // Goal line — golden finish
-    if (goalX > cam.x - 20 && goalX < cam.x + W + 20) {
-        const pulse = 0.6 + 0.4 * Math.sin(performance.now() / 200);
-        ctx.globalAlpha = pulse * 0.7;
-        ctx.fillStyle = C.player;
-        ctx.fillRect(goalX, 0, 3, H);
-        // Glow effect
-        ctx.globalAlpha = pulse * 0.15;
-        ctx.fillRect(goalX - 4, 0, 11, H);
-        ctx.globalAlpha = 1;
-    }
-
-    // Buzzsaws
+    // E. Buzzsaw proximity (4) — 2 nearest
+    const pCX = p.x + TILE * 1.5;
+    const pCY = p.y + TILE * 1.5;
+    const sawDists = [];
     for (const saw of buzzsaws) {
-        if (saw.x - saw.r < cam.x - 30 || saw.x + saw.r > cam.x + W + 30) continue;
-        ctx.fillStyle = C.saw;
-        ctx.beginPath();
-        ctx.arc(saw.x, saw.y, saw.r, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.fillStyle = C.sawBlade;
-        for (let i = 0; i < 4; i++) {
-            const a = saw.spin + i * Math.PI / 2;
-            ctx.fillRect(
-                saw.x + Math.cos(a) * (saw.r - 2) - 1,
-                saw.y + Math.sin(a) * (saw.r - 2) - 1,
-                2, 2
-            );
-        }
-        ctx.fillStyle = '#281820';
-        ctx.beginPath();
-        ctx.arc(saw.x, saw.y, 2, 0, Math.PI * 2);
-        ctx.fill();
+        const dx = (saw.x - pCX) / (10 * TILE);
+        const dy = (saw.y - pCY) / (lH * TILE);
+        const dist = dx * dx + dy * dy;
+        sawDists.push({ dist, dx, dy });
     }
+    sawDists.sort((a, b) => a.dist - b.dist);
 
-    // Moving platforms
-    for (const p of movingPlatforms) {
-        const px1 = Math.floor(p.x / TILE) * TILE;
-        const py = Math.floor(p.y / TILE) * TILE;
-        if (px1 + p.w * TILE < cam.x - 20 || px1 > cam.x + W + 20) continue;
-        for (let dx = 0; dx < p.w; dx++) {
-            const bx = px1 + dx * TILE;
-            ctx.fillStyle = C.platform;
-            ctx.fillRect(bx, py, TILE, TILE);
-            ctx.fillStyle = C.platformHL;
-            ctx.fillRect(bx, py, TILE, 1);
-            ctx.fillRect(bx, py, 1, TILE);
-            ctx.fillStyle = C.platformSH;
-            ctx.fillRect(bx, py + TILE - 1, TILE, 1);
-            ctx.fillRect(bx + TILE - 1, py, 1, TILE);
-        }
-        // Direction indicator — small arrow
-        const centerX = px1 + (p.w * TILE) / 2;
-        ctx.fillStyle = C.platformHL;
-        ctx.globalAlpha = 0.5;
-        if (p.vertical) {
-            ctx.fillRect(centerX - 1, py + 3, 2, TILE - 6);
-            ctx.fillRect(centerX - 2, py + 4, 4, 1);
-            ctx.fillRect(centerX - 2, py + TILE - 5, 4, 1);
+    for (let i = 0; i < 2; i++) {
+        if (i < sawDists.length) {
+            inputs[idx++] = Math.max(-1, Math.min(1, sawDists[i].dx));
+            inputs[idx++] = Math.max(-1, Math.min(1, sawDists[i].dy));
         } else {
-            ctx.fillRect(px1 + 3, py + TILE/2, p.w * TILE - 6, 1);
-            ctx.fillRect(px1 + 4, py + TILE/2 - 1, 1, 3);
-            ctx.fillRect(px1 + p.w * TILE - 5, py + TILE/2 - 1, 1, 3);
+            inputs[idx++] = 0.0;
+            inputs[idx++] = 0.0;
         }
-        ctx.globalAlpha = 1;
     }
 
-    // Ghost preview — where your piece would snap on death
-    if (!player.dead && started) {
-        const cells = getCells(player.shape, player.rotation);
-        ctx.globalAlpha = 0.15;
-        for (const [cx, cy] of cells) {
-            const worldPx = player.x + cx * TILE;
-            const worldPy = player.y + cy * TILE;
-            const gridX = Math.floor(worldPx / TILE);
-            const gridY = Math.round(worldPy / TILE);
-            ctx.fillStyle = matColor(player.material);
-            ctx.fillRect(gridX * TILE, gridY * TILE, TILE, TILE);
-        }
-        ctx.globalAlpha = 1;
-    }
+    return inputs;
+}
 
-    // Player trail (only behind the player)
-    if (!player.dead) {
-        const cells = getCells(player.shape, player.rotation);
-        for (const t of player.trail) {
-            const a = t.life / 0.12;
-            ctx.globalAlpha = a * 0.2;
-            ctx.fillStyle = matColor(player.material);
-            for (const [cx, cy] of cells) {
-                const cellRight = t.x + cx * TILE + TILE;
-                if (cellRight > player.x) continue;
-                ctx.fillRect(t.x + cx * TILE + 1, t.y + cy * TILE + 1, TILE - 2, TILE - 2);
-            }
-        }
-        ctx.globalAlpha = 1;
-    }
 
-    // Quake invincibility golden glow
-    if (!player.dead && player.quakeTimer > 0) {
-        const cells = getCells(player.shape, player.rotation);
-        const pulse = 0.4 + 0.4 * Math.sin(performance.now() / 80);
-        // Flashing warning when about to expire
-        const expiring = player.quakeTimer < 1.0;
-        const alpha = expiring ? (Math.sin(performance.now() / 50) > 0 ? pulse : 0) : pulse;
-        ctx.globalAlpha = alpha;
-        ctx.fillStyle = '#FFD080'; // golden glow
-        for (const [cx, cy] of cells) {
-            const px = player.x + cx * TILE;
-            const py = player.y + cy * TILE;
-            ctx.fillRect(px - 3, py - 3, TILE + 6, TILE + 6);
-        }
-        ctx.globalAlpha = 1;
-    }
+// ══════════════════════════════════════════════════════════════
+// ── AGENT EVALUATOR ──
+// ══════════════════════════════════════════════════════════════
 
-    // Player tetromino
-    if (!player.dead) {
-        const cells = getCells(player.shape, player.rotation);
-        const mat = player.material;
+var _evalNoCorpses = false;
+function evaluateAgent(flatWeights, levelNum, maxTime, seed, noCorpses) {
+    _evalNoCorpses = !!noCorpses;
+    // Install seeded PRNG
+    var prng = mulberry32(seed);
+    Math.random = prng;
 
-        for (let i = 0; i < cells.length; i++) {
-            const [cx, cy] = cells[i];
-            const px = player.x + cx * TILE;
-            const py = player.y + cy * TILE;
+    // Reset simulation time
+    _simTime = 0;
 
-            // Squash/stretch around center
-            const centerX = player.x + getShapeCenterX(player.shape, player.rotation);
-            const centerY = player.y + getShapeCenterY(player.shape, player.rotation);
-            const sx = 1 / player.squash;
-            const sy = player.squash;
-            const drawX = centerX + (px - centerX) * sx + (TILE * (1 - sx)) / 2;
-            const drawY = centerY + (py - centerY) * sy + (TILE * (1 - sy)) / 2;
-            const drawW = TILE * sx;
-            const drawH = TILE * sy;
+    // Reset all game state
+    shapeBag = [];
+    gameWon = false;
+    winTimer = 0;
+    winParticleTimer = 0;
+    fallingGroup = null;
+    pendingClears = [];
+    encounterLabels = [];
+    particles = [];
+    timeSlowTimer = 0;
+    nextPieceShape = null;
+    nextPieceMaterial = null;
 
-            // Body
-            ctx.fillStyle = matColor(mat);
-            ctx.fillRect(drawX, drawY, drawW, drawH);
+    // Reset player stats
+    player.deathCount = 0;
+    player.chasmDeaths = 0;
+    player.quakeCount = 0;
+    player.quakeTimer = 0;
+    player.bestDistance = 0;
+    player._hitSpring = false;
+    player._hitBooster = false;
+    player._lastBoost = null;
+    player._hasRun = false;
+    player._totalDeaths = 0;
+    player._totalQuakes = 0;
+    player._highestLevel = 1;
+    player._bestRun = 0;
+    player._hasWon = false;
 
-            // Highlight top/left
-            ctx.fillStyle = matHL(mat);
-            ctx.fillRect(drawX, drawY, drawW, 1);
-            ctx.fillRect(drawX, drawY, 1, drawH);
+    // Initialize level
+    currentLevel = levelNum;
+    initLevel(currentLevel);
 
-            // Shadow bottom/right
-            ctx.fillStyle = matDark(mat);
-            ctx.fillRect(drawX, drawY + drawH - 1, drawW, 1);
-            ctx.fillRect(drawX + drawW - 1, drawY, 1, drawH);
+    // Start the game
+    started = true;
+    paused = false;
+    tutorialStep = 3;
+    tutorialComplete = true;
+    jumpBuffered = false;
+    levelComplete = false;
 
-            // Eyes on first cell — kawaii alive!
-            if (i === 0) {
-                const ey = drawY + 2 * sy;
-                const sh = player.facing * 1;
-                // Dark eye sockets 3x2
-                ctx.fillStyle = matDark(mat);
-                ctx.fillRect(drawX + 1 + sh, ey, 3, 3);
-                ctx.fillRect(drawX + 7 + sh, ey, 3, 3);
-                // Catchlight sparkle (top corner, shifts with facing)
-                const cx = player.facing >= 0 ? 2 : 0;
-                ctx.fillStyle = '#FFFFF0';
-                ctx.fillRect(drawX + 1 + sh + cx, ey, 1, 1);
-                ctx.fillRect(drawX + 7 + sh + cx, ey, 1, 1);
-                // Lower gleam (subtle life)
-                ctx.fillStyle = 'rgba(255,255,240,0.35)';
-                ctx.fillRect(drawX + 2 + sh, ey + 2, 1, 1);
-                ctx.fillRect(drawX + 8 + sh, ey + 2, 1, 1);
-                // Mouth — smile on ground, O when airborne
-                ctx.fillStyle = matDark(mat);
-                if (player.onGround) {
-                    // Kawaii smile :3
-                    ctx.fillRect(drawX + 4, ey + 5, 1, 1);
-                    ctx.fillRect(drawX + 7, ey + 5, 1, 1);
-                    ctx.fillRect(drawX + 5, ey + 6, 2, 1);
-                } else {
-                    // Surprised O (rounded)
-                    ctx.fillRect(drawX + 6, ey + 4, 1, 1);
-                    ctx.fillRect(drawX + 5, ey + 5, 1, 1);
-                    ctx.fillRect(drawX + 7, ey + 5, 1, 1);
-                    ctx.fillRect(drawX + 6, ey + 6, 1, 1);
+    // Create NN
+    var nn = new SmallNN(flatWeights);
+
+    var dt = 1 / 60;
+    var elapsed = 0;
+    var decisionTimer = 0;
+    var jumpCooldown = 0;      // cooldown after a successful jump
+    var wasOnGround = false;   // track landing to reset cooldown
+    var groundedFrames = 0;    // frames spent on ground (for ground ratio)
+    var totalFrames = 0;       // total simulation frames
+    var startLevel = currentLevel;
+    var stagnantTimer = 0;     // time since last forward progress
+    var lastProgressX = 0;     // x position at last progress check
+
+    while (elapsed < maxTime) {
+        _simTime = elapsed;
+
+        // Track ground time for ground ratio fitness
+        totalFrames++;
+        if (player.onGround && !player.dead) groundedFrames++;
+
+        // Stagnation: 0.25s without forward progress = death
+        // Forces agents to immediately rotate/jump when hooked, or die
+        if (!player.dead) {
+            if (player.x > lastProgressX + TILE) {
+                lastProgressX = player.x;
+                stagnantTimer = 0;
+            } else {
+                stagnantTimer += dt;
+                if (stagnantTimer > 2.0) {
+                    die();
+                    stagnantTimer = 0;
                 }
             }
+        } else {
+            stagnantTimer = 0;
+            lastProgressX = player.x;
+        }
 
-            // Material decoration on other cells
-            if (i > 0) {
-                if (mat === 'spike') {
-                    // Warning spikes on the live piece — small triangles pointing right (forward)
-                    ctx.fillStyle = C.corpseSpikeHL;
-                    ctx.beginPath();
-                    ctx.moveTo(drawX + drawW, drawY + 1);
-                    ctx.lineTo(drawX + 2, drawY + drawH/2);
-                    ctx.lineTo(drawX + drawW, drawY + drawH - 1);
-                    ctx.fill();
-                } else if (mat === 'spring') {
-                    // Zigzag spring coil — chunky 2px-tall rungs
-                    ctx.fillStyle = C.springHL;
-                    ctx.fillRect(drawX + 2, drawY + 2, 4, 2);
-                    ctx.fillRect(drawX + 6, drawY + 5, 4, 2);
-                    ctx.fillRect(drawX + 2, drawY + 8, 4, 2);
-                } else if (mat === 'booster') {
-                    ctx.fillStyle = C.boosterHL;
-                    ctx.beginPath();
-                    const d = player.facing;
-                    ctx.moveTo(drawX + drawW/2 + d * 3.5, drawY + drawH/2);
-                    ctx.lineTo(drawX + drawW/2 - d * 2, drawY + drawH/2 - 2.5);
-                    ctx.lineTo(drawX + drawW/2 - d * 2, drawY + drawH/2 + 2.5);
-                    ctx.fill();
+        // NN decision (every ~0.12s, ~8 decisions/sec)
+        if (!player.dead && !levelComplete && !gameWon) {
+            decisionTimer -= dt;
+            if (decisionTimer <= 0) {
+                decisionTimer = 0.12;
+                var inputs = getInputs();
+                var action = nn.forward(inputs);
+                // Actions: 0=nothing, 1=jump, 2=rotate_cw, 3=rotate_ccw, 4=die
+                if (action === 1) {
+                    jumpBuffered = true;
                 }
+                else if (action === 2) tryRotate(1);
+                else if (action === 3) tryRotate(-1);
+                else if (action === 4) die();
             }
         }
 
-        // Wall slide indicator
-        if (player.onWall !== 0) {
-            ctx.globalAlpha = 0.4;
-            ctx.fillStyle = C.player;
-            const bounds = shapeBounds(player.shape, player.rotation);
-            const wx = player.onWall > 0 ? player.x + (bounds.maxC + 1) * TILE : player.x + bounds.minC * TILE - 2;
-            ctx.fillRect(wx, player.y + bounds.minR * TILE + 1, 2, bounds.h * TILE - 2);
-            ctx.globalAlpha = 1;
-        }
+        update(dt);
+        elapsed += dt;
+
+        // Check if game won
+        if (gameWon) break;
+
+        // Death cap: eval ends after 20 deaths (forces strategic dying)
+        if (player.deathCount >= 20) break;
     }
 
-    // Golden tint overlay during quake invincibility (drawn ON TOP of player)
-    if (!player.dead && player.quakeTimer > 0) {
-        const cells = getCells(player.shape, player.rotation);
-        const pulse = 0.3 + 0.25 * Math.sin(performance.now() / 100);
-        const expiring = player.quakeTimer < 1.0;
-        const tint = expiring ? (Math.sin(performance.now() / 50) > 0 ? pulse : 0.05) : pulse;
-        ctx.globalAlpha = tint;
-        ctx.fillStyle = '#FFD040'; // bright gold tint
-        for (const [cx, cy] of cells) {
-            const px = player.x + cx * TILE;
-            const py = player.y + cy * TILE;
-            ctx.fillRect(px, py, TILE, TILE);
-        }
-        ctx.globalAlpha = 1;
-    }
+    var levelsCompleted = currentLevel - startLevel + (levelComplete ? 1 : 0);
+    var fitness = player.bestDistance + 500 * levelsCompleted;
 
-    // Particles
-    for (const p of particles) {
-        ctx.globalAlpha = p.life / p.maxLife;
-        ctx.fillStyle = p.color;
-        ctx.fillRect(p.x, p.y, p.size, p.size);
-    }
-    ctx.globalAlpha = 1;
-
-    // First-encounter labels
-    for (const lbl of encounterLabels) {
-        const fade = Math.min(1, lbl.timer * 2);
-        const scale = 1 + (1.5 - lbl.timer) * 0.3;
-        ctx.globalAlpha = fade;
-        ctx.fillStyle = lbl.color;
-        ctx.font = `bold ${Math.round(8 * scale)}px monospace`;
-        ctx.textAlign = 'center';
-        ctx.fillText(lbl.text, lbl.x, lbl.y);
-        ctx.textAlign = 'left';
-    }
-    ctx.globalAlpha = 1;
-
-    ctx.restore();
-
-    // ── HUD ──
-    ctx.fillStyle = C.player;
-    ctx.font = '8px monospace';
-    ctx.fillText(`LEVEL ${currentLevel}`, 4, 10);
-    ctx.fillStyle = C.text;
-    ctx.font = '7px monospace';
-    const totalDist = getSegmentsForLevel(currentLevel) * SEGMENT_W;
-    const progress = Math.min(100, Math.floor(player.distance / totalDist * 100));
-    const deathStr = `${progress}%  deaths: ${player.deathCount}`;
-    // Flash gold during quake invincibility
-    if (player.quakeTimer > 0) {
-        ctx.fillStyle = `rgba(232,168,56,${0.5 + 0.5 * Math.sin(performance.now() / 80)})`;
-    }
-    ctx.fillText(deathStr, 4, 20);
-    // Show quake count + invincibility timer
-    if (player.quakeCount > 0) {
-        const deathTextW = ctx.measureText(deathStr).width;
-        ctx.fillStyle = '#FFD080';
-        const qText = player.quakeTimer > 0
-            ? `  QUAKE! ${Math.ceil(player.quakeTimer)}s`
-            : `  quakes: ${player.quakeCount}`;
-        ctx.fillText(qText, 4 + deathTextW, 20);
-    }
-
-    // NN bot indicator
-    if (typeof nnAgent !== 'undefined' && nnAgent.active) {
-        ctx.fillStyle = '#80FF80';
-        ctx.font = '7px monospace';
-        ctx.fillText('BOT', W - 22, 10);
-    }
-
-    // Shape + material indicator
-    ctx.fillStyle = matColor(player.material);
-    ctx.font = '7px monospace';
-    ctx.fillText(`${player.shape}-piece  ${player.material}`, 4, 32);
-
-    // Next piece preview (top-right, left of pause button)
-    if (nextPieceShape && started && !player.dead) {
-        const previewX = W - 52;
-        const previewY = 4;
-        ctx.globalAlpha = 0.4;
-        ctx.fillStyle = C.text;
-        ctx.font = '6px monospace';
-        ctx.textAlign = 'right';
-        ctx.fillText('NEXT', previewX - 2, previewY + 6);
-        ctx.textAlign = 'left';
-        ctx.globalAlpha = 0.7;
-        // Draw mini tetromino (half-size tiles)
-        const miniTile = 5;
-        const nextCells = getCells(nextPieceShape, 0);
-        const nextBounds = shapeBounds(nextPieceShape, 0);
-        const offsetX = previewX - nextBounds.minC * miniTile;
-        const offsetY = previewY - nextBounds.minR * miniTile + 1;
-        for (const [cx, cy] of nextCells) {
-            ctx.fillStyle = matColor(nextPieceMaterial);
-            ctx.fillRect(offsetX + cx * miniTile, offsetY + cy * miniTile, miniTile - 1, miniTile - 1);
-        }
-        ctx.globalAlpha = 1;
-    }
-
-    // Tutorial prompts (level 1) or controls hint
-    if (tutorialStep < 3 && started) {
-        const pulse = 0.6 + 0.3 * Math.sin(performance.now() / 400);
-        ctx.globalAlpha = pulse;
-        ctx.fillStyle = C.player;
-        ctx.font = '8px monospace';
-        ctx.textAlign = 'center';
-        if (tutorialStep === 0) ctx.fillText(lastInputWasTouch ? 'tap to jump' : 'SPACE to jump', W/2, H/2 + 8);
-        else if (tutorialStep === 1) ctx.fillText(lastInputWasTouch ? 'swipe \u2190 \u2192 to rotate' : 'A / D to rotate', W/2, H/2 + 8);
-        else if (tutorialStep === 2) ctx.fillText(lastInputWasTouch ? 'swipe \u2193 to place' : 'X to place', W/2, H/2 + 8);
-        ctx.textAlign = 'left';
-        ctx.globalAlpha = 1;
-    } else if (player.deathCount < 3 && started) {
-        ctx.globalAlpha = Math.max(0, 1 - player.distance / 20);
-        ctx.fillStyle = 'rgba(216,208,192,0.35)';
-        ctx.font = '6px monospace';
-        ctx.textAlign = 'center';
-        ctx.fillText(ctrlHint('all'), W/2, H - 6);
-        ctx.textAlign = 'left';
-        ctx.globalAlpha = 1;
-    }
-
-    // Flash
-    if (flash.a > 0) {
-        ctx.globalAlpha = flash.a * 0.3;
-        ctx.fillStyle = `rgb(${flash.r*255},${flash.g*255},${flash.b*255})`;
-        ctx.fillRect(0, 0, W, H);
-        ctx.globalAlpha = 1;
-    }
-
-    // Start screen
-    if (!started) {
-        ctx.fillStyle = 'rgba(16, 16, 30, 0.88)';
-        ctx.fillRect(0, 0, W, H);
-        ctx.textAlign = 'center';
-        ctx.fillStyle = C.player;
-        ctx.font = '14px monospace';
-        ctx.fillText('SEDIMENT', W/2, H/2 - 28);
-        ctx.fillStyle = 'rgba(232,168,56,0.45)';
-        ctx.font = '7px monospace';
-        ctx.fillText('you are the shape', W/2, H/2 - 12);
-        ctx.fillStyle = C.text;
-        ctx.font = '7px monospace';
-        ctx.fillText(lastInputWasTouch ? 'tap to start' : 'press any key', W/2, H/2 + 10);
-        ctx.fillStyle = 'rgba(216,208,192,0.3)';
-        ctx.font = '6px monospace';
-        ctx.fillText(ctrlHint('all'), W/2, H/2 + 24);
-
-        // Animated kawaii T-piece running across
-        const runT = performance.now() / 1000;
-        const runX = ((runT * 40) % (W + 60)) - 30;
-        const runY = H/2 + 42;
-        const bounce = Math.abs(Math.sin(runT * 8)) * 4;
-        const tileS = 6; // mini tile size
-        const tCells = [[0,0],[1,0],[2,0],[1,1]]; // T-piece
-        ctx.globalAlpha = 0.5;
-        for (let i = 0; i < tCells.length; i++) {
-            const [cx, cy] = tCells[i];
-            const px = runX + cx * tileS;
-            const py = runY - bounce + cy * tileS;
-            ctx.fillStyle = C.solid;
-            ctx.fillRect(px, py, tileS - 1, tileS - 1);
-            // Eyes on first cell
-            if (i === 0) {
-                ctx.fillStyle = C.solidSH;
-                ctx.fillRect(px, py, 1, 1);
-                ctx.fillRect(px + 3, py, 1, 1);
-                ctx.fillStyle = '#FFFFF0';
-                ctx.fillRect(px + 1, py, 1, 1);
-                ctx.fillRect(px + 4, py, 1, 1);
-            }
-        }
-        ctx.globalAlpha = 1;
-
-        // Saved progress hint
-        if (player._highestLevel > 1) {
-            ctx.fillStyle = 'rgba(216,208,192,0.3)';
-            ctx.font = '6px monospace';
-            ctx.fillText(`best: level ${player._bestRun || player._highestLevel - 1}`, W/2, H/2 + 38);
-        }
-
-        // locomot.io link
-        ctx.fillStyle = 'rgba(208,204,196,0.15)';
-        ctx.font = '6px monospace';
-        ctx.textAlign = 'left';
-        ctx.fillText('locomot.io', 4, H - 4);
-        ctx.textAlign = 'right';
-        ctx.fillText(VERSION, W - 4, H - 4);
-        ctx.textAlign = 'left';
-    }
-
-
-    // Level title (fades in at start of each level)
-    if (levelTitleTimer > 0 && started && !levelComplete) {
-        const fade = levelTitleTimer < 1 ? levelTitleTimer : Math.min(1, (3 - levelTitleTimer) * 2);
-        ctx.globalAlpha = fade;
-        ctx.textAlign = 'center';
-        ctx.fillStyle = C.player;
-        ctx.font = '14px monospace';
-        ctx.fillText(`LEVEL ${currentLevel}`, W/2, H/2 - 16);
-        ctx.fillStyle = 'rgba(232,168,56,0.5)';
-        ctx.font = '7px monospace';
-        const LEVEL_NAMES = [
-            '', 'the shallows', 'the thorns', 'the overhang', 'blood stone',
-            'the scaffolding', 'sawdust', 'the conveyor', 'the pit',
-            'the gauntlet', 'vertigo', 'the furnace', 'the core'
-        ];
-        const hellName = LEVEL_NAMES[currentLevel] || `circle ${currentLevel}`;
-        ctx.fillText(hellName, W/2, H/2);
-        ctx.textAlign = 'left';
-        ctx.globalAlpha = 1;
-    }
-
-    // Level complete overlay
-    if (levelComplete) {
-        const fade = Math.min(1, (3 - levelTransitionTimer) * 3);
-        ctx.globalAlpha = fade * 0.7;
-        ctx.fillStyle = C.bg;
-        ctx.fillRect(0, 0, W, H);
-        ctx.globalAlpha = fade;
-        ctx.textAlign = 'center';
-        ctx.fillStyle = C.player;
-        ctx.font = '14px monospace';
-        ctx.fillText(`LEVEL ${currentLevel} CLEAR`, W/2, H/2 - 20);
-        ctx.fillStyle = C.text;
-        ctx.font = '7px monospace';
-        ctx.fillText(`deaths: ${levelDeaths}${levelQuakes > 0 ? `  quakes: ${levelQuakes}` : ''}`, W/2, H/2);
-        ctx.fillStyle = 'rgba(216,208,192,0.5)';
-        ctx.font = '6px monospace';
-        if (levelTransitionTimer > 0) {
-            ctx.fillText(`next level in ${Math.ceil(levelTransitionTimer)}...`, W/2, H/2 + 14);
-        }
-        ctx.textAlign = 'left';
-        ctx.globalAlpha = 1;
-    }
-
-    // Win screen
-    if (gameWon) {
-        const fade = Math.min(1, winTimer * 2);
-        ctx.fillStyle = `rgba(16, 16, 30, ${fade * 0.9})`;
-        ctx.fillRect(0, 0, W, H);
-
-        ctx.globalAlpha = fade;
-        ctx.textAlign = 'center';
-
-        // Title
-        const titlePulse = 1 + Math.sin(winTimer * 3) * 0.05;
-        ctx.fillStyle = C.player;
-        ctx.font = `${Math.round(16 * titlePulse)}px monospace`;
-        ctx.fillText('CONGRATULATIONS', W/2, H/2 - 40);
-
-        // Subtitle
-        ctx.fillStyle = '#FFF0D0';
-        ctx.font = '8px monospace';
-        ctx.fillText('you escaped the sediment', W/2, H/2 - 20);
-
-        // Stats
-        ctx.fillStyle = C.text;
-        ctx.font = '7px monospace';
-        ctx.fillText(`deaths: ${player.deathCount}  quakes: ${player.quakeCount}`, W/2, H/2 + 4);
-
-        // Continue hint
-        if (winTimer > 2) {
-            const blink = Math.sin(winTimer * 4) > 0;
-            if (blink) {
-                ctx.fillStyle = 'rgba(216,208,192,0.5)';
-                ctx.font = '6px monospace';
-                ctx.fillText(lastInputWasTouch ? 'tap to enter endless mode' : 'press any key for endless mode', W/2, H/2 + 36);
-            }
-        }
-
-        // Render floating particles on win screen
-        ctx.save();
-        ctx.translate(-Math.floor(cam.x + cam.sx), -Math.floor(cam.y + cam.sy));
-        for (const p of particles) {
-            ctx.globalAlpha = p.life / p.maxLife;
-            ctx.fillStyle = p.color;
-            ctx.fillRect(p.x, p.y, p.size, p.size);
-        }
-        ctx.restore();
-
-        ctx.textAlign = 'left';
-        ctx.globalAlpha = 1;
-    }
-
-    // Pause
-    if (paused) {
-        ctx.fillStyle = 'rgba(16, 16, 30, 0.8)';
-        ctx.fillRect(0, 0, W, H);
-        ctx.fillStyle = C.text;
-        ctx.font = '12px monospace';
-        ctx.textAlign = 'center';
-        ctx.fillText('PAUSED', W/2, H/2 - 24);
-        ctx.font = '7px monospace';
-        ctx.fillStyle = 'rgba(216,208,192,0.5)';
-        ctx.fillText('tap to resume', W/2, H/2 - 8);
-
-        // Skip level button
-        const skipY = H/2 + 12;
-        const skipW = 70, skipH = 16;
-        const skipX = W/2 - skipW/2;
-        ctx.fillStyle = 'rgba(232,168,56,0.2)';
-        ctx.fillRect(skipX, skipY - skipH/2, skipW, skipH);
-        ctx.strokeStyle = 'rgba(232,168,56,0.5)';
-        ctx.lineWidth = 1;
-        ctx.strokeRect(skipX, skipY - skipH/2, skipW, skipH);
-        ctx.fillStyle = C.player;
-        ctx.font = '7px monospace';
-        ctx.fillText('RESTART', W/2, skipY + 3);
-
-        // Store button bounds for tap detection (in screen coords)
-        _skipBtnBounds = { x: skipX, y: skipY - skipH/2, w: skipW, h: skipH };
-
-        // Music volume row: [  -  ] MUSIC XX% [  +  ]
-        const volY = skipY + 22;
-        const volBtnW = 16, volBtnH = 14;
-        const volLabelW = 70;
-        const volTotalW = volBtnW + volLabelW + volBtnW;
-        const volStartX = W/2 - volTotalW/2;
-
-        // "-" button
-        ctx.fillStyle = 'rgba(216,208,192,0.15)';
-        ctx.fillRect(volStartX, volY - volBtnH/2, volBtnW, volBtnH);
-        ctx.strokeStyle = 'rgba(216,208,192,0.3)';
-        ctx.lineWidth = 1;
-        ctx.strokeRect(volStartX, volY - volBtnH/2, volBtnW, volBtnH);
-        ctx.fillStyle = C.text;
-        ctx.font = '8px monospace';
-        ctx.fillText('-', volStartX + volBtnW/2, volY + 3);
-
-        // Volume label
-        const volPct = musicMuted ? 'OFF' : Math.round(musicVolume * 100) + '%';
-        ctx.fillStyle = musicMuted ? 'rgba(200,56,72,0.7)' : 'rgba(216,208,192,0.6)';
-        ctx.font = '6px monospace';
-        ctx.fillText('MUSIC ' + volPct, volStartX + volBtnW + volLabelW/2, volY + 2);
-
-        // "+" button
-        const plusX = volStartX + volBtnW + volLabelW;
-        ctx.fillStyle = 'rgba(216,208,192,0.15)';
-        ctx.fillRect(plusX, volY - volBtnH/2, volBtnW, volBtnH);
-        ctx.strokeStyle = 'rgba(216,208,192,0.3)';
-        ctx.lineWidth = 1;
-        ctx.strokeRect(plusX, volY - volBtnH/2, volBtnW, volBtnH);
-        ctx.fillStyle = C.text;
-        ctx.font = '8px monospace';
-        ctx.fillText('+', plusX + volBtnW/2, volY + 3);
-
-        _volDownBounds = { x: volStartX, y: volY - volBtnH/2, w: volBtnW, h: volBtnH };
-        _volUpBounds = { x: plusX, y: volY - volBtnH/2, w: volBtnW, h: volBtnH };
-
-        // SFX toggle button
-        const sfxY = volY + 20;
-        const sfxW = 70, sfxH = 14;
-        const sfxX = W/2 - sfxW/2;
-        ctx.fillStyle = sfxMuted ? 'rgba(200,56,72,0.2)' : 'rgba(88,184,72,0.2)';
-        ctx.fillRect(sfxX, sfxY - sfxH/2, sfxW, sfxH);
-        ctx.strokeStyle = sfxMuted ? 'rgba(200,56,72,0.5)' : 'rgba(88,184,72,0.5)';
-        ctx.lineWidth = 1;
-        ctx.strokeRect(sfxX, sfxY - sfxH/2, sfxW, sfxH);
-        ctx.fillStyle = sfxMuted ? '#C83848' : C.spring;
-        ctx.font = '6px monospace';
-        ctx.fillText(sfxMuted ? 'SFX: OFF' : 'SFX: ON', W/2, sfxY + 2);
-
-        _sfxBtnBounds = { x: sfxX, y: sfxY - sfxH/2, w: sfxW, h: sfxH };
-        _muteBtnBounds = null; // replaced by new controls
-        ctx.textAlign = 'left';
-    } else {
-        _skipBtnBounds = null;
-        _muteBtnBounds = null;
-        _volDownBounds = null;
-        _volUpBounds = null;
-        _sfxBtnBounds = null;
-    }
+    return {
+        fitness: fitness,
+        completed: levelComplete || gameWon,
+        distance: player.bestDistance,
+        deaths: player.deathCount
+    };
 }
 
-// ── Loop ──
-function loop(time) {
-    const dt = Math.min((time - lastTime) / 1000, 1/20);
-    lastTime = time;
-    update(dt);
-    draw();
-    requestAnimationFrame(loop);
-}
 
-document.getElementById('splash-version').textContent = VERSION;
+// ══════════════════════════════════════════════════════════════
+// ── BATCH EVALUATION (stdin/stdout JSON) ──
+// ══════════════════════════════════════════════════════════════
 
-// Draw splash logo: S-piece with kawaii eyes
-(function() {
-    const lc = document.getElementById('splash-logo');
-    if (!lc) return;
-    const cx = lc.getContext('2d');
-    cx.imageSmoothingEnabled = false;
-    const t = 12; // tile size in logo
-    // S-tetromino upright: (0,0)(0,1) left, (1,1)(1,2) right
-    const cells = [[0,0],[0,1],[1,1],[1,2]];
-    const ox = 12, oy = 0;
-    for (const [gx,gy] of cells) {
-        const x = ox + gx * t, y = oy + gy * t;
-        cx.fillStyle = C.solid;
-        cx.fillRect(x, y, t, t);
-        cx.fillStyle = C.solidHL;
-        cx.fillRect(x, y, t, 1);
-        cx.fillRect(x, y, 1, t);
-        cx.fillStyle = C.solidSH;
-        cx.fillRect(x, y + t - 1, t, 1);
-        cx.fillRect(x + t - 1, y, 1, t);
+// Read JSON from stdin, evaluate all agents, output results to stdout
+// Input:  { weights: [[...], [...]], levelNum: 1, maxTime: 30, seeds: [42, 43] }
+// Output: [ {fitness, completed, distance, deaths}, ... ]
+
+var inputChunks = [];
+process.stdin.setEncoding('utf8');
+process.stdin.on('data', function(chunk) { inputChunks.push(chunk); });
+process.stdin.on('end', function() {
+    var input;
+    try {
+        input = JSON.parse(inputChunks.join(''));
+    } catch (e) {
+        process.stderr.write('ERROR: Invalid JSON input: ' + e.message + '\n');
+        process.exit(1);
     }
-    // Kawaii eyes on cell (0,0)
-    const ex = ox, ey = oy;
-    cx.fillStyle = C.solidSH;
-    cx.fillRect(ex + 1, ey + 2, 3, 3);
-    cx.fillRect(ex + 7, ey + 2, 3, 3);
-    cx.fillStyle = '#FFFFF0';
-    cx.fillRect(ex + 2, ey + 2, 1, 1);
-    cx.fillRect(ex + 8, ey + 2, 1, 1);
-    cx.fillStyle = 'rgba(255,255,240,0.35)';
-    cx.fillRect(ex + 2, ey + 4, 1, 1);
-    cx.fillRect(ex + 8, ey + 4, 1, 1);
-})();
 
-init();
-requestAnimationFrame(loop);
-</script>
-<script src="nn_agent.js"></script>
-<script>
-// Auto-play mode: ?autoplay=1 enables NN agent immediately
-if (new URLSearchParams(location.search).has('autoplay')) {
-    const waitForAgent = setInterval(() => {
-        if (typeof nnAgent !== 'undefined' && nnAgent.load) {
-            nnAgent.load('nn_weights.json').then(() => {
-                nnAgent.toggle();
-                console.log('Auto-play enabled');
-            });
-            clearInterval(waitForAgent);
-        }
-    }, 100);
-}
-</script>
-</body>
-</html>
+    var weightsArray = input.weights || [[]];
+    var levelNum = input.levelNum || 1;
+    var maxTime = input.maxTime || 30;
+    var seeds = input.seeds || weightsArray.map(function(_, i) { return 42 + i; });
+    var noCorpses = input.noCorpses || false;
+
+    // Save original Math.random
+    var _origRandom = Math.random;
+
+    var _noCorpses = noCorpses;  // expose to evaluateAgent scope
+
+    var results = [];
+    for (var i = 0; i < weightsArray.length; i++) {
+        var result = evaluateAgent(weightsArray[i], levelNum, maxTime, seeds[i], _noCorpses);
+        results.push(result);
+    }
+
+    // Restore Math.random
+    Math.random = _origRandom;
+
+    process.stdout.write(JSON.stringify(results) + '\n');
+});

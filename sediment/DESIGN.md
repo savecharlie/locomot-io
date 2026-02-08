@@ -1,6 +1,6 @@
 # SEDIMENT v2
 
-**A multiplayer auto-runner where you ARE a Tetris piece. When you die, your body snaps to the grid and becomes terrain. Completed rows clear. Every player shapes the level.**
+**A multiplayer auto-runner where you ARE a shape. When you die, your body snaps to the grid and becomes terrain. Completed rows clear. Every player shapes the level.**
 
 ## The Goal
 
@@ -12,7 +12,7 @@ You auto-run through hell. You're a tetromino — an actual I-piece or T-piece o
 
 The level starts barren and brutal. Over time, deaths fill it with blocks. Bridges form across chasms. Stairways grow up walls. Spike fields get paved over. The terrain is built entirely from collective failure.
 
-## The Tetromino Mechanic
+## The Shape Mechanic
 
 - You ARE your shape. Full collision. An I-piece is 4 tiles tall and bonks every ceiling. An O-piece is compact and easy to run. Each shape has personality.
 - Swipe left/right to rotate while running. Rotation is a survival skill AND a construction tool — orient your piece for the gap you want to fill.
@@ -32,7 +32,7 @@ You can see what you are while running — your color tells you your material.
 
 ## Row Clearing — The Ecosystem
 
-When a horizontal row fills completely (terrain + corpse blocks), it clears. **Only corpse blocks vanish — terrain stays.** Blocks above fall down (Tetris gravity). Cascading clears are possible.
+When a horizontal row fills completely (terrain + corpse blocks), it clears. **Only corpse blocks vanish — terrain stays.** Blocks above fall down. Cascading clears are possible.
 
 This creates a self-balancing player ecosystem:
 
@@ -75,7 +75,7 @@ These are all construction tools disguised as movement abilities. Double jump fo
 
 Everything on a unified TILE grid. Level terrain, placed blocks, player collision — all the same grid.
 
-**Blocks fall when placed.** When you die, your tetromino detaches and falls (visibly, with a satisfying drop animation) until it lands on terrain or other blocks. Then it locks in place. This means:
+**Blocks fall when placed.** When you die, your shape detaches and falls (visibly, with a satisfying drop animation) until it lands on terrain or other blocks. Then it locks in place. This means:
 - Blocks pile up naturally, forming dense layers → rows complete → clearing works
 - Chasms fill from the bottom up (like real sediment settling)
 - No floating bridges — you cross chasms by FILLING them
@@ -108,6 +108,6 @@ Everything on a unified TILE grid. Level terrain, placed blocks, player collisio
 
 ## The Pitch
 
-You're a Tetris piece running through hell. When you die, your body becomes the floor. Completed rows clear. Every player — builder, griefer, janitor, pioneer — feeds the ecosystem. The level is alive, shaped by collective failure, breathing through cycles of creation and destruction.
+You're a shape running through hell. When you die, your body becomes the floor. Completed rows clear. Every player — builder, griefer, janitor, pioneer — feeds the ecosystem. The level is alive, shaped by collective failure, breathing through cycles of creation and destruction.
 
 Every time you die, you make the game different for someone else.
