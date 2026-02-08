@@ -1472,6 +1472,8 @@ function applyCorpseGravity() {
 
 function tryRotate(dir) {
     // dir: 1 = clockwise, -1 = counter-clockwise
+    // Rate limit: max ~4 rotations/sec
+    if (player.rotateCooldown > 0) return false;
     const oldRot = player.rotation;
     const newRot = (oldRot + dir + 4) % 4;
     const kicks = player.shape === 'I' ? KICK_DATA_I : KICK_DATA;
@@ -1508,6 +1510,7 @@ function tryRotate(dir) {
                 player.spinCooldown = 1.0;
             }
             SFX.rotate();
+            player.rotateCooldown = 0.25;
             return true;
         }
     }
@@ -1537,6 +1540,7 @@ function respawn() {
     // NOTE: quakeTimer is NOT reset here — invincibility persists through respawn
     player.jumpsLeft = 2;
     player.spinCooldown = 0;
+    player.rotateCooldown = 0;
     player.coyoteTimer = 0;
     player.distance = 0;
     player.stuckTimer = 0;
@@ -1927,6 +1931,7 @@ function update(dt) {
     // Boost timer
     if (player.boostTimer > 0) player.boostTimer -= dt;
     if (player.spinCooldown > 0) player.spinCooldown -= dt;
+    if (player.rotateCooldown > 0) player.rotateCooldown -= dt;
 
     // Auto-run (frozen during tutorial step 0)
     if (tutorialStep === 0) {
