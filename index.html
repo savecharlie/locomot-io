@@ -20,7 +20,7 @@
   <meta property="og:image" content="https://locomot.io/og-image.png">
 
   <meta name="theme-color" content="#1D2B30">
-  <meta name="app-version" content="364">
+  <meta name="app-version" content="365">
   <link rel="manifest" href="manifest.json">
 
   <!-- Pixel Font -->
@@ -344,6 +344,18 @@
       sc.fillRect(ex + 2, ey + 4, 1, 1);
       sc.fillRect(ex + 8, ey + 4, 1, 1);
     }
+
+    // Sort games by popularity (Cloudflare analytics)
+    fetch('/api/popularity?' + Date.now()).then(r => r.json()).then(counts => {
+      const grid = document.querySelector('.game-grid');
+      const cards = [...grid.querySelectorAll('.game-card')];
+      cards.sort((a, b) => {
+        const aKey = a.getAttribute('href');
+        const bKey = b.getAttribute('href');
+        return (counts[bKey] || 0) - (counts[aKey] || 0);
+      });
+      for (const card of cards) grid.appendChild(card);
+    }).catch(() => {}); // fail silently — default order stays
 
     // Auto-update: fetch version from server, reload if stale
     fetch('version.txt?' + Date.now()).then(r => r.text()).then(v => {
