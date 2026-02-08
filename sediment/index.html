@@ -102,7 +102,7 @@ const canvas = document.getElementById('c');
 const ctx = canvas.getContext('2d');
 
 // ── Config ──
-const VERSION = 'v46';
+const VERSION = 'v47';
 const TILE = 12;
 const GRAVITY = 700;
 const JUMP_FORCE = -280;
@@ -166,18 +166,29 @@ function matDark(mat) {
 // ══════════════════════════════════════
 
 let audioCtx = null;
+let sfxMaster = null; // master gain node for all SFX
+let sfxMuted = false;
+let sfxVolume = 0.7;
+
 function ensureAudio() {
-    if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    if (!audioCtx) {
+        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        sfxMaster = audioCtx.createGain();
+        sfxMaster.connect(audioCtx.destination);
+        sfxMaster.gain.value = sfxMuted ? 0 : sfxVolume;
+    }
     if (audioCtx.state === 'suspended') audioCtx.resume();
     return audioCtx;
 }
+
+function sfxDest() { return sfxMaster || ensureAudio() && sfxMaster; }
 
 const SFX = {
     jump() {
         const ctx = ensureAudio();
         const osc = ctx.createOscillator();
         const gain = ctx.createGain();
-        osc.connect(gain); gain.connect(ctx.destination);
+        osc.connect(gain); gain.connect(sfxDest());
         osc.type = 'square';
         osc.frequency.setValueAtTime(280, ctx.currentTime);
         osc.frequency.exponentialRampToValueAtTime(560, ctx.currentTime + 0.08);
@@ -190,7 +201,7 @@ const SFX = {
         const ctx = ensureAudio();
         const osc = ctx.createOscillator();
         const gain = ctx.createGain();
-        osc.connect(gain); gain.connect(ctx.destination);
+        osc.connect(gain); gain.connect(sfxDest());
         osc.type = 'square';
         osc.frequency.setValueAtTime(400, ctx.currentTime);
         osc.frequency.exponentialRampToValueAtTime(800, ctx.currentTime + 0.07);
@@ -204,7 +215,7 @@ const SFX = {
         // Low thud
         const osc = ctx.createOscillator();
         const gain = ctx.createGain();
-        osc.connect(gain); gain.connect(ctx.destination);
+        osc.connect(gain); gain.connect(sfxDest());
         osc.type = 'sawtooth';
         osc.frequency.setValueAtTime(150, ctx.currentTime);
         osc.frequency.exponentialRampToValueAtTime(40, ctx.currentTime + 0.2);
@@ -219,7 +230,7 @@ const SFX = {
         const noise = ctx.createBufferSource();
         noise.buffer = buf;
         const ng = ctx.createGain();
-        noise.connect(ng); ng.connect(ctx.destination);
+        noise.connect(ng); ng.connect(sfxDest());
         ng.gain.setValueAtTime(0.08, ctx.currentTime);
         ng.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.1);
         noise.start(ctx.currentTime);
@@ -228,7 +239,7 @@ const SFX = {
         const ctx = ensureAudio();
         const osc = ctx.createOscillator();
         const gain = ctx.createGain();
-        osc.connect(gain); gain.connect(ctx.destination);
+        osc.connect(gain); gain.connect(sfxDest());
         osc.type = 'sine';
         osc.frequency.setValueAtTime(220, ctx.currentTime);
         osc.frequency.exponentialRampToValueAtTime(880, ctx.currentTime + 0.12);
@@ -242,7 +253,7 @@ const SFX = {
         const ctx = ensureAudio();
         const osc = ctx.createOscillator();
         const gain = ctx.createGain();
-        osc.connect(gain); gain.connect(ctx.destination);
+        osc.connect(gain); gain.connect(sfxDest());
         osc.type = 'sawtooth';
         osc.frequency.setValueAtTime(200, ctx.currentTime);
         osc.frequency.exponentialRampToValueAtTime(600, ctx.currentTime + 0.15);
@@ -258,7 +269,7 @@ const SFX = {
         // Bass hit
         const osc1 = ctx.createOscillator();
         const g1 = ctx.createGain();
-        osc1.connect(g1); g1.connect(ctx.destination);
+        osc1.connect(g1); g1.connect(sfxDest());
         osc1.type = 'square';
         osc1.frequency.setValueAtTime(120, ctx.currentTime);
         osc1.frequency.exponentialRampToValueAtTime(60, ctx.currentTime + 0.15);
@@ -269,7 +280,7 @@ const SFX = {
         // High sparkle
         const osc2 = ctx.createOscillator();
         const g2 = ctx.createGain();
-        osc2.connect(g2); g2.connect(ctx.destination);
+        osc2.connect(g2); g2.connect(sfxDest());
         osc2.type = 'sine';
         osc2.frequency.setValueAtTime(800, ctx.currentTime + 0.05);
         osc2.frequency.exponentialRampToValueAtTime(1200, ctx.currentTime + 0.15);
@@ -285,7 +296,7 @@ const SFX = {
         const noise = ctx.createBufferSource();
         noise.buffer = buf;
         const ng = ctx.createGain();
-        noise.connect(ng); ng.connect(ctx.destination);
+        noise.connect(ng); ng.connect(sfxDest());
         ng.gain.setValueAtTime(0.1, ctx.currentTime);
         ng.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.08);
         noise.start(ctx.currentTime);
@@ -297,7 +308,7 @@ const SFX = {
         notes.forEach((freq, i) => {
             const osc = ctx.createOscillator();
             const gain = ctx.createGain();
-            osc.connect(gain); gain.connect(ctx.destination);
+            osc.connect(gain); gain.connect(sfxDest());
             osc.type = 'square';
             const t = ctx.currentTime + i * 0.1;
             osc.frequency.setValueAtTime(freq, t);
@@ -312,7 +323,7 @@ const SFX = {
         [1047, 1319, 1568].forEach(freq => {
             const osc = ctx.createOscillator();
             const gain = ctx.createGain();
-            osc.connect(gain); gain.connect(ctx.destination);
+            osc.connect(gain); gain.connect(sfxDest());
             osc.type = 'sine';
             const t = ctx.currentTime + 0.4;
             osc.frequency.setValueAtTime(freq, t);
@@ -328,7 +339,7 @@ const SFX = {
         const ctx = ensureAudio();
         const osc = ctx.createOscillator();
         const gain = ctx.createGain();
-        osc.connect(gain); gain.connect(ctx.destination);
+        osc.connect(gain); gain.connect(sfxDest());
         osc.type = 'triangle';
         osc.frequency.setValueAtTime(100 + Math.random() * 50, ctx.currentTime);
         gain.gain.setValueAtTime(0.03, ctx.currentTime);
@@ -340,7 +351,7 @@ const SFX = {
         const ctx = ensureAudio();
         const osc = ctx.createOscillator();
         const gain = ctx.createGain();
-        osc.connect(gain); gain.connect(ctx.destination);
+        osc.connect(gain); gain.connect(sfxDest());
         osc.type = 'square';
         osc.frequency.setValueAtTime(440, ctx.currentTime);
         osc.frequency.setValueAtTime(520, ctx.currentTime + 0.03);
@@ -353,7 +364,7 @@ const SFX = {
         const ctx = ensureAudio();
         const osc = ctx.createOscillator();
         const gain = ctx.createGain();
-        osc.connect(gain); gain.connect(ctx.destination);
+        osc.connect(gain); gain.connect(sfxDest());
         osc.type = 'triangle';
         osc.frequency.setValueAtTime(160, ctx.currentTime);
         osc.frequency.exponentialRampToValueAtTime(80, ctx.currentTime + 0.06);
@@ -369,7 +380,7 @@ const SFX = {
         melody.forEach((freq, i) => {
             const osc = ctx.createOscillator();
             const gain = ctx.createGain();
-            osc.connect(gain); gain.connect(ctx.destination);
+            osc.connect(gain); gain.connect(sfxDest());
             osc.type = i < 4 ? 'square' : 'sine';
             const t = ctx.currentTime + i * 0.12;
             osc.frequency.setValueAtTime(freq, t);
@@ -389,21 +400,27 @@ const SFX = {
 
 let musicEl = null;
 let musicMuted = false;
+let musicVolume = 0.15; // default quieter
 let musicStarted = false;
+const VOLUME_STEPS = [0, 0.05, 0.10, 0.15, 0.25, 0.40, 0.60];
 
 function initMusic() {
     if (musicEl) return;
     musicEl = document.createElement('audio');
     musicEl.loop = true;
-    musicEl.volume = 0.3;
     // Try OGG first, fall back to MP3
     const canOgg = musicEl.canPlayType('audio/ogg; codecs=opus');
     musicEl.src = canOgg ? 'music.ogg' : 'music.mp3';
-    // Load saved mute preference
+    // Load saved preferences
     try {
-        musicMuted = localStorage.getItem('sediment_muted') === 'true';
-        musicEl.muted = musicMuted;
+        const saved = JSON.parse(localStorage.getItem('sediment_audio') || '{}');
+        if (saved.musicMuted !== undefined) musicMuted = saved.musicMuted;
+        if (saved.musicVolume !== undefined) musicVolume = saved.musicVolume;
+        if (saved.sfxMuted !== undefined) sfxMuted = saved.sfxMuted;
     } catch(e) {}
+    musicEl.volume = musicVolume;
+    musicEl.muted = musicMuted;
+    if (sfxMaster) sfxMaster.gain.value = sfxMuted ? 0 : sfxVolume;
 }
 
 function startMusic() {
@@ -413,10 +430,34 @@ function startMusic() {
     musicEl.play().catch(() => {}); // may fail without user gesture
 }
 
-function toggleMute() {
+function saveAudioPrefs() {
+    try { localStorage.setItem('sediment_audio', JSON.stringify({ musicMuted, musicVolume, sfxMuted })); } catch(e) {}
+}
+
+function toggleMusicMute() {
     musicMuted = !musicMuted;
     if (musicEl) musicEl.muted = musicMuted;
-    try { localStorage.setItem('sediment_muted', musicMuted); } catch(e) {}
+    saveAudioPrefs();
+}
+
+function adjustMusicVolume(dir) {
+    // Find current step index and move
+    let idx = 0;
+    for (let i = 0; i < VOLUME_STEPS.length; i++) {
+        if (VOLUME_STEPS[i] <= musicVolume + 0.01) idx = i;
+    }
+    idx = Math.max(0, Math.min(VOLUME_STEPS.length - 1, idx + dir));
+    musicVolume = VOLUME_STEPS[idx];
+    if (musicEl) musicEl.volume = musicVolume;
+    if (musicVolume === 0) { musicMuted = true; if (musicEl) musicEl.muted = true; }
+    else if (musicMuted) { musicMuted = false; if (musicEl) musicEl.muted = false; }
+    saveAudioPrefs();
+}
+
+function toggleSfxMute() {
+    sfxMuted = !sfxMuted;
+    if (sfxMaster) sfxMaster.gain.value = sfxMuted ? 0 : sfxVolume;
+    saveAudioPrefs();
 }
 
 // ══════════════════════════════════════
@@ -1442,6 +1483,9 @@ function respawn() {
 let jumpBuffered = false;
 let _skipBtnBounds = null; // {x,y,w,h} in game pixels when pause menu is showing
 let _muteBtnBounds = null;
+let _volDownBounds = null;
+let _volUpBounds = null;
+let _sfxBtnBounds = null;
 let touchStartX = 0, touchStartY = 0;
 let touchStartTime = 0;
 let touchHandled = false;
@@ -1539,10 +1583,24 @@ canvas.addEventListener('touchend', (e) => {
                         return;
                     }
                 }
-                if (_muteBtnBounds) {
-                    const b = _muteBtnBounds;
+                if (_volDownBounds) {
+                    const b = _volDownBounds;
                     if (tapX >= b.x && tapX <= b.x + b.w && tapY >= b.y && tapY <= b.y + b.h) {
-                        toggleMute();
+                        adjustMusicVolume(-1);
+                        return;
+                    }
+                }
+                if (_volUpBounds) {
+                    const b = _volUpBounds;
+                    if (tapX >= b.x && tapX <= b.x + b.w && tapY >= b.y && tapY <= b.y + b.h) {
+                        adjustMusicVolume(1);
+                        return;
+                    }
+                }
+                if (_sfxBtnBounds) {
+                    const b = _sfxBtnBounds;
+                    if (tapX >= b.x && tapX <= b.x + b.w && tapY >= b.y && tapY <= b.y + b.h) {
+                        toggleSfxMute();
                         return;
                     }
                 }
@@ -1563,7 +1621,10 @@ document.addEventListener('keydown', (e) => {
     if (e.code === 'KeyR') hardReset();
     if (e.code === 'KeyP' || e.code === 'Escape') togglePause();
     if (e.code === 'KeyN' && paused) restartLevel();
-    if (e.code === 'KeyM') toggleMute();
+    if (e.code === 'KeyM') toggleMusicMute();
+    if (e.code === 'KeyF') toggleSfxMute();
+    if (e.code === 'Comma' && paused) adjustMusicVolume(-1);
+    if (e.code === 'Period' && paused) adjustMusicVolume(1);
 });
 
 // Pause
@@ -1604,10 +1665,24 @@ canvas.addEventListener('click', (e) => {
                 return;
             }
         }
-        if (_muteBtnBounds) {
-            const b = _muteBtnBounds;
+        if (_volDownBounds) {
+            const b = _volDownBounds;
             if (clickX >= b.x && clickX <= b.x + b.w && clickY >= b.y && clickY <= b.y + b.h) {
-                toggleMute();
+                adjustMusicVolume(-1);
+                return;
+            }
+        }
+        if (_volUpBounds) {
+            const b = _volUpBounds;
+            if (clickX >= b.x && clickX <= b.x + b.w && clickY >= b.y && clickY <= b.y + b.h) {
+                adjustMusicVolume(1);
+                return;
+            }
+        }
+        if (_sfxBtnBounds) {
+            const b = _sfxBtnBounds;
+            if (clickX >= b.x && clickX <= b.x + b.w && clickY >= b.y && clickY <= b.y + b.h) {
+                toggleSfxMute();
                 return;
             }
         }
@@ -2740,24 +2815,65 @@ function draw() {
         // Store button bounds for tap detection (in screen coords)
         _skipBtnBounds = { x: skipX, y: skipY - skipH/2, w: skipW, h: skipH };
 
-        // Mute toggle button
-        const muteY = skipY + 22;
-        const muteW = 70, muteH = 16;
-        const muteX = W/2 - muteW/2;
-        ctx.fillStyle = musicMuted ? 'rgba(200,56,72,0.2)' : 'rgba(88,184,72,0.2)';
-        ctx.fillRect(muteX, muteY - muteH/2, muteW, muteH);
-        ctx.strokeStyle = musicMuted ? 'rgba(200,56,72,0.5)' : 'rgba(88,184,72,0.5)';
-        ctx.lineWidth = 1;
-        ctx.strokeRect(muteX, muteY - muteH/2, muteW, muteH);
-        ctx.fillStyle = musicMuted ? '#C83848' : C.spring;
-        ctx.font = '7px monospace';
-        ctx.fillText(musicMuted ? 'MUSIC: OFF' : 'MUSIC: ON', W/2, muteY + 3);
+        // Music volume row: [  -  ] MUSIC XX% [  +  ]
+        const volY = skipY + 22;
+        const volBtnW = 16, volBtnH = 14;
+        const volLabelW = 70;
+        const volTotalW = volBtnW + volLabelW + volBtnW;
+        const volStartX = W/2 - volTotalW/2;
 
-        _muteBtnBounds = { x: muteX, y: muteY - muteH/2, w: muteW, h: muteH };
+        // "-" button
+        ctx.fillStyle = 'rgba(216,208,192,0.15)';
+        ctx.fillRect(volStartX, volY - volBtnH/2, volBtnW, volBtnH);
+        ctx.strokeStyle = 'rgba(216,208,192,0.3)';
+        ctx.lineWidth = 1;
+        ctx.strokeRect(volStartX, volY - volBtnH/2, volBtnW, volBtnH);
+        ctx.fillStyle = C.text;
+        ctx.font = '8px monospace';
+        ctx.fillText('-', volStartX + volBtnW/2, volY + 3);
+
+        // Volume label
+        const volPct = musicMuted ? 'OFF' : Math.round(musicVolume * 100) + '%';
+        ctx.fillStyle = musicMuted ? 'rgba(200,56,72,0.7)' : 'rgba(216,208,192,0.6)';
+        ctx.font = '6px monospace';
+        ctx.fillText('MUSIC ' + volPct, volStartX + volBtnW + volLabelW/2, volY + 2);
+
+        // "+" button
+        const plusX = volStartX + volBtnW + volLabelW;
+        ctx.fillStyle = 'rgba(216,208,192,0.15)';
+        ctx.fillRect(plusX, volY - volBtnH/2, volBtnW, volBtnH);
+        ctx.strokeStyle = 'rgba(216,208,192,0.3)';
+        ctx.lineWidth = 1;
+        ctx.strokeRect(plusX, volY - volBtnH/2, volBtnW, volBtnH);
+        ctx.fillStyle = C.text;
+        ctx.font = '8px monospace';
+        ctx.fillText('+', plusX + volBtnW/2, volY + 3);
+
+        _volDownBounds = { x: volStartX, y: volY - volBtnH/2, w: volBtnW, h: volBtnH };
+        _volUpBounds = { x: plusX, y: volY - volBtnH/2, w: volBtnW, h: volBtnH };
+
+        // SFX toggle button
+        const sfxY = volY + 20;
+        const sfxW = 70, sfxH = 14;
+        const sfxX = W/2 - sfxW/2;
+        ctx.fillStyle = sfxMuted ? 'rgba(200,56,72,0.2)' : 'rgba(88,184,72,0.2)';
+        ctx.fillRect(sfxX, sfxY - sfxH/2, sfxW, sfxH);
+        ctx.strokeStyle = sfxMuted ? 'rgba(200,56,72,0.5)' : 'rgba(88,184,72,0.5)';
+        ctx.lineWidth = 1;
+        ctx.strokeRect(sfxX, sfxY - sfxH/2, sfxW, sfxH);
+        ctx.fillStyle = sfxMuted ? '#C83848' : C.spring;
+        ctx.font = '6px monospace';
+        ctx.fillText(sfxMuted ? 'SFX: OFF' : 'SFX: ON', W/2, sfxY + 2);
+
+        _sfxBtnBounds = { x: sfxX, y: sfxY - sfxH/2, w: sfxW, h: sfxH };
+        _muteBtnBounds = null; // replaced by new controls
         ctx.textAlign = 'left';
     } else {
         _skipBtnBounds = null;
         _muteBtnBounds = null;
+        _volDownBounds = null;
+        _volUpBounds = null;
+        _sfxBtnBounds = null;
     }
 }
 
