@@ -1498,16 +1498,20 @@ function tryRotate(dir) {
             player.squash = 1.15;
             const cx = player.x + getShapeCenterX(player.shape, player.rotation);
             const cy = player.y + getShapeCenterY(player.shape, player.rotation);
-            spawnP(cx, cy, matColor(player.material), 3, 20, 0.1);
-            // Spin boost/brake (with cooldown)
-            if (!player.spinCooldown || player.spinCooldown <= 0) {
-                if (dir === 1) {
-                    player.vx = 200;  // CW = boost forward
-                } else {
-                    player.vx = 20;   // CCW = brake to dodge
-                }
+            // Spin boost/brake
+            // Brake (CCW) = always free
+            // Boost (CW) = cooldown; spam = forced brake
+            if (dir === -1) {
+                player.vx = 20;
+                player.boostTimer = 0.5;
+            } else if (!player.spinCooldown || player.spinCooldown <= 0) {
+                player.vx = 200;
                 player.boostTimer = 0.5;
                 player.spinCooldown = 1.0;
+            } else {
+                // CW spam = brake check
+                player.vx = 20;
+                player.boostTimer = 0.5;
             }
             SFX.rotate();
             player.rotateCooldown = 0.25;
