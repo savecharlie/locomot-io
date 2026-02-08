@@ -1941,8 +1941,8 @@ function update(dt) {
     // Squash lerp
     player.squash += (1 - player.squash) * 10 * dt;
 
-    // Trail
-    player.trail.unshift({ x: player.x, y: player.y, life: 0.12 });
+    // Trail (only during spin boost/brake or on booster material)
+    if (player.boostTimer > 0) player.trail.unshift({ x: player.x, y: player.y, life: 0.12 });
     for (let i = player.trail.length - 1; i >= 0; i--) {
         player.trail[i].life -= dt;
         if (player.trail[i].life <= 0) player.trail.splice(i, 1);
