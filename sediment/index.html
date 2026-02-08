@@ -102,7 +102,7 @@ const canvas = document.getElementById('c');
 const ctx = canvas.getContext('2d');
 
 // ── Config ──
-const VERSION = 'v47';
+const VERSION = 'v48';
 const TILE = 12;
 const GRAVITY = 700;
 const JUMP_FORCE = -280;
@@ -1604,6 +1604,9 @@ canvas.addEventListener('touchend', (e) => {
                         return;
                     }
                 }
+                // Tap anywhere else = resume
+                togglePause();
+                return;
             }
             doJump();
         }
@@ -1686,6 +1689,8 @@ canvas.addEventListener('click', (e) => {
                 return;
             }
         }
+        // Click anywhere else = resume
+        togglePause();
     }
 });
 
