@@ -15,9 +15,9 @@ export async function onRequestGet(context) {
     return new Response(JSON.stringify({ error: 'missing config' }), { status: 500, headers });
   }
 
-  // Last 30 days
+  // Last 7 days (Cloudflare adaptive groups max ~8 days)
   const now = new Date();
-  const since = new Date(now - 30 * 24 * 60 * 60 * 1000);
+  const since = new Date(now - 7 * 24 * 60 * 60 * 1000);
   const sinceStr = since.toISOString().split('T')[0];
   const untilStr = now.toISOString().split('T')[0];
 
@@ -28,7 +28,6 @@ export async function onRequestGet(context) {
           filter: {
             date_geq: "${sinceStr}"
             date_leq: "${untilStr}"
-            requestType: "page"
           }
           limit: 50
           orderBy: [count_DESC]
@@ -69,7 +68,7 @@ export async function onRequestGet(context) {
       // Normalize: /sediment/ and /sediment/index.html both count for sediment
       // Match game paths from homepage hrefs
       const gamePatterns = [
-        { pattern: /^\/trains\.html/, key: 'trains.html' },
+        { pattern: /^\/trains(\.html)?$/, key: 'trains.html' },
         { pattern: /^\/ice_skater/, key: 'ice_skater/' },
         { pattern: /^\/pixel\.html/, key: 'pixel.html' },
         { pattern: /^\/painter/, key: 'painter/' },
