@@ -1500,11 +1500,11 @@ function tryRotate(dir) {
             // Spin boost/brake (with cooldown)
             if (!player.spinCooldown || player.spinCooldown <= 0) {
                 if (dir === 1) {
-                    player.vx = 160;  // CW = boost forward
+                    player.vx = 200;  // CW = boost forward
                 } else {
-                    player.vx = 40;   // CCW = brake to dodge
+                    player.vx = 20;   // CCW = brake to dodge
                 }
-                player.boostTimer = 0.15;
+                player.boostTimer = 0.5;
                 player.spinCooldown = 1.0;
             }
             SFX.rotate();

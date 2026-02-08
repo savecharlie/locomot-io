@@ -1512,13 +1512,13 @@ function tryRotate(dir) {
                 spawnP(cx, cy, matColor(player.material), 3, 20, 0.1);
                 if (dir === 1) {
                     // CW = boost forward
-                    player.vx = 160;
-                    player.boostTimer = 0.15;
+                    player.vx = 200;
+                    player.boostTimer = 0.5;
                     SFX.spinBoost();
                 } else {
                     // CCW = brake to dodge
-                    player.vx = 40;
-                    player.boostTimer = 0.15;
+                    player.vx = 20;
+                    player.boostTimer = 0.5;
                     SFX.spinBrake();
                 }
                 player.spinCooldown = 1.0;
