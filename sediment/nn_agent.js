@@ -12,6 +12,9 @@ const nnAgent = (() => {
     let weights = null;
     let active = false;
     let loaded = false;
+    let progressCheckX = 0;
+    let progressTimer = 0;
+    let progressJumped = false;
 
     // ── Matrix math ──
 
@@ -209,12 +212,29 @@ const nnAgent = (() => {
         /** Called each frame from update(). Returns action 0-4. */
         getAction() {
             if (!loaded || !active) return 0;
-            if (player.dead) return 0;
-            // Stuck detector: override NN when not making progress
-            const stuck = player.stuckTimer || 0;
-            if (stuck > 0.8) return 4; // phase 3: die and retry
-            if (stuck > 0.5) return 1; // phase 2: jump out
-            if (stuck > 0.3) return 2; // phase 1: spin to change shape
+            if (player.dead) {
+                progressTimer = 0;
+                progressJumped = false;
+                progressCheckX = player.x;
+                return 0;
+            }
+            // Progress detector: stuck → jump once → die
+            if (player.x > progressCheckX + 2 * TILE) {
+                progressCheckX = player.x;
+                progressTimer = 0;
+                progressJumped = false;
+            } else {
+                progressTimer += 1/60;
+                if (progressTimer > 1.5) {
+                    progressTimer = 0;
+                    progressJumped = false;
+                    return 4; // die
+                }
+                if (progressTimer > 0.8 && player.onGround && !progressJumped) {
+                    progressJumped = true;
+                    return 1; // jump
+                }
+            }
             const inputs = getInputs();
             return forward(inputs);
         },

@@ -2535,13 +2535,12 @@ function evaluateAgent(flatWeights, levelNum, maxTime, seed, noCorpses) {
     var dt = 1 / 60;
     var elapsed = 0;
     var decisionTimer = 0;
-    var jumpCooldown = 0;      // cooldown after a successful jump
-    var wasOnGround = false;   // track landing to reset cooldown
     var groundedFrames = 0;    // frames spent on ground (for ground ratio)
     var totalFrames = 0;       // total simulation frames
     var startLevel = currentLevel;
-    var stagnantTimer = 0;     // time since last forward progress
-    var lastProgressX = 0;     // x position at last progress check
+    var progressCheckX = 0;    // x at last real forward progress
+    var progressTimer = 0;     // time since last forward progress
+    var progressJumped = false; // whether auto-jump has fired
 
     while (elapsed < maxTime) {
         _simTime = elapsed;
@@ -2550,22 +2549,31 @@ function evaluateAgent(flatWeights, levelNum, maxTime, seed, noCorpses) {
         totalFrames++;
         if (player.onGround && !player.dead) groundedFrames++;
 
-        // Stagnation: 0.25s without forward progress = death
-        // Forces agents to immediately rotate/jump when hooked, or die
+        // Progress detector: auto-jump then auto-die when stuck
+        // (physics event, not NN override — NN still makes its own decisions)
         if (!player.dead) {
-            if (player.x > lastProgressX + TILE) {
-                lastProgressX = player.x;
-                stagnantTimer = 0;
+            if (player.x > progressCheckX + 2 * TILE) {
+                progressCheckX = player.x;
+                progressTimer = 0;
+                progressJumped = false;
             } else {
-                stagnantTimer += dt;
-                if (stagnantTimer > 2.0) {
+                progressTimer += dt;
+                // Phase 1: auto-jump once after 0.8s (like hitting a spring)
+                if (progressTimer > 0.8 && player.onGround && !progressJumped) {
+                    jumpBuffered = true;
+                    progressJumped = true;
+                }
+                // Phase 2: auto-die after 1.5s
+                if (progressTimer > 1.5) {
                     die();
-                    stagnantTimer = 0;
+                    progressTimer = 0;
+                    progressJumped = false;
                 }
             }
         } else {
-            stagnantTimer = 0;
-            lastProgressX = player.x;
+            progressTimer = 0;
+            progressJumped = false;
+            progressCheckX = player.x;
         }
 
         // NN decision (every ~0.12s, ~8 decisions/sec)
@@ -2573,18 +2581,8 @@ function evaluateAgent(flatWeights, levelNum, maxTime, seed, noCorpses) {
             decisionTimer -= dt;
             if (decisionTimer <= 0) {
                 decisionTimer = 0.12;
-                var action;
-                // Stuck detector: force decisions when not progressing
-                if (stagnantTimer > 0.8) {
-                    action = 4; // phase 3: die and retry
-                } else if (stagnantTimer > 0.5) {
-                    action = 1; // phase 2: jump out
-                } else if (stagnantTimer > 0.3) {
-                    action = 2; // phase 1: spin to change shape
-                } else {
-                    var inputs = getInputs();
-                    action = nn.forward(inputs);
-                }
+                var inputs = getInputs();
+                var action = nn.forward(inputs);
                 // Actions: 0=nothing, 1=jump, 2=rotate_cw, 3=rotate_ccw, 4=die
                 if (action === 1) {
                     jumpBuffered = true;
