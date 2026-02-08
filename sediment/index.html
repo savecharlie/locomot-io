@@ -102,7 +102,7 @@ const canvas = document.getElementById('c');
 const ctx = canvas.getContext('2d');
 
 // ── Config ──
-const VERSION = 'v45';
+const VERSION = 'v46';
 const TILE = 12;
 const GRAVITY = 700;
 const JUMP_FORCE = -280;
@@ -382,6 +382,42 @@ const SFX = {
         });
     }
 };
+
+// ══════════════════════════════════════
+// ── MUSIC ──
+// ══════════════════════════════════════
+
+let musicEl = null;
+let musicMuted = false;
+let musicStarted = false;
+
+function initMusic() {
+    if (musicEl) return;
+    musicEl = document.createElement('audio');
+    musicEl.loop = true;
+    musicEl.volume = 0.3;
+    // Try OGG first, fall back to MP3
+    const canOgg = musicEl.canPlayType('audio/ogg; codecs=opus');
+    musicEl.src = canOgg ? 'music.ogg' : 'music.mp3';
+    // Load saved mute preference
+    try {
+        musicMuted = localStorage.getItem('sediment_muted') === 'true';
+        musicEl.muted = musicMuted;
+    } catch(e) {}
+}
+
+function startMusic() {
+    if (musicStarted) return;
+    initMusic();
+    musicStarted = true;
+    musicEl.play().catch(() => {}); // may fail without user gesture
+}
+
+function toggleMute() {
+    musicMuted = !musicMuted;
+    if (musicEl) musicEl.muted = musicMuted;
+    try { localStorage.setItem('sediment_muted', musicMuted); } catch(e) {}
+}
 
 // ══════════════════════════════════════
 // ── SAVE / LOAD (localStorage) ──
@@ -1405,6 +1441,7 @@ function respawn() {
 
 let jumpBuffered = false;
 let _skipBtnBounds = null; // {x,y,w,h} in game pixels when pause menu is showing
+let _muteBtnBounds = null;
 let touchStartX = 0, touchStartY = 0;
 let touchStartTime = 0;
 let touchHandled = false;
@@ -1429,13 +1466,13 @@ function ctrlHint(action) {
 }
 
 function doJump() {
-    if (!started) { started = true; return; }
+    if (!started) { started = true; startMusic(); return; }
     if (tutorialStep === 0) tutorialStep = 1;
     jumpBuffered = true;
 }
 
 function doDie() {
-    if (!started) { started = true; return; }
+    if (!started) { started = true; startMusic(); return; }
     if (tutorialStep === 0) return; // blocked until jump
     if (tutorialStep === 2) { tutorialStep = 3; tutorialComplete = true; }
     die();
@@ -1489,16 +1526,25 @@ canvas.addEventListener('touchend', (e) => {
     if (!touchHandled) {
         const elapsed = performance.now() - touchStartTime;
         if (elapsed < 300) {
-            // Check if tapping the skip button in pause menu
-            if (paused && _skipBtnBounds) {
+            // Check if tapping pause menu buttons
+            if (paused) {
                 const t = e.changedTouches[0];
                 const rect = canvas.getBoundingClientRect();
                 const tapX = (t.clientX - rect.left) / rect.width * W;
                 const tapY = (t.clientY - rect.top) / rect.height * H;
-                const b = _skipBtnBounds;
-                if (tapX >= b.x && tapX <= b.x + b.w && tapY >= b.y && tapY <= b.y + b.h) {
-                    restartLevel();
-                    return;
+                if (_skipBtnBounds) {
+                    const b = _skipBtnBounds;
+                    if (tapX >= b.x && tapX <= b.x + b.w && tapY >= b.y && tapY <= b.y + b.h) {
+                        restartLevel();
+                        return;
+                    }
+                }
+                if (_muteBtnBounds) {
+                    const b = _muteBtnBounds;
+                    if (tapX >= b.x && tapX <= b.x + b.w && tapY >= b.y && tapY <= b.y + b.h) {
+                        toggleMute();
+                        return;
+                    }
                 }
             }
             doJump();
@@ -1517,6 +1563,7 @@ document.addEventListener('keydown', (e) => {
     if (e.code === 'KeyR') hardReset();
     if (e.code === 'KeyP' || e.code === 'Escape') togglePause();
     if (e.code === 'KeyN' && paused) restartLevel();
+    if (e.code === 'KeyM') toggleMute();
 });
 
 // Pause
@@ -1544,15 +1591,25 @@ document.getElementById('pauseBtn').addEventListener('click', (e) => {
     togglePause();
 });
 
-// Click on skip button (desktop)
+// Click on pause menu buttons (desktop)
 canvas.addEventListener('click', (e) => {
-    if (paused && _skipBtnBounds) {
+    if (paused) {
         const rect = canvas.getBoundingClientRect();
         const clickX = (e.clientX - rect.left) / rect.width * W;
         const clickY = (e.clientY - rect.top) / rect.height * H;
-        const b = _skipBtnBounds;
-        if (clickX >= b.x && clickX <= b.x + b.w && clickY >= b.y && clickY <= b.y + b.h) {
-            restartLevel();
+        if (_skipBtnBounds) {
+            const b = _skipBtnBounds;
+            if (clickX >= b.x && clickX <= b.x + b.w && clickY >= b.y && clickY <= b.y + b.h) {
+                restartLevel();
+                return;
+            }
+        }
+        if (_muteBtnBounds) {
+            const b = _muteBtnBounds;
+            if (clickX >= b.x && clickX <= b.x + b.w && clickY >= b.y && clickY <= b.y + b.h) {
+                toggleMute();
+                return;
+            }
         }
     }
 });
@@ -2682,9 +2739,25 @@ function draw() {
 
         // Store button bounds for tap detection (in screen coords)
         _skipBtnBounds = { x: skipX, y: skipY - skipH/2, w: skipW, h: skipH };
+
+        // Mute toggle button
+        const muteY = skipY + 22;
+        const muteW = 70, muteH = 16;
+        const muteX = W/2 - muteW/2;
+        ctx.fillStyle = musicMuted ? 'rgba(200,56,72,0.2)' : 'rgba(88,184,72,0.2)';
+        ctx.fillRect(muteX, muteY - muteH/2, muteW, muteH);
+        ctx.strokeStyle = musicMuted ? 'rgba(200,56,72,0.5)' : 'rgba(88,184,72,0.5)';
+        ctx.lineWidth = 1;
+        ctx.strokeRect(muteX, muteY - muteH/2, muteW, muteH);
+        ctx.fillStyle = musicMuted ? '#C83848' : C.spring;
+        ctx.font = '7px monospace';
+        ctx.fillText(musicMuted ? 'MUSIC: OFF' : 'MUSIC: ON', W/2, muteY + 3);
+
+        _muteBtnBounds = { x: muteX, y: muteY - muteH/2, w: muteW, h: muteH };
         ctx.textAlign = 'left';
     } else {
         _skipBtnBounds = null;
+        _muteBtnBounds = null;
     }
 }
 
