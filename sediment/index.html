@@ -1350,11 +1350,11 @@ function onQuake() {
     player._totalQuakes = (player._totalQuakes || 0) + 1;
     SFX.crunch();
     timeSlowTimer = 0.3; // brief time-slow for juice
-    // Stack invincibility — combos extend the timer
-    player.quakeTimer += 3.0;
+    // Stack invincibility — 5s base, combos stack +5s each
+    player.quakeTimer += 5.0;
     quakeFlash = 1.5;
     // Screen shake — bigger for combos
-    const combo = player.quakeTimer > 3.5 ? Math.floor(player.quakeTimer / 3) + 1 : 0;
+    const combo = player.quakeTimer > 5.5 ? Math.floor(player.quakeTimer / 5) + 1 : 0;
     cam.shake = Math.max(cam.shake, combo >= 2 ? 12 : 8);
     // Big screen feedback — combo counter
     const cx = player.x + getShapeCenterX(player.shape, player.rotation);
