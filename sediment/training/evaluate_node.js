@@ -2574,10 +2574,10 @@ function evaluateAgent(flatWeights, levelNum, maxTime, seed, noCorpses) {
             if (decisionTimer <= 0) {
                 decisionTimer = 0.12;
                 var action;
-                // Stuck detector: override NN when not making progress
-                if (stagnantTimer > 0.6) {
+                // Stuck detector: safety net after NN has had time to try
+                if (stagnantTimer > 1.5) {
                     action = 4; // phase 2: die and retry
-                } else if (stagnantTimer > 0.3) {
+                } else if (stagnantTimer > 1.0) {
                     action = 1; // phase 1: try jumping out
                 } else {
                     var inputs = getInputs();
