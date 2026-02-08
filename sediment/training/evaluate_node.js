@@ -2574,11 +2574,13 @@ function evaluateAgent(flatWeights, levelNum, maxTime, seed, noCorpses) {
             if (decisionTimer <= 0) {
                 decisionTimer = 0.12;
                 var action;
-                // Stuck detector: safety net after NN has had time to try
-                if (stagnantTimer > 1.5) {
-                    action = 4; // phase 2: die and retry
-                } else if (stagnantTimer > 1.0) {
-                    action = 1; // phase 1: try jumping out
+                // Stuck detector: force decisions when not progressing
+                if (stagnantTimer > 0.8) {
+                    action = 4; // phase 3: die and retry
+                } else if (stagnantTimer > 0.5) {
+                    action = 1; // phase 2: jump out
+                } else if (stagnantTimer > 0.3) {
+                    action = 2; // phase 1: spin to change shape
                 } else {
                     var inputs = getInputs();
                     action = nn.forward(inputs);

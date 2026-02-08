@@ -212,8 +212,9 @@ const nnAgent = (() => {
             if (player.dead) return 0;
             // Stuck detector: override NN when not making progress
             const stuck = player.stuckTimer || 0;
-            if (stuck > 1.5) return 4; // phase 2: die and retry
-            if (stuck > 1.0) return 1; // phase 1: try jumping out
+            if (stuck > 0.8) return 4; // phase 3: die and retry
+            if (stuck > 0.5) return 1; // phase 2: jump out
+            if (stuck > 0.3) return 2; // phase 1: spin to change shape
             const inputs = getInputs();
             return forward(inputs);
         },
