@@ -102,7 +102,7 @@ const canvas = document.getElementById('c');
 const ctx = canvas.getContext('2d');
 
 // ── Config ──
-const VERSION = 'v48';
+const VERSION = 'v49';
 const TILE = 12;
 const GRAVITY = 700;
 const JUMP_FORCE = -280;
@@ -471,7 +471,7 @@ function saveProgress() {
         const data = {
             highestLevel: player._highestLevel || currentLevel,
             totalDeaths: player._totalDeaths || 0,
-            totalCrunches: player._totalCrunches || 0,
+            totalQuakes: player._totalQuakes || 0,
             bestRun: player._bestRun || 0,
             hasWon: player._hasWon || false
         };
@@ -486,7 +486,7 @@ function loadProgress() {
             const data = JSON.parse(raw);
             player._highestLevel = data.highestLevel || 1;
             player._totalDeaths = data.totalDeaths || 0;
-            player._totalCrunches = data.totalCrunches || 0;
+            player._totalQuakes = data.totalQuakes || 0;
             player._bestRun = data.bestRun || 0;
             player._hasWon = data.hasWon || false;
             return data;
@@ -494,7 +494,7 @@ function loadProgress() {
     } catch (e) {}
     player._highestLevel = 1;
     player._totalDeaths = 0;
-    player._totalCrunches = 0;
+    player._totalQuakes = 0;
     player._bestRun = 0;
     player._hasWon = false;
     return null;
@@ -651,7 +651,7 @@ let buzzsaws = [];
 let movingPlatforms = [];
 let fallingGroup = null; // {cells: [{x,y,mat,eyes}], drop:0, targetDrop:N, fallSpeed:0}
 let pendingClears = []; // {cells:[{x,y}], timer:0.35} — flash before delete
-let timeSlowTimer = 0; // brief time-slow for crunch juice
+let timeSlowTimer = 0; // brief time-slow for quake juice
 let encounterLabels = []; // [{text, x, y, color, timer}] — first-encounter pop-ups
 
 function encounterLabel(text, x, y, color) {
@@ -661,8 +661,8 @@ function encounterLabel(text, x, y, color) {
 // ── Level system ──
 let currentLevel = 1;
 let levelDeaths = 0;
-let levelCrunches = 0;
-let crunchFlash = 0; // timer for "-N" flash on HUD
+let levelQuakes = 0;
+let quakeFlash = 0; // timer for "SURGE!" flash on HUD
 let levelComplete = false;
 let levelTransitionTimer = 0;
 let levelTitleTimer = 0;
@@ -990,8 +990,8 @@ const player = {
     trail: [],
     boostTimer: 0,
     deathCount: 0,
-    crunchCount: 0,
-    deathsErased: 0,
+    quakeCount: 0,
+    quakeTimer: 0,
     distance: 0,
     bestDistance: 0,
     spawnX: 2 * TILE,
@@ -1032,8 +1032,8 @@ function initLevel(lvl) {
     levelComplete = false;
     levelTransitionTimer = 0;
     levelDeaths = 0;
-    levelCrunches = 0;
-    crunchFlash = 0;
+    levelQuakes = 0;
+    quakeFlash = 0;
     levelTitleTimer = 3.0;
 
     // Tutorial on level 1 (first time only)
@@ -1095,8 +1095,8 @@ function init() {
 function hardReset() {
     player._hasRun = false;
     player.deathCount = 0;
-    player.crunchCount = 0;
-    player.deathsErased = 0;
+    player.quakeCount = 0;
+    player.quakeTimer = 0;
     player.bestDistance = 0;
     player._hitSpring = false;
     player._hitBooster = false;
@@ -1301,26 +1301,22 @@ function checkRowClears() {
     // Gravity now applied when pendingClears timers expire
 }
 
-function onCrunch() {
-    player.crunchCount++;
-    levelCrunches++;
-    player._totalCrunches = (player._totalCrunches || 0) + 1;
+function onQuake() {
+    player.quakeCount++;
+    levelQuakes++;
+    player._totalQuakes = (player._totalQuakes || 0) + 1;
     SFX.crunch();
     timeSlowTimer = 0.3; // brief time-slow for juice
-    // Each crunch erases half your current net deaths (rounded up)
-    const netDeaths = Math.max(0, player.deathCount - player.deathsErased);
-    const eraseAmount = Math.ceil(netDeaths / 2);
-    if (eraseAmount > 0) {
-        player.deathsErased += eraseAmount;
-        crunchFlash = 1.2; // show "-N" for 1.2 seconds
-        crunchFlashAmount = eraseAmount;
-    } else {
-        crunchFlash = 1.2;
-        crunchFlashAmount = 0;
-    }
+    // Stack invincibility — combos extend the timer
+    player.quakeTimer += 3.0;
+    quakeFlash = 1.5;
+    // Big screen feedback — combo counter
+    const combo = player.quakeTimer > 3.5 ? Math.floor(player.quakeTimer / 3) + 1 : 0;
+    const cx = player.x + getShapeCenterX(player.shape, player.rotation);
+    const cy = player.y + getShapeCenterY(player.shape, player.rotation);
+    const label = combo >= 2 ? `QUAKE x${combo}!` : 'QUAKE!';
+    encounterLabel(label, cx, cy - 10, C.player);
 }
-
-let crunchFlashAmount = 0;
 
 function clearColumn(x) {
     const cells = [];
@@ -1332,7 +1328,7 @@ function clearColumn(x) {
     }
     if (cells.length) {
         pendingClears.push({ cells, timer: 0.35 });
-        onCrunch();
+        onQuake();
     }
 }
 
@@ -1346,7 +1342,7 @@ function clearRowSegment(y, startX, endX) {
     }
     if (cells.length) {
         pendingClears.push({ cells, timer: 0.35 });
-        onCrunch();
+        onQuake();
     }
 }
 
@@ -1468,6 +1464,7 @@ function respawn() {
     player.squash = 0.5;
     player.trail = [];
     player.boostTimer = 0;
+    player.quakeTimer = 0;
     player.jumpsLeft = 2;
     player.coyoteTimer = 0;
     player.distance = 0;
@@ -1731,7 +1728,7 @@ function update(dt) {
         return;
     }
 
-    // Time-slow effect (crunch juice)
+    // Time-slow effect (quake juice)
     if (timeSlowTimer > 0) {
         timeSlowTimer -= dt;
         dt *= 0.3; // slow everything to 30% speed
@@ -1793,7 +1790,18 @@ function update(dt) {
 
     // Flash
     if (flash.a > 0) flash.a -= dt * 4;
-    if (crunchFlash > 0) crunchFlash -= dt;
+    if (quakeFlash > 0) quakeFlash -= dt;
+
+    // Quake invincibility countdown + sparkle trail
+    if (player.quakeTimer > 0) {
+        player.quakeTimer -= dt;
+        if (Math.random() < 0.5) {
+            const cx = player.x + getShapeCenterX(player.shape, player.rotation);
+            const cy = player.y + getShapeCenterY(player.shape, player.rotation);
+            spawnP(cx + (Math.random() - 0.5) * 24, cy + (Math.random() - 0.5) * 24,
+                Math.random() < 0.5 ? '#FFD080' : C.player, 1, 25, 0.4);
+        }
+    }
 
     // Falling group
     updateFallingGroup(dt);
@@ -2094,26 +2102,27 @@ function update(dt) {
         }
     }
 
-    // Spike check
-    if (tetSpike(player.x, player.y, player.shape, player.rotation)) {
+    // Spike check (skipped during quake invincibility)
+    if (player.quakeTimer <= 0 && tetSpike(player.x, player.y, player.shape, player.rotation)) {
         die();
         return;
     }
 
-    // Buzzsaw collision — circle vs each cell rect
-    const sawCells = getCells(player.shape, player.rotation);
-    for (const saw of buzzsaws) {
-        for (const [cx, cy] of sawCells) {
-            const cellX = player.x + cx * TILE;
-            const cellY = player.y + cy * TILE;
-            // Nearest point on cell rect to saw center
-            const nearX = Math.max(cellX, Math.min(saw.x, cellX + TILE));
-            const nearY = Math.max(cellY, Math.min(saw.y, cellY + TILE));
-            const ddx = nearX - saw.x;
-            const ddy = nearY - saw.y;
-            if (ddx * ddx + ddy * ddy < saw.r * saw.r) {
-                die();
-                return;
+    // Buzzsaw collision (skipped during quake invincibility)
+    if (player.quakeTimer <= 0) {
+        const sawCells = getCells(player.shape, player.rotation);
+        for (const saw of buzzsaws) {
+            for (const [cx, cy] of sawCells) {
+                const cellX = player.x + cx * TILE;
+                const cellY = player.y + cy * TILE;
+                const nearX = Math.max(cellX, Math.min(saw.x, cellX + TILE));
+                const nearY = Math.max(cellY, Math.min(saw.y, cellY + TILE));
+                const ddx = nearX - saw.x;
+                const ddy = nearY - saw.y;
+                if (ddx * ddx + ddy * ddy < saw.r * saw.r) {
+                    die();
+                    return;
+                }
             }
         }
     }
@@ -2416,6 +2425,23 @@ function draw() {
         ctx.globalAlpha = 1;
     }
 
+    // Quake invincibility glow
+    if (!player.dead && player.quakeTimer > 0) {
+        const cells = getCells(player.shape, player.rotation);
+        const pulse = 0.3 + 0.3 * Math.sin(performance.now() / 60);
+        // Flashing warning when about to expire
+        const expiring = player.quakeTimer < 1.0;
+        const alpha = expiring ? (Math.sin(performance.now() / 50) > 0 ? pulse : 0) : pulse;
+        ctx.globalAlpha = alpha;
+        ctx.fillStyle = C.player;
+        for (const [cx, cy] of cells) {
+            const px = player.x + cx * TILE;
+            const py = player.y + cy * TILE;
+            ctx.fillRect(px - 2, py - 2, TILE + 4, TILE + 4);
+        }
+        ctx.globalAlpha = 1;
+    }
+
     // Player tetromino
     if (!player.dead) {
         const cells = getCells(player.shape, player.rotation);
@@ -2553,26 +2579,20 @@ function draw() {
     ctx.font = '7px monospace';
     const totalDist = getSegmentsForLevel(currentLevel) * SEGMENT_W;
     const progress = Math.min(100, Math.floor(player.distance / totalDist * 100));
-    const netDeaths = Math.max(0, player.deathCount - player.deathsErased);
-    const deathStr = `${progress}%  deaths: ${netDeaths}`;
-    // Flash death counter green during crunch
-    if (crunchFlash > 0) {
-        ctx.fillStyle = `rgba(100,255,140,${Math.min(1, crunchFlash)})`;
+    const deathStr = `${progress}%  deaths: ${player.deathCount}`;
+    // Flash gold during quake invincibility
+    if (player.quakeTimer > 0) {
+        ctx.fillStyle = `rgba(232,168,56,${0.5 + 0.5 * Math.sin(performance.now() / 80)})`;
     }
     ctx.fillText(deathStr, 4, 20);
-    // Show crunch count
-    if (player.crunchCount > 0) {
+    // Show quake count + invincibility timer
+    if (player.quakeCount > 0) {
         const deathTextW = ctx.measureText(deathStr).width;
         ctx.fillStyle = '#FFD080';
-        ctx.fillText(`  crunches: ${player.crunchCount}`, 4 + deathTextW, 20);
-    }
-    // Floating "-N" when crunch erases deaths
-    if (crunchFlash > 0 && crunchFlashAmount > 0) {
-        const floatY = 20 - (1.2 - crunchFlash) * 12;
-        ctx.fillStyle = `rgba(100,255,140,${Math.min(1, crunchFlash)})`;
-        ctx.font = '8px monospace';
-        ctx.fillText(`-${crunchFlashAmount}`, 4 + ctx.measureText(`${progress}%  deaths: `).width, floatY);
-        ctx.font = '7px monospace';
+        const qText = player.quakeTimer > 0
+            ? `  QUAKE! ${Math.ceil(player.quakeTimer)}s`
+            : `  quakes: ${player.quakeCount}`;
+        ctx.fillText(qText, 4 + deathTextW, 20);
     }
 
     // Shape + material indicator
@@ -2730,8 +2750,7 @@ function draw() {
         ctx.fillText(`LEVEL ${currentLevel} CLEAR`, W/2, H/2 - 20);
         ctx.fillStyle = C.text;
         ctx.font = '7px monospace';
-        const levelNetDeaths = Math.max(0, levelDeaths - levelCrunches * Math.ceil(levelDeaths / Math.max(1, levelCrunches * 2)));
-        ctx.fillText(`deaths: ${levelDeaths}${levelCrunches > 0 ? `  crunches: ${levelCrunches}` : ''}`, W/2, H/2);
+        ctx.fillText(`deaths: ${levelDeaths}${levelQuakes > 0 ? `  quakes: ${levelQuakes}` : ''}`, W/2, H/2);
         ctx.fillStyle = 'rgba(216,208,192,0.5)';
         ctx.font = '6px monospace';
         if (levelTransitionTimer > 0) {
@@ -2764,9 +2783,7 @@ function draw() {
         // Stats
         ctx.fillStyle = C.text;
         ctx.font = '7px monospace';
-        const netDeaths = Math.max(0, player.deathCount - player.deathsErased);
-        ctx.fillText(`total deaths: ${player.deathCount}  crunches: ${player.crunchCount}`, W/2, H/2 + 4);
-        ctx.fillText(`net deaths: ${netDeaths}`, W/2, H/2 + 16);
+        ctx.fillText(`deaths: ${player.deathCount}  quakes: ${player.quakeCount}`, W/2, H/2 + 4);
 
         // Continue hint
         if (winTimer > 2) {
