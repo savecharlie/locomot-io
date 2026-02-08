@@ -2573,8 +2573,16 @@ function evaluateAgent(flatWeights, levelNum, maxTime, seed, noCorpses) {
             decisionTimer -= dt;
             if (decisionTimer <= 0) {
                 decisionTimer = 0.12;
-                var inputs = getInputs();
-                var action = nn.forward(inputs);
+                var action;
+                // Stuck detector: override NN when not making progress
+                if (stagnantTimer > 0.6) {
+                    action = 4; // phase 2: die and retry
+                } else if (stagnantTimer > 0.3) {
+                    action = 1; // phase 1: try jumping out
+                } else {
+                    var inputs = getInputs();
+                    action = nn.forward(inputs);
+                }
                 // Actions: 0=nothing, 1=jump, 2=rotate_cw, 3=rotate_ccw, 4=die
                 if (action === 1) {
                     jumpBuffered = true;
