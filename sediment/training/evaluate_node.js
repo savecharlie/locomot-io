@@ -1504,8 +1504,8 @@ function tryRotate(dir) {
                 } else {
                     player.vx = 20;   // CCW = brake to dodge
                 }
-                player.boostTimer = 0.5;
-                player.spinCooldown = 1.0;
+                player.boostTimer = 1.0;
+                player.spinCooldown = 1.5;
             }
             SFX.rotate();
             return true;

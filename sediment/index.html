@@ -1513,15 +1513,15 @@ function tryRotate(dir) {
                 if (dir === 1) {
                     // CW = boost forward
                     player.vx = 200;
-                    player.boostTimer = 0.5;
+                    player.boostTimer = 1.0;
                     SFX.spinBoost();
                 } else {
                     // CCW = brake to dodge
                     player.vx = 20;
-                    player.boostTimer = 0.5;
+                    player.boostTimer = 1.0;
                     SFX.spinBrake();
                 }
-                player.spinCooldown = 1.0;
+                player.spinCooldown = 1.5;
             } else {
                 SFX.rotate();
             }
