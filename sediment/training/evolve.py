@@ -24,7 +24,7 @@ SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 NODE_EVALUATOR = os.path.join(SCRIPT_DIR, 'evaluate_node.js')
 
 # NN architecture constants (must match evaluate_node.js SmallNN)
-LAYER_SIZES = [76, 48, 32, 5]
+LAYER_SIZES = [77, 48, 32, 5]
 
 
 def num_params(sizes=None):

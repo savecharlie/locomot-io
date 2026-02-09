@@ -72,12 +72,12 @@ const nnAgent = (() => {
 
     function getInputs() {
         const p = player;
-        const inputs = new Float32Array(72);
+        const inputs = new Float32Array(73);
         let idx = 0;
         const lW = segments.length * SEGMENT_W;
         const lH = levelH || level.length;
 
-        // A. Player state (9)
+        // A. Player state (10)
         inputs[idx++] = p.vy / 400.0;
         inputs[idx++] = (p.jumpsLeft || 0) / 2.0;
         inputs[idx++] = p.onGround ? 1.0 : 0.0;
@@ -87,6 +87,25 @@ const nnAgent = (() => {
         inputs[idx++] = (p.quakeTimer || p.crunchTimer || 0) > 0 ? 1.0 : 0.0;
         inputs[idx++] = Math.min(1.0, (p.stuckTimer || 0) / 0.5);
         inputs[idx++] = Math.min(1.0, (p.distance || 0) / Math.max(1, goalX));
+        // Distance to next safe ground ahead
+        let safeGroundDist = 1.0;
+        const _pCol = Math.floor(p.x / TILE);
+        for (let sc = 1; sc <= 40; sc++) {
+            const _sc = _pCol + sc;
+            if (_sc >= 0 && _sc < lW) {
+                let hasSafeGround = false;
+                for (let sy = lH - 1; sy >= 0; sy--) {
+                    if ((level[sy] && level[sy][_sc] === 1) ||
+                        (corpseGrid[sy] && corpseGrid[sy][_sc] !== null && (!corpseGrid[sy][_sc] || corpseGrid[sy][_sc].mat !== 'spike'))) {
+                        const aboveIsSpike = (sy > 0 && level[sy - 1] && level[sy - 1][_sc] === 2);
+                        if (!aboveIsSpike) { hasSafeGround = true; }
+                        break;
+                    }
+                }
+                if (hasSafeGround) { safeGroundDist = sc / 40.0; break; }
+            }
+        }
+        inputs[idx++] = safeGroundDist;
 
         // B. Shape geometry 4x4 (16)
         const cells = getCells(p.shape, p.rotation);
@@ -256,15 +275,15 @@ const nnAgent = (() => {
                 if (progressTimer > 0.8 && Math.random() < 0.08) return Math.random() < 0.7 ? 2 : 3;
                 if (progressTimer > 2.0) { progressTimer = 0; }
             }
-            // Get base 72 inputs + append 4 death memory
+            // Get base 73 inputs + append 4 death memory = 77
             const base = getInputs();
-            const inputs = new Float32Array(76);
+            const inputs = new Float32Array(77);
             inputs.set(base);
-            inputs[72] = Math.min(1.0, dmDeaths / 5.0);
+            inputs[73] = Math.min(1.0, dmDeaths / 5.0);
             const deathDx = dmDeaths > 0 ? (dmLastDeathX - player.x) / (10 * TILE) : 0;
-            inputs[73] = Math.max(-1, Math.min(1, deathDx));
-            inputs[74] = dmBestX > 0 ? Math.min(1.0, player.x / dmBestX) : 0;
-            inputs[75] = Math.min(1.0, dmTimeSinceDeath / 5.0);
+            inputs[74] = Math.max(-1, Math.min(1, deathDx));
+            inputs[75] = dmBestX > 0 ? Math.min(1.0, player.x / dmBestX) : 0;
+            inputs[76] = Math.min(1.0, dmTimeSinceDeath / 5.0);
             let action = forward(inputs);
 
             // Loop detector: break repeating action sequences

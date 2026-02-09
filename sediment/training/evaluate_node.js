@@ -2293,26 +2293,26 @@ function mulberry32(a) {
 
 
 // ══════════════════════════════════════════════════════════════
-// ── SMALL NN (76 → 48 → 32 → 5, ReLU, argmax) ──
+// ── SMALL NN (77 → 48 → 32 → 5, ReLU, argmax) ──
 // ══════════════════════════════════════════════════════════════
 
 class SmallNN {
     constructor(flat) {
-        // Architecture: 76 input → 48 hidden → 32 hidden → 5 output
-        // Flat layout: w1(48*76), b1(48), w2(32*48), b2(32), w3(5*32), b3(5)
-        // Total: 3648 + 48 + 1536 + 32 + 160 + 5 = 5429
-        if (!flat || flat.length < 5429) {
+        // Architecture: 77 input → 48 hidden → 32 hidden → 5 output
+        // Flat layout: w1(48*77), b1(48), w2(32*48), b2(32), w3(5*32), b3(5)
+        // Total: 3696 + 48 + 1536 + 32 + 160 + 5 = 5477
+        if (!flat || flat.length < 5477) {
             this.valid = false;
             return;
         }
         this.valid = true;
         let idx = 0;
 
-        // Layer 1: 48 x 76
+        // Layer 1: 48 x 77
         this.w1 = [];
         for (let i = 0; i < 48; i++) {
-            this.w1.push(new Float32Array(flat.slice(idx, idx + 76)));
-            idx += 76;
+            this.w1.push(new Float32Array(flat.slice(idx, idx + 77)));
+            idx += 77;
         }
         this.b1 = new Float32Array(flat.slice(idx, idx + 48));
         idx += 48;
@@ -2389,12 +2389,12 @@ var _deathMemory = {
 
 function getInputs() {
     const p = player;
-    const inputs = new Float32Array(76);
+    const inputs = new Float32Array(77);
     let idx = 0;
     const lW = segments.length * SEGMENT_W;
     const lH = levelH || level.length;
 
-    // A. Player state (9)
+    // A. Player state (10)
     inputs[idx++] = p.vy / 400.0;
     inputs[idx++] = (p.jumpsLeft || 0) / 2.0;
     inputs[idx++] = p.onGround ? 1.0 : 0.0;
@@ -2404,6 +2404,31 @@ function getInputs() {
     inputs[idx++] = (p.quakeTimer || p.crunchTimer || 0) > 0 ? 1.0 : 0.0;
     inputs[idx++] = Math.min(1.0, (p.stuckTimer || 0) / 0.5);
     inputs[idx++] = Math.min(1.0, (p.distance || 0) / Math.max(1, goalX));
+    // Distance to next safe ground (no spike) ahead — scan up to 40 columns
+    var safeGroundDist = 1.0; // default: far away
+    var _pCol = Math.floor(p.x / TILE);
+    for (var sc = 1; sc <= 40; sc++) {
+        var _sc = _pCol + sc;
+        if (_sc >= 0 && _sc < lW) {
+            var hasSafeGround = false;
+            for (var sy = lH - 1; sy >= 0; sy--) {
+                if ((level[sy] && level[sy][_sc] === 1) ||
+                    (corpseGrid[sy] && corpseGrid[sy][_sc] !== null && (!corpseGrid[sy][_sc] || corpseGrid[sy][_sc].mat !== 'spike'))) {
+                    // Found solid ground — check if the tile above is NOT a spike
+                    var aboveIsSpike = (sy > 0 && level[sy - 1] && level[sy - 1][_sc] === 2);
+                    if (!aboveIsSpike) {
+                        hasSafeGround = true;
+                    }
+                    break;
+                }
+            }
+            if (hasSafeGround) {
+                safeGroundDist = sc / 40.0;
+                break;
+            }
+        }
+    }
+    inputs[idx++] = safeGroundDist;
 
     // B. Shape geometry 4x4 (16)
     const cells = getCells(p.shape, p.rotation);
