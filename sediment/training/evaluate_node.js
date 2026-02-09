@@ -1148,7 +1148,8 @@ function initLevel(lvl) {
     player.rotation = 0;
     rollNextPiece(); // pre-roll for preview
     player.x = 2 * TILE;
-    player.y = (spawnH - 3) * TILE;
+    const _spawnBounds = shapeBounds(player.shape, 0);
+    player.y = (spawnH - 2 - _spawnBounds.maxR) * TILE;
     player.spawnX = player.x;
     player.vx = RUN_SPEED;
     player.vy = 0;
@@ -1585,7 +1586,8 @@ function respawn() {
     player.rotation = 0;
     rollNextPiece(); // pre-roll for preview
     player.x = 2 * TILE;
-    player.y = (h - 3) * TILE;
+    const _rBounds = shapeBounds(player.shape, 0);
+    player.y = (h - 2 - _rBounds.maxR) * TILE;
     player.spawnX = player.x;
     player.vx = RUN_SPEED;
     player.vy = 0;
