@@ -271,25 +271,40 @@ class Evolver:
         # Curriculum
         self.levels_beaten = set()
 
+    def eval_level_spread(self):
+        """Spread evals across levels: easy + medium + hard."""
+        base = self.level_num
+        # 3 levels spaced across the range, clamped to 1-12
+        levels = [
+            max(1, base - 4),   # easy: well below starting level
+            base,               # medium: the target level
+            min(12, base + 4),  # hard: well above starting level
+        ]
+        return levels[:self.num_evals]
+
     def evaluate_population(self):
         """Evaluate all agents using Node.js (exact game JS, zero divergence)."""
         gen_seed_base = self.generation * 10000
 
-        # Build batch: each agent evaluated num_evals times with different seeds
+        # Build batch: each agent evaluated num_evals times across different levels
         all_weights = []
         all_seeds = []
+        all_levels = []
+        # Spread evals across levels: e.g. 3 evals → L2, L6, L10
+        eval_levels = self.eval_level_spread()
         for i, w in enumerate(self.population):
             for e in range(self.num_evals):
                 seed = gen_seed_base + e * 1000 + i
                 all_weights.append(w.tolist())
                 all_seeds.append(seed)
+                all_levels.append(eval_levels[e % len(eval_levels)])
 
         payload = json.dumps({
             'weights': all_weights,
-            'levelNum': self.level_num,
+            'levelNums': all_levels,
             'maxTime': self.eval_time,
             'seeds': all_seeds,
-            'noCorpses': False,  # Corpses back on — agents learned to play properly
+            'noCorpses': False,
         })
 
         result = subprocess.run(
@@ -420,7 +435,8 @@ class Evolver:
         os.makedirs(checkpoint_dir, exist_ok=True)
 
         print(f"Evolving {self.pop_size} agents × {self.num_params} params (Node.js eval)")
-        print(f"Starting level: {self.level_num} | Eval time: {self.eval_time}s")
+        spread = self.eval_level_spread()
+        print(f"Training across levels: {spread} | Eval time: {self.eval_time}s")
         print(f"Evaluations per agent: {self.num_evals}")
         print("-" * 70)
 

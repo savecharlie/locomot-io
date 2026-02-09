@@ -702,6 +702,7 @@ const SEGMENT_W = 40;
 let levelH = 0;
 let level = [];      // terrain grid: 0=empty, 1=solid, 2=spike
 let corpseGrid = []; // placed blocks: null or {mat, age, eyes}
+let chasmColumns = new Set(); // columns that are chasm voids (below-level walls)
 let segments = [];
 let particles = [];
 let buzzsaws = [];
@@ -776,17 +777,12 @@ function generateSegment(segIndex, lvl) {
             } else {
                 level[h - 1][cx + dx] = 0;
             }
+            chasmColumns.add(cx + dx); // track for below-level walls
         }
-        // Chasm pit walls: deepen chasm + solid walls on sides going down
+        // Deepen chasm — 3 tiles deep so corpses can't easily bridge
         for (let dx = 0; dx < cw; dx++) {
-            // Clear rows above floor too — deeper pit, can't bridge with corpses
             if (level[h - 2]) level[h - 2][cx + dx] = 0;
             if (level[h - 3]) level[h - 3][cx + dx] = 0;
-        }
-        // Solid walls on left/right edges at pit depth (below floor surface)
-        for (let wy = h - 3; wy <= h - 1; wy++) {
-            if (cx - 1 >= startX && level[wy]) level[wy][cx - 1] = 1;
-            if (cx + cw < startX + SEGMENT_W && level[wy]) level[wy][cx + cw] = 1;
         }
     }
 
@@ -904,7 +900,7 @@ function generateSegment(segIndex, lvl) {
 // Interactions (bounce, boost) happen at collision boundaries
 function tileIsSolid(tx, ty) {
     if (ty < 0) return true; // ceiling
-    if (ty >= levelH) return false; // void below
+    if (ty >= levelH) return !chasmColumns.has(tx); // solid below level, void only in chasms
     if (level[ty] && level[ty][tx] === 1) return true;
     if (corpseGrid[ty] && corpseGrid[ty][tx]) return true;
     // Moving platforms
@@ -1092,6 +1088,7 @@ function rollNextPiece() {
 function initLevel(lvl) {
     level = [];
     corpseGrid = [];
+    chasmColumns = new Set();
     segments = [];
     particles = [];
     buzzsaws = [];
@@ -2764,7 +2761,8 @@ process.stdin.on('end', function() {
     }
 
     var weightsArray = input.weights || [[]];
-    var levelNum = input.levelNum || 1;
+    var levelNums = input.levelNums || null;  // per-eval level array
+    var levelNum = input.levelNum || 1;       // fallback single level
     var maxTime = input.maxTime || 30;
     var seeds = input.seeds || weightsArray.map(function(_, i) { return 42 + i; });
     var noCorpses = input.noCorpses || false;
@@ -2776,7 +2774,8 @@ process.stdin.on('end', function() {
 
     var results = [];
     for (var i = 0; i < weightsArray.length; i++) {
-        var result = evaluateAgent(weightsArray[i], levelNum, maxTime, seeds[i], _noCorpses);
+        var lvl = levelNums ? levelNums[i] : levelNum;
+        var result = evaluateAgent(weightsArray[i], lvl, maxTime, seeds[i], _noCorpses);
         results.push(result);
     }
 
