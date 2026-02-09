@@ -121,6 +121,21 @@ canvas { display: block; width: 100%; height: 100%; image-rendering: pixelated; 
     z-index: 20;
 }
 #pauseBtn:active { background: rgba(255, 255, 255, 0.3); }
+#botBtn {
+    position: fixed; top: 8px; right: 52px;
+    width: 36px; height: 36px;
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.1);
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    color: rgba(216, 208, 192, 0.6);
+    font-size: 18px;
+    display: flex; align-items: center; justify-content: center;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+    z-index: 20;
+}
+#botBtn:active { background: rgba(255, 255, 255, 0.3); }
+#botBtn.active { background: rgba(128, 255, 128, 0.2); border-color: rgba(128, 255, 128, 0.5); }
 </style>
 </head>
 <body>
@@ -133,6 +148,7 @@ canvas { display: block; width: 100%; height: 100%; image-rendering: pixelated; 
     <div class="version" id="splash-version"></div>
 </div>
 <canvas id="c"></canvas>
+<div id="botBtn">&#129504;</div>
 <div id="pauseBtn">&#9646;&#9646;</div>
 <div id="dbg" style="position:fixed;bottom:4px;left:4px;color:rgba(216,208,192,0.3);font:8px monospace;z-index:100;pointer-events:none;"></div>
 <script>
@@ -1722,7 +1738,7 @@ document.addEventListener('keydown', (e) => {
     if (e.code === 'KeyF') toggleSfxMute();
     if (e.code === 'Comma' && paused) adjustMusicVolume(-1);
     if (e.code === 'Period' && paused) adjustMusicVolume(1);
-    if (e.code === 'KeyB') { if (typeof nnAgent !== 'undefined') nnAgent.toggle(); }
+    if (e.code === 'KeyB') { toggleBot(); }
 });
 
 // Pause
@@ -1748,6 +1764,23 @@ document.getElementById('pauseBtn').addEventListener('click', (e) => {
     e.preventDefault();
     e.stopPropagation();
     togglePause();
+});
+
+// Bot toggle button
+function toggleBot() {
+    if (typeof nnAgent === 'undefined') return;
+    nnAgent.toggle();
+    document.getElementById('botBtn').classList.toggle('active', nnAgent.active);
+}
+document.getElementById('botBtn').addEventListener('touchstart', (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    toggleBot();
+}, { passive: false });
+document.getElementById('botBtn').addEventListener('click', (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    toggleBot();
 });
 
 // Click on pause menu buttons (desktop)
@@ -3104,12 +3137,17 @@ requestAnimationFrame(loop);
 </script>
 <script src="nn_agent.js"></script>
 <script>
+// Load NN weights on startup (silently fails if not available)
+if (typeof nnAgent !== 'undefined') {
+    nnAgent.load('nn_weights.json');
+}
+
 // Auto-play mode: ?autoplay=1 enables NN agent immediately
 if (new URLSearchParams(location.search).has('autoplay')) {
     const waitForAgent = setInterval(() => {
         if (typeof nnAgent !== 'undefined' && nnAgent.load) {
             nnAgent.load('nn_weights.json').then(() => {
-                nnAgent.toggle();
+                toggleBot();
                 console.log('Auto-play enabled');
             });
             clearInterval(waitForAgent);
