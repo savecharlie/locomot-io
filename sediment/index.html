@@ -1212,6 +1212,7 @@ function spawnP(x, y, color, count, speed, life) {
 
 function die() {
     if (player.dead) return;
+    if (player.quakeTimer > 0) return; // can't die while invincible
     player.dead = true;
     player.deathTimer = 0;
     player.deathCount++;
