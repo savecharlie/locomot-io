@@ -2597,6 +2597,7 @@ function getInputs() {
 // ══════════════════════════════════════════════════════════════
 
 var _evalNoCorpses = false;
+var _deathCap = 20;
 function evaluateAgent(flatWeights, levelNum, maxTime, seed, noCorpses) {
     _evalNoCorpses = !!noCorpses;
     // Install seeded PRNG
@@ -2749,8 +2750,8 @@ function evaluateAgent(flatWeights, levelNum, maxTime, seed, noCorpses) {
         // Check if game won
         if (gameWon) break;
 
-        // Death cap: eval ends after 20 deaths (forces strategic dying)
-        if (player.deathCount >= 20) break;
+        // Death cap (configurable, default 20)
+        if (player.deathCount >= _deathCap) break;
     }
 
     var levelsCompleted = currentLevel - startLevel + (levelComplete ? 1 : 0);
@@ -2796,6 +2797,7 @@ process.stdin.on('end', function() {
     var maxTime = input.maxTime || 30;
     var seeds = input.seeds || weightsArray.map(function(_, i) { return 42 + i; });
     var noCorpses = input.noCorpses || false;
+    _deathCap = input.maxDeaths || 20;
 
     // Save original Math.random
     var _origRandom = Math.random;
