@@ -584,80 +584,93 @@ const _resizeInterval = setInterval(() => {
 // ── TETROMINO SYSTEM ──
 // ══════════════════════════════════════
 
-// Shapes defined as cell offsets [col, row] from origin
-// 4 rotation states each, pre-computed for speed
+// ── SEDIMENT POLYOMINO SET ──
+// 9 shapes across 4 size tiers (geological naming)
 const SHAPES = {
-    I: [
+    Pebble: [
+        [[0,0],[1,0]],
+        [[1,0],[1,1]],
+        [[0,1],[1,1]],
+        [[0,0],[0,1]]
+    ],
+    Shard: [
+        [[0,1],[1,1],[2,1]],
+        [[1,0],[1,1],[1,2]],
+        [[0,1],[1,1],[2,1]],
+        [[1,0],[1,1],[1,2]]
+    ],
+    Flake: [
+        [[0,0],[1,0],[0,1]],
+        [[0,0],[0,1],[1,1]],
+        [[1,0],[0,1],[1,1]],
+        [[0,0],[1,0],[1,1]]
+    ],
+    Shelf: [
         [[0,1],[1,1],[2,1],[3,1]],
         [[2,0],[2,1],[2,2],[2,3]],
         [[0,2],[1,2],[2,2],[3,2]],
         [[1,0],[1,1],[1,2],[1,3]]
     ],
-    O: [
-        [[0,0],[1,0],[0,1],[1,1]],
-        [[0,0],[1,0],[0,1],[1,1]],
-        [[0,0],[1,0],[0,1],[1,1]],
-        [[0,0],[1,0],[0,1],[1,1]]
-    ],
-    T: [
+    Crag: [
         [[0,0],[1,0],[2,0],[1,1]],
         [[1,0],[1,1],[1,2],[0,1]],
         [[1,1],[0,2],[1,2],[2,2]],
         [[1,0],[1,1],[1,2],[2,1]]
     ],
-    S: [
+    Scree: [
         [[1,0],[2,0],[0,1],[1,1]],
         [[0,0],[0,1],[1,1],[1,2]],
         [[1,1],[2,1],[0,2],[1,2]],
         [[1,0],[1,1],[2,1],[2,2]]
     ],
-    Z: [
-        [[0,0],[1,0],[1,1],[2,1]],
-        [[2,0],[1,1],[2,1],[1,2]],
-        [[0,1],[1,1],[1,2],[2,2]],
-        [[1,0],[0,1],[1,1],[0,2]]
-    ],
-    L: [
+    Ridge: [
         [[0,0],[1,0],[2,0],[0,1]],
         [[0,0],[1,0],[1,1],[1,2]],
         [[2,1],[0,2],[1,2],[2,2]],
         [[1,0],[1,1],[1,2],[2,2]]
     ],
-    J: [
-        [[0,0],[1,0],[2,0],[2,1]],
-        [[1,0],[1,1],[0,2],[1,2]],
-        [[0,1],[0,2],[1,2],[2,2]],
-        [[1,0],[2,0],[1,1],[1,2]]
+    Ledge: [
+        [[0,1],[1,1],[2,1],[3,1],[0,2]],
+        [[1,0],[2,0],[2,1],[2,2],[2,3]],
+        [[3,1],[0,2],[1,2],[2,2],[3,2]],
+        [[1,0],[1,1],[1,2],[1,3],[2,3]]
+    ],
+    Arch: [
+        [[0,0],[2,0],[0,1],[1,1],[2,1]],
+        [[1,0],[2,0],[1,1],[1,2],[2,2]],
+        [[0,1],[1,1],[2,1],[0,2],[2,2]],
+        [[0,0],[1,0],[1,1],[0,2],[1,2]]
     ]
 };
 
-const SHAPE_NAMES = ['I', 'O', 'T', 'S', 'Z', 'L', 'J'];
+const SHAPE_NAMES = ['Pebble','Shard','Flake','Shelf','Crag','Scree','Ridge','Ledge','Arch'];
 const MATERIAL_TYPES = ['solid', 'spring', 'booster'];
-// Spike material added in later levels — see pickMaterial()
 
-// SRS wall kick data (for non-I pieces)
+const KICK_DATA_SMALL = [
+    [[0,0],[1,0],[-1,0],[0,-1],[0,1]],
+    [[0,0],[1,0],[-1,0],[0,-1],[0,1]],
+    [[0,0],[1,0],[-1,0],[0,-1],[0,1]],
+    [[0,0],[1,0],[-1,0],[0,-1],[0,1]]
+];
 const KICK_DATA = [
-    // 0→1
     [[0,0],[-1,0],[-1,-1],[0,2],[-1,2]],
-    // 1→2
     [[0,0],[1,0],[1,1],[0,-2],[1,-2]],
-    // 2→3
     [[0,0],[1,0],[1,-1],[0,2],[1,2]],
-    // 3→0
     [[0,0],[-1,0],[-1,1],[0,-2],[-1,-2]]
 ];
 const KICK_DATA_I = [
-    // 0→1
     [[0,0],[-2,0],[1,0],[-2,1],[1,-2]],
-    // 1→2
     [[0,0],[-1,0],[2,0],[-1,-2],[2,1]],
-    // 2→3
     [[0,0],[2,0],[-1,0],[2,-1],[-1,2]],
-    // 3→0
     [[0,0],[1,0],[-2,0],[1,2],[-2,-1]]
 ];
+const SHAPE_KICKS = {
+    Pebble: KICK_DATA_SMALL, Shard: KICK_DATA, Flake: KICK_DATA_SMALL,
+    Shelf: KICK_DATA_I, Crag: KICK_DATA, Scree: KICK_DATA,
+    Ridge: KICK_DATA, Ledge: KICK_DATA_I, Arch: KICK_DATA
+};
 
-// Bag of 7 — all shapes before repeating
+// Bag of 9 — all shapes before repeating
 let shapeBag = [];
 function nextShape() {
     if (shapeBag.length === 0) {
@@ -1010,7 +1023,7 @@ function canEscapeRight() {
     // 2) Check each rotation (CW and CCW) with SRS wall kicks
     for (const dir of [1, -1]) {
         const newRot = (rot + dir + 4) % 4;
-        const kicks = shape === 'I' ? KICK_DATA_I : KICK_DATA;
+        const kicks = SHAPE_KICKS[shape] || KICK_DATA;
         const kickIdx = dir === 1 ? rot : newRot;
         const kickTests = kicks[kickIdx];
 
@@ -1043,7 +1056,7 @@ function canEscapeRight() {
 const player = {
     x: 2 * TILE, y: 0,
     vx: RUN_SPEED, vy: 0,
-    shape: 'T',
+    shape: 'Crag',
     rotation: 0,
     material: 'solid',
     onGround: false,
@@ -1525,7 +1538,7 @@ function tryRotate(dir) {
     if (player.rotateCooldown > 0) return false;
     const oldRot = player.rotation;
     const newRot = (oldRot + dir + 4) % 4;
-    const kicks = player.shape === 'I' ? KICK_DATA_I : KICK_DATA;
+    const kicks = SHAPE_KICKS[player.shape] || KICK_DATA;
 
     // Determine kick table index
     let kickIdx;
