@@ -228,7 +228,7 @@ const nnAgent = (() => {
                 if (progressTimer > 1.5) {
                     progressTimer = 0;
                     progressJumped = false;
-                    return 4; // die — last resort when truly stuck
+                    return 2; // boost — try to push through when stuck
                 }
                 if (progressTimer > 0.8 && player.onGround && !progressJumped) {
                     progressJumped = true;
