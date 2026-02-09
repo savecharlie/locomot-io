@@ -1246,6 +1246,7 @@ function die() {
     player.deathTimer = 0;
     player.deathCount++;
     levelDeaths++;
+    console.log('HIGHLIGHT:DEATH:' + performance.now().toFixed(0));
     player._totalDeaths = (player._totalDeaths || 0) + 1;
 
     cam.shake = Math.max(cam.shake, 6);
@@ -1420,6 +1421,7 @@ function onQuake(clearCells) {
     player.quakeCount++;
     levelQuakes++;
     player._totalQuakes = (player._totalQuakes || 0) + 1;
+    console.log('HIGHLIGHT:QUAKE:' + performance.now().toFixed(0));
 
     // RESURRECT: piece rises from the dead at the quake location
     if (player.dead && clearCells && clearCells.length > 0) {
@@ -1444,6 +1446,7 @@ function onQuake(clearCells) {
         player.distance = 0;
         // Refund the death — it was productive
         if (player.deathCount > 0) player.deathCount--;
+        console.log('HIGHLIGHT:RESURRECT:' + performance.now().toFixed(0));
         // Roll a new piece
         player.shape = nextPieceShape;
         player.material = nextPieceMaterial;
@@ -1477,6 +1480,7 @@ function onQuake(clearCells) {
     quakeFlash = 1.5;
     // Screen shake — bigger for combos
     const combo = player.quakeTimer > 5.5 ? Math.floor(player.quakeTimer / 5) + 1 : 0;
+    if (combo >= 2) console.log('HIGHLIGHT:COMBO:' + performance.now().toFixed(0) + ':x' + combo);
     cam.shake = Math.max(cam.shake, combo >= 2 ? 12 : 8);
     // Big screen feedback
     const cx = player.x + getShapeCenterX(player.shape, player.rotation);
@@ -2372,6 +2376,7 @@ function update(dt) {
     if (!levelComplete && rightmostX >= goalX) {
         levelComplete = true;
         levelTransitionTimer = 3.0;
+        console.log('HIGHLIGHT:LEVEL_COMPLETE:' + performance.now().toFixed(0) + ':L' + currentLevel);
         cam.shake = Math.max(cam.shake, 10);
         flash.a = 1.0; flash.r = 0.91; flash.g = 0.84; flash.b = 0.42;
         // Big celebration particles
