@@ -1398,6 +1398,21 @@ function onQuake(clearCells) {
         player.material = nextPieceMaterial;
         player.rotation = 0;
         rollNextPiece();
+        // Blast radius — destroy nearby corpses and spikes
+        const blastR = 3;
+        const pcx = Math.floor(player.x / TILE);
+        const pcy = Math.floor(player.y / TILE);
+        for (let by = pcy - blastR; by <= pcy + blastR; by++) {
+            for (let bx = pcx - blastR; bx <= pcx + blastR; bx++) {
+                if (by < 0 || by >= levelH || bx < 0) continue;
+                if (corpseGrid[by] && corpseGrid[by][bx]) {
+                    corpseGrid[by][bx] = null;
+                }
+                if (level[by] && level[by][bx] === 2) {
+                    level[by][bx] = 0;
+                }
+            }
+        }
     }
 
     SFX.crunch();
