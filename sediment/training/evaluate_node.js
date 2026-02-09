@@ -1360,19 +1360,44 @@ function checkRowClears() {
     // Gravity now applied when pendingClears timers expire
 }
 
-function onQuake() {
+function onQuake(clearCells) {
     player.quakeCount++;
     levelQuakes++;
     player._totalQuakes = (player._totalQuakes || 0) + 1;
+
+    // RESURRECT: piece rises from the dead at the quake location
+    if (player.dead && clearCells && clearCells.length > 0) {
+        let maxX = 0, resY = 0;
+        for (const c of clearCells) {
+            if (c.x >= maxX) { maxX = c.x; resY = c.y; }
+        }
+        player.x = maxX * TILE;
+        player.y = (resY - 2) * TILE;
+        player.vx = RUN_SPEED;
+        player.vy = -200;
+        player.dead = false;
+        player.deathTimer = 0;
+        player.onGround = false;
+        player.jumpsLeft = 2;
+        player.spinCooldown = 0;
+        player.rotateCooldown = 0;
+        player.squash = 0.5;
+        player.trail = [];
+        player.boostTimer = 0;
+        player.distance = 0;
+        if (player.deathCount > 0) player.deathCount--;
+        player.shape = nextPieceShape;
+        player.material = nextPieceMaterial;
+        player.rotation = 0;
+        rollNextPiece();
+    }
+
     SFX.crunch();
-    timeSlowTimer = 0.3; // brief time-slow for juice
-    // Stack invincibility — 5s base, combos stack +5s each
+    timeSlowTimer = 0.3;
     player.quakeTimer += 5.0;
     quakeFlash = 1.5;
-    // Screen shake — bigger for combos
     const combo = player.quakeTimer > 5.5 ? Math.floor(player.quakeTimer / 5) + 1 : 0;
     cam.shake = Math.max(cam.shake, combo >= 2 ? 12 : 8);
-    // Big screen feedback — combo counter
     const cx = player.x + getShapeCenterX(player.shape, player.rotation);
     const cy = player.y + getShapeCenterY(player.shape, player.rotation);
     const label = combo >= 2 ? `QUAKE x${combo}!` : 'QUAKE!';
@@ -1389,7 +1414,7 @@ function clearColumn(x) {
     }
     if (cells.length) {
         pendingClears.push({ cells, timer: 0.35 });
-        onQuake();
+        onQuake(cells);
     }
 }
 
@@ -1403,7 +1428,7 @@ function clearRowSegment(y, startX, endX) {
     }
     if (cells.length) {
         pendingClears.push({ cells, timer: 0.35 });
-        onQuake();
+        onQuake(cells);
     }
 }
 
