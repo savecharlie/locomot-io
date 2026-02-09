@@ -130,59 +130,55 @@ const nnAgent = (() => {
         inputs[idx++] = p.material === 'spike' ? 1.0 : 0.0;
 
         // D. Terrain lookahead: 10 columns × 4 features (40)
-        // Log-spaced: dense near, sparse far — see as far as the player can
+        // Bounding-box-relative: danger at piece height, above, and at landing
         const _colOffsets = [1, 2, 3, 5, 7, 10, 15, 20, 28, 38];
         const playerCol = Math.floor(p.x / TILE);
-        const playerRow = Math.floor(p.y / TILE);
+        const _bounds = shapeBounds(p.shape, p.rotation);
+        const pTileY = Math.floor(p.y / TILE);
+        const boxTop = pTileY + _bounds.minR;
+        const boxBot = pTileY + _bounds.maxR;
+
         for (let ci = 0; ci < 10; ci++) {
             const col = playerCol + _colOffsets[ci];
             let groundH = 0.0;
-            let ceilingH = 0.0;
-            let spikeRelY = 0.0;
-            let hasGap = 1.0;
-            let nearestSpikeDist = 999;
+            let boxThreat = 0.0;
+            let aboveThreat = 0.0;
+            let landThreat = 1.0;
 
-            // Scan top to bottom for ceiling + spikes
-            for (let y = 0; y < lH; y++) {
-                let solid = false;
-                let isSpike = false;
-                if (col >= 0 && col < lW) {
-                    if (level[y] && level[y][col] === 1) solid = true;
-                    else if (level[y] && level[y][col] === 2) isSpike = true;
-                    const c = corpseGrid[y] && corpseGrid[y][col];
-                    if (c) {
-                        solid = true;
-                        if (c.mat === 'spike') isSpike = true;
-                    }
-                }
-                if (isSpike) {
-                    const dist = Math.abs(y - playerRow);
-                    if (dist < nearestSpikeDist) {
-                        nearestSpikeDist = dist;
-                        spikeRelY = (y - playerRow) / lH;
-                    }
-                }
-                if (solid && ceilingH === 0.0 && y > 0) {
-                    ceilingH = y / lH;
-                }
-            }
-
-            // Scan bottom to top for ground
-            for (let y = lH - 1; y >= 0; y--) {
-                if (col >= 0 && col < lW) {
-                    if ((level[y] && level[y][col] === 1) ||
-                        (corpseGrid[y] && corpseGrid[y][col] !== null)) {
+            if (col >= 0 && col < lW) {
+                // groundH + landThreat
+                for (let y = lH - 1; y >= 0; y--) {
+                    const tile = level[y] && level[y][col];
+                    const corp = corpseGrid[y] && corpseGrid[y][col];
+                    if (tile === 1 || corp) {
                         groundH = (lH - y) / lH;
-                        hasGap = 0.0;
+                        if (y > 0) {
+                            const at = level[y - 1] && level[y - 1][col];
+                            const ac = corpseGrid[y - 1] && corpseGrid[y - 1][col];
+                            landThreat = (at === 2 || (ac && ac.mat === 'spike')) ? 0.5 : 0.0;
+                        } else { landThreat = 0.0; }
                         break;
                     }
+                }
+                // boxThreat: piece bounding box rows
+                for (let y = Math.max(0, boxTop); y <= Math.min(lH - 1, boxBot); y++) {
+                    const tile = level[y] && level[y][col];
+                    const corp = corpseGrid[y] && corpseGrid[y][col];
+                    if (tile === 2 || (corp && corp.mat === 'spike')) { boxThreat = 1.0; break; }
+                    else if (tile === 1 || corp) { boxThreat = 0.5; }
+                }
+                // aboveThreat: above piece to ceiling
+                for (let y = 0; y < Math.max(0, boxTop); y++) {
+                    const tile = level[y] && level[y][col];
+                    const corp = corpseGrid[y] && corpseGrid[y][col];
+                    if (tile === 2 || (corp && corp.mat === 'spike')) { aboveThreat = 1.0; break; }
                 }
             }
 
             inputs[idx++] = groundH;
-            inputs[idx++] = ceilingH;
-            inputs[idx++] = spikeRelY;
-            inputs[idx++] = hasGap;
+            inputs[idx++] = boxThreat;
+            inputs[idx++] = aboveThreat;
+            inputs[idx++] = landThreat;
         }
 
         // E. Buzzsaw proximity (4) — 2 nearest
