@@ -763,7 +763,7 @@ function generateSegment(segIndex, lvl) {
     // L7: moving platforms (H) | L8: spiked chasms | L9: spike walls
     // L10: moving platforms (V) | L11-12: intensity
 
-    // Chasms (always)
+    // Chasms (always) — with walls on edges so you can't go under
     const numChasms = 2 + Math.floor(d * 0.8);
     const chasmMinX = segIndex === 0 ? 10 : 3;
     for (let i = 0; i < numChasms; i++) {
@@ -776,6 +776,17 @@ function generateSegment(segIndex, lvl) {
             } else {
                 level[h - 1][cx + dx] = 0;
             }
+        }
+        // Chasm pit walls: deepen chasm + solid walls on sides going down
+        for (let dx = 0; dx < cw; dx++) {
+            // Clear rows above floor too — deeper pit, can't bridge with corpses
+            if (level[h - 2]) level[h - 2][cx + dx] = 0;
+            if (level[h - 3]) level[h - 3][cx + dx] = 0;
+        }
+        // Solid walls on left/right edges at pit depth (below floor surface)
+        for (let wy = h - 3; wy <= h - 1; wy++) {
+            if (cx - 1 >= startX && level[wy]) level[wy][cx - 1] = 1;
+            if (cx + cw < startX + SEGMENT_W && level[wy]) level[wy][cx + cw] = 1;
         }
     }
 
@@ -2251,9 +2262,11 @@ function update(dt) {
         }
     }
 
-    // Track distance
-    player.distance = Math.max(player.distance, Math.floor(player.x / TILE));
-    if (player.distance > player.bestDistance) player.bestDistance = player.distance;
+    // Track distance (only while alive and inside the level)
+    if (!player.dead && player.y >= 0 && player.y < levelH * TILE) {
+        player.distance = Math.max(player.distance, Math.floor(player.x / TILE));
+        if (player.distance > player.bestDistance) player.bestDistance = player.distance;
+    }
 
     // Goal detection — any cell crosses the finish line?
     const bounds = shapeBounds(player.shape, player.rotation);
