@@ -2574,6 +2574,8 @@ function evaluateAgent(flatWeights, levelNum, maxTime, seed, noCorpses) {
     var progressCheckX = 0;    // x at last real forward progress
     var progressTimer = 0;     // time since last forward progress
     var _prevDeathCount = 0;   // for detecting new deaths
+    var actionHistory = [];    // loop detector: recent actions
+    var loopBreaks = 0;        // how many times loop was broken
 
     // Reset death memory for this episode
     _deathMemory = { deaths: 0, lastDeathX: 0, bestX: 0, timeSinceDeath: 999 };
@@ -2627,7 +2629,27 @@ function evaluateAgent(flatWeights, levelNum, maxTime, seed, noCorpses) {
                 decisionTimer = 0.12;
                 var inputs = getInputs();
                 var action = nn.forward(inputs);
-                // Actions: 0=nothing, 1=jump, 2=rotate_cw(+boost), 3=rotate_ccw, 4=unused
+
+                // Loop detector: check if recent actions repeat
+                actionHistory.push(action);
+                if (actionHistory.length > 24) actionHistory.shift();
+                for (var patLen = 3; patLen <= 8 && patLen * 2 <= actionHistory.length; patLen++) {
+                    var isLoop = true;
+                    var start = actionHistory.length - patLen * 2;
+                    for (var ki = 0; ki < patLen; ki++) {
+                        if (actionHistory[start + ki] !== actionHistory[start + patLen + ki]) {
+                            isLoop = false; break;
+                        }
+                    }
+                    if (isLoop) {
+                        var alts = [0,1,2,3].filter(function(a){return a !== action;});
+                        action = alts[Math.floor(Math.random() * alts.length)];
+                        loopBreaks++;
+                        break;
+                    }
+                }
+
+                // Actions: 0=nothing, 1=jump, 2=rotate_cw(+boost), 3=rotate_ccw
                 if (action === 1) {
                     jumpBuffered = true;
                 }
@@ -2652,7 +2674,7 @@ function evaluateAgent(flatWeights, levelNum, maxTime, seed, noCorpses) {
     var deathPenalty = 0;
     var deaths = Math.min(player.deathCount, 5);
     for (var d = 1; d <= deaths; d++) deathPenalty += d * d;
-    var fitness = player.bestDistance + 500 * levelsCompleted - deathPenalty;
+    var fitness = player.bestDistance + 2000 * levelsCompleted - deathPenalty;
 
     return {
         fitness: fitness,

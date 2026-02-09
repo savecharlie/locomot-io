@@ -20,6 +20,9 @@ const nnAgent = (() => {
     let dmBestX = 0;
     let dmTimeSinceDeath = 999;
     let dmPrevDeathCount = 0;
+    // Loop detector
+    let actionHist = [];
+    let loopBreakCount = 0;
 
     // ── Matrix math ──
 
@@ -252,13 +255,34 @@ const nnAgent = (() => {
             inputs[73] = Math.max(-1, Math.min(1, deathDx));
             inputs[74] = dmBestX > 0 ? Math.min(1.0, player.x / dmBestX) : 0;
             inputs[75] = Math.min(1.0, dmTimeSinceDeath / 5.0);
-            return forward(inputs);
+            let action = forward(inputs);
+
+            // Loop detector: break repeating action sequences
+            actionHist.push(action);
+            if (actionHist.length > 24) actionHist.shift();
+            for (let patLen = 3; patLen <= 8 && patLen * 2 <= actionHist.length; patLen++) {
+                let isLoop = true;
+                const start = actionHist.length - patLen * 2;
+                for (let ki = 0; ki < patLen; ki++) {
+                    if (actionHist[start + ki] !== actionHist[start + patLen + ki]) {
+                        isLoop = false; break;
+                    }
+                }
+                if (isLoop) {
+                    const alts = [0,1,2,3].filter(a => a !== action);
+                    action = alts[Math.floor(Math.random() * alts.length)];
+                    loopBreakCount++;
+                    break;
+                }
+            }
+            return action;
         },
 
         /** Reset death memory (call on level restart) */
         resetMemory() {
             dmDeaths = 0; dmLastDeathX = 0; dmBestX = 0;
             dmTimeSinceDeath = 999; dmPrevDeathCount = 0;
+            actionHist = []; loopBreakCount = 0;
         },
     };
 })();
