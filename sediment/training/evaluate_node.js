@@ -2268,26 +2268,26 @@ function mulberry32(a) {
 
 
 // ══════════════════════════════════════════════════════════════
-// ── SMALL NN (72 → 48 → 32 → 5, ReLU, argmax) ──
+// ── SMALL NN (76 → 48 → 32 → 5, ReLU, argmax) ──
 // ══════════════════════════════════════════════════════════════
 
 class SmallNN {
     constructor(flat) {
-        // Architecture: 72 input → 48 hidden → 32 hidden → 5 output
-        // Flat layout: w1(48*72), b1(48), w2(32*48), b2(32), w3(5*32), b3(5)
-        // Total: 3456 + 48 + 1536 + 32 + 160 + 5 = 5237
-        if (!flat || flat.length < 5237) {
+        // Architecture: 76 input → 48 hidden → 32 hidden → 5 output
+        // Flat layout: w1(48*76), b1(48), w2(32*48), b2(32), w3(5*32), b3(5)
+        // Total: 3648 + 48 + 1536 + 32 + 160 + 5 = 5429
+        if (!flat || flat.length < 5429) {
             this.valid = false;
             return;
         }
         this.valid = true;
         let idx = 0;
 
-        // Layer 1: 48 x 72
+        // Layer 1: 48 x 76
         this.w1 = [];
         for (let i = 0; i < 48; i++) {
-            this.w1.push(new Float32Array(flat.slice(idx, idx + 72)));
-            idx += 72;
+            this.w1.push(new Float32Array(flat.slice(idx, idx + 76)));
+            idx += 76;
         }
         this.b1 = new Float32Array(flat.slice(idx, idx + 48));
         idx += 48;
@@ -2354,9 +2354,17 @@ class SmallNN {
 // ── NN INPUT EXTRACTION (from nn_agent.js, adapted for Node) ──
 // ══════════════════════════════════════════════════════════════
 
+// Death memory — tracked per episode, fed into getInputs()
+var _deathMemory = {
+    deaths: 0,
+    lastDeathX: 0,
+    bestX: 0,
+    timeSinceDeath: 999,
+};
+
 function getInputs() {
     const p = player;
-    const inputs = new Float32Array(72);
+    const inputs = new Float32Array(76);
     let idx = 0;
     const lW = segments.length * SEGMENT_W;
     const lH = levelH || level.length;
@@ -2462,6 +2470,14 @@ function getInputs() {
         }
     }
 
+    // F. Death memory (4)
+    var dm = _deathMemory;
+    inputs[idx++] = Math.min(1.0, dm.deaths / 5.0);  // life urgency
+    var deathDx = dm.deaths > 0 ? (dm.lastDeathX - p.x) / (10 * TILE) : 0;
+    inputs[idx++] = Math.max(-1, Math.min(1, deathDx));  // distance to last death
+    inputs[idx++] = dm.bestX > 0 ? Math.min(1.0, p.x / dm.bestX) : 0;  // progress ratio
+    inputs[idx++] = Math.min(1.0, dm.timeSinceDeath / 5.0);  // time since death
+
     return inputs;
 }
 
@@ -2532,7 +2548,10 @@ function evaluateAgent(flatWeights, levelNum, maxTime, seed, noCorpses) {
     var startLevel = currentLevel;
     var progressCheckX = 0;    // x at last real forward progress
     var progressTimer = 0;     // time since last forward progress
-    var progressJumped = false; // whether auto-jump has fired
+    var _prevDeathCount = 0;   // for detecting new deaths
+
+    // Reset death memory for this episode
+    _deathMemory = { deaths: 0, lastDeathX: 0, bestX: 0, timeSinceDeath: 999 };
 
     while (elapsed < maxTime) {
         _simTime = elapsed;
@@ -2540,6 +2559,16 @@ function evaluateAgent(flatWeights, levelNum, maxTime, seed, noCorpses) {
         // Track ground time for ground ratio fitness
         totalFrames++;
         if (player.onGround && !player.dead) groundedFrames++;
+
+        // Update death memory
+        _deathMemory.timeSinceDeath += dt;
+        if (player.x > _deathMemory.bestX) _deathMemory.bestX = player.x;
+        if (player.deathCount > _prevDeathCount) {
+            _deathMemory.deaths = player.deathCount;
+            _deathMemory.lastDeathX = player.x;
+            _deathMemory.timeSinceDeath = 0;
+            _prevDeathCount = player.deathCount;
+        }
 
         // Progress detector: erratic jumps + rotations to shake loose, then die
         if (!player.dead) {
@@ -2563,7 +2592,6 @@ function evaluateAgent(flatWeights, levelNum, maxTime, seed, noCorpses) {
             }
         } else {
             progressTimer = 0;
-            progressJumped = false;
             progressCheckX = player.x;
         }
 

@@ -1,7 +1,7 @@
 /**
  * Sediment NN Agent — Browser inference for evolved neural network.
  *
- * Loads trained weights (JSON) and runs a 72→48→32→5 feedforward NN
+ * Loads trained weights (JSON) and runs a 76→48→32→5 feedforward NN
  * to play the game autonomously. Toggle with 'N' key.
  *
  * Expects these game globals: player, level, corpseGrid, buzzsaws,
@@ -14,7 +14,12 @@ const nnAgent = (() => {
     let loaded = false;
     let progressCheckX = 0;
     let progressTimer = 0;
-    let progressJumped = false;
+    // Death memory
+    let dmDeaths = 0;
+    let dmLastDeathX = 0;
+    let dmBestX = 0;
+    let dmTimeSinceDeath = 999;
+    let dmPrevDeathCount = 0;
 
     // ── Matrix math ──
 
@@ -212,9 +217,19 @@ const nnAgent = (() => {
         /** Called each frame from update(). Returns action 0-4. */
         getAction() {
             if (!loaded || !active) return 0;
+
+            // Update death memory
+            dmTimeSinceDeath += 1/60;
+            if (player.x > dmBestX) dmBestX = player.x;
+            if ((player.deathCount || 0) > dmPrevDeathCount) {
+                dmDeaths = player.deathCount;
+                dmLastDeathX = player.x;
+                dmTimeSinceDeath = 0;
+                dmPrevDeathCount = player.deathCount;
+            }
+
             if (player.dead) {
                 progressTimer = 0;
-                progressJumped = false;
                 progressCheckX = player.x;
                 return 0;
             }
@@ -224,14 +239,26 @@ const nnAgent = (() => {
                 progressTimer = 0;
             } else {
                 progressTimer += 1/60;
-                // Phase 1: random jumps + rotates
                 if (progressTimer > 0.5 && player.onGround && Math.random() < 0.15) return 1;
                 if (progressTimer > 0.8 && Math.random() < 0.08) return Math.random() < 0.7 ? 2 : 3;
-                // Phase 2: give up, let NN try fresh
                 if (progressTimer > 2.0) { progressTimer = 0; }
             }
-            const inputs = getInputs();
+            // Get base 72 inputs + append 4 death memory
+            const base = getInputs();
+            const inputs = new Float32Array(76);
+            inputs.set(base);
+            inputs[72] = Math.min(1.0, dmDeaths / 5.0);
+            const deathDx = dmDeaths > 0 ? (dmLastDeathX - player.x) / (10 * TILE) : 0;
+            inputs[73] = Math.max(-1, Math.min(1, deathDx));
+            inputs[74] = dmBestX > 0 ? Math.min(1.0, player.x / dmBestX) : 0;
+            inputs[75] = Math.min(1.0, dmTimeSinceDeath / 5.0);
             return forward(inputs);
+        },
+
+        /** Reset death memory (call on level restart) */
+        resetMemory() {
+            dmDeaths = 0; dmLastDeathX = 0; dmBestX = 0;
+            dmTimeSinceDeath = 999; dmPrevDeathCount = 0;
         },
     };
 })();
