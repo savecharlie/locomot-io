@@ -2431,23 +2431,33 @@ function getInputs() {
     // Log-spaced: dense near, sparse far — see as far as the player can
     const _colOffsets = [1, 2, 3, 5, 7, 10, 15, 20, 28, 38];
     const playerCol = Math.floor(p.x / TILE);
+    const playerRow = Math.floor(p.y / TILE);
     for (let ci = 0; ci < 10; ci++) {
         const col = playerCol + _colOffsets[ci];
         let groundH = 0.0;
         let ceilingH = 0.0;
-        let hasSpike = 0.0;
+        let spikeRelY = 0.0;  // spike row relative to player: >0 = below, <0 = above, 0 = none
         let hasGap = 1.0;
+        let nearestSpikeDist = 999;
 
-        // Scan top to bottom for ceiling
+        // Scan top to bottom for ceiling + spikes
         for (let y = 0; y < lH; y++) {
             let solid = false;
+            let isSpike = false;
             if (col >= 0 && col < lW) {
                 if (level[y] && level[y][col] === 1) solid = true;
-                else if (level[y] && level[y][col] === 2) hasSpike = 1.0;
+                else if (level[y] && level[y][col] === 2) isSpike = true;
                 const c = corpseGrid[y] && corpseGrid[y][col];
                 if (c) {
                     solid = true;
-                    if (c.mat === 'spike') hasSpike = 1.0;
+                    if (c.mat === 'spike') isSpike = true;
+                }
+            }
+            if (isSpike) {
+                const dist = Math.abs(y - playerRow);
+                if (dist < nearestSpikeDist) {
+                    nearestSpikeDist = dist;
+                    spikeRelY = (y - playerRow) / lH;  // positive = below player, negative = above
                 }
             }
             if (solid && ceilingH === 0.0 && y > 0) {
@@ -2469,7 +2479,7 @@ function getInputs() {
 
         inputs[idx++] = groundH;
         inputs[idx++] = ceilingH;
-        inputs[idx++] = hasSpike;
+        inputs[idx++] = spikeRelY;  // relative row: where the spike is vs player
         inputs[idx++] = hasGap;
     }
 
