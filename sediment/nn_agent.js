@@ -218,22 +218,17 @@ const nnAgent = (() => {
                 progressCheckX = player.x;
                 return 0;
             }
-            // Progress detector: stuck → jump once → die
+            // Progress detector: erratic actions to shake loose
             if (player.x > progressCheckX + 2 * TILE) {
                 progressCheckX = player.x;
                 progressTimer = 0;
-                progressJumped = false;
             } else {
                 progressTimer += 1/60;
-                if (progressTimer > 1.5) {
-                    progressTimer = 0;
-                    progressJumped = false;
-                    return 2; // boost — try to push through when stuck
-                }
-                if (progressTimer > 0.8 && player.onGround && !progressJumped) {
-                    progressJumped = true;
-                    return 1; // jump
-                }
+                // Phase 1: random jumps + rotates
+                if (progressTimer > 0.5 && player.onGround && Math.random() < 0.15) return 1;
+                if (progressTimer > 0.8 && Math.random() < 0.08) return Math.random() < 0.7 ? 2 : 3;
+                // Phase 2: give up, let NN try fresh
+                if (progressTimer > 2.0) { progressTimer = 0; }
             }
             const inputs = getInputs();
             return forward(inputs);

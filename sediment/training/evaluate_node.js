@@ -1185,6 +1185,7 @@ function spawnP(x, y, color, count, speed, life) {
 
 function die() {
     if (player.dead) return;
+    if (player.quakeTimer > 0) return; // can't die while invincible
     player.dead = true;
     player.deathTimer = 0;
     player.deathCount++;
@@ -1498,20 +1499,11 @@ function tryRotate(dir) {
             player.squash = 1.15;
             const cx = player.x + getShapeCenterX(player.shape, player.rotation);
             const cy = player.y + getShapeCenterY(player.shape, player.rotation);
-            // Spin boost/brake
-            // Brake (CCW) = always free
-            // Boost (CW) = cooldown; spam = forced brake
-            if (dir === -1) {
-                player.vx = 20;
-                player.boostTimer = 0.5;
-            } else if (!player.spinCooldown || player.spinCooldown <= 0) {
+            // Spin boost (CW only, with cooldown)
+            if (dir === 1 && (!player.spinCooldown || player.spinCooldown <= 0)) {
                 player.vx = 200;
                 player.boostTimer = 0.5;
                 player.spinCooldown = 1.0;
-            } else {
-                // CW spam = brake check
-                player.vx = 20;
-                player.boostTimer = 0.5;
             }
             SFX.rotate();
             player.rotateCooldown = 0.25;
@@ -2549,25 +2541,24 @@ function evaluateAgent(flatWeights, levelNum, maxTime, seed, noCorpses) {
         totalFrames++;
         if (player.onGround && !player.dead) groundedFrames++;
 
-        // Progress detector: auto-jump then auto-die when stuck
-        // (physics event, not NN override — NN still makes its own decisions)
+        // Progress detector: erratic jumps + rotations to shake loose, then die
         if (!player.dead) {
             if (player.x > progressCheckX + 2 * TILE) {
                 progressCheckX = player.x;
                 progressTimer = 0;
-                progressJumped = false;
             } else {
                 progressTimer += dt;
-                // Phase 1: auto-jump once after 0.8s (like hitting a spring)
-                if (progressTimer > 0.8 && player.onGround && !progressJumped) {
+                // Phase 1 (0.5-2.0s): random jumps + rotates to shake free
+                if (progressTimer > 0.5 && player.onGround && Math.random() < 0.15) {
                     jumpBuffered = true;
-                    progressJumped = true;
                 }
-                // Phase 2: auto-die after 1.5s
-                if (progressTimer > 1.5) {
+                if (progressTimer > 0.8 && Math.random() < 0.08) {
+                    tryRotate(Math.random() < 0.7 ? 1 : -1);
+                }
+                // Phase 2 (2.0s): truly stuck, die and respawn
+                if (progressTimer > 2.0) {
                     die();
                     progressTimer = 0;
-                    progressJumped = false;
                 }
             }
         } else {
@@ -2583,13 +2574,12 @@ function evaluateAgent(flatWeights, levelNum, maxTime, seed, noCorpses) {
                 decisionTimer = 0.12;
                 var inputs = getInputs();
                 var action = nn.forward(inputs);
-                // Actions: 0=nothing, 1=jump, 2=rotate_cw, 3=rotate_ccw, 4=die
+                // Actions: 0=nothing, 1=jump, 2=rotate_cw(+boost), 3=rotate_ccw, 4=unused
                 if (action === 1) {
                     jumpBuffered = true;
                 }
                 else if (action === 2) tryRotate(1);
                 else if (action === 3) tryRotate(-1);
-                else if (action === 4) die();
             }
         }
 
@@ -2604,7 +2594,12 @@ function evaluateAgent(flatWeights, levelNum, maxTime, seed, noCorpses) {
     }
 
     var levelsCompleted = currentLevel - startLevel + (levelComplete ? 1 : 0);
-    var fitness = player.bestDistance + 500 * levelsCompleted;
+    // Quadratic death penalty: deaths 1-5 cost 1,4,9,16,25 (sum=55)
+    // Cap at 5 so intentional suicide still works but farming is punished
+    var deathPenalty = 0;
+    var deaths = Math.min(player.deathCount, 5);
+    for (var d = 1; d <= deaths; d++) deathPenalty += d * d;
+    var fitness = player.bestDistance + 500 * levelsCompleted - deathPenalty;
 
     return {
         fitness: fitness,
