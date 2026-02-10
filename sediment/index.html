@@ -720,9 +720,9 @@ function nextShape() {
     return shapeBag.pop();
 }
 
-// Pick material — spike is a possible material (level 7+, 25% chance)
+// Pick material — spike is a possible material (level 6+, 25% chance)
 function pickMaterial(lvl) {
-    if (lvl >= 7 && Math.random() < 0.25) return 'spike';
+    if (lvl >= 6 && Math.random() < 0.25) return 'spike';
     return MATERIAL_TYPES[Math.floor(Math.random() * 3)];
 }
 
@@ -808,10 +808,10 @@ function generateSegment(segIndex, lvl) {
     }
 
     // ── Mechanic gating by level number ──
-    // L1-2: chasms only | L3: floor spikes | L5: ceiling spikes
-    // L7: spike material | L9: static platforms | L11: buzzsaws
-    // L13: moving platforms (H) | L15: spiked chasms | L17: spike walls
-    // L19: moving platforms (V) | L20-24: intensity
+    // L1: chasms only | L2: floor spikes | L4: ceiling spikes
+    // L6: spike material | L8: static platforms | L10: buzzsaws
+    // L12: moving platforms (H) | L14: spiked chasms | L16: spike walls
+    // L18: moving platforms (V) | L19-24: intensity
 
     // Chasms (always) — with walls on edges so you can't go under
     const numChasms = 2 + Math.floor(d * 0.8);
@@ -820,8 +820,8 @@ function generateSegment(segIndex, lvl) {
         const cx = startX + chasmMinX + Math.floor(Math.random() * (SEGMENT_W - chasmMinX - 4));
         const cw = 2 + Math.floor(Math.random() * (1 + d * 0.4));
         for (let dx = 0; dx < cw; dx++) {
-            if (lvl >= 15 && Math.random() < Math.min(0.8, d * 0.1)) {
-                // Spiked chasms (level 15+)
+            if (lvl >= 14 && Math.random() < Math.min(0.8, d * 0.1)) {
+                // Spiked chasms (level 14+)
                 level[h - 2][cx + dx] = 2;
             } else {
                 level[h - 1][cx + dx] = 0;
@@ -835,8 +835,8 @@ function generateSegment(segIndex, lvl) {
         }
     }
 
-    // Floor spikes (level 3+)
-    if (lvl >= 3) {
+    // Floor spikes (level 2+)
+    if (lvl >= 2) {
         const numSpikeFields = 1 + Math.floor(d * 0.6);
         const spikeMinX = segIndex === 0 ? 18 : 3;
         for (let i = 0; i < numSpikeFields; i++) {
@@ -850,8 +850,8 @@ function generateSegment(segIndex, lvl) {
         }
     }
 
-    // Ceiling spikes (level 5+)
-    if (lvl >= 5) {
+    // Ceiling spikes (level 4+)
+    if (lvl >= 4) {
         const numCeilingSpikes = Math.max(1, Math.floor(d * 0.5));
         for (let i = 0; i < numCeilingSpikes; i++) {
             const sx = startX + 2 + Math.floor(Math.random() * (SEGMENT_W - 4));
@@ -860,8 +860,8 @@ function generateSegment(segIndex, lvl) {
         }
     }
 
-    // Static platforms (level 9+)
-    if (lvl >= 9) {
+    // Static platforms (level 8+)
+    if (lvl >= 8) {
         const numPlats = 1 + Math.floor(d * 0.3);
         const platMinX = segIndex === 0 ? 20 : 4;
         for (let i = 0; i < numPlats; i++) {
@@ -874,8 +874,8 @@ function generateSegment(segIndex, lvl) {
         }
     }
 
-    // Buzzsaws (level 11+)
-    if (lvl >= 11) {
+    // Buzzsaws (level 10+)
+    if (lvl >= 10) {
         const numSaws = Math.max(1, Math.floor((d - 4) * 0.6));
         for (let i = 0; i < numSaws; i++) {
             const sawX = (startX + 8 + Math.floor(Math.random() * (SEGMENT_W - 16))) * TILE;
@@ -893,14 +893,14 @@ function generateSegment(segIndex, lvl) {
         }
     }
 
-    // Moving platforms — horizontal (level 13+)
-    if (lvl >= 13) {
+    // Moving platforms — horizontal (level 12+)
+    if (lvl >= 12) {
         const numMoving = 1 + Math.floor((d - 5) * 0.4);
         const movMinX = segIndex === 0 ? 22 : 5;
         for (let i = 0; i < numMoving; i++) {
             const mx = (startX + movMinX + Math.floor(Math.random() * (SEGMENT_W - movMinX - 8))) * TILE;
             const my = (3 + Math.floor(Math.random() * (h - 6))) * TILE;
-            const vert = lvl >= 19 && Math.random() < 0.4; // vertical only level 19+
+            const vert = lvl >= 18 && Math.random() < 0.4; // vertical only level 18+
             movingPlatforms.push({
                 x: mx, y: my, w: 3,
                 baseX: mx, baseY: my,
@@ -912,8 +912,8 @@ function generateSegment(segIndex, lvl) {
         }
     }
 
-    // Spike walls (level 17+)
-    if (lvl >= 17) {
+    // Spike walls (level 16+)
+    if (lvl >= 16) {
         const numWalls = Math.max(1, Math.floor((d - 6) * 0.5));
         for (let i = 0; i < numWalls; i++) {
             const wx = startX + 6 + Math.floor(Math.random() * (SEGMENT_W - 12));
