@@ -167,7 +167,8 @@ const GRAVITY = 700;
 const JUMP_FORCE = -280;
 const RUN_SPEED = 100;
 const WALL_SLIDE_SPEED = 40;
-const MIN_DISTANCE_FOR_CORPSE = 5; // tiles from spawn before death leaves blocks
+const MIN_DISTANCE_FOR_CORPSE = 12; // tiles from spawn before death leaves blocks
+const MIN_DISTANCE_FOR_SPIKE_CORPSE = 22; // spike corpses pushed even further
 const COLUMN_CLEAR_THRESHOLD = 6; // filled tiles needed to clear a column (classic=10, tunnel=14)
 
 // ── Colors ──
@@ -719,9 +720,9 @@ function nextShape() {
     return shapeBag.pop();
 }
 
-// Pick material — spike is a possible material (level 4+, 25% chance)
+// Pick material — spike is a possible material (level 7+, 25% chance)
 function pickMaterial(lvl) {
-    if (lvl >= 4 && Math.random() < 0.25) return 'spike';
+    if (lvl >= 7 && Math.random() < 0.25) return 'spike';
     return MATERIAL_TYPES[Math.floor(Math.random() * 3)];
 }
 
@@ -778,11 +779,11 @@ let winTimer = 0;
 let winParticleTimer = 0;
 
 function getLevelDifficulty(lvl) {
-    return Math.min(10, 1 + (lvl - 1) * 0.82);
+    return Math.min(10, 1 + (lvl - 1) * 0.39);
 }
 
 function getSegmentsForLevel(lvl) {
-    return Math.min(7, 3 + Math.floor((lvl - 1) * 0.4));
+    return Math.min(7, 3 + Math.floor((lvl - 1) * 0.2));
 }
 
 function generateSegment(segIndex, lvl) {
@@ -807,20 +808,20 @@ function generateSegment(segIndex, lvl) {
     }
 
     // ── Mechanic gating by level number ──
-    // L1: chasms only | L2: floor spikes | L3: ceiling spikes
-    // L4: spike material | L5: static platforms | L6: buzzsaws
-    // L7: moving platforms (H) | L8: spiked chasms | L9: spike walls
-    // L10: moving platforms (V) | L11-12: intensity
+    // L1-2: chasms only | L3: floor spikes | L5: ceiling spikes
+    // L7: spike material | L9: static platforms | L11: buzzsaws
+    // L13: moving platforms (H) | L15: spiked chasms | L17: spike walls
+    // L19: moving platforms (V) | L20-24: intensity
 
     // Chasms (always) — with walls on edges so you can't go under
     const numChasms = 2 + Math.floor(d * 0.8);
-    const chasmMinX = segIndex === 0 ? 10 : 3;
+    const chasmMinX = segIndex === 0 ? 18 : 3;
     for (let i = 0; i < numChasms; i++) {
         const cx = startX + chasmMinX + Math.floor(Math.random() * (SEGMENT_W - chasmMinX - 4));
         const cw = 2 + Math.floor(Math.random() * (1 + d * 0.4));
         for (let dx = 0; dx < cw; dx++) {
-            if (lvl >= 8 && Math.random() < Math.min(0.8, d * 0.1)) {
-                // Spiked chasms (level 8+)
+            if (lvl >= 15 && Math.random() < Math.min(0.8, d * 0.1)) {
+                // Spiked chasms (level 15+)
                 level[h - 2][cx + dx] = 2;
             } else {
                 level[h - 1][cx + dx] = 0;
@@ -834,10 +835,10 @@ function generateSegment(segIndex, lvl) {
         }
     }
 
-    // Floor spikes (level 2+)
-    if (lvl >= 2) {
+    // Floor spikes (level 3+)
+    if (lvl >= 3) {
         const numSpikeFields = 1 + Math.floor(d * 0.6);
-        const spikeMinX = segIndex === 0 ? 10 : 3;
+        const spikeMinX = segIndex === 0 ? 18 : 3;
         for (let i = 0; i < numSpikeFields; i++) {
             const sx = startX + spikeMinX + Math.floor(Math.random() * (SEGMENT_W - spikeMinX - 3));
             const sw = 2 + Math.floor(Math.random() * 3);
@@ -849,8 +850,8 @@ function generateSegment(segIndex, lvl) {
         }
     }
 
-    // Ceiling spikes (level 3+)
-    if (lvl >= 3) {
+    // Ceiling spikes (level 5+)
+    if (lvl >= 5) {
         const numCeilingSpikes = Math.max(1, Math.floor(d * 0.5));
         for (let i = 0; i < numCeilingSpikes; i++) {
             const sx = startX + 2 + Math.floor(Math.random() * (SEGMENT_W - 4));
@@ -859,10 +860,10 @@ function generateSegment(segIndex, lvl) {
         }
     }
 
-    // Static platforms (level 5+)
-    if (lvl >= 5) {
+    // Static platforms (level 9+)
+    if (lvl >= 9) {
         const numPlats = 1 + Math.floor(d * 0.3);
-        const platMinX = segIndex === 0 ? 14 : 4;
+        const platMinX = segIndex === 0 ? 20 : 4;
         for (let i = 0; i < numPlats; i++) {
             const px = startX + platMinX + Math.floor(Math.random() * (SEGMENT_W - platMinX - 6));
             const pw = 2 + Math.floor(Math.random() * 3);
@@ -873,8 +874,8 @@ function generateSegment(segIndex, lvl) {
         }
     }
 
-    // Buzzsaws (level 6+)
-    if (lvl >= 6) {
+    // Buzzsaws (level 11+)
+    if (lvl >= 11) {
         const numSaws = Math.max(1, Math.floor((d - 4) * 0.6));
         for (let i = 0; i < numSaws; i++) {
             const sawX = (startX + 8 + Math.floor(Math.random() * (SEGMENT_W - 16))) * TILE;
@@ -892,14 +893,14 @@ function generateSegment(segIndex, lvl) {
         }
     }
 
-    // Moving platforms — horizontal (level 7+)
-    if (lvl >= 7) {
+    // Moving platforms — horizontal (level 13+)
+    if (lvl >= 13) {
         const numMoving = 1 + Math.floor((d - 5) * 0.4);
-        const movMinX = segIndex === 0 ? 16 : 5;
+        const movMinX = segIndex === 0 ? 22 : 5;
         for (let i = 0; i < numMoving; i++) {
             const mx = (startX + movMinX + Math.floor(Math.random() * (SEGMENT_W - movMinX - 8))) * TILE;
             const my = (3 + Math.floor(Math.random() * (h - 6))) * TILE;
-            const vert = lvl >= 10 && Math.random() < 0.4; // vertical only level 10+
+            const vert = lvl >= 19 && Math.random() < 0.4; // vertical only level 19+
             movingPlatforms.push({
                 x: mx, y: my, w: 3,
                 baseX: mx, baseY: my,
@@ -911,8 +912,8 @@ function generateSegment(segIndex, lvl) {
         }
     }
 
-    // Spike walls (level 9+)
-    if (lvl >= 9) {
+    // Spike walls (level 17+)
+    if (lvl >= 17) {
         const numWalls = Math.max(1, Math.floor((d - 6) * 0.5));
         for (let i = 0; i < numWalls; i++) {
             const wx = startX + 6 + Math.floor(Math.random() * (SEGMENT_W - 12));
@@ -924,14 +925,14 @@ function generateSegment(segIndex, lvl) {
         }
     }
 
-    // Safe spawn
+    // Safe spawn — generous clear zone so players don't hit walls immediately
     if (segIndex === 0) {
         for (let y = 1; y < h - 1; y++) {
-            for (let x = 0; x < 10; x++) {
+            for (let x = 0; x < 18; x++) {
                 if (level[y] && level[y][x] === 2) level[y][x] = 0;
             }
         }
-        for (let x = 0; x < 10; x++) {
+        for (let x = 0; x < 18; x++) {
             level[h - 1][x] = 1;
         }
     }
@@ -1262,7 +1263,9 @@ function die() {
     // Check minimum distance
     const distFromSpawn = Math.floor((player.x - player.spawnX) / TILE);
 
-    if (distFromSpawn >= MIN_DISTANCE_FOR_CORPSE) {
+    // Spike corpses need more distance to avoid nasty pileups near spawn
+    const minDist = player.material === 'spike' ? MIN_DISTANCE_FOR_SPIKE_CORPSE : MIN_DISTANCE_FOR_CORPSE;
+    if (distFromSpawn >= minDist) {
         // Snap each cell to the grid — clamp to valid range so chasm deaths still place blocks
         const groupCells = [];
         for (let i = 0; i < cells.length; i++) {
@@ -1918,7 +1921,7 @@ function update(dt) {
         if (winTimer > 2 && jumpBuffered) {
             jumpBuffered = false;
             gameWon = false;
-            currentLevel = 13;
+            currentLevel = 25;
             initLevel(currentLevel);
         }
         // Keep particles alive
@@ -1959,11 +1962,11 @@ function update(dt) {
         if (flash.a > 0) flash.a -= dt * 2; // slower flash fade
         if (cam.shake > 0) { cam.sx = (Math.random()*2-1)*cam.shake; cam.sy = (Math.random()*2-1)*cam.shake; cam.shake *= (1-6*dt); if (cam.shake < 0.3) cam.shake = 0; }
         if (levelTransitionTimer <= 0) {
-            if (currentLevel >= 12 && !player._hasWon) {
+            if (currentLevel >= 24 && !player._hasWon) {
                 // BEAT THE GAME!
                 player._hasWon = true;
-                player._highestLevel = Math.max(player._highestLevel || 1, 13);
-                player._bestRun = Math.max(player._bestRun || 0, 12);
+                player._highestLevel = Math.max(player._highestLevel || 1, 25);
+                player._bestRun = Math.max(player._bestRun || 0, 24);
                 saveProgress();
                 gameWon = true;
                 winTimer = 0;
@@ -2384,7 +2387,7 @@ function update(dt) {
         const cy = player.y + getShapeCenterY(player.shape, player.rotation);
         spawnP(cx, cy, C.player, 30, 120, 0.6);
         spawnP(cx, cy, '#FFF0D0', 20, 80, 0.5);
-        if (currentLevel >= 12) {
+        if (currentLevel >= 24) {
             SFX.win();
         } else {
             SFX.levelComplete();
