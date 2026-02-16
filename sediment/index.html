@@ -1671,6 +1671,9 @@ let _muteBtnBounds = null;
 let _volDownBounds = null;
 let _volUpBounds = null;
 let _sfxBtnBounds = null;
+let _levelLeftBounds = null;
+let _levelRightBounds = null;
+let _pauseSelectedLevel = 1;
 let touchStartX = 0, touchStartY = 0;
 let touchStartTime = 0;
 let touchHandled = false;
@@ -1768,6 +1771,20 @@ canvas.addEventListener('touchend', (e) => {
                         return;
                     }
                 }
+                if (_levelLeftBounds) {
+                    const b = _levelLeftBounds;
+                    if (tapX >= b.x && tapX <= b.x + b.w && tapY >= b.y && tapY <= b.y + b.h) {
+                        pauseLevelLeft();
+                        return;
+                    }
+                }
+                if (_levelRightBounds) {
+                    const b = _levelRightBounds;
+                    if (tapX >= b.x && tapX <= b.x + b.w && tapY >= b.y && tapY <= b.y + b.h) {
+                        pauseLevelRight();
+                        return;
+                    }
+                }
                 if (_volDownBounds) {
                     const b = _volDownBounds;
                     if (tapX >= b.x && tapX <= b.x + b.w && tapY >= b.y && tapY <= b.y + b.h) {
@@ -1813,6 +1830,8 @@ document.addEventListener('keydown', (e) => {
     if (e.code === 'KeyF') toggleSfxMute();
     if (e.code === 'Comma' && paused) adjustMusicVolume(-1);
     if (e.code === 'Period' && paused) adjustMusicVolume(1);
+    if (e.code === 'BracketLeft' && paused) pauseLevelLeft();
+    if (e.code === 'BracketRight' && paused) pauseLevelRight();
     if (e.code === 'KeyB') { toggleBot(); }
 });
 
@@ -1820,6 +1839,7 @@ document.addEventListener('keydown', (e) => {
 function togglePause() {
     paused = !paused;
     document.getElementById('pauseBtn').innerHTML = paused ? '&#9654;' : '&#9646;&#9646;';
+    if (paused) _pauseSelectedLevel = currentLevel;
 }
 
 function restartLevel() {
@@ -1827,6 +1847,23 @@ function restartLevel() {
     paused = false;
     document.getElementById('pauseBtn').innerHTML = '&#9646;&#9646;';
     initLevel(currentLevel);
+}
+
+function pauseLevelLeft() {
+    if (_pauseSelectedLevel > 1) {
+        _pauseSelectedLevel--;
+        currentLevel = _pauseSelectedLevel;
+        initLevel(currentLevel);
+    }
+}
+
+function pauseLevelRight() {
+    const maxLevel = player._highestLevel || 1;
+    if (_pauseSelectedLevel < maxLevel) {
+        _pauseSelectedLevel++;
+        currentLevel = _pauseSelectedLevel;
+        initLevel(currentLevel);
+    }
 }
 
 document.getElementById('pauseBtn').addEventListener('touchstart', (e) => {
@@ -1868,6 +1905,20 @@ canvas.addEventListener('click', (e) => {
             const b = _skipBtnBounds;
             if (clickX >= b.x && clickX <= b.x + b.w && clickY >= b.y && clickY <= b.y + b.h) {
                 restartLevel();
+                return;
+            }
+        }
+        if (_levelLeftBounds) {
+            const b = _levelLeftBounds;
+            if (clickX >= b.x && clickX <= b.x + b.w && clickY >= b.y && clickY <= b.y + b.h) {
+                pauseLevelLeft();
+                return;
+            }
+        }
+        if (_levelRightBounds) {
+            const b = _levelRightBounds;
+            if (clickX >= b.x && clickX <= b.x + b.w && clickY >= b.y && clickY <= b.y + b.h) {
+                pauseLevelRight();
                 return;
             }
         }
@@ -3088,7 +3139,7 @@ function draw() {
         ctx.fillText('tap to resume', W/2, H/2 - 8);
 
         // Skip level button
-        const skipY = H/2 + 12;
+        const skipY = H/2 + 8;
         const skipW = 70, skipH = 16;
         const skipX = W/2 - skipW/2;
         ctx.fillStyle = 'rgba(232,168,56,0.2)';
@@ -3103,8 +3154,52 @@ function draw() {
         // Store button bounds for tap detection (in screen coords)
         _skipBtnBounds = { x: skipX, y: skipY - skipH/2, w: skipW, h: skipH };
 
+        // Level selector row: [ < ] LEVEL X [ > ]
+        const maxLevel = player._highestLevel || 1;
+        if (maxLevel > 1) {
+            const lvlY = skipY + 22;
+            const lvlBtnW = 16, lvlBtnH = 14;
+            const lvlLabelW = 70;
+            const lvlTotalW = lvlBtnW + lvlLabelW + lvlBtnW;
+            const lvlStartX = W/2 - lvlTotalW/2;
+
+            // "<" button
+            const canGoLeft = _pauseSelectedLevel > 1;
+            ctx.fillStyle = canGoLeft ? 'rgba(104,187,196,0.2)' : 'rgba(216,208,192,0.05)';
+            ctx.fillRect(lvlStartX, lvlY - lvlBtnH/2, lvlBtnW, lvlBtnH);
+            ctx.strokeStyle = canGoLeft ? 'rgba(104,187,196,0.5)' : 'rgba(216,208,192,0.15)';
+            ctx.lineWidth = 1;
+            ctx.strokeRect(lvlStartX, lvlY - lvlBtnH/2, lvlBtnW, lvlBtnH);
+            ctx.fillStyle = canGoLeft ? '#68BBC4' : 'rgba(216,208,192,0.2)';
+            ctx.font = '8px monospace';
+            ctx.fillText('<', lvlStartX + lvlBtnW/2, lvlY + 3);
+
+            // Level label
+            ctx.fillStyle = 'rgba(104,187,196,0.8)';
+            ctx.font = '6px monospace';
+            ctx.fillText('LEVEL ' + _pauseSelectedLevel, lvlStartX + lvlBtnW + lvlLabelW/2, lvlY + 2);
+
+            // ">" button
+            const canGoRight = _pauseSelectedLevel < maxLevel;
+            const lvlPlusX = lvlStartX + lvlBtnW + lvlLabelW;
+            ctx.fillStyle = canGoRight ? 'rgba(104,187,196,0.2)' : 'rgba(216,208,192,0.05)';
+            ctx.fillRect(lvlPlusX, lvlY - lvlBtnH/2, lvlBtnW, lvlBtnH);
+            ctx.strokeStyle = canGoRight ? 'rgba(104,187,196,0.5)' : 'rgba(216,208,192,0.15)';
+            ctx.lineWidth = 1;
+            ctx.strokeRect(lvlPlusX, lvlY - lvlBtnH/2, lvlBtnW, lvlBtnH);
+            ctx.fillStyle = canGoRight ? '#68BBC4' : 'rgba(216,208,192,0.2)';
+            ctx.font = '8px monospace';
+            ctx.fillText('>', lvlPlusX + lvlBtnW/2, lvlY + 3);
+
+            _levelLeftBounds = { x: lvlStartX, y: lvlY - lvlBtnH/2, w: lvlBtnW, h: lvlBtnH };
+            _levelRightBounds = { x: lvlPlusX, y: lvlY - lvlBtnH/2, w: lvlBtnW, h: lvlBtnH };
+        } else {
+            _levelLeftBounds = null;
+            _levelRightBounds = null;
+        }
+
         // Music volume row: [  -  ] MUSIC XX% [  +  ]
-        const volY = skipY + 22;
+        const volY = skipY + (maxLevel > 1 ? 44 : 22);
         const volBtnW = 16, volBtnH = 14;
         const volLabelW = 70;
         const volTotalW = volBtnW + volLabelW + volBtnW;
@@ -3162,6 +3257,8 @@ function draw() {
         _volDownBounds = null;
         _volUpBounds = null;
         _sfxBtnBounds = null;
+        _levelLeftBounds = null;
+        _levelRightBounds = null;
     }
 }
 
