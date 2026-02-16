@@ -2405,7 +2405,7 @@ function update(dt) {
             }
         }
 
-        // Push corpse blocks out of the way
+        // Push corpse blocks out of the way (chain-push entire rows)
         {
             const ptx1 = Math.floor(p.x / TILE);
             const ptx2 = Math.floor((p.x + p.w * TILE - 1) / TILE);
@@ -2414,58 +2414,95 @@ function update(dt) {
             for (let ty = pty; ty <= pty2; ty++) {
                 for (let tx = ptx1; tx <= ptx2; tx++) {
                     if (ty < 0 || ty >= levelH || !corpseGrid[ty] || !corpseGrid[ty][tx]) continue;
-                    const block = corpseGrid[ty][tx];
-                    // Push in movement direction
                     if (p.vertical) {
                         const dir = (p.y - prevY) >= 0 ? 1 : -1;
-                        let destY = ty + dir;
-                        // Slide as far as possible
-                        while (destY >= 1 && destY < levelH) {
-                            const solid = (level[destY] && level[destY][tx] === 1) ||
-                                          (corpseGrid[destY] && corpseGrid[destY][tx]);
-                            if (solid) break;
-                            // Check not still inside this platform
-                            const destPx = destY * TILE;
-                            if (destPx + TILE > p.y && destPx < p.y + TILE) {
-                                destY += dir;
-                                continue;
-                            }
+                        // Collect chain of corpses in push direction
+                        const chain = [];
+                        let scan = ty;
+                        while (scan >= 0 && scan < levelH && corpseGrid[scan] && corpseGrid[scan][tx]) {
+                            chain.push(scan);
+                            scan += dir;
+                        }
+                        // scan is now the first empty/wall tile after the chain
+                        // Check if any tile in the chain is still inside the platform
+                        // and find the first open slot past the platform
+                        let openSlot = scan;
+                        while (openSlot >= 0 && openSlot < levelH) {
+                            const px2 = openSlot * TILE;
+                            if (px2 + TILE > p.y && px2 < p.y + TILE) { openSlot += dir; continue; }
                             break;
                         }
-                        if (destY !== ty && destY >= 1 && destY < levelH &&
-                            !(level[destY] && level[destY][tx] === 1) &&
-                            !(corpseGrid[destY] && corpseGrid[destY][tx])) {
-                            if (!corpseGrid[destY]) corpseGrid[destY] = [];
-                            corpseGrid[destY][tx] = block;
-                            corpseGrid[ty][tx] = null;
+                        const wallBlock = openSlot < 1 || openSlot >= levelH ||
+                                          (level[openSlot] && level[openSlot][tx] === 1);
+                        if (!wallBlock) {
+                            // Shift entire chain by 1 in dir (work from far end)
+                            for (let i = chain.length - 1; i >= 0; i--) {
+                                const from = chain[i], to = from + dir;
+                                if (to >= 1 && to < levelH) {
+                                    if (!corpseGrid[to]) corpseGrid[to] = [];
+                                    corpseGrid[to][tx] = corpseGrid[from][tx];
+                                }
+                                corpseGrid[from][tx] = null;
+                            }
                         } else {
-                            // Can't push — destroy it with particles
-                            spawnP(tx * TILE + TILE/2, ty * TILE + TILE/2, matColor(block.mat), 6, 50, 0.3);
-                            corpseGrid[ty][tx] = null;
+                            // Chain is against a wall — crush the last block, shift rest
+                            if (chain.length > 0) {
+                                const crushIdx = chain[chain.length - 1];
+                                const crushBlock = corpseGrid[crushIdx][tx];
+                                spawnP(tx * TILE + TILE/2, crushIdx * TILE + TILE/2, matColor(crushBlock.mat), 6, 50, 0.3);
+                                corpseGrid[crushIdx][tx] = null;
+                                for (let i = chain.length - 2; i >= 0; i--) {
+                                    const from = chain[i], to = from + dir;
+                                    if (to >= 1 && to < levelH) {
+                                        if (!corpseGrid[to]) corpseGrid[to] = [];
+                                        corpseGrid[to][tx] = corpseGrid[from][tx];
+                                    }
+                                    corpseGrid[from][tx] = null;
+                                }
+                            }
                         }
                     } else {
                         const dir = (p.x - prevX) >= 0 ? 1 : -1;
-                        let destX = tx + dir;
-                        while (destX >= 0 && destX < segments.length * SEGMENT_W) {
-                            const solid = (level[ty] && level[ty][destX] === 1) ||
-                                          (corpseGrid[ty] && corpseGrid[ty][destX]);
-                            if (solid) break;
-                            const destPx = destX * TILE;
-                            if (destPx + TILE > p.x && destPx < p.x + p.w * TILE) {
-                                destX += dir;
-                                continue;
-                            }
+                        const maxX = segments.length * SEGMENT_W;
+                        // Collect chain
+                        const chain = [];
+                        let scan = tx;
+                        while (scan >= 0 && scan < maxX && corpseGrid[ty] && corpseGrid[ty][scan]) {
+                            chain.push(scan);
+                            scan += dir;
+                        }
+                        let openSlot = scan;
+                        while (openSlot >= 0 && openSlot < maxX) {
+                            const px2 = openSlot * TILE;
+                            if (px2 + TILE > p.x && px2 < p.x + p.w * TILE) { openSlot += dir; continue; }
                             break;
                         }
-                        if (destX !== tx && destX >= 0 && destX < segments.length * SEGMENT_W &&
-                            !(level[ty] && level[ty][destX] === 1) &&
-                            !(corpseGrid[ty] && corpseGrid[ty][destX])) {
-                            if (!corpseGrid[ty]) corpseGrid[ty] = [];
-                            corpseGrid[ty][destX] = block;
-                            corpseGrid[ty][tx] = null;
+                        const wallBlock = openSlot < 0 || openSlot >= maxX ||
+                                          (level[ty] && level[ty][openSlot] === 1);
+                        if (!wallBlock) {
+                            for (let i = chain.length - 1; i >= 0; i--) {
+                                const from = chain[i], to = from + dir;
+                                if (to >= 0 && to < maxX) {
+                                    if (!corpseGrid[ty]) corpseGrid[ty] = [];
+                                    corpseGrid[ty][to] = corpseGrid[ty][from];
+                                }
+                                corpseGrid[ty][from] = null;
+                            }
                         } else {
-                            spawnP(tx * TILE + TILE/2, ty * TILE + TILE/2, matColor(block.mat), 6, 50, 0.3);
-                            corpseGrid[ty][tx] = null;
+                            if (chain.length > 0) {
+                                const crushIdx = chain[chain.length - 1];
+                                const crushBlock = corpseGrid[ty][crushIdx];
+                                spawnP(crushIdx * TILE + TILE/2, ty * TILE + TILE/2, matColor(crushBlock.mat), 6, 50, 0.3);
+                                corpseGrid[ty][crushIdx] = null;
+                                for (let i = chain.length - 2; i >= 0; i--) {
+                                    const from = chain[i], to = from + dir;
+                                    if (to >= 0 && to < maxX) {
+                                        if (!corpseGrid[ty]) corpseGrid[ty] = [];
+                                        corpseGrid[ty][to] = corpseGrid[ty][from];
+                                    }
+                                    corpseGrid[ty][from] = null;
+                                }
+                            }
                         }
                     }
                 }
