@@ -2405,6 +2405,73 @@ function update(dt) {
             }
         }
 
+        // Push corpse blocks out of the way
+        {
+            const ptx1 = Math.floor(p.x / TILE);
+            const ptx2 = Math.floor((p.x + p.w * TILE - 1) / TILE);
+            const pty = Math.floor(p.y / TILE);
+            const pty2 = Math.floor((p.y + TILE - 1) / TILE);
+            for (let ty = pty; ty <= pty2; ty++) {
+                for (let tx = ptx1; tx <= ptx2; tx++) {
+                    if (ty < 0 || ty >= levelH || !corpseGrid[ty] || !corpseGrid[ty][tx]) continue;
+                    const block = corpseGrid[ty][tx];
+                    // Push in movement direction
+                    if (p.vertical) {
+                        const dir = (p.y - prevY) >= 0 ? 1 : -1;
+                        let destY = ty + dir;
+                        // Slide as far as possible
+                        while (destY >= 1 && destY < levelH) {
+                            const solid = (level[destY] && level[destY][tx] === 1) ||
+                                          (corpseGrid[destY] && corpseGrid[destY][tx]);
+                            if (solid) break;
+                            // Check not still inside this platform
+                            const destPx = destY * TILE;
+                            if (destPx + TILE > p.y && destPx < p.y + TILE) {
+                                destY += dir;
+                                continue;
+                            }
+                            break;
+                        }
+                        if (destY !== ty && destY >= 1 && destY < levelH &&
+                            !(level[destY] && level[destY][tx] === 1) &&
+                            !(corpseGrid[destY] && corpseGrid[destY][tx])) {
+                            if (!corpseGrid[destY]) corpseGrid[destY] = [];
+                            corpseGrid[destY][tx] = block;
+                            corpseGrid[ty][tx] = null;
+                        } else {
+                            // Can't push — destroy it with particles
+                            spawnP(tx * TILE + TILE/2, ty * TILE + TILE/2, matColor(block.mat), 6, 50, 0.3);
+                            corpseGrid[ty][tx] = null;
+                        }
+                    } else {
+                        const dir = (p.x - prevX) >= 0 ? 1 : -1;
+                        let destX = tx + dir;
+                        while (destX >= 0 && destX < segments.length * SEGMENT_W) {
+                            const solid = (level[ty] && level[ty][destX] === 1) ||
+                                          (corpseGrid[ty] && corpseGrid[ty][destX]);
+                            if (solid) break;
+                            const destPx = destX * TILE;
+                            if (destPx + TILE > p.x && destPx < p.x + p.w * TILE) {
+                                destX += dir;
+                                continue;
+                            }
+                            break;
+                        }
+                        if (destX !== tx && destX >= 0 && destX < segments.length * SEGMENT_W &&
+                            !(level[ty] && level[ty][destX] === 1) &&
+                            !(corpseGrid[ty] && corpseGrid[ty][destX])) {
+                            if (!corpseGrid[ty]) corpseGrid[ty] = [];
+                            corpseGrid[ty][destX] = block;
+                            corpseGrid[ty][tx] = null;
+                        } else {
+                            spawnP(tx * TILE + TILE/2, ty * TILE + TILE/2, matColor(block.mat), 6, 50, 0.3);
+                            corpseGrid[ty][tx] = null;
+                        }
+                    }
+                }
+            }
+        }
+
         if (!player.dead) {
             const deltaX = p.x - prevX;
             const deltaY = p.y - prevY;
