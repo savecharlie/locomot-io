@@ -1020,6 +1020,24 @@ function tetSolid(px, py, shapeName, rotation) {
     return false;
 }
 
+// Check if a tetromino overlaps a specific moving platform (pixel-level AABB)
+function tetOverlapsPlatform(px, py, shapeName, rotation, plat) {
+    const cells = getCells(shapeName, rotation);
+    const px1 = plat.x, py1 = plat.y;
+    const px2 = plat.x + plat.w * TILE, py2 = plat.y + TILE;
+    for (const [cx, cy] of cells) {
+        const cx1 = px + cx * TILE, cy1 = py + cy * TILE;
+        if (cx1 + TILE > px1 && cx1 < px2 && cy1 + TILE > py1 && cy1 < py2) return true;
+    }
+    return false;
+}
+
+// Check if two moving platforms overlap (AABB)
+function platformsOverlap(a, b) {
+    return a.x + a.w * TILE > b.x && a.x < b.x + b.w * TILE &&
+           a.y + TILE > b.y && a.y < b.y + TILE;
+}
+
 function tetSpike(px, py, shapeName, rotation) {
     const cells = getCells(shapeName, rotation);
     for (const [cx, cy] of cells) {
@@ -2355,7 +2373,7 @@ function update(dt) {
         }
     }
 
-    // Update moving platforms + carry player
+    // Update moving platforms + carry/push player + platform-platform collision
     for (const p of movingPlatforms) {
         const prevX = p.x, prevY = p.y;
         const t = performance.now() / 1000;
@@ -2364,18 +2382,95 @@ function update(dt) {
         } else {
             p.x = p.baseX + Math.sin(t * p.speed * 0.05 + p.phase) * p.range;
         }
-        // Carry player if standing on this platform
+
+        // Platform-platform collision: if overlapping another, clamp back
+        for (const other of movingPlatforms) {
+            if (other === p) continue;
+            if (platformsOverlap(p, other)) {
+                if (p.vertical) {
+                    // Push apart vertically
+                    if (p.y < other.y) {
+                        p.y = other.y - TILE;
+                    } else {
+                        p.y = other.y + TILE;
+                    }
+                } else {
+                    // Push apart horizontally
+                    if (p.x < other.x) {
+                        p.x = other.x - p.w * TILE;
+                    } else {
+                        p.x = other.x + other.w * TILE;
+                    }
+                }
+            }
+        }
+
         if (!player.dead) {
+            const deltaX = p.x - prevX;
+            const deltaY = p.y - prevY;
+
+            // Carry player if standing on this platform
             const cells = getCells(player.shape, player.rotation);
+            let carried = false;
             for (const [cx, cy] of cells) {
                 const footTX = Math.floor((player.x + cx * TILE + TILE/2) / TILE);
                 const footTY = Math.floor((player.y + (cy + 1) * TILE) / TILE);
                 const px1 = Math.floor(prevX / TILE);
                 const ppy = Math.floor(prevY / TILE);
                 if (footTY === ppy && footTX >= px1 && footTX < px1 + p.w) {
-                    player.x += (p.x - prevX);
-                    player.y += (p.y - prevY);
+                    player.x += deltaX;
+                    player.y += deltaY;
+                    carried = true;
                     break;
+                }
+            }
+
+            // Push player if platform moved into them (and wasn't already carried)
+            if (!carried && tetOverlapsPlatform(player.x, player.y, player.shape, player.rotation, p)) {
+                // Push in the platform's movement direction
+                const pushX = deltaX, pushY = deltaY;
+                let pushed = false;
+
+                // Try pushing by the platform delta first
+                if (!tetSolid(player.x + pushX, player.y + pushY, player.shape, player.rotation) ||
+                    !tetOverlapsPlatform(player.x + pushX, player.y + pushY, player.shape, player.rotation, p)) {
+                    player.x += pushX;
+                    player.y += pushY;
+                    pushed = true;
+                }
+
+                // If still overlapping, nudge pixel by pixel away from platform center
+                if (!pushed || tetOverlapsPlatform(player.x, player.y, player.shape, player.rotation, p)) {
+                    const platCX = p.x + (p.w * TILE) / 2;
+                    const platCY = p.y + TILE / 2;
+                    const playerCX = player.x + getShapeCenterX(player.shape, player.rotation);
+                    const bounds = shapeBounds(player.shape, player.rotation);
+                    const playerCY = player.y + ((bounds.minR + bounds.maxR) / 2) * TILE;
+                    const awayX = playerCX >= platCX ? 1 : -1;
+                    const awayY = playerCY >= platCY ? 1 : -1;
+
+                    for (let nudge = 1; nudge <= TILE * 2; nudge++) {
+                        // Try horizontal push
+                        if (!tetSolid(player.x + awayX * nudge, player.y, player.shape, player.rotation) &&
+                            !tetOverlapsPlatform(player.x + awayX * nudge, player.y, player.shape, player.rotation, p)) {
+                            player.x += awayX * nudge;
+                            pushed = true;
+                            break;
+                        }
+                        // Try vertical push
+                        if (!tetSolid(player.x, player.y + awayY * nudge, player.shape, player.rotation) &&
+                            !tetOverlapsPlatform(player.x, player.y + awayY * nudge, player.shape, player.rotation, p)) {
+                            player.y += awayY * nudge;
+                            pushed = true;
+                            break;
+                        }
+                    }
+
+                    // Completely stuck — crushed
+                    if (!pushed && tetOverlapsPlatform(player.x, player.y, player.shape, player.rotation, p)) {
+                        die();
+                        return;
+                    }
                 }
             }
         }
