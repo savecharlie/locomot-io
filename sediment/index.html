@@ -1858,8 +1858,7 @@ function pauseLevelLeft() {
 }
 
 function pauseLevelRight() {
-    const maxLevel = player._highestLevel || 1;
-    if (_pauseSelectedLevel < maxLevel) {
+    if (_pauseSelectedLevel < 24) {
         _pauseSelectedLevel++;
         currentLevel = _pauseSelectedLevel;
         initLevel(currentLevel);
@@ -3155,8 +3154,7 @@ function draw() {
         _skipBtnBounds = { x: skipX, y: skipY - skipH/2, w: skipW, h: skipH };
 
         // Level selector row: [ < ] LEVEL X [ > ]
-        const maxLevel = player._highestLevel || 1;
-        if (maxLevel > 1) {
+        {
             const lvlY = skipY + 22;
             const lvlBtnW = 16, lvlBtnH = 14;
             const lvlLabelW = 70;
@@ -3180,7 +3178,7 @@ function draw() {
             ctx.fillText('LEVEL ' + _pauseSelectedLevel, lvlStartX + lvlBtnW + lvlLabelW/2, lvlY + 2);
 
             // ">" button
-            const canGoRight = _pauseSelectedLevel < maxLevel;
+            const canGoRight = _pauseSelectedLevel < 24;
             const lvlPlusX = lvlStartX + lvlBtnW + lvlLabelW;
             ctx.fillStyle = canGoRight ? 'rgba(104,187,196,0.2)' : 'rgba(216,208,192,0.05)';
             ctx.fillRect(lvlPlusX, lvlY - lvlBtnH/2, lvlBtnW, lvlBtnH);
@@ -3193,13 +3191,10 @@ function draw() {
 
             _levelLeftBounds = { x: lvlStartX, y: lvlY - lvlBtnH/2, w: lvlBtnW, h: lvlBtnH };
             _levelRightBounds = { x: lvlPlusX, y: lvlY - lvlBtnH/2, w: lvlBtnW, h: lvlBtnH };
-        } else {
-            _levelLeftBounds = null;
-            _levelRightBounds = null;
         }
 
         // Music volume row: [  -  ] MUSIC XX% [  +  ]
-        const volY = skipY + (maxLevel > 1 ? 44 : 22);
+        const volY = skipY + 44;
         const volBtnW = 16, volBtnH = 14;
         const volLabelW = 70;
         const volTotalW = volBtnW + volLabelW + volBtnW;
