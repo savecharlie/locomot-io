@@ -164,7 +164,7 @@ const canvas = document.getElementById('c');
 const ctx = canvas.getContext('2d');
 
 // ── Config ──
-const VERSION = 'v54';
+const VERSION = 'v55';
 const TILE = 12;
 const GRAVITY = 700;
 const JUMP_FORCE = -280;
@@ -580,6 +580,7 @@ const HAPTICS = {
     levelStart: [30, 45, 30],         // new level pulse
     levelClear: [45, 30, 45, 30, 45, 30, 113], // celebration
     win:        [75, 38, 75, 38, 75, 38, 75, 38, 225], // game won
+    doubleJump: [15, 45, 12, 40, 10, 35], // airy flutter — light mid-air flap
     rotate:     8,                    // tiny click on piece rotation
     dive:       26                    // downward slam
 };
@@ -2277,6 +2278,7 @@ function update(dt) {
             const bounds = shapeBounds(player.shape, player.rotation);
             spawnP(cx, player.y + (bounds.maxR + 1) * TILE, 'rgba(232,168,56,0.5)', 4, 35, 0.2);
             SFX.doubleJump();
+            haptic(HAPTICS.doubleJump);
         }
     }
 
@@ -3250,23 +3252,23 @@ function draw() {
         ctx.font = '6px monospace';
         ctx.fillText(ctrlHint('all'), W/2, H/2 + 24);
 
-        // Animated kawaii T-piece running across
+        // Animated kawaii Crag running across
         const runT = performance.now() / 1000;
         const runX = ((runT * 40) % (W + 60)) - 30;
         const runY = H/2 + 42;
         const bounce = Math.abs(Math.sin(runT * 8)) * 4;
         const tileS = 6; // mini tile size
-        const tCells = [[0,0],[1,0],[2,0],[1,1]]; // T-piece
+        const tCells = [[0,0],[1,0],[2,0],[1,1]]; // T-piece (Crag)
         ctx.globalAlpha = 0.5;
         for (let i = 0; i < tCells.length; i++) {
             const [cx, cy] = tCells[i];
             const px = runX + cx * tileS;
             const py = runY - bounce + cy * tileS;
-            ctx.fillStyle = C.solid;
+            ctx.fillStyle = C.spring;
             ctx.fillRect(px, py, tileS - 1, tileS - 1);
             // Eyes on first cell
             if (i === 0) {
-                ctx.fillStyle = C.solidSH;
+                ctx.fillStyle = C.springDark;
                 ctx.fillRect(px, py, 1, 1);
                 ctx.fillRect(px + 3, py, 1, 1);
                 ctx.fillStyle = '#FFFFF0';
@@ -3578,30 +3580,38 @@ function loop(time) {
 
 document.getElementById('splash-version').textContent = VERSION;
 
-// Draw splash logo: S-piece with kawaii eyes
+// Draw splash logo: Crag (T-piece) with kawaii eyes in spring green
 (function() {
     const lc = document.getElementById('splash-logo');
     if (!lc) return;
     const cx = lc.getContext('2d');
     cx.imageSmoothingEnabled = false;
     const t = 12; // tile size in logo
-    // S-tetromino upright: (0,0)(0,1) left, (1,1)(1,2) right
-    const cells = [[0,0],[0,1],[1,1],[1,2]];
-    const ox = 12, oy = 0;
-    for (const [gx,gy] of cells) {
+    // Crag (T-piece): top row + center below
+    const cells = [[0,0],[1,0],[2,0],[1,1]];
+    const ox = 6, oy = 6;
+    for (let i = 0; i < cells.length; i++) {
+        const [gx,gy] = cells[i];
         const x = ox + gx * t, y = oy + gy * t;
-        cx.fillStyle = C.solid;
+        cx.fillStyle = C.spring;
         cx.fillRect(x, y, t, t);
-        cx.fillStyle = C.solidHL;
+        cx.fillStyle = C.springHL;
         cx.fillRect(x, y, t, 1);
         cx.fillRect(x, y, 1, t);
-        cx.fillStyle = C.solidSH;
+        cx.fillStyle = C.springDark;
         cx.fillRect(x, y + t - 1, t, 1);
         cx.fillRect(x + t - 1, y, 1, t);
+        // Spring coil decoration on non-face cells
+        if (i > 0) {
+            cx.fillStyle = C.springHL;
+            cx.fillRect(x + 2, y + 2, 4, 2);
+            cx.fillRect(x + 6, y + 5, 4, 2);
+            cx.fillRect(x + 2, y + 8, 4, 2);
+        }
     }
     // Kawaii eyes on cell (0,0)
     const ex = ox, ey = oy;
-    cx.fillStyle = C.solidSH;
+    cx.fillStyle = C.springDark;
     cx.fillRect(ex + 1, ey + 2, 3, 3);
     cx.fillRect(ex + 7, ey + 2, 3, 3);
     cx.fillStyle = '#FFFFF0';
@@ -3610,6 +3620,11 @@ document.getElementById('splash-version').textContent = VERSION;
     cx.fillStyle = 'rgba(255,255,240,0.35)';
     cx.fillRect(ex + 2, ey + 4, 1, 1);
     cx.fillRect(ex + 8, ey + 4, 1, 1);
+    // Smile
+    cx.fillStyle = C.springDark;
+    cx.fillRect(ex + 4, ey + 7, 1, 1);
+    cx.fillRect(ex + 7, ey + 7, 1, 1);
+    cx.fillRect(ex + 5, ey + 8, 2, 1);
 })();
 
 init();
