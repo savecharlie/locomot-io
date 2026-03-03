@@ -164,7 +164,7 @@ const canvas = document.getElementById('c');
 const ctx = canvas.getContext('2d');
 
 // ── Config ──
-const VERSION = 'v56';
+const VERSION = 'v57';
 const TILE = 12;
 const GRAVITY = 700;
 const JUMP_FORCE = -280;
@@ -579,7 +579,7 @@ const HAPTICS = {
     saw:        [38, 8, 38],           // buzzsaw hit
     levelStart: [15, 23, 15],          // new level pulse
     levelClear: [23, 15, 23, 15, 23, 15, 56], // celebration
-    win:        [38, 19, 38, 19, 38, 19, 38, 19, 113], // game won
+    win:        [20,30, 40,25, 70,20, 120, 60, 20,30, 40,25, 70,20, 120, 60, 30,20, 50,20, 90,15, 180], // low→high escalating waves ×3
     doubleJump: [8, 23, 6, 20, 5, 18], // airy flutter — light mid-air flap
     rotate:     4,                     // tiny click on piece rotation
     dive:       13                     // downward slam
