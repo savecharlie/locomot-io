@@ -27,7 +27,7 @@
 
   <meta name="robots" content="index, follow">
   <meta name="theme-color" content="#1D2B30">
-  <meta name="app-version" content="v417">
+  <meta name="app-version" content="v418">
   <link rel="manifest" href="/manifest.json">
 
   <!-- Structured Data -->
@@ -335,7 +335,7 @@
       pixelateEmoji(kofiIcon, '☕', 12, 24);
     }
 
-    // Sediment logo: S-piece with kawaii eyes (48x48 canvas, same tile size as game)
+    // Sediment logo: Crag (T-piece) with kawaii eyes in spring green
     const sedLogo = document.getElementById('sediment-logo');
     if (sedLogo) {
       const S = 48;
@@ -348,10 +348,11 @@
       sedLogo.style.height = (isMob ? 48 : 64) + 'px';
       sedLogo.style.imageRendering = 'pixelated';
       const t = 12;
-      const cells = [[0,0],[0,1],[1,1],[1,2]]; // upright S
-      const col = '#B8A078', hl = '#E0D0A0', sh = '#685060';
-      const ox = 12, oy = 6;
-      for (const [cx,cy] of cells) {
+      const cells = [[0,0],[1,0],[2,0],[1,1]]; // Crag T-piece
+      const col = '#60C048', hl = '#B0E890', sh = '#1C3828';
+      const ox = 6, oy = 6;
+      for (let i = 0; i < cells.length; i++) {
+        const [cx,cy] = cells[i];
         const x = ox + cx * t, y = oy + cy * t;
         sc.fillStyle = col;
         sc.fillRect(x, y, t, t);
@@ -361,6 +362,13 @@
         sc.fillStyle = sh;
         sc.fillRect(x, y + t - 1, t, 1);
         sc.fillRect(x + t - 1, y, 1, t);
+        // Spring coil decoration on non-face cells
+        if (i > 0) {
+          sc.fillStyle = hl;
+          sc.fillRect(x + 2, y + 2, 4, 2);
+          sc.fillRect(x + 6, y + 5, 4, 2);
+          sc.fillRect(x + 2, y + 8, 4, 2);
+        }
       }
       // Kawaii eyes on cell (0,0)
       const ex = ox, ey = oy;
@@ -373,6 +381,11 @@
       sc.fillStyle = 'rgba(255,255,240,0.35)';
       sc.fillRect(ex + 2, ey + 4, 1, 1);
       sc.fillRect(ex + 8, ey + 4, 1, 1);
+      // Smile
+      sc.fillStyle = sh;
+      sc.fillRect(ex + 4, ey + 7, 1, 1);
+      sc.fillRect(ex + 7, ey + 7, 1, 1);
+      sc.fillRect(ex + 5, ey + 8, 2, 1);
     }
 
     // Sort games by popularity (Cloudflare analytics)
