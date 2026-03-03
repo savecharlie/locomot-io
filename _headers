@@ -17,6 +17,14 @@
 /ice_skater/*.json
   Cache-Control: no-cache, no-store, must-revalidate
 
+# JSON files served with correct MIME type
+/*.json
+  Content-Type: application/json
+/sediment/*.json
+  Content-Type: application/json
+/.well-known/*.json
+  Content-Type: application/json
+
 # Security Headers
 /*
   X-Frame-Options: DENY
