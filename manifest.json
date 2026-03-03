@@ -2,7 +2,7 @@
   "name": "LOCOMOT.IO - Games & Toys",
   "short_name": "LOCOMOT",
   "description": "Free browser games and creative tools. Sediment, Locomot, Figure 8, PixPad, and more.",
-  "start_url": "./index.html",
+  "start_url": "/index.html",
   "display": "standalone",
   "orientation": "any",
   "background_color": "#1D2B30",

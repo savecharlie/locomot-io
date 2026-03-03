@@ -1,10 +1,10 @@
 // LOCOMOT.IO Service Worker - Auto-updating with offline fallback
-const CACHE_NAME = 'locomotio-v411';
+const CACHE_NAME = 'locomotio-v412';
 
 const urlsToCache = [
-  './',
-  './index.html',
-  './trains.html'
+  '/',
+  '/index.html',
+  '/trains.html'
 ];
 
 // Install: cache the game, skip waiting to activate immediately
@@ -53,7 +53,7 @@ self.addEventListener('fetch', event => {
         .catch(() => {
           // Offline - serve from cache
           return caches.match(event.request)
-            .then(cached => cached || caches.match('./index.html'));
+            .then(cached => cached || caches.match('/index.html'));
         })
     );
     return;

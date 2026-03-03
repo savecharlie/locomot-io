@@ -33,7 +33,7 @@
     <meta name="theme-color" content="#0a0610">
     <meta name="application-name" content="LOCOMOT.IO">
 
-    <link rel="manifest" href="manifest.json">
+    <link rel="manifest" href="/manifest.json">
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap');
         
@@ -9665,7 +9665,7 @@
 
         // PWA: Register service worker for offline play
         if ('serviceWorker' in navigator) {
-            navigator.serviceWorker.register('./sw.js')
+            navigator.serviceWorker.register('/sw.js')
                 .then(reg => console.log('Offline mode enabled'))
                 .catch(err => console.log('Offline mode unavailable'));
         }

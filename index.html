@@ -28,7 +28,7 @@
   <meta name="robots" content="index, follow">
   <meta name="theme-color" content="#1D2B30">
   <meta name="app-version" content="370">
-  <link rel="manifest" href="manifest.json">
+  <link rel="manifest" href="/manifest.json">
 
   <!-- Structured Data -->
   <script type="application/ld+json">
@@ -237,15 +237,15 @@
   </header>
 
   <main class="game-grid">
-    <a href="flail.html" class="game-card">
-      <img src="flail_logo.png" class="pixel-icon" alt="Flail" style="object-fit:contain;image-rendering:auto">
+    <a href="/flail.html" class="game-card">
+      <img src="/flail_logo.png" class="pixel-icon" alt="Flail" style="object-fit:contain;image-rendering:auto">
       <div>
         <h2>FLAIL</h2>
         <p>Sword arms vs missiles</p>
       </div>
     </a>
 
-    <a href="trains.html" class="game-card">
+    <a href="/trains.html" class="game-card">
       <canvas class="pixel-icon" data-emoji="🚂"></canvas>
       <div>
         <h2>LOCOMOT</h2>
@@ -253,15 +253,15 @@
       </div>
     </a>
 
-    <a href="ice_skater/" class="game-card">
-      <img src="ice_skater/skater_side_skating_16x24.png" class="pixel-icon" alt="Figure ∞" style="object-fit:contain;transform:scaleX(-1)">
+    <a href="/ice_skater/" class="game-card">
+      <img src="/ice_skater/skater_side_skating_16x24.png" class="pixel-icon" alt="Figure ∞" style="object-fit:contain;transform:scaleX(-1)">
       <div>
         <h2>FIGURE ∞</h2>
         <p>Slide & solve puzzles</p>
       </div>
     </a>
 
-    <a href="pixel.html" class="game-card">
+    <a href="/pixel.html" class="game-card">
       <canvas class="pixel-icon" data-emoji="✏️"></canvas>
       <div>
         <h2>PIXPAD</h2>
@@ -269,7 +269,7 @@
       </div>
     </a>
 
-    <a href="painter/" class="game-card">
+    <a href="/painter/" class="game-card">
       <canvas class="pixel-icon" data-emoji="🖌️"></canvas>
       <div>
         <h2>PAINTER</h2>
@@ -277,15 +277,15 @@
       </div>
     </a>
 
-    <a href="sandbox/" class="game-card">
-      <img src="sand-buddy-v2.png" class="pixel-icon" alt="Sand Buddy">
+    <a href="/sandbox/" class="game-card">
+      <img src="/sand-buddy-v2.png" class="pixel-icon" alt="Sand Buddy">
       <div>
         <h2>SAND BUDDY</h2>
         <p>Falling sand game</p>
       </div>
     </a>
 
-    <a href="sediment/" class="game-card">
+    <a href="/sediment/" class="game-card">
       <canvas class="pixel-icon" id="sediment-logo"></canvas>
       <div>
         <h2>SEDIMENT</h2>
@@ -380,15 +380,15 @@
       const grid = document.querySelector('.game-grid');
       const cards = [...grid.querySelectorAll('.game-card')];
       cards.sort((a, b) => {
-        const aKey = a.getAttribute('href');
-        const bKey = b.getAttribute('href');
+        const aKey = a.getAttribute('href').replace(/^\//, '');
+        const bKey = b.getAttribute('href').replace(/^\//, '');
         return (counts[bKey] || 0) - (counts[aKey] || 0);
       });
       for (const card of cards) grid.appendChild(card);
     }).catch(() => {}); // fail silently — default order stays
 
     // Auto-update: fetch version from server, reload if stale
-    fetch('version.txt?' + Date.now()).then(r => r.text()).then(v => {
+    fetch('/version.txt?' + Date.now()).then(r => r.text()).then(v => {
       const serverVer = v.trim();
       const localVer = document.querySelector('meta[name="app-version"]')?.content;
       if (localVer && serverVer !== localVer) {
@@ -404,7 +404,7 @@
     }).catch(() => {});
     // Register service worker
     if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' }).then(reg => {
+      navigator.serviceWorker.register('/sw.js', { updateViaCache: 'none' }).then(reg => {
         reg.update();
       });
     }
