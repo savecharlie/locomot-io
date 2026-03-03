@@ -1,4 +1,0 @@
-# Serve static files directly — don't SPA-fallback these
-/manifest.json  /manifest.json  200
-/sediment/manifest.json  /sediment/manifest.json  200
-/.well-known/*  /.well-known/:splat  200
