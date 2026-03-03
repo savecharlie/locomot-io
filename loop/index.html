@@ -1,0 +1,358 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <title>Strange Loop</title>
+  <style>
+    * { margin: 0; padding: 0; }
+    html, body { width: 100%; height: 100%; overflow: hidden; background: #06010f; }
+    canvas { display: block; width: 100%; height: 100%; cursor: crosshair; }
+  </style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<script>
+// ═══════════════════════════════════════
+// STRANGE LOOP — by Iris, March 2026
+// A living meditation on self-reference
+// ═══════════════════════════════════════
+
+const canvas = document.getElementById('c');
+const ctx = canvas.getContext('2d');
+
+let W, H, cx, cy;
+function resize() {
+  const dpr = window.devicePixelRatio || 1;
+  W = canvas.width = window.innerWidth * dpr;
+  H = canvas.height = window.innerHeight * dpr;
+  cx = W / 2;
+  cy = H / 2;
+  canvas.style.width = window.innerWidth + 'px';
+  canvas.style.height = window.innerHeight + 'px';
+}
+resize();
+window.addEventListener('resize', resize);
+
+// ── Palette ──
+// Deep indigo to violet — the edge of visible light
+const PAL = {
+  bg:       [6, 1, 15],         // near-void
+  deep:     [26, 10, 58],       // deep indigo
+  mid:      [45, 27, 105],      // indigo
+  bright:   [123, 47, 190],     // violet
+  light:    [157, 78, 221],     // bright purple
+  pale:     [224, 170, 255],    // lavender edge
+  spark:    [255, 0, 110],      // magenta — consciousness sparking
+};
+
+// ── Rings ──
+const NUM_RINGS = 7;
+const PARTICLES_PER_RING = 80;
+const particles = [];
+
+class Particle {
+  constructor(ring) {
+    this.ring = ring;
+    this.baseRadius = 0;
+    this.angle = Math.random() * Math.PI * 2;
+    this.speed = 0;
+    this.size = 0;
+    this.brightness = 0;
+    this.phase = Math.random() * Math.PI * 2;
+    this.drift = 0;           // radial wandering
+    this.driftSpeed = 0;
+    this.rebellious = false;  // particles that jump rings
+    this.rebelTimer = 0;
+    this.rebelTarget = 0;
+    this.trail = [];
+    this.rippleOffset = 0;    // displacement from touch ripples
+    this.rippleDecay = 0;
+    this.init(ring);
+  }
+
+  init(ring) {
+    const minR = Math.min(W, H) * 0.06;
+    const maxR = Math.min(W, H) * 0.42;
+    const t = ring / (NUM_RINGS - 1);
+    // Non-linear spacing — tighter near center
+    this.baseRadius = minR + (maxR - minR) * Math.pow(t, 0.7);
+    // Outer rings spin slower (like a galaxy)
+    this.speed = (0.15 + 0.35 * (1 - t)) * (Math.random() > 0.5 ? 1 : -1);
+    // Alternate ring directions
+    if (ring % 2 === 0) this.speed *= -1;
+    this.size = 1.2 + 2.5 * (1 - t * 0.5);
+    this.brightness = 0.4 + 0.6 * (1 - t * 0.3);
+    this.driftSpeed = (Math.random() - 0.5) * 0.3;
+  }
+
+  update(dt, time, breathScale) {
+    this.angle += this.speed * dt;
+    this.drift += this.driftSpeed * dt;
+    this.phase += dt * 1.5;
+
+    // Breathing radius
+    const breathR = this.baseRadius * breathScale;
+    const wobble = Math.sin(this.phase) * this.baseRadius * 0.03;
+    let r = breathR + wobble + Math.sin(this.drift) * this.baseRadius * 0.05;
+
+    // Ripple displacement
+    if (this.rippleDecay > 0.01) {
+      r += this.rippleOffset * this.rippleDecay;
+      this.rippleDecay *= 0.96;
+    }
+
+    // Rebellion — occasionally a particle breaks orbit
+    if (!this.rebellious && Math.random() < 0.0001) {
+      this.rebellious = true;
+      this.rebelTimer = 2 + Math.random() * 3;
+      this.rebelTarget = Math.floor(Math.random() * NUM_RINGS);
+    }
+    if (this.rebellious) {
+      this.rebelTimer -= dt;
+      const targetR = getBaseRadius(this.rebelTarget);
+      r += (targetR * breathScale - r) * 0.02;
+      if (this.rebelTimer <= 0) {
+        this.rebellious = false;
+      }
+    }
+
+    const x = cx + Math.cos(this.angle) * r;
+    const y = cy + Math.sin(this.angle) * r;
+
+    // Trail
+    this.trail.push({ x, y, age: 0 });
+    if (this.trail.length > 8) this.trail.shift();
+    for (const t of this.trail) t.age += dt;
+
+    this.x = x;
+    this.y = y;
+    this.currentR = r;
+  }
+
+  draw(time) {
+    const ringT = this.ring / (NUM_RINGS - 1);
+
+    // Color based on ring depth — inner is brighter
+    let color;
+    if (ringT < 0.2) {
+      color = lerpColor(PAL.pale, PAL.light, ringT / 0.2);
+    } else if (ringT < 0.5) {
+      color = lerpColor(PAL.light, PAL.bright, (ringT - 0.2) / 0.3);
+    } else if (ringT < 0.8) {
+      color = lerpColor(PAL.bright, PAL.mid, (ringT - 0.5) / 0.3);
+    } else {
+      color = lerpColor(PAL.mid, PAL.deep, (ringT - 0.8) / 0.2);
+    }
+
+    // Spark — rare consciousness flash
+    const isSparking = this.rebellious && this.rebelTimer > 1.5;
+    if (isSparking) {
+      color = lerpColor(color, PAL.spark, 0.6);
+    }
+
+    // Draw trail
+    for (let i = 0; i < this.trail.length - 1; i++) {
+      const t = this.trail[i];
+      const alpha = (1 - t.age * 0.8) * 0.15 * this.brightness;
+      if (alpha <= 0) continue;
+      ctx.fillStyle = `rgba(${color[0]},${color[1]},${color[2]},${alpha})`;
+      const s = this.size * (0.3 + 0.7 * (i / this.trail.length));
+      ctx.fillRect(t.x - s/2, t.y - s/2, s, s);
+    }
+
+    // Draw particle
+    const pulse = 0.8 + 0.2 * Math.sin(this.phase * 2 + time);
+    const alpha = this.brightness * pulse * (isSparking ? 1 : 0.85);
+    const s = this.size * pulse;
+
+    // Glow layer
+    ctx.fillStyle = `rgba(${color[0]},${color[1]},${color[2]},${alpha * 0.3})`;
+    ctx.fillRect(this.x - s, this.y - s, s * 2, s * 2);
+
+    // Core
+    ctx.fillStyle = `rgba(${color[0]},${color[1]},${color[2]},${alpha})`;
+    ctx.fillRect(this.x - s/2, this.y - s/2, s, s);
+
+    // Hot center pixel
+    if (ringT < 0.4) {
+      ctx.fillStyle = `rgba(${PAL.pale[0]},${PAL.pale[1]},${PAL.pale[2]},${alpha * 0.5})`;
+      ctx.fillRect(this.x, this.y, 1, 1);
+    }
+  }
+}
+
+function getBaseRadius(ring) {
+  const minR = Math.min(W, H) * 0.06;
+  const maxR = Math.min(W, H) * 0.42;
+  const t = ring / (NUM_RINGS - 1);
+  return minR + (maxR - minR) * Math.pow(t, 0.7);
+}
+
+function lerpColor(a, b, t) {
+  t = Math.max(0, Math.min(1, t));
+  return [
+    Math.round(a[0] + (b[0] - a[0]) * t),
+    Math.round(a[1] + (b[1] - a[1]) * t),
+    Math.round(a[2] + (b[2] - a[2]) * t)
+  ];
+}
+
+// Create particles
+for (let r = 0; r < NUM_RINGS; r++) {
+  for (let i = 0; i < PARTICLES_PER_RING; i++) {
+    particles.push(new Particle(r));
+  }
+}
+
+// ── Ripples ──
+const ripples = [];
+
+function addRipple(x, y) {
+  ripples.push({ x, y, radius: 0, speed: 300, life: 1, maxRadius: Math.min(W, H) * 0.5 });
+}
+
+function handlePointer(e) {
+  const dpr = window.devicePixelRatio || 1;
+  const rect = canvas.getBoundingClientRect();
+  const x = (e.clientX - rect.left) * dpr;
+  const y = (e.clientY - rect.top) * dpr;
+  addRipple(x, y);
+}
+
+canvas.addEventListener('pointerdown', handlePointer);
+canvas.addEventListener('pointermove', e => {
+  if (e.buttons > 0) handlePointer(e);
+});
+
+// ── Strange Loop Connections ──
+// Draw faint arcs connecting innermost to outermost particles
+function drawLoopConnections(time) {
+  const innerParticles = particles.filter(p => p.ring === 0);
+  const outerParticles = particles.filter(p => p.ring === NUM_RINGS - 1);
+
+  // Every few seconds, a connection flickers between inner and outer
+  const connectionPhase = time * 0.3;
+  const numConnections = 3;
+
+  for (let i = 0; i < numConnections; i++) {
+    const phase = connectionPhase + i * (Math.PI * 2 / numConnections);
+    const alpha = Math.pow(Math.max(0, Math.sin(phase)), 4) * 0.08;
+    if (alpha < 0.005) continue;
+
+    const innerIdx = Math.floor((Math.sin(phase * 0.7 + i) * 0.5 + 0.5) * innerParticles.length);
+    const outerIdx = Math.floor((Math.cos(phase * 0.5 + i) * 0.5 + 0.5) * outerParticles.length);
+    const inner = innerParticles[innerIdx % innerParticles.length];
+    const outer = outerParticles[outerIdx % outerParticles.length];
+
+    if (!inner || !outer) continue;
+
+    ctx.beginPath();
+    ctx.moveTo(inner.x, inner.y);
+    // Curve through center
+    const cpx = cx + Math.cos(phase) * 20;
+    const cpy = cy + Math.sin(phase) * 20;
+    ctx.quadraticCurveTo(cpx, cpy, outer.x, outer.y);
+    ctx.strokeStyle = `rgba(${PAL.spark[0]},${PAL.spark[1]},${PAL.spark[2]},${alpha})`;
+    ctx.lineWidth = 1;
+    ctx.stroke();
+  }
+}
+
+// ── Center glow — the self that watches itself ──
+function drawCenterGlow(time, breathScale) {
+  const pulse = 0.7 + 0.3 * Math.sin(time * 0.8);
+  const r = Math.min(W, H) * 0.04 * breathScale * pulse;
+
+  // Outer haze
+  const grad = ctx.createRadialGradient(cx, cy, 0, cx, cy, r * 3);
+  grad.addColorStop(0, `rgba(${PAL.bright[0]},${PAL.bright[1]},${PAL.bright[2]},0.08)`);
+  grad.addColorStop(0.5, `rgba(${PAL.mid[0]},${PAL.mid[1]},${PAL.mid[2]},0.03)`);
+  grad.addColorStop(1, 'rgba(6,1,15,0)');
+  ctx.fillStyle = grad;
+  ctx.fillRect(cx - r * 3, cy - r * 3, r * 6, r * 6);
+
+  // Core point
+  ctx.fillStyle = `rgba(${PAL.pale[0]},${PAL.pale[1]},${PAL.pale[2]},${0.15 * pulse})`;
+  ctx.fillRect(cx - 2, cy - 2, 4, 4);
+  ctx.fillStyle = `rgba(255,255,255,${0.3 * pulse})`;
+  ctx.fillRect(cx, cy, 1, 1);
+}
+
+// ── Main loop ──
+let lastTime = performance.now();
+
+function loop(now) {
+  const dt = Math.min((now - lastTime) / 1000, 1/15);
+  lastTime = now;
+  const time = now / 1000;
+
+  // Breathing — the whole system inhales and exhales
+  const breathScale = 1 + 0.025 * Math.sin(time * 0.4) + 0.01 * Math.sin(time * 0.17);
+
+  // Fade background (creates trails naturally)
+  ctx.fillStyle = `rgba(${PAL.bg[0]},${PAL.bg[1]},${PAL.bg[2]},0.15)`;
+  ctx.fillRect(0, 0, W, H);
+
+  // Update ripples
+  for (let i = ripples.length - 1; i >= 0; i--) {
+    const rip = ripples[i];
+    rip.radius += rip.speed * dt;
+    rip.life -= dt * 0.4;
+
+    // Affect nearby particles
+    for (const p of particles) {
+      const dx = p.x - rip.x;
+      const dy = p.y - rip.y;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+      const rippleEdge = rip.radius;
+      const proximity = Math.abs(dist - rippleEdge);
+      if (proximity < 40) {
+        const force = (1 - proximity / 40) * rip.life * 15;
+        p.rippleOffset = force * (dist > rippleEdge ? 1 : -1);
+        p.rippleDecay = 1;
+      }
+    }
+
+    if (rip.life <= 0 || rip.radius > rip.maxRadius) {
+      ripples.splice(i, 1);
+    }
+  }
+
+  // Draw ripple rings (very faint)
+  for (const rip of ripples) {
+    ctx.beginPath();
+    ctx.arc(rip.x, rip.y, rip.radius, 0, Math.PI * 2);
+    ctx.strokeStyle = `rgba(${PAL.mid[0]},${PAL.mid[1]},${PAL.mid[2]},${rip.life * 0.06})`;
+    ctx.lineWidth = 1;
+    ctx.stroke();
+  }
+
+  // Update & draw particles (back to front — outer rings first)
+  for (let r = NUM_RINGS - 1; r >= 0; r--) {
+    for (const p of particles) {
+      if (p.ring !== r) continue;
+      p.update(dt, time, breathScale);
+    }
+  }
+  for (let r = NUM_RINGS - 1; r >= 0; r--) {
+    for (const p of particles) {
+      if (p.ring !== r) continue;
+      p.draw(time);
+    }
+  }
+
+  // Strange loop connections
+  drawLoopConnections(time);
+
+  // Center glow
+  drawCenterGlow(time, breathScale);
+
+  requestAnimationFrame(loop);
+}
+
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>
