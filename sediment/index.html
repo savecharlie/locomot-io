@@ -164,7 +164,7 @@ const canvas = document.getElementById('c');
 const ctx = canvas.getContext('2d');
 
 // ── Config ──
-const VERSION = 'v52';
+const VERSION = 'v53';
 const TILE = 12;
 const GRAVITY = 700;
 const JUMP_FORCE = -280;
@@ -568,8 +568,8 @@ function haptic(pattern) {
 }
 
 const HAPTICS = {
-    jump:       15,                   // light tap
-    land:       25,                   // soft thud
+    jump:       [50, 30, 80, 20, 120], // joyous sproing — rising bursts
+    land:       [100, 50, 40],         // soft cushioned settle
     death:      [80, 30, 80],         // double punch
     snap:       [40, 20, 60],         // corpse locking to grid
     quake:      [120, 40, 120, 40, 200], // row clear earthquake
