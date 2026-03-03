@@ -154,7 +154,6 @@ canvas { display: block; width: 100%; height: 100%; image-rendering: pixelated; 
 <canvas id="c"></canvas>
 <div id="botBtn">&#129504;</div>
 <div id="pauseBtn">&#9646;&#9646;</div>
-<div id="dbg" style="position:fixed;bottom:4px;left:4px;color:rgba(216,208,192,0.3);font:8px monospace;z-index:100;pointer-events:none;"></div>
 <script>
 // ── SEDIMENT v2 ──
 // You ARE the shape. When you die, your body snaps to the grid.
@@ -165,7 +164,7 @@ const canvas = document.getElementById('c');
 const ctx = canvas.getContext('2d');
 
 // ── Config ──
-const VERSION = 'v50';
+const VERSION = 'v51';
 const TILE = 12;
 const GRAVITY = 700;
 const JUMP_FORCE = -280;
@@ -507,6 +506,7 @@ function initMusic() {
         if (saved.musicMuted !== undefined) musicMuted = saved.musicMuted;
         if (saved.musicVolume !== undefined) musicVolume = saved.musicVolume;
         if (saved.sfxMuted !== undefined) sfxMuted = saved.sfxMuted;
+        if (saved.hapticsEnabled !== undefined) hapticsEnabled = saved.hapticsEnabled;
     } catch(e) {}
     musicEl.volume = musicVolume;
     musicEl.muted = musicMuted;
@@ -521,7 +521,7 @@ function startMusic() {
 }
 
 function saveAudioPrefs() {
-    try { localStorage.setItem('sediment_audio', JSON.stringify({ musicMuted, musicVolume, sfxMuted })); } catch(e) {}
+    try { localStorage.setItem('sediment_audio', JSON.stringify({ musicMuted, musicVolume, sfxMuted, hapticsEnabled })); } catch(e) {}
 }
 
 function toggleMusicMute() {
@@ -549,6 +549,40 @@ function toggleSfxMute() {
     if (sfxMaster) sfxMaster.gain.value = sfxMuted ? 0 : sfxVolume;
     saveAudioPrefs();
 }
+
+function toggleHaptics() {
+    hapticsEnabled = !hapticsEnabled;
+    if (hapticsEnabled && supportsVibrate) navigator.vibrate(30); // confirmation buzz
+    saveAudioPrefs();
+}
+
+// ══════════════════════════════════════
+// ── HAPTIC FEEDBACK (Vibration API) ──
+// ══════════════════════════════════════
+
+const supportsVibrate = 'vibrate' in navigator;
+let hapticsEnabled = true;
+
+function haptic(pattern) {
+    if (hapticsEnabled && supportsVibrate) navigator.vibrate(pattern);
+}
+
+const HAPTICS = {
+    jump:       15,                   // light tap
+    land:       25,                   // soft thud
+    death:      [80, 30, 80],         // double punch
+    snap:       [40, 20, 60],         // corpse locking to grid
+    quake:      [120, 40, 120, 40, 200], // row clear earthquake
+    resurrect:  [60, 30, 60, 30, 60, 30, 120], // rising from the dead
+    spring:     [30, 20, 50],         // bouncy
+    booster:    [20, 10, 20, 10, 20], // buzzy acceleration
+    saw:        [100, 20, 100],       // buzzsaw hit (same as death but different feel)
+    levelStart: [40, 60, 40],         // new level pulse
+    levelClear: [60, 40, 60, 40, 60, 40, 150], // celebration
+    win:        [100, 50, 100, 50, 100, 50, 100, 50, 300], // game won
+    rotate:     10,                   // tiny click on piece rotation
+    dive:       35                    // downward slam
+};
 
 // ══════════════════════════════════════
 // ── SAVE / LOAD (localStorage) ──
@@ -1171,6 +1205,7 @@ function initLevel(lvl) {
     levelQuakes = 0;
     quakeFlash = 0;
     levelTitleTimer = 3.0;
+    if (lvl > 1) haptic(HAPTICS.levelStart);
 
     // Tutorial on level 1 (first time only)
     if (lvl === 1 && !tutorialComplete) {
@@ -1275,6 +1310,7 @@ function die() {
     cam.shake = Math.max(cam.shake, 6);
     flash.a = 0.6; flash.r = 0.91; flash.g = 0.66; flash.b = 0.22;
     SFX.death();
+    haptic(HAPTICS.death);
 
     const cells = getCells(player.shape, player.rotation);
     const cx = player.x + getShapeCenterX(player.shape, player.rotation);
@@ -1380,6 +1416,7 @@ function updateFallingGroup(dt) {
             spawnP(cell.x * TILE + TILE/2, (cell.y + fallingGroup.targetDrop) * TILE + TILE, C.tile, 3, 25, 0.15);
         }
         cam.shake = Math.max(cam.shake, 2);
+        haptic(HAPTICS.snap);
         fallingGroup = null;
         checkRowClears();
     }
@@ -1511,6 +1548,7 @@ function onQuake(clearCells) {
     const cx = player.x + getShapeCenterX(player.shape, player.rotation);
     const cy = player.y + getShapeCenterY(player.shape, player.rotation);
     const wasResurrected = !player.dead && clearCells && clearCells.length > 0;
+    haptic(wasResurrected ? HAPTICS.resurrect : HAPTICS.quake);
     const label = wasResurrected ? 'RESURRECT!' : (combo >= 2 ? `QUAKE x${combo}!` : 'QUAKE!');
     encounterLabel(label, cx, cy - 10, '#FFD080');
 }
@@ -1633,6 +1671,7 @@ function tryRotate(dir) {
             player.y = testY;
             player.rotation = newRot;
             player.squash = 1.15;
+            haptic(HAPTICS.rotate);
             const cx = player.x + getShapeCenterX(player.shape, player.rotation);
             const cy = player.y + getShapeCenterY(player.shape, player.rotation);
             // Spin boost (CW only, with cooldown)
@@ -1693,6 +1732,7 @@ let _muteBtnBounds = null;
 let _volDownBounds = null;
 let _volUpBounds = null;
 let _sfxBtnBounds = null;
+let _hapticBtnBounds = null;
 let _levelLeftBounds = null;
 let _levelRightBounds = null;
 let _pauseSelectedLevel = 1;
@@ -1825,6 +1865,13 @@ canvas.addEventListener('touchend', (e) => {
                     const b = _sfxBtnBounds;
                     if (tapX >= b.x && tapX <= b.x + b.w && tapY >= b.y && tapY <= b.y + b.h) {
                         toggleSfxMute();
+                        return;
+                    }
+                }
+                if (_hapticBtnBounds) {
+                    const b = _hapticBtnBounds;
+                    if (tapX >= b.x && tapX <= b.x + b.w && tapY >= b.y && tapY <= b.y + b.h) {
+                        toggleHaptics();
                         return;
                     }
                 }
@@ -1961,6 +2008,13 @@ canvas.addEventListener('click', (e) => {
             const b = _sfxBtnBounds;
             if (clickX >= b.x && clickX <= b.x + b.w && clickY >= b.y && clickY <= b.y + b.h) {
                 toggleSfxMute();
+                return;
+            }
+        }
+        if (_hapticBtnBounds) {
+            const b = _hapticBtnBounds;
+            if (clickX >= b.x && clickX <= b.x + b.w && clickY >= b.y && clickY <= b.y + b.h) {
+                toggleHaptics();
                 return;
             }
         }
@@ -2203,6 +2257,7 @@ function update(dt) {
             const bounds = shapeBounds(player.shape, player.rotation);
             spawnP(player.x + (bounds.maxC + 1) * TILE, player.y + bounds.h * TILE / 2, C.tile, 4, 40, 0.2);
             SFX.jump();
+            haptic(HAPTICS.jump);
         } else if (player.onGround || player.coyoteTimer > 0) {
             player.vy = JUMP_FORCE;
             player.onGround = false;
@@ -2213,6 +2268,7 @@ function update(dt) {
             const bounds = shapeBounds(player.shape, player.rotation);
             spawnP(cx, player.y + (bounds.maxR + 1) * TILE, C.player, 3, 25, 0.15);
             SFX.jump();
+            haptic(HAPTICS.jump);
         } else if (player.jumpsLeft > 0) {
             player.vy = JUMP_FORCE * 0.7;
             player.jumpsLeft = 0;
@@ -2260,6 +2316,7 @@ function update(dt) {
                 cam.shake = Math.max(cam.shake, 4);
                 spawnP(bh.tx * TILE + TILE/2, bh.ty * TILE + TILE/2, C.booster, 7, 70, 0.3);
                 SFX.booster();
+                haptic(HAPTICS.booster);
                 if (!player._hitBooster) { player._hitBooster = true; encounterLabel('BOOST!', bh.tx * TILE + TILE/2, bh.ty * TILE + TILE/2, C.booster); }
             }
         }
@@ -2287,6 +2344,7 @@ function update(dt) {
                         spawnP(cx, player.y + (bounds.maxR + 1) * TILE, C.player, 3, 30, 0.2);
                         if (player.vy > 250) cam.shake = Math.max(cam.shake, 2);
                         SFX.land();
+                        haptic(HAPTICS.land);
                     }
                 } else {
                     hitCeiling = true;
@@ -2311,6 +2369,7 @@ function update(dt) {
             cam.shake = Math.max(cam.shake, 3);
             spawnP(sh.tx * TILE + TILE/2, sh.ty * TILE, C.spring, 5, 60, 0.3);
             SFX.spring();
+            haptic(HAPTICS.spring);
             if (!player._hitSpring) { player._hitSpring = true; encounterLabel('BOUNCE!', sh.tx * TILE + TILE/2, sh.ty * TILE, C.spring); }
         }
     }
@@ -2324,6 +2383,7 @@ function update(dt) {
             cam.shake = Math.max(cam.shake, 2);
             spawnP(sh.tx * TILE + TILE/2, (sh.ty + 1) * TILE, C.spring, 4, 50, 0.25);
             SFX.spring();
+            haptic(HAPTICS.spring);
         }
     }
 
@@ -2343,6 +2403,7 @@ function update(dt) {
                 cam.shake = Math.max(cam.shake, 4);
                 spawnP(bh.tx * TILE + TILE/2, bh.ty * TILE + TILE/2, C.booster, 7, 70, 0.3);
                 SFX.booster();
+                haptic(HAPTICS.booster);
                 if (!player._hitBooster) { player._hitBooster = true; encounterLabel('BOOST!', bh.tx * TILE + TILE/2, bh.ty * TILE + TILE/2, C.booster); }
             }
         }
@@ -2371,6 +2432,7 @@ function update(dt) {
             player.jumpsLeft = 2;
             cam.shake = Math.max(cam.shake, 6);
             SFX.spring();
+            haptic(HAPTICS.spring);
         } else {
             die();
             return;
@@ -2642,8 +2704,10 @@ function update(dt) {
         spawnP(cx, cy, '#FFF0D0', 20, 80, 0.5);
         if (currentLevel >= 24) {
             SFX.win();
+            haptic(HAPTICS.win);
         } else {
             SFX.levelComplete();
+            haptic(HAPTICS.levelClear);
         }
     }
 }
@@ -2652,12 +2716,7 @@ function update(dt) {
 // ── DRAW ──
 // ══════════════════════════════════════
 
-let _dbgF = 0;
 function draw() {
-    if (_dbgF++ % 20 === 0) {
-        document.getElementById('dbg').textContent =
-            `${VERSION} L${currentLevel} ${player.shape}${player.rotation} ${player.material} p:${Math.floor(player.x)},${Math.floor(player.y)} d:${player.distance}`;
-    }
     ctx.fillStyle = C.bg;
     ctx.fillRect(0, 0, W, H);
 
@@ -3246,9 +3305,31 @@ function draw() {
         ctx.fillStyle = 'rgba(232,168,56,0.5)';
         ctx.font = '7px monospace';
         const LEVEL_NAMES = [
-            '', 'the shallows', 'the thorns', 'the overhang', 'blood stone',
-            'the scaffolding', 'sawdust', 'the conveyor', 'the pit',
-            'the gauntlet', 'vertigo', 'the furnace', 'the core'
+            '',
+            'the shallows',      // L1: chasms only
+            'the thorns',        // L2: floor spikes
+            'the roots',         // L3: deeper organic layer
+            'stalactite',        // L4: ceiling spikes
+            'the gravel',        // L5: harder ground
+            'blood stone',       // L6: spike material
+            'the sediment',      // L7: namesake, mid-depth
+            'the scaffolding',   // L8: static platforms
+            'the quarry',        // L9: open danger
+            'sawdust',           // L10: buzzsaws
+            'the grinder',       // L11: more saws
+            'the conveyor',      // L12: moving platforms (H)
+            'the churn',         // L13: everything mixing
+            'the maw',           // L14: spiked chasms
+            'the crucible',      // L15: intense
+            'the needles',       // L16: spike walls
+            'the pressure',      // L17: deep, crushing
+            'vertigo',           // L18: vertical platforms
+            'the gauntlet',      // L19: all mechanics
+            'the furnace',       // L20: deep heat
+            'the fault line',    // L21: unstable
+            'the mantle',        // L22: geological layer
+            'the abyss',         // L23: near bottom
+            'the core'           // L24: final level
         ];
         const hellName = LEVEL_NAMES[currentLevel] || `circle ${currentLevel}`;
         ctx.fillText(hellName, W/2, H/2);
@@ -3447,6 +3528,26 @@ function draw() {
         ctx.fillText(sfxMuted ? 'SFX: OFF' : 'SFX: ON', W/2, sfxY + 2);
 
         _sfxBtnBounds = { x: sfxX, y: sfxY - sfxH/2, w: sfxW, h: sfxH };
+
+        // Haptics toggle button (only show on devices that support it)
+        if (supportsVibrate) {
+            const hapY = sfxY + 18;
+            const hapW = 70, hapH = 14;
+            const hapX = W/2 - hapW/2;
+            ctx.fillStyle = hapticsEnabled ? 'rgba(88,144,208,0.2)' : 'rgba(200,56,72,0.2)';
+            ctx.fillRect(hapX, hapY - hapH/2, hapW, hapH);
+            ctx.strokeStyle = hapticsEnabled ? 'rgba(88,144,208,0.5)' : 'rgba(200,56,72,0.5)';
+            ctx.lineWidth = 1;
+            ctx.strokeRect(hapX, hapY - hapH/2, hapW, hapH);
+            ctx.fillStyle = hapticsEnabled ? C.booster : '#C83848';
+            ctx.textAlign = 'center';
+            ctx.font = '6px monospace';
+            ctx.fillText(hapticsEnabled ? 'HAPTIC: ON' : 'HAPTIC: OFF', W/2, hapY + 2);
+            _hapticBtnBounds = { x: hapX, y: hapY - hapH/2, w: hapW, h: hapH };
+        } else {
+            _hapticBtnBounds = null;
+        }
+
         _muteBtnBounds = null; // replaced by new controls
         ctx.textAlign = 'left';
     } else {
@@ -3455,6 +3556,7 @@ function draw() {
         _volDownBounds = null;
         _volUpBounds = null;
         _sfxBtnBounds = null;
+        _hapticBtnBounds = null;
         _levelLeftBounds = null;
         _levelRightBounds = null;
     }
