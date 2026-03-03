@@ -1,0 +1,62 @@
+{
+  "name": "Sediment - Die-to-Build Platformer",
+  "short_name": "Sediment",
+  "description": "You ARE a shape. Die and your body becomes the level. Clear rows to crunch away deaths. Free browser platformer.",
+  "start_url": "/sediment/",
+  "scope": "/sediment/",
+  "display": "fullscreen",
+  "orientation": "landscape",
+  "background_color": "#0C1020",
+  "theme_color": "#0C1020",
+  "categories": ["games", "entertainment"],
+  "icons": [
+    {
+      "src": "icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "icon-maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "icon-144.png",
+      "sizes": "144x144",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "icon-96.png",
+      "sizes": "96x96",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "icon-72.png",
+      "sizes": "72x72",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "icon-48.png",
+      "sizes": "48x48",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "icon-mono-48.png",
+      "sizes": "48x48",
+      "type": "image/png",
+      "purpose": "monochrome"
+    }
+  ]
+}
