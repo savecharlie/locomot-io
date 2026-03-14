@@ -3180,6 +3180,7 @@ function draw() {
     ctx.restore();
 
     // ── HUD ──
+    if (!cleanMode) {
     ctx.fillStyle = C.player;
     ctx.font = '8px monospace';
     ctx.fillText(`LEVEL ${currentLevel}`, 4, 10);
@@ -3214,9 +3215,10 @@ function draw() {
     ctx.fillStyle = matColor(player.material);
     ctx.font = '7px monospace';
     ctx.fillText(`${player.shape}-piece  ${player.material}`, 4, 32);
+    } // end !cleanMode
 
     // Next piece preview (top-right, left of pause button)
-    if (nextPieceShape && started && !player.dead) {
+    if (nextPieceShape && started && !player.dead && !cleanMode) {
         const previewX = W - 52;
         const previewY = 4;
         ctx.globalAlpha = 0.4;
@@ -3240,7 +3242,7 @@ function draw() {
     }
 
     // Tutorial prompts (level 1) or controls hint
-    if ((!hasJumped || !hasRotated || !hasPlaced) && started && !player.dead) {
+    if ((!hasJumped || !hasRotated || !hasPlaced) && started && !player.dead && !cleanMode) {
         // Passive control hints — show next action they haven't done yet
         const pulse = 0.6 + 0.3 * Math.sin(performance.now() / 400);
         ctx.globalAlpha = pulse;
@@ -3813,8 +3815,11 @@ requestAnimationFrame(loop);
 </script>
 <script src="nn_agent.js"></script>
 <script>
-// Dev mode: ?dev=1 shows bot button
+// URL params
 const _params = new URLSearchParams(location.search);
+const cleanMode = _params.has('clean'); // ?clean hides all HUD for screenshots
+
+// Dev mode: ?dev=1 shows bot button
 if (_params.has('dev')) {
     document.getElementById('botBtn').style.display = 'flex';
 }

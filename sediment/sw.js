@@ -1,4 +1,4 @@
-const CACHE_NAME = 'sediment-v5';
+const CACHE_NAME = 'sediment-v6';
 const ASSETS = [
     '/sediment/',
     '/sediment/index.html',
