@@ -1801,13 +1801,13 @@ function doDie() {
     if (tutorialStep === 2) {
         tutorialStep = 3;
         tutorialComplete = true;
-        tutorialDoneTimer = 1.5;
-        // Place the piece, then after a beat restart as real level 1
+        tutorialDoneTimer = 3.0;
+        // Place the piece, let them see the corpse become terrain, then level 2
         die();
         setTimeout(() => {
-            currentLevel = 1;
-            initLevel(1);
-        }, 1500);
+            currentLevel = 2;
+            initLevel(2);
+        }, 3000);
         return;
     }
     die();
@@ -2223,6 +2223,8 @@ function update(dt) {
 
     if (player.dead) {
         player.deathTimer += dt;
+        // Don't respawn during tutorial ending — let them see the corpse
+        if (tutorialDoneTimer > 0) return;
         if (player.deathTimer > 0.5) respawn();
         return;
     }
