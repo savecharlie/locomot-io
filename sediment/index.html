@@ -1182,6 +1182,7 @@ let tutorialStep = 3; // 0=jump, 1=rotate, 2=place, 3=done
 let tutorialComplete = false;
 let startShowSettings = false;
 let startSelectedLevel = 1;
+let tutorialDoneTimer = 0; // shows "your body is the level" after first placement
 let _startLvlLeftBounds = null;
 let _startLvlRightBounds = null;
 let _startGearBounds = null;
@@ -1235,6 +1236,11 @@ function initLevel(lvl) {
 
     // Goal line near the end of the last segment
     goalX = (numSegments * SEGMENT_W - 4) * TILE;
+
+    // Tutorial level has no exit — endless until first piece placed
+    if (lvl === 1 && !tutorialComplete) {
+        goalX = Infinity;
+    }
 
     const h = LEVEL_H_TILES;
 
@@ -1792,7 +1798,18 @@ function doJump() {
 function doDie() {
     if (!started) { startGame(); return; }
     if (tutorialStep === 0) return; // blocked until jump
-    if (tutorialStep === 2) { tutorialStep = 3; tutorialComplete = true; }
+    if (tutorialStep === 2) {
+        tutorialStep = 3;
+        tutorialComplete = true;
+        tutorialDoneTimer = 1.5;
+        // Place the piece, then after a beat restart as real level 1
+        die();
+        setTimeout(() => {
+            currentLevel = 1;
+            initLevel(1);
+        }, 1500);
+        return;
+    }
     die();
 }
 
@@ -2124,6 +2141,7 @@ function update(dt) {
     }
 
     if (levelTitleTimer > 0) levelTitleTimer -= dt;
+    if (tutorialDoneTimer > 0) tutorialDoneTimer -= dt;
 
     // Level complete — freeze gameplay, count down to next level
     if (levelComplete) {
@@ -3263,6 +3281,15 @@ function draw() {
         if (tutorialStep === 0) ctx.fillText(lastInputWasTouch ? 'tap to jump' : 'SPACE to jump', W/2, H/2 + 8);
         else if (tutorialStep === 1) ctx.fillText(lastInputWasTouch ? 'swipe \u2190 \u2192 to rotate' : 'A / D to rotate', W/2, H/2 + 8);
         else if (tutorialStep === 2) ctx.fillText(lastInputWasTouch ? 'swipe \u2193 to place' : 'X to place', W/2, H/2 + 8);
+        ctx.textAlign = 'left';
+        ctx.globalAlpha = 1;
+    } else if (tutorialDoneTimer > 0 && started) {
+        const fade = Math.min(1, tutorialDoneTimer * 2);
+        ctx.globalAlpha = fade;
+        ctx.fillStyle = C.player;
+        ctx.font = '8px monospace';
+        ctx.textAlign = 'center';
+        ctx.fillText('your body is the level', W/2, H/2 + 8);
         ctx.textAlign = 'left';
         ctx.globalAlpha = 1;
     } else if (player.deathCount < 3 && started) {
