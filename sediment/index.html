@@ -1189,6 +1189,7 @@ const flash = { a: 0, r: 1, g: 1, b: 1 };
 let paused = false;
 let started = false;
 let hasJumped = false, hasRotated = false, hasPlaced = false;
+let _betaBtnBounds = null;
 let startShowSettings = false;
 let startSelectedLevel = 1;
 let _startLvlLeftBounds = null;
@@ -1320,6 +1321,11 @@ function die() {
     levelDeaths++;
     console.log('HIGHLIGHT:DEATH:' + performance.now().toFixed(0));
     player._totalDeaths = (player._totalDeaths || 0) + 1;
+
+    // Show beta signup every 10th death
+    if (player.deathCount % 10 === 0 && player.deathCount >= 10 && typeof showBeta === 'function') {
+        setTimeout(showBeta, 600);
+    }
 
     cam.shake = Math.max(cam.shake, 6);
     flash.a = 0.6; flash.r = 0.91; flash.g = 0.66; flash.b = 0.22;
@@ -1894,6 +1900,13 @@ canvas.addEventListener('touchend', (e) => {
                     const b = _hapticBtnBounds;
                     if (tapX >= b.x && tapX <= b.x + b.w && tapY >= b.y && tapY <= b.y + b.h) {
                         toggleHaptics();
+                        return;
+                    }
+                }
+                if (_betaBtnBounds) {
+                    const b = _betaBtnBounds;
+                    if (tapX >= b.x && tapX <= b.x + b.w && tapY >= b.y && tapY <= b.y + b.h) {
+                        showBeta();
                         return;
                     }
                 }
@@ -2755,10 +2768,6 @@ function update(dt) {
         } else {
             SFX.levelComplete();
             haptic(HAPTICS.levelClear);
-        }
-        // Show beta signup after level 3 (they're invested by then)
-        if (currentLevel === 3 && typeof showBeta === 'function') {
-            setTimeout(showBeta, 1500);
         }
     }
 }
@@ -3710,6 +3719,19 @@ function draw() {
         }
 
         _muteBtnBounds = null; // replaced by new controls
+
+        // Android beta link (bottom of pause menu)
+        if (!betaSignedUp) {
+            const betaY = supportsVibrate ? menuTop + 128 : menuTop + 112;
+            ctx.fillStyle = 'rgba(104,187,196,0.5)';
+            ctx.font = '6px monospace';
+            ctx.fillText('\u{1F4F1} join android beta', W/2, betaY);
+            const betaW = 80, betaH = 12;
+            _betaBtnBounds = { x: W/2 - betaW/2, y: betaY - betaH/2, w: betaW, h: betaH };
+        } else {
+            _betaBtnBounds = null;
+        }
+
         ctx.textAlign = 'left';
     } else {
         _skipBtnBounds = null;
