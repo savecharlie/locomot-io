@@ -13,6 +13,7 @@
 <link rel="canonical" href="https://locomot.io/sediment/">
 <link rel="manifest" href="/sediment/manifest.json">
 <link rel="apple-touch-icon" href="/sediment/icon-192.png">
+<script>if('serviceWorker' in navigator) navigator.serviceWorker.register('/sediment/sw.js');</script>
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 
@@ -152,7 +153,7 @@ canvas { display: block; width: 100%; height: 100%; image-rendering: pixelated; 
     <div class="version" id="splash-version"></div>
 </div>
 <canvas id="c"></canvas>
-<div id="botBtn">&#129504;</div>
+<div id="botBtn" style="display:none">&#129504;</div>
 <div id="pauseBtn">&#9646;&#9646;</div>
 <script>
 // ── SEDIMENT v2 ──
@@ -164,7 +165,7 @@ const canvas = document.getElementById('c');
 const ctx = canvas.getContext('2d');
 
 // ── Config ──
-const VERSION = 'v57';
+const VERSION = '1.0';
 const TILE = 12;
 const GRAVITY = 700;
 const JUMP_FORCE = -280;
@@ -1179,7 +1180,15 @@ let paused = false;
 let started = false;
 let tutorialStep = 3; // 0=jump, 1=rotate, 2=place, 3=done
 let tutorialComplete = false;
-
+let startShowSettings = false;
+let startSelectedLevel = 1;
+let _startLvlLeftBounds = null;
+let _startLvlRightBounds = null;
+let _startGearBounds = null;
+let _startMusDownBounds = null;
+let _startMusUpBounds = null;
+let _startSfxBounds = null;
+let _startHapBounds = null;
 
 // Next piece preview
 let nextPieceShape = null;
@@ -1261,6 +1270,7 @@ function initLevel(lvl) {
 
 function init() {
     loadProgress();
+    startSelectedLevel = 1;
     currentLevel = 1;
     initLevel(currentLevel);
 }
@@ -1760,14 +1770,27 @@ function ctrlHint(action) {
     }
 }
 
+function startGame() {
+    if (startSelectedLevel > 1) {
+        currentLevel = startSelectedLevel;
+        initLevel(currentLevel);
+        tutorialStep = 3;
+        tutorialComplete = true;
+    }
+    started = true;
+    startShowSettings = false;
+    history.pushState({ sediment: 'playing' }, '');
+    startMusic();
+}
+
 function doJump() {
-    if (!started) { started = true; startMusic(); return; }
+    if (!started) { startGame(); return; }
     if (tutorialStep === 0) tutorialStep = 1;
     jumpBuffered = true;
 }
 
 function doDie() {
-    if (!started) { started = true; startMusic(); return; }
+    if (!started) { startGame(); return; }
     if (tutorialStep === 0) return; // blocked until jump
     if (tutorialStep === 2) { tutorialStep = 3; tutorialComplete = true; }
     die();
@@ -1880,6 +1903,21 @@ canvas.addEventListener('touchend', (e) => {
                 togglePause();
                 return;
             }
+            // Start screen button taps
+            if (!started) {
+                const t = e.changedTouches[0];
+                const rect = canvas.getBoundingClientRect();
+                const tapX = (t.clientX - rect.left) / rect.width * W;
+                const tapY = (t.clientY - rect.top) / rect.height * H;
+                const _hit = (b) => b && tapX >= b.x && tapX <= b.x + b.w && tapY >= b.y && tapY <= b.y + b.h;
+                if (_hit(_startGearBounds)) { startShowSettings = !startShowSettings; return; }
+                if (_hit(_startLvlLeftBounds) && startSelectedLevel > 1) { startSelectedLevel--; return; }
+                if (_hit(_startLvlRightBounds) && startSelectedLevel < (player._highestLevel || 1)) { startSelectedLevel++; return; }
+                if (_hit(_startMusDownBounds)) { adjustMusicVolume(-1); return; }
+                if (_hit(_startMusUpBounds)) { adjustMusicVolume(1); return; }
+                if (_hit(_startSfxBounds)) { toggleSfxMute(); return; }
+                if (_hit(_startHapBounds)) { toggleHaptics(); return; }
+            }
             doJump();
         }
     }
@@ -1889,6 +1927,17 @@ canvas.addEventListener('touchend', (e) => {
 document.addEventListener('keydown', (e) => {
     if (e.repeat) return;
     lastInputWasTouch = false;
+    // Start screen: arrows change level select
+    if (!started && (player._highestLevel || 1) > 1) {
+        if (e.code === 'ArrowLeft' || e.code === 'KeyA') {
+            if (startSelectedLevel > 1) startSelectedLevel--;
+            return;
+        }
+        if (e.code === 'ArrowRight' || e.code === 'KeyD') {
+            if (startSelectedLevel < (player._highestLevel || 1)) startSelectedLevel++;
+            return;
+        }
+    }
     if (e.code === 'Space' || e.code === 'ArrowUp' || e.code === 'KeyW') doJump();
     if (e.code === 'ArrowDown' || e.code === 'KeyS' || e.code === 'KeyX') doDie();
     if (e.code === 'ArrowRight' || e.code === 'KeyD') doRotateCW();
@@ -3266,7 +3315,6 @@ function draw() {
             const py = runY - bounce + cy * tileS;
             ctx.fillStyle = C.spring;
             ctx.fillRect(px, py, tileS - 1, tileS - 1);
-            // Eyes on first cell
             if (i === 0) {
                 ctx.fillStyle = C.springDark;
                 ctx.fillRect(px, py, 1, 1);
@@ -3278,18 +3326,121 @@ function draw() {
         }
         ctx.globalAlpha = 1;
 
-        // Saved progress hint
-        if (player._highestLevel > 1) {
-            ctx.fillStyle = 'rgba(216,208,192,0.3)';
+        // Level select (if player has progress)
+        const maxUnlocked = Math.max(1, player._highestLevel || 1);
+        if (maxUnlocked > 1) {
+            const lvlY = H/2 + 38;
+            const lvlBtnW = 16, lvlBtnH = 12;
+            const lvlLabelW = 64;
+            const lvlTotalW = lvlBtnW + lvlLabelW + lvlBtnW;
+            const lvlStartX = W/2 - lvlTotalW/2;
+            const canLeft = startSelectedLevel > 1;
+            const canRight = startSelectedLevel < maxUnlocked;
+
+            ctx.fillStyle = canLeft ? 'rgba(104,187,196,0.2)' : 'rgba(216,208,192,0.05)';
+            ctx.fillRect(lvlStartX, lvlY - lvlBtnH/2, lvlBtnW, lvlBtnH);
+            ctx.strokeStyle = canLeft ? 'rgba(104,187,196,0.5)' : 'rgba(216,208,192,0.15)';
+            ctx.lineWidth = 1;
+            ctx.strokeRect(lvlStartX, lvlY - lvlBtnH/2, lvlBtnW, lvlBtnH);
+            ctx.fillStyle = canLeft ? '#68BBC4' : 'rgba(216,208,192,0.2)';
+            ctx.font = '8px monospace';
+            ctx.fillText('<', lvlStartX + lvlBtnW/2, lvlY + 3);
+
+            ctx.fillStyle = 'rgba(104,187,196,0.8)';
             ctx.font = '6px monospace';
-            ctx.fillText(`best: level ${player._bestRun || player._highestLevel - 1}`, W/2, H/2 + 38);
+            ctx.fillText('LEVEL ' + startSelectedLevel, lvlStartX + lvlBtnW + lvlLabelW/2, lvlY + 2);
+
+            const lvlPlusX = lvlStartX + lvlBtnW + lvlLabelW;
+            ctx.fillStyle = canRight ? 'rgba(104,187,196,0.2)' : 'rgba(216,208,192,0.05)';
+            ctx.fillRect(lvlPlusX, lvlY - lvlBtnH/2, lvlBtnW, lvlBtnH);
+            ctx.strokeStyle = canRight ? 'rgba(104,187,196,0.5)' : 'rgba(216,208,192,0.15)';
+            ctx.strokeRect(lvlPlusX, lvlY - lvlBtnH/2, lvlBtnW, lvlBtnH);
+            ctx.fillStyle = canRight ? '#68BBC4' : 'rgba(216,208,192,0.2)';
+            ctx.font = '8px monospace';
+            ctx.fillText('>', lvlPlusX + lvlBtnW/2, lvlY + 3);
+
+            _startLvlLeftBounds = { x: lvlStartX, y: lvlY - lvlBtnH/2, w: lvlBtnW, h: lvlBtnH };
+            _startLvlRightBounds = { x: lvlPlusX, y: lvlY - lvlBtnH/2, w: lvlBtnW, h: lvlBtnH };
+        } else {
+            _startLvlLeftBounds = null;
+            _startLvlRightBounds = null;
         }
 
-        // locomot.io link
+        // Settings gear (top-left corner)
+        const gearX = 4, gearY = 4, gearW = 14, gearH = 14;
+        ctx.fillStyle = startShowSettings ? 'rgba(232,168,56,0.3)' : 'rgba(216,208,192,0.15)';
+        ctx.fillRect(gearX, gearY, gearW, gearH);
+        ctx.strokeStyle = startShowSettings ? 'rgba(232,168,56,0.5)' : 'rgba(216,208,192,0.25)';
+        ctx.lineWidth = 1;
+        ctx.strokeRect(gearX, gearY, gearW, gearH);
+        ctx.fillStyle = startShowSettings ? C.player : 'rgba(216,208,192,0.5)';
+        ctx.font = '9px monospace';
+        ctx.textAlign = 'center';
+        ctx.fillText('\u2699', gearX + gearW/2, gearY + gearH/2 + 3);
+        _startGearBounds = { x: gearX, y: gearY, w: gearW, h: gearH };
+
+        // Settings panel (expanded from gear)
+        if (startShowSettings) {
+            const panelX = 4, panelY = 22, panelW = 90;
+            ctx.fillStyle = 'rgba(16, 16, 30, 0.9)';
+            ctx.fillRect(panelX, panelY, panelW, supportsVibrate ? 52 : 36);
+            ctx.strokeStyle = 'rgba(216,208,192,0.15)';
+            ctx.strokeRect(panelX, panelY, panelW, supportsVibrate ? 52 : 36);
+
+            // Music volume row
+            const musY = panelY + 10;
+            const musW = 14, musH = 12;
+            ctx.fillStyle = 'rgba(216,208,192,0.15)';
+            ctx.fillRect(panelX + 2, musY - musH/2, musW, musH);
+            ctx.fillStyle = C.text; ctx.font = '8px monospace';
+            ctx.fillText('-', panelX + 2 + musW/2, musY + 3);
+            const musPct = musicMuted ? 'OFF' : Math.round(musicVolume * 100) + '%';
+            ctx.fillStyle = musicMuted ? 'rgba(200,56,72,0.7)' : 'rgba(216,208,192,0.6)';
+            ctx.font = '5px monospace';
+            ctx.fillText('MUS ' + musPct, panelX + 2 + musW + 24, musY + 2);
+            const musPlusX = panelX + panelW - musW - 2;
+            ctx.fillStyle = 'rgba(216,208,192,0.15)';
+            ctx.fillRect(musPlusX, musY - musH/2, musW, musH);
+            ctx.fillStyle = C.text; ctx.font = '8px monospace';
+            ctx.fillText('+', musPlusX + musW/2, musY + 3);
+            _startMusDownBounds = { x: panelX + 2, y: musY - musH/2, w: musW, h: musH };
+            _startMusUpBounds = { x: musPlusX, y: musY - musH/2, w: musW, h: musH };
+
+            // SFX toggle
+            const sfxY = panelY + 26;
+            const sfxBW = panelW - 4, sfxBH = 12;
+            ctx.fillStyle = sfxMuted ? 'rgba(200,56,72,0.2)' : 'rgba(88,184,72,0.2)';
+            ctx.fillRect(panelX + 2, sfxY - sfxBH/2, sfxBW, sfxBH);
+            ctx.fillStyle = sfxMuted ? '#C83848' : C.spring;
+            ctx.font = '5px monospace';
+            ctx.fillText(sfxMuted ? 'SFX: OFF' : 'SFX: ON', panelX + 2 + sfxBW/2, sfxY + 2);
+            _startSfxBounds = { x: panelX + 2, y: sfxY - sfxBH/2, w: sfxBW, h: sfxBH };
+
+            // Haptics toggle
+            if (supportsVibrate) {
+                const hapY = panelY + 42;
+                const hapBW = panelW - 4, hapBH = 12;
+                ctx.fillStyle = hapticsEnabled ? 'rgba(88,144,208,0.2)' : 'rgba(200,56,72,0.2)';
+                ctx.fillRect(panelX + 2, hapY - hapBH/2, hapBW, hapBH);
+                ctx.fillStyle = hapticsEnabled ? C.booster : '#C83848';
+                ctx.font = '5px monospace';
+                ctx.fillText(hapticsEnabled ? 'HAPTIC: ON' : 'HAPTIC: OFF', panelX + 2 + hapBW/2, hapY + 2);
+                _startHapBounds = { x: panelX + 2, y: hapY - hapBH/2, w: hapBW, h: hapBH };
+            } else {
+                _startHapBounds = null;
+            }
+        } else {
+            _startMusDownBounds = null; _startMusUpBounds = null;
+            _startSfxBounds = null; _startHapBounds = null;
+        }
+
+        ctx.textAlign = 'left';
+
+        // Credits
         ctx.fillStyle = 'rgba(208,204,196,0.15)';
         ctx.font = '6px monospace';
         ctx.textAlign = 'left';
-        ctx.fillText('locomot.io', 4, H - 4);
+        ctx.fillText('by Ivy & Iris', 4, H - 4);
         ctx.textAlign = 'right';
         ctx.fillText(VERSION, W - 4, H - 4);
         ctx.textAlign = 'left';
@@ -3569,12 +3720,55 @@ function draw() {
     }
 }
 
+// ── Visibility — pause on background ──
+document.addEventListener('visibilitychange', () => {
+    if (document.hidden && started && !paused) {
+        togglePause();
+    }
+    if (document.hidden && audioCtx && audioCtx.state === 'running') {
+        audioCtx.suspend();
+    }
+    if (!document.hidden && audioCtx && audioCtx.state === 'suspended' && !paused) {
+        audioCtx.resume();
+    }
+});
+window.addEventListener('beforeunload', saveProgress);
+
+// ── Android back button ──
+if (started === false) history.replaceState({ sediment: 'start' }, '');
+window.addEventListener('popstate', (e) => {
+    if (started) {
+        e.preventDefault();
+        history.pushState({ sediment: 'playing' }, '');
+        if (!paused) togglePause();
+    }
+});
+
 // ── Loop ──
+let _loopError = false;
 function loop(time) {
-    const dt = Math.min((time - lastTime) / 1000, 1/20);
-    lastTime = time;
-    update(dt);
-    draw();
+    if (_loopError) return;
+    try {
+        const dt = Math.min((time - lastTime) / 1000, 1/20);
+        lastTime = time;
+        update(dt);
+        draw();
+    } catch (err) {
+        console.error('Game loop error:', err);
+        _loopError = true;
+        ctx.fillStyle = 'rgba(16, 16, 30, 0.95)';
+        ctx.fillRect(0, 0, W, H);
+        ctx.fillStyle = '#E04848';
+        ctx.font = '10px monospace';
+        ctx.textAlign = 'center';
+        ctx.fillText('something went wrong', W/2, H/2 - 8);
+        ctx.fillStyle = '#E0D0B8';
+        ctx.font = '7px monospace';
+        ctx.fillText('tap to restart', W/2, H/2 + 8);
+        canvas.addEventListener('click', () => { _loopError = false; hardReset(); requestAnimationFrame(loop); }, { once: true });
+        canvas.addEventListener('touchstart', () => { _loopError = false; hardReset(); requestAnimationFrame(loop); }, { once: true });
+        return;
+    }
     requestAnimationFrame(loop);
 }
 
@@ -3632,13 +3826,20 @@ requestAnimationFrame(loop);
 </script>
 <script src="nn_agent.js"></script>
 <script>
+// Dev mode: ?dev=1 shows bot button
+const _params = new URLSearchParams(location.search);
+if (_params.has('dev')) {
+    document.getElementById('botBtn').style.display = 'flex';
+}
+
 // Load NN weights on startup (silently fails if not available)
 if (typeof nnAgent !== 'undefined') {
     nnAgent.load('nn_weights.json');
 }
 
 // Auto-play mode: ?autoplay=1 enables NN agent immediately
-if (new URLSearchParams(location.search).has('autoplay')) {
+if (_params.has('autoplay')) {
+    document.getElementById('botBtn').style.display = 'flex';
     const waitForAgent = setInterval(() => {
         if (typeof nnAgent !== 'undefined' && nnAgent.load) {
             nnAgent.load('nn_weights.json').then(() => {
