@@ -1183,6 +1183,7 @@ let tutorialComplete = false;
 let startShowSettings = false;
 let startSelectedLevel = 1;
 let tutorialDoneTimer = 0; // shows "your body is the level" after first placement
+let _tutSkipBounds = null;
 let _startLvlLeftBounds = null;
 let _startLvlRightBounds = null;
 let _startGearBounds = null;
@@ -1802,6 +1803,7 @@ function doDie() {
         tutorialStep = 3;
         tutorialComplete = true;
         tutorialDoneTimer = 3.0;
+        _tutSkipBounds = null;
         // Place the piece, let them see the corpse become terrain, then level 2
         die();
         setTimeout(() => {
@@ -1920,6 +1922,22 @@ canvas.addEventListener('touchend', (e) => {
                 togglePause();
                 return;
             }
+            // Tutorial skip button
+            if (started && tutorialStep < 3 && _tutSkipBounds) {
+                const t = e.changedTouches[0];
+                const rect = canvas.getBoundingClientRect();
+                const tapX = (t.clientX - rect.left) / rect.width * W;
+                const tapY = (t.clientY - rect.top) / rect.height * H;
+                const b = _tutSkipBounds;
+                if (tapX >= b.x && tapX <= b.x + b.w && tapY >= b.y && tapY <= b.y + b.h) {
+                    tutorialStep = 3;
+                    tutorialComplete = true;
+                    _tutSkipBounds = null;
+                    currentLevel = 2;
+                    initLevel(2);
+                    return;
+                }
+            }
             // Start screen button taps
             if (!started) {
                 const t = e.changedTouches[0];
@@ -1954,6 +1972,13 @@ document.addEventListener('keydown', (e) => {
             if (startSelectedLevel < (player._highestLevel || 1)) startSelectedLevel++;
             return;
         }
+    }
+    // Skip tutorial
+    if (started && tutorialStep < 3 && (e.code === 'Escape' || e.code === 'Tab')) {
+        e.preventDefault();
+        tutorialStep = 3; tutorialComplete = true; _tutSkipBounds = null;
+        currentLevel = 2; initLevel(2);
+        return;
     }
     if (e.code === 'Space' || e.code === 'ArrowUp' || e.code === 'KeyW') doJump();
     if (e.code === 'ArrowDown' || e.code === 'KeyS' || e.code === 'KeyX') doDie();
@@ -3283,6 +3308,16 @@ function draw() {
         if (tutorialStep === 0) ctx.fillText(lastInputWasTouch ? 'tap to jump' : 'SPACE to jump', W/2, H/2 + 8);
         else if (tutorialStep === 1) ctx.fillText(lastInputWasTouch ? 'swipe \u2190 \u2192 to rotate' : 'A / D to rotate', W/2, H/2 + 8);
         else if (tutorialStep === 2) ctx.fillText(lastInputWasTouch ? 'swipe \u2193 to place' : 'X to place', W/2, H/2 + 8);
+        // Skip button
+        ctx.globalAlpha = 0.4;
+        ctx.fillStyle = 'rgba(216,208,192,0.15)';
+        const skipW = 30, skipH = 10;
+        const skipX = W - skipW - 4, skipY = H - skipH - 4;
+        ctx.fillRect(skipX, skipY, skipW, skipH);
+        ctx.fillStyle = 'rgba(216,208,192,0.5)';
+        ctx.font = '6px monospace';
+        ctx.fillText('skip', skipX + skipW/2, skipY + skipH/2 + 2);
+        _tutSkipBounds = { x: skipX, y: skipY, w: skipW, h: skipH };
         ctx.textAlign = 'left';
         ctx.globalAlpha = 1;
     } else if (tutorialDoneTimer > 0 && started) {
