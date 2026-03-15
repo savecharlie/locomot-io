@@ -1,0 +1,207 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no"
+    />
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+    <meta http-equiv="Pragma" content="no-cache" />
+    <meta http-equiv="Expires" content="0" />
+    <title>Inkjet</title>
+    <script type="module" crossorigin src="assets/index-B4MC20a3.js"></script>
+    <link rel="stylesheet" crossorigin href="assets/index-CHf-zXMl.css">
+  </head>
+  <body>
+    <div class="page-shell">
+      <div class="bg-orb orb-a"></div>
+      <div class="bg-orb orb-b"></div>
+      <div class="bg-grid"></div>
+
+      <!-- Tutorial overlay -->
+      <div id="tutorial-overlay" class="tutorial-overlay">
+        <div class="tutorial-pages">
+          <!-- Page 1: Shoot to Move -->
+          <div class="tutorial-page active" data-page="0">
+            <div class="tut-scene">
+              <div class="tut-grid-lines"></div>
+              <div class="tut-squid tut-squid-anim"></div>
+              <div class="tut-trail tut-trail-anim"></div>
+              <div class="tut-bullet tut-bullet-anim"></div>
+              <div class="tut-bullet tut-bullet-anim-2"></div>
+              <div class="tut-finger tut-finger-anim"></div>
+              <div class="tut-recoil-arrow tut-arrow-anim"></div>
+            </div>
+            <h2 class="tut-heading">shoot to move</h2>
+            <p class="tut-body">drag to fire — recoil pushes you backward</p>
+          </div>
+
+          <!-- Page 2: Paint the Arena -->
+          <div class="tutorial-page" data-page="1">
+            <div class="tut-scene">
+              <div class="tut-grid-lines"></div>
+              <div class="tut-squid tut-squid-paint"></div>
+              <div class="tut-bullet tut-bullet-paint"></div>
+              <div class="tut-wall tut-wall-top"></div>
+              <div class="tut-wall tut-wall-right"></div>
+              <div class="tut-paint-glow tut-paint-anim"></div>
+              <div class="tut-paint-glow tut-paint-anim-2"></div>
+            </div>
+            <h2 class="tut-heading">paint the arena</h2>
+            <p class="tut-body">bullets bounce off walls and claim them in your color</p>
+          </div>
+
+          <!-- Page 3: Burst Rivals -->
+          <div class="tutorial-page" data-page="2">
+            <div class="tut-scene">
+              <div class="tut-grid-lines"></div>
+              <div class="tut-squid tut-squid-burst-shooter"></div>
+              <div class="tut-enemy tut-enemy-anim"></div>
+              <div class="tut-bullet tut-bullet-burst"></div>
+              <div class="tut-burst-ring tut-burst-anim"></div>
+            </div>
+            <h2 class="tut-heading">burst rivals</h2>
+            <p class="tut-body">kill to claim a huge paint radius around their death</p>
+          </div>
+        </div>
+
+        <div class="tut-nav">
+          <div class="tut-dots">
+            <span class="tut-dot active" data-dot="0"></span>
+            <span class="tut-dot" data-dot="1"></span>
+            <span class="tut-dot" data-dot="2"></span>
+          </div>
+          <button id="tut-next" class="tut-button" type="button">next</button>
+        </div>
+      </div>
+
+      <!-- Mode picker splash -->
+      <div id="splash-overlay" class="splash-overlay" hidden>
+        <div class="splash-content">
+          <h1 class="splash-title">inkjet</h1>
+          <p class="splash-sub">shoot to move. paint to win.</p>
+          <div class="splash-color-picker">
+            <label class="color-label">your color</label>
+            <div class="color-slider-row">
+              <input id="splash-hue" type="range" min="0" max="360" value="200" class="hue-slider" />
+              <div id="splash-color-preview" class="color-preview"></div>
+            </div>
+          </div>
+          <div class="splash-modes">
+            <button id="splash-ffa" class="splash-mode-btn" type="button">
+              <span class="mode-label">free for all</span>
+              <span class="mode-desc">every squid for themselves</span>
+            </button>
+            <button id="splash-teams" class="splash-mode-btn splash-teams" type="button">
+              <span class="mode-label">teams</span>
+              <span class="mode-desc">blue vs orange</span>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Win screen overlay -->
+      <div id="win-overlay" class="splash-overlay" hidden>
+        <div class="splash-content">
+          <h1 id="win-title" class="splash-title" style="font-size:2.4rem">you won</h1>
+          <p id="win-sub" class="splash-sub">crossed the victory line</p>
+          <div class="splash-modes">
+            <button id="win-play-again" class="splash-mode-btn" type="button">
+              <span class="mode-label">play again</span>
+              <span class="mode-desc">same mode, new maze</span>
+            </button>
+            <button id="win-switch-mode" class="splash-mode-btn splash-teams" type="button">
+              <span id="win-switch-label" class="mode-label">switch to teams</span>
+              <span class="mode-desc">try the other mode</span>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <main class="arena-shell">
+        <canvas id="game" aria-label="Inkjet arena"></canvas>
+
+        <div id="touch-anchor" class="touch-anchor" aria-hidden="true"></div>
+        <div id="touch-stick" class="touch-stick" aria-hidden="true"></div>
+        <div id="touch-line" class="touch-line" aria-hidden="true"></div>
+
+        <div class="brand-tag" aria-hidden="true">inkjet</div>
+
+        <div class="room-pill">
+          <span class="chip-label">room</span>
+          <strong id="room-readout">public</strong>
+        </div>
+
+        <button
+          id="settings-button"
+          class="settings-button"
+          type="button"
+          aria-expanded="false"
+          aria-controls="settings-panel"
+        >
+          menu
+        </button>
+
+        <section id="feed-banner" class="feed-banner feed-idle" aria-live="polite">
+          <span class="chip-label">feed</span>
+          <strong id="feed-readout">the tide is alive</strong>
+        </section>
+
+        <section class="player-badge">
+          <div id="player-color-swatch" class="player-color-swatch" aria-hidden="true"></div>
+          <div class="player-badge-copy">
+            <span id="player-name-readout" class="player-name-readout">drift</span>
+            <strong class="player-score-line">
+              <span id="kills-readout">—</span>
+              <span class="score-sep"></span>
+              <span id="paint-readout"></span>
+            </strong>
+          </div>
+        </section>
+
+        <section id="settings-panel" class="settings-panel" hidden>
+          <div class="settings-card">
+            <div class="settings-grid">
+              <div class="settings-row">
+                <span class="chip-label">status</span>
+                <strong id="status-readout">connecting</strong>
+              </div>
+              <div class="settings-row">
+                <span class="chip-label">leader</span>
+                <strong id="leader-readout">none</strong>
+              </div>
+              <div class="settings-row">
+                <span class="chip-label">mode</span>
+                <strong id="mode-readout">ffa</strong>
+              </div>
+              <div class="settings-row">
+                <span class="chip-label">crowd</span>
+                <strong id="population-readout">0</strong>
+              </div>
+              <div class="settings-row">
+                <span class="chip-label">health</span>
+                <strong id="health-readout">100</strong>
+              </div>
+              <div class="settings-row">
+                <span class="chip-label">shield</span>
+                <strong id="shield-readout">3</strong>
+              </div>
+              <div class="settings-row">
+                <span class="chip-label">hint</span>
+                <strong id="hint-readout">Drag in the lower half of the screen to steer recoil.</strong>
+              </div>
+            </div>
+
+            <div class="action-row">
+              <button id="invert-button" class="action-button" type="button">invert: off</button>
+              <button id="toggle-mode-button" class="action-button" type="button">switch to teams</button>
+              <button id="new-room-button" class="action-button alt" type="button">new tide</button>
+            </div>
+          </div>
+        </section>
+      </main>
+    </div>
+
+  </body>
+</html>
