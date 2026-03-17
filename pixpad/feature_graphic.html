@@ -1,0 +1,301 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>PixPad Feature Graphic Generator</title>
+<style>
+body { margin: 0; background: #111; display: flex; flex-direction: column; align-items: center; padding: 20px; font-family: sans-serif; color: #eee; }
+canvas { border: 1px solid #333; image-rendering: pixelated; }
+button { margin: 10px; padding: 10px 20px; background: #e94560; border: none; color: white; border-radius: 8px; cursor: pointer; font-size: 16px; }
+button:hover { opacity: 0.9; }
+.controls { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
+</style>
+</head>
+<body>
+<h2>PixPad Feature Graphic (1024x500)</h2>
+<canvas id="c" width="1024" height="500"></canvas>
+<div class="controls">
+    <button onclick="regenerate()">Regenerate</button>
+    <button onclick="download()">Download PNG</button>
+</div>
+
+<script>
+const C = document.getElementById('c');
+const ctx = C.getContext('2d');
+
+// PixPad palette
+const palette = {
+    bgDark: '#1a1a2e',
+    bgMed: '#16213e',
+    bgLight: '#0f3460',
+    accent: '#e94560',
+    text: '#eaeaea',
+    // pixel art accent colors
+    colors: ['#e94560','#ff6b6b','#ffa07a','#ffd93d','#6bcb77','#4d96ff','#9b59b6','#e94560','#ff8fab','#00d2d3','#54a0ff','#5f27cd','#01a3a4','#f368e0','#ff9f43','#ee5a24']
+};
+
+// Tiny pixel art sprites (8x8)
+const sprites = [
+    // Heart
+    [
+        '..xx.xx.',
+        '.xxxxxxx',
+        'xxxxxxxx',
+        'xxxxxxxx',
+        '.xxxxxxx',
+        '..xxxxx.',
+        '...xxx..',
+        '....x...'
+    ],
+    // Star
+    [
+        '...xx...',
+        '...xx...',
+        '.xxxxxx.',
+        'xxxxxxxx',
+        '.xxxxxx.',
+        '..xxxx..',
+        '.xx..xx.',
+        'xx....xx'
+    ],
+    // Smiley
+    [
+        '..xxxx..',
+        '.x....x.',
+        'x.x..x.x',
+        'x......x',
+        'x.x..x.x',
+        'x..xx..x',
+        '.x....x.',
+        '..xxxx..'
+    ],
+    // Mushroom
+    [
+        '..xxxx..',
+        '.xxxxxx.',
+        'xx.xx.xx',
+        'xxxxxxxx',
+        '..xxxx..',
+        '..xxxx..',
+        '.xxxxxx.',
+        '..xxxx..'
+    ],
+    // Sword
+    [
+        '.......x',
+        '......xx',
+        '.....xx.',
+        '....xx..',
+        '...xx...',
+        'x.xx....',
+        'xxx.....',
+        '.x......'
+    ],
+    // Tree
+    [
+        '...xx...',
+        '..xxxx..',
+        '.xxxxxx.',
+        'xxxxxxxx',
+        '..xxxx..',
+        '.xxxxxx.',
+        '...xx...',
+        '...xx...'
+    ],
+    // Cat face
+    [
+        'x......x',
+        'xx....xx',
+        'xxxxxxxx',
+        'x.x..x.x',
+        'xxxxxxxx',
+        'x.xxxx.x',
+        '.xxxxxx.',
+        '..xxxx..'
+    ],
+    // Gem
+    [
+        '..xxxx..',
+        '.xxxxxx.',
+        'xxxxxxxx',
+        'xxxxxxxx',
+        '.xx..xx.',
+        '..x..x..',
+        '...xx...',
+        '....x...'
+    ]
+];
+
+function drawPixelSprite(x, y, sprite, color, scale) {
+    ctx.fillStyle = color;
+    for (let row = 0; row < sprite.length; row++) {
+        for (let col = 0; col < sprite[row].length; col++) {
+            if (sprite[row][col] === 'x') {
+                ctx.fillRect(x + col * scale, y + row * scale, scale, scale);
+            }
+        }
+    }
+}
+
+function drawGrid(x, y, w, h, cellSize, color, alpha) {
+    ctx.strokeStyle = color;
+    ctx.globalAlpha = alpha;
+    ctx.lineWidth = 1;
+    for (let gx = x; gx <= x + w; gx += cellSize) {
+        ctx.beginPath();
+        ctx.moveTo(gx, y);
+        ctx.lineTo(gx, y + h);
+        ctx.stroke();
+    }
+    for (let gy = y; gy <= y + h; gy += cellSize) {
+        ctx.beginPath();
+        ctx.moveTo(x, gy);
+        ctx.lineTo(x + w, gy);
+        ctx.stroke();
+    }
+    ctx.globalAlpha = 1;
+}
+
+function drawCheckerboard(x, y, w, h, cellSize, color1, color2, alpha) {
+    ctx.globalAlpha = alpha;
+    for (let row = 0; row < h / cellSize; row++) {
+        for (let col = 0; col < w / cellSize; col++) {
+            ctx.fillStyle = (row + col) % 2 === 0 ? color1 : color2;
+            ctx.fillRect(x + col * cellSize, y + row * cellSize, cellSize, cellSize);
+        }
+    }
+    ctx.globalAlpha = 1;
+}
+
+function regenerate() {
+    // Background gradient
+    const grad = ctx.createLinearGradient(0, 0, 1024, 500);
+    grad.addColorStop(0, '#0d0d1a');
+    grad.addColorStop(0.5, palette.bgDark);
+    grad.addColorStop(1, '#0d0d1a');
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, 1024, 500);
+
+    // Subtle checkerboard transparency pattern in corners
+    drawCheckerboard(0, 0, 200, 200, 16, '#1e1e3a', '#1a1a2e', 0.3);
+    drawCheckerboard(824, 300, 200, 200, 16, '#1e1e3a', '#1a1a2e', 0.3);
+
+    // Pixel grid overlay (subtle)
+    drawGrid(0, 0, 1024, 500, 32, '#ffffff', 0.03);
+
+    // Scatter pixel art sprites around the canvas
+    const placed = [];
+    for (let i = 0; i < 18; i++) {
+        const sprite = sprites[Math.floor(Math.random() * sprites.length)];
+        const color = palette.colors[Math.floor(Math.random() * palette.colors.length)];
+        const scale = 3 + Math.floor(Math.random() * 5); // 3-7px per pixel
+        const sw = 8 * scale;
+        const sh = 8 * scale;
+
+        let sx, sy, attempts = 0;
+        do {
+            sx = Math.random() * (1024 - sw);
+            sy = Math.random() * (500 - sh);
+            attempts++;
+        } while (attempts < 50 && (
+            // Keep center clear for title
+            (sx + sw > 280 && sx < 744 && sy + sh > 150 && sy < 380) ||
+            // Check overlap with previous
+            placed.some(p => Math.abs(sx - p.x) < sw && Math.abs(sy - p.y) < sh)
+        ));
+
+        if (attempts < 50) {
+            // Glow behind sprite
+            ctx.shadowColor = color;
+            ctx.shadowBlur = 20;
+            ctx.globalAlpha = 0.15;
+            ctx.fillStyle = color;
+            ctx.fillRect(sx - 4, sy - 4, sw + 8, sh + 8);
+            ctx.shadowBlur = 0;
+            ctx.globalAlpha = 1;
+
+            // Draw sprite with slight transparency variation
+            ctx.globalAlpha = 0.5 + Math.random() * 0.5;
+            drawPixelSprite(sx, sy, sprite, color, scale);
+            ctx.globalAlpha = 1;
+
+            placed.push({ x: sx, y: sy });
+        }
+    }
+
+    // Floating single pixels (stardust)
+    for (let i = 0; i < 60; i++) {
+        const px = Math.random() * 1024;
+        const py = Math.random() * 500;
+        const ps = 2 + Math.random() * 4;
+        const color = palette.colors[Math.floor(Math.random() * palette.colors.length)];
+        ctx.globalAlpha = 0.2 + Math.random() * 0.4;
+        ctx.fillStyle = color;
+        ctx.fillRect(Math.floor(px), Math.floor(py), ps, ps);
+    }
+    ctx.globalAlpha = 1;
+
+    // "Cursor" - a pixel art pencil/crosshair near center-right
+    const cursorX = 620, cursorY = 200;
+    ctx.strokeStyle = '#ffffff';
+    ctx.lineWidth = 2;
+    ctx.globalAlpha = 0.6;
+    // Crosshair
+    ctx.beginPath();
+    ctx.moveTo(cursorX - 12, cursorY); ctx.lineTo(cursorX + 12, cursorY);
+    ctx.moveTo(cursorX, cursorY - 12); ctx.lineTo(cursorX, cursorY + 12);
+    ctx.stroke();
+    // Active pixel
+    ctx.fillStyle = palette.accent;
+    ctx.globalAlpha = 0.8;
+    ctx.fillRect(cursorX + 2, cursorY + 2, 8, 8);
+    ctx.globalAlpha = 1;
+
+    // Title: PIXPAD
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+
+    // Title shadow/glow
+    ctx.shadowColor = palette.accent;
+    ctx.shadowBlur = 40;
+    ctx.fillStyle = palette.accent;
+    ctx.font = 'bold 90px monospace';
+    ctx.fillText('PIXPAD', 512, 220);
+    ctx.shadowBlur = 0;
+
+    // Title solid
+    ctx.fillStyle = '#ffffff';
+    ctx.font = 'bold 90px monospace';
+    ctx.fillText('PIXPAD', 512, 220);
+
+    // Subtitle
+    ctx.fillStyle = palette.text;
+    ctx.globalAlpha = 0.7;
+    ctx.font = '24px sans-serif';
+    ctx.fillText('free pixel art editor', 512, 290);
+    ctx.globalAlpha = 1;
+
+    // Bottom tagline
+    ctx.fillStyle = '#888';
+    ctx.font = '16px sans-serif';
+    ctx.fillText('no ads  ·  no login  ·  just pixels', 512, 460);
+
+    // locomot.io watermark
+    ctx.fillStyle = '#555';
+    ctx.font = '14px monospace';
+    ctx.textAlign = 'right';
+    ctx.fillText('locomot.io', 1010, 485);
+    ctx.textAlign = 'center';
+}
+
+function download() {
+    const link = document.createElement('a');
+    link.download = 'pixpad_feature_graphic.png';
+    link.href = C.toDataURL('image/png');
+    link.click();
+}
+
+regenerate();
+</script>
+</body>
+</html>

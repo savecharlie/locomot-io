@@ -1,0 +1,1202 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>SNAKE DESCENT</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+html, body {
+    width: 100%; height: 100%; overflow: hidden;
+    background: #10101E;
+    touch-action: none;
+    user-select: none;
+    -webkit-user-select: none;
+}
+canvas { display: block; image-rendering: pixelated; }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<script>
+const canvas = document.getElementById('c');
+const ctx = canvas.getContext('2d');
+
+// ── Config ──
+const TILE = 12;
+const COLS = 8;
+let VISIBLE_ROWS = 22;
+const START_LENGTH = 3;
+const SECTION_H = 12;
+
+// ── Colors (Sediment palette) ──
+const C = {
+    bg: '#10101E',
+    tile: '#2E3450', tileHL: '#484E6A', tileSH: '#1C2038',
+    spike: '#D03040',
+    spring: '#60C048', springHL: '#B0E890', springDark: '#1C3828',
+    saw: '#888898', sawHL: '#B0B0C0', sawDark: '#484858',
+    text: '#E0D0B8',
+    gold: '#F0A830'
+};
+
+// ══════════════════════════════════════
+// ── SFX (procedural Web Audio) ──
+// ══════════════════════════════════════
+
+let actx = null, sfxGain = null;
+function ensureAudio() {
+    if (!actx) {
+        actx = new (window.AudioContext || window.webkitAudioContext)();
+        sfxGain = actx.createGain();
+        sfxGain.connect(actx.destination);
+        sfxGain.gain.value = 0.7;
+    }
+    if (actx.state === 'suspended') actx.resume();
+    return actx;
+}
+function dest() { return sfxGain || ensureAudio() && sfxGain; }
+
+const SFX = {
+    move() {
+        const c = ensureAudio(), t = c.currentTime;
+        const o = c.createOscillator(), g = c.createGain();
+        o.connect(g); g.connect(dest());
+        o.type = 'square';
+        o.frequency.setValueAtTime(280, t);
+        o.frequency.exponentialRampToValueAtTime(400, t + 0.04);
+        g.gain.setValueAtTime(0.06, t);
+        g.gain.exponentialRampToValueAtTime(0.001, t + 0.06);
+        o.start(t); o.stop(t + 0.06);
+    },
+    bump() {
+        const c = ensureAudio(), t = c.currentTime;
+        const o = c.createOscillator(), g = c.createGain();
+        o.connect(g); g.connect(dest());
+        o.type = 'triangle';
+        o.frequency.setValueAtTime(160, t);
+        o.frequency.exponentialRampToValueAtTime(80, t + 0.06);
+        g.gain.setValueAtTime(0.08, t);
+        g.gain.exponentialRampToValueAtTime(0.001, t + 0.08);
+        o.start(t); o.stop(t + 0.08);
+    },
+    death() {
+        const c = ensureAudio(), t = c.currentTime;
+        const o = c.createOscillator(), g = c.createGain();
+        o.connect(g); g.connect(dest());
+        o.type = 'sawtooth';
+        o.frequency.setValueAtTime(150, t);
+        o.frequency.exponentialRampToValueAtTime(40, t + 0.2);
+        g.gain.setValueAtTime(0.15, t);
+        g.gain.exponentialRampToValueAtTime(0.001, t + 0.25);
+        o.start(t); o.stop(t + 0.25);
+        const buf = c.createBuffer(1, c.sampleRate * 0.1, c.sampleRate);
+        const d = buf.getChannelData(0);
+        for (let i = 0; i < d.length; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / d.length);
+        const n = c.createBufferSource(); n.buffer = buf;
+        const ng = c.createGain();
+        n.connect(ng); ng.connect(dest());
+        ng.gain.setValueAtTime(0.08, t);
+        ng.gain.exponentialRampToValueAtTime(0.001, t + 0.1);
+        n.start(t);
+    },
+    grow() {
+        const c = ensureAudio(), t = c.currentTime;
+        [523, 659, 784, 1047].forEach((f, i) => {
+            const o = c.createOscillator(), g = c.createGain();
+            o.connect(g); g.connect(dest());
+            o.type = 'square';
+            const st = t + i * 0.08;
+            o.frequency.setValueAtTime(f, st);
+            g.gain.setValueAtTime(0.001, t);
+            g.gain.linearRampToValueAtTime(0.1, st);
+            g.gain.exponentialRampToValueAtTime(0.001, st + 0.15);
+            o.start(st); o.stop(st + 0.15);
+        });
+    },
+    land() {
+        const c = ensureAudio(), t = c.currentTime;
+        const o = c.createOscillator(), g = c.createGain();
+        o.connect(g); g.connect(dest());
+        o.type = 'triangle';
+        o.frequency.setValueAtTime(160, t);
+        o.frequency.exponentialRampToValueAtTime(80, t + 0.06);
+        g.gain.setValueAtTime(0.06, t);
+        g.gain.exponentialRampToValueAtTime(0.001, t + 0.08);
+        o.start(t); o.stop(t + 0.08);
+    },
+    stuck() {
+        const c = ensureAudio(), t = c.currentTime;
+        const o = c.createOscillator(), g = c.createGain();
+        o.connect(g); g.connect(dest());
+        o.type = 'sawtooth';
+        o.frequency.setValueAtTime(200, t);
+        o.frequency.exponentialRampToValueAtTime(60, t + 0.3);
+        g.gain.setValueAtTime(0.1, t);
+        g.gain.exponentialRampToValueAtTime(0.001, t + 0.35);
+        o.start(t); o.stop(t + 0.35);
+    },
+    chop() {
+        const c = ensureAudio(), t = c.currentTime;
+        // Wet slice — descending buzz
+        const o = c.createOscillator(), g = c.createGain();
+        o.connect(g); g.connect(dest());
+        o.type = 'sawtooth';
+        o.frequency.setValueAtTime(900, t);
+        o.frequency.exponentialRampToValueAtTime(120, t + 0.12);
+        g.gain.setValueAtTime(0.14, t);
+        g.gain.exponentialRampToValueAtTime(0.001, t + 0.15);
+        o.start(t); o.stop(t + 0.15);
+        // Splat noise burst (longer, wetter)
+        const buf = c.createBuffer(1, c.sampleRate * 0.12, c.sampleRate);
+        const d = buf.getChannelData(0);
+        for (let i = 0; i < d.length; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / d.length, 0.5);
+        const n = c.createBufferSource(); n.buffer = buf;
+        const ng = c.createGain();
+        const flt = c.createBiquadFilter();
+        flt.type = 'lowpass'; flt.frequency.value = 800;
+        n.connect(flt); flt.connect(ng); ng.connect(dest());
+        ng.gain.setValueAtTime(0.15, t);
+        ng.gain.exponentialRampToValueAtTime(0.001, t + 0.12);
+        n.start(t);
+    }
+};
+
+// ══════════════════════════════════════
+// ── JUICE ──
+// ══════════════════════════════════════
+
+let screenShake = 0, whiteFlash = 0;
+let particles = [], floatTexts = [];
+
+function spawnP(x, y, color, n, spread) {
+    for (let i = 0; i < n; i++) {
+        particles.push({
+            x, y,
+            vx: (Math.random() - 0.5) * spread,
+            vy: (Math.random() - 0.5) * spread - spread * 0.3,
+            color, life: 0.4 + Math.random() * 0.4,
+            size: 1 + Math.random() * 2
+        });
+    }
+}
+function spawnText(x, y, text, color) {
+    floatTexts.push({ x, y, text, color, life: 1.5, vy: -30 });
+}
+
+// Severed snake chunks that fly and tumble
+let chunks = [];
+function spawnChunk(x, y) {
+    const angle = Math.random() * Math.PI * 2;
+    const speed = 60 + Math.random() * 80;
+    chunks.push({
+        x, y,
+        vx: Math.cos(angle) * speed,
+        vy: Math.sin(angle) * speed - 80, // upward bias
+        rot: 0,
+        vr: (Math.random() - 0.5) * 15, // tumble speed
+        life: 1.2 + Math.random() * 0.6,
+        size: TILE * 0.7 + Math.random() * 3,
+    });
+}
+
+// ══════════════════════════════════════
+// ── STATE ──
+// ══════════════════════════════════════
+
+let W, H, scale;
+let state = 'title';
+let snakeLen = START_LENGTH;
+let deaths = 0, moveCount = 0, depth = 0;
+let bestDepth = parseInt(localStorage.getItem('snakeBest') || '0');
+
+let grid = [], gridRows = 0, sectionsGenerated = 0;
+let snake = [], snakeDir = { x: 0, y: 1 }, snakeAlive = true;
+let nextGrowth = SECTION_H * 3;
+
+let cam = { y: 0, targetY: 0, sx: 0, sy: 0 };
+let headBob = 0, deathTimer = 0;
+let fallOffset = 0, falling = false;
+let gravityTimer = 0;
+const GRAVITY_TICK = 0.15; // seconds between auto-drops
+
+// ══════════════════════════════════════
+// ── ENDLESS LEVEL GEN (BFS-verified) ──
+// ══════════════════════════════════════
+
+function ensureRows(toRow) {
+    while (gridRows <= toRow + SECTION_H) appendSection();
+}
+
+function appendSection() {
+    const startR = gridRows;
+    const endR = startR + SECTION_H;
+    const secNum = sectionsGenerated;
+    const diff = Math.min(secNum, 20);
+
+    for (let r = startR; r < endR; r++) {
+        grid[r] = new Array(COLS).fill(0);
+        grid[r][0] = 1;
+        grid[r][COLS - 1] = 1;
+    }
+    gridRows = endR;
+
+    if (secNum === 0) { sectionsGenerated++; return; } // spawn area clear
+
+    // Snake length at this depth
+    const lenAtDepth = START_LENGTH + Math.floor(endR / (SECTION_H * 3));
+    // Minimum gap width scales with snake length
+    const minGap = Math.max(2, Math.min(lenAtDepth, COLS - 3));
+
+    let tries = 0;
+    while (tries < 50) {
+        // Clear interior
+        for (let r = startR; r < endR; r++)
+            for (let c = 1; c < COLS - 1; c++) grid[r][c] = 0;
+
+        // Shelves with gaps (gap width scales with snake length)
+        const nShelves = 1 + Math.floor(diff * 0.3);
+        for (let s = 0; s < nShelves; s++) {
+            const r = startR + 2 + Math.floor(Math.random() * Math.max(1, SECTION_H - 4));
+            if (r >= endR) continue;
+            const inner = COLS - 2;
+            const gw = minGap;
+            const sw = Math.min(inner, gw + 1 + Math.floor(Math.random() * Math.max(1, inner - gw - 1)));
+            const sc = 1 + Math.floor(Math.random() * Math.max(1, inner - sw));
+            const gs = sc + Math.floor(Math.random() * Math.max(1, sw - gw));
+            for (let c = sc; c < sc + sw && c < COLS - 1; c++) {
+                if (c >= gs && c < gs + gw) continue;
+                grid[r][c] = 1;
+            }
+        }
+
+        // Saws — cap count so sections stay passable
+        const maxSaws = Math.min(Math.floor(diff * 0.4) + 1, Math.floor((COLS - 2) * SECTION_H * 0.1));
+        for (let s = 0; s < maxSaws; s++) {
+            const r = startR + 1 + Math.floor(Math.random() * (SECTION_H - 2));
+            const c = 1 + Math.floor(Math.random() * (COLS - 2));
+            if (r < endR && grid[r][c] === 0) grid[r][c] = 3;
+        }
+
+        if (bfsOK(startR, endR, lenAtDepth)) break;
+        tries++;
+    }
+
+    // If all tries failed, place just a few saws in an open section
+    if (tries >= 50) {
+        for (let r = startR; r < endR; r++)
+            for (let c = 1; c < COLS - 1; c++) grid[r][c] = 0;
+        // Scatter 1-2 saws so it's not completely empty
+        const fewSaws = Math.min(2, Math.floor(diff / 5));
+        for (let s = 0; s < fewSaws; s++) {
+            const r = startR + 2 + Math.floor(Math.random() * (SECTION_H - 4));
+            const c = 2 + Math.floor(Math.random() * (COLS - 4));
+            if (grid[r][c] === 0) grid[r][c] = 3;
+        }
+    }
+    sectionsGenerated++;
+}
+
+function bfsOK(startR, endR, sLen) {
+    // Physics-aware solver: simulates actual snake movement + gravity
+    sLen = sLen || START_LENGTH;
+    const exitR = endR - 1;
+    const visited = new Set();
+    const queue = [];
+
+    function isWall(x, y) { return x < 0 || x >= COLS || y < 0 || y >= gridRows || grid[y][x] === 1; }
+    function isSpikeAt(x, y) { return y >= 0 && y < gridRows && grid[y][x] === 2; }
+    function headDeath(x, y) { return isSpikeAt(x, y) || (y >= 0 && y < gridRows && grid[y][x] === 3); }
+
+    function stateKey(s) {
+        let k = '';
+        for (let i = 0; i < s.length; i++) k += s[i].x + ',' + s[i].y + ';';
+        return k;
+    }
+
+    function supported(s) {
+        for (const seg of s) {
+            const b = seg.y + 1;
+            if (b >= gridRows) return true;
+            if (grid[b][seg.x] === 1) return true;
+        }
+        return false;
+    }
+
+    function gravDrop(s) {
+        // Drop 1 cell if unsupported. Returns null if spike death.
+        if (supported(s)) return s;
+        for (const seg of s) {
+            if (seg.y + 1 >= gridRows || grid[seg.y + 1][seg.x] === 1) return s; // blocked
+        }
+        const ns = s.map(seg => ({ x: seg.x, y: seg.y + 1 }));
+        if (headDeath(ns[0].x, ns[0].y)) return null;
+        for (let i = 1; i < ns.length; i++) { if (isSpikeAt(ns[i].x, ns[i].y)) return null; }
+        return ns;
+    }
+
+    function settle(s) {
+        // Drop until supported or dead
+        let cur = s;
+        for (let i = 0; i < 50; i++) {
+            if (supported(cur)) return cur;
+            const next = gravDrop(cur);
+            if (!next) return null; // died
+            if (next === cur) return cur; // stuck
+            cur = next;
+        }
+        return cur;
+    }
+
+    function tryMove(s, dx, dy) {
+        if (dx === 0 && dy === 0) {
+            // Wait — just gravity
+            return gravDrop(s);
+        }
+
+        // Can't go up when straight vertical (matches real game rule)
+        if (dy === -1 && s.length >= 2 && s.every(seg => seg.x === s[0].x)) {
+            return null;
+        }
+
+        const hx = s[0].x + dx, hy = s[0].y + dy;
+
+        // Reverse check — flip if straight
+        if (s.length >= 2 && hx === s[1].x && hy === s[1].y) {
+            const allX = s.every(seg => seg.x === s[0].x);
+            const allY = s.every(seg => seg.y === s[0].y);
+            if (allX || allY) {
+                const flipped = s.slice().reverse();
+                return gravDrop(flipped);
+            }
+            return null; // can't reverse when not straight
+        }
+
+        if (isWall(hx, hy)) return null;
+        if (headDeath(hx, hy)) return null;
+
+        // Self collision (tail vacates)
+        for (let i = 0; i < s.length - 1; i++) {
+            if (s[i].x === hx && s[i].y === hy) return null;
+        }
+
+        // Move
+        const ns = [{ x: hx, y: hy }];
+        for (let i = 0; i < s.length - 1; i++) ns.push({ x: s[i].x, y: s[i].y });
+
+        // Gravity drop 1 cell after move
+        return gravDrop(ns);
+    }
+
+    // Seed: try all entry columns, snake vertical head at startR, body above
+    for (let c = 1; c < COLS - 1; c++) {
+        let valid = true;
+        const s = [];
+        for (let i = 0; i < sLen; i++) {
+            const r = startR - i;
+            if (r < 0 || isWall(c, r) || headDeath(c, r)) { valid = false; break; }
+            s.push({ x: c, y: r });
+        }
+        if (!valid) continue;
+
+        const settled = settle(s);
+        if (!settled) continue;
+
+        const key = stateKey(settled);
+        if (!visited.has(key)) {
+            visited.add(key);
+            queue.push(settled);
+        }
+    }
+
+    const MAX_STATES = sLen <= 3 ? 40000 : 80000;
+    let steps = 0;
+    const actions = [[0,1],[0,-1],[1,0],[-1,0],[0,0]];
+
+    while (queue.length > 0 && steps < MAX_STATES) {
+        const cur = queue.shift();
+        steps++;
+
+        if (cur[0].y >= exitR) return true;
+
+        for (const [dx, dy] of actions) {
+            const next = tryMove(cur, dx, dy);
+            if (!next) continue;
+
+            const key = stateKey(next);
+            if (!visited.has(key)) {
+                visited.add(key);
+                queue.push(next);
+
+                if (next[0].y >= exitR) return true;
+            }
+        }
+    }
+    return false;
+}
+
+function initWorld() {
+    grid = []; gridRows = 0; sectionsGenerated = 0;
+    grid[0] = new Array(COLS).fill(1);
+    gridRows = 1;
+    for (let i = 0; i < 8; i++) appendSection();
+}
+
+// ══════════════════════════════════════
+// ── SNAKE ──
+// ══════════════════════════════════════
+
+function initSnake() {
+    snake = [];
+    const col = Math.floor(COLS / 2);
+    for (let i = 0; i < snakeLen; i++)
+        snake.push({ x: col, y: 1 + snakeLen - 1 - i });
+    snakeDir = { x: 0, y: 1 };
+    snakeAlive = true;
+    fallOffset = 0; falling = false;
+    gravityTimer = 0;
+}
+
+function isStuck() {
+    if (!snakeAlive || !snakeSupported()) return false;
+    const dirs = [[0,1],[0,-1],[1,0],[-1,0]];
+    for (const [dx, dy] of dirs) {
+        const hx = snake[0].x + dx, hy = snake[0].y + dy;
+        // Check flip
+        if (snake.length >= 2 && hx === snake[1].x && hy === snake[1].y) {
+            const allX = snake.every(s => s.x === snake[0].x);
+            const allY = snake.every(s => s.y === snake[0].y);
+            if (allX || allY) return false; // can flip
+            continue;
+        }
+        if (blocked(hx, hy)) continue;
+        if (isSpike(hx, hy)) continue;
+        if (isSaw(hx, hy)) continue;
+        let selfHit = false;
+        for (let i = 0; i < snake.length - 1; i++) {
+            if (snake[i].x === hx && snake[i].y === hy) { selfHit = true; break; }
+        }
+        if (selfHit) continue;
+        return false; // at least one valid move
+    }
+    return true; // no valid moves
+}
+
+
+function blocked(x, y) {
+    if (x < 0 || x >= COLS || y < 0 || y >= gridRows) return true;
+    return grid[y][x] === 1;
+}
+
+function isSpike(x, y) {
+    return y >= 0 && y < gridRows && grid[y][x] === 2;
+}
+
+function isSaw(x, y) {
+    return y >= 0 && y < gridRows && grid[y][x] === 3;
+}
+
+function checkSaws() {
+    // Head on saw = death
+    if (isSaw(snake[0].x, snake[0].y)) { die(); return; }
+    // Body on saw = trim from that point
+    for (let i = 1; i < snake.length; i++) {
+        if (isSaw(snake[i].x, snake[i].y)) {
+            const cut = snake.splice(i);
+            snakeLen = snake.length;
+            // Gore! Green worm guts + severed chunks flying
+            for (const s of cut) {
+                const cx = s.x * TILE + TILE / 2, cy = s.y * TILE + TILE / 2;
+                // Green guts splatter
+                spawnP(cx, cy, '#40A030', 6, 100);
+                spawnP(cx, cy, '#80E060', 4, 80);
+                // Dark green goo drips
+                spawnP(cx, cy, '#1C5018', 3, 40);
+                // Severed chunk flies away
+                spawnChunk(cx, cy);
+            }
+            // Blood splat at cut point
+            const cutPt = snake[snake.length - 1];
+            spawnP(cutPt.x * TILE + TILE / 2, cutPt.y * TILE + TILE / 2, '#40A030', 8, 120);
+            spawnText(snake[0].x * TILE, snake[0].y * TILE - TILE, 'CHOPPED! -' + cut.length, '#80E060');
+            SFX.chop(); screenShake = 6;
+            return;
+        }
+    }
+}
+
+function snakeSupported() {
+    for (const s of snake) {
+        const b = s.y + 1;
+        if (b >= gridRows) return true;
+        if (grid[b][s.x] === 1) return true;
+    }
+    return false;
+}
+
+function gravityDrop() {
+    // Drop exactly 1 cell. Returns true if dropped.
+    if (!snakeAlive || snakeSupported()) return false;
+
+    let canFall = true;
+    for (const s of snake) {
+        const b = s.y + 1;
+        ensureRows(b);
+        if (b >= gridRows || grid[b][s.x] === 1) { canFall = false; break; }
+    }
+    if (!canFall) return false;
+
+    for (const s of snake) s.y++;
+
+    if (snake[0].y > depth) { depth = snake[0].y; if (depth > bestDepth) { bestDepth = depth; localStorage.setItem('snakeBest', bestDepth); } }
+
+    // Spike check
+    for (const s of snake) {
+        if (isSpike(s.x, s.y)) { die(); return true; }
+    }
+    // Saw check — head kills, body trims
+    if (isSaw(snake[0].x, snake[0].y)) { die(); return true; }
+    checkSaws();
+
+    // Animate 1-tile drop
+    fallOffset = -TILE;
+    falling = true;
+
+    ensureRows(snake[0].y + VISIBLE_ROWS);
+
+    // Growth check during fall
+    if (depth >= nextGrowth) {
+        snakeLen++;
+        const tail = snake[snake.length - 1];
+        snake.push({ x: tail.x, y: tail.y });
+        nextGrowth += SECTION_H * 3;
+        spawnText(snake[0].x * TILE, snake[0].y * TILE - TILE, 'GREW TO ' + snakeLen + '!', C.gold);
+        SFX.grow(); screenShake = 3;
+    }
+
+    return true;
+}
+
+function moveSnake(dx, dy) {
+    if (!snakeAlive || state !== 'playing') return;
+
+    // Can't go up if already straight vertical — snake's version of double jump
+    if (dy === -1 && snake.length >= 2 && snake.every(s => s.x === snake[0].x)) {
+        SFX.bump(); return;
+    }
+
+    // Reverse check — if straight, flip head to other end
+    if (snake.length >= 2) {
+        if (snake[0].x + dx === snake[1].x && snake[0].y + dy === snake[1].y) {
+            const allSameX = snake.every(s => s.x === snake[0].x);
+            const allSameY = snake.every(s => s.y === snake[0].y);
+            if (allSameX || allSameY) {
+                moveCount++;
+                snake.reverse();
+                snakeDir = { x: dx, y: dy };
+                SFX.move(); headBob = 1;
+                gravityTimer = 0;
+                return;
+            }
+            SFX.bump(); screenShake = 2; return;
+        }
+    }
+
+    const hx = snake[0].x + dx, hy = snake[0].y + dy;
+    ensureRows(hy + VISIBLE_ROWS);
+
+    if (blocked(hx, hy)) { SFX.bump(); screenShake = 2; return; }
+
+    // Self collision (tail vacates)
+    for (let i = 0; i < snake.length - 1; i++) {
+        if (snake[i].x === hx && snake[i].y === hy) {
+            SFX.bump(); screenShake = 2; return;
+        }
+    }
+
+    moveCount++;
+
+    for (let i = snake.length - 1; i > 0; i--) {
+        snake[i].x = snake[i - 1].x;
+        snake[i].y = snake[i - 1].y;
+    }
+    snake[0].x = hx; snake[0].y = hy;
+    snakeDir = { x: dx, y: dy };
+    SFX.move(); headBob = 1;
+
+    if (snake[0].y > depth) { depth = snake[0].y; if (depth > bestDepth) { bestDepth = depth; localStorage.setItem('snakeBest', bestDepth); } }
+
+    // Spike / Saw
+    if (isSpike(hx, hy)) { die(); return; }
+    if (isSaw(hx, hy)) { die(); return; }
+    checkSaws(); // body segments on saws get trimmed
+    if (!snakeAlive) return;
+
+    // Growth
+    if (depth >= nextGrowth) {
+        snakeLen++;
+        const tail = snake[snake.length - 1];
+        snake.push({ x: tail.x, y: tail.y });
+        nextGrowth += SECTION_H * 3;
+        spawnText(snake[0].x * TILE, snake[0].y * TILE - TILE, 'GREW TO ' + snakeLen + '!', C.gold);
+        SFX.grow(); screenShake = 3;
+    }
+
+    // After a move, reset gravity timer so there's a brief pause before falling
+    gravityTimer = 0;
+    ensureRows(snake[0].y + VISIBLE_ROWS);
+
+    // Stuck check after every move (not just after falling)
+    if (snakeAlive && snakeSupported() && isStuck()) {
+        spawnText(snake[0].x * TILE, snake[0].y * TILE - TILE, 'STUCK!', C.spike);
+        SFX.stuck();
+        die();
+    }
+}
+
+function die() {
+    snakeAlive = false; state = 'dead';
+    deathTimer = 1.5; deaths++;
+    screenShake = 12; whiteFlash = 0.5;
+    SFX.death();
+    // CARNAGE — every segment explodes into guts
+    for (const s of snake) {
+        const cx = s.x * TILE + TILE / 2, cy = s.y * TILE + TILE / 2;
+        // Green guts explosion
+        spawnP(cx, cy, '#40A030', 8, 120);
+        spawnP(cx, cy, '#80E060', 5, 100);
+        spawnP(cx, cy, '#1C5018', 4, 60);
+        // Red cartoon blood splashes
+        spawnP(cx, cy, '#D03040', 3, 90);
+        spawnP(cx, cy, '#F06070', 2, 70);
+        // Severed chunks fly everywhere
+        spawnChunk(cx, cy);
+    }
+}
+
+function startGame() {
+    snakeLen = START_LENGTH; deaths = 0; moveCount = 0; chunks = [];
+    depth = 0; nextGrowth = SECTION_H * 3;
+    initWorld(); initSnake();
+    state = 'playing'; cam.y = 0; cam.targetY = 0;
+}
+
+// ══════════════════════════════════════
+// ── INPUT ──
+// ══════════════════════════════════════
+
+let touchRef = null, touchSwiped = false, lastSwipeTime = 0;
+const SWIPE_THRESHOLD = 40;
+const SWIPE_COOLDOWN = 100; // ms between swipe moves
+
+document.addEventListener('keydown', e => {
+    if (state === 'title') { ensureAudio(); startGame(); return; }
+    if (state === 'dead' && deathTimer <= 0) { startGame(); return; }
+    if (state !== 'playing') return;
+    switch (e.key) {
+        case 'ArrowLeft': case 'a': case 'A': moveSnake(-1, 0); break;
+        case 'ArrowRight': case 'd': case 'D': moveSnake(1, 0); break;
+        case 'ArrowDown': case 's': case 'S': moveSnake(0, 1); break;
+        case 'ArrowUp': case 'w': case 'W': moveSnake(0, -1); break;
+        case 'r': case 'R': startGame(); break;
+    }
+    e.preventDefault();
+});
+
+canvas.addEventListener('touchstart', e => {
+    e.preventDefault();
+    if (state === 'title') { ensureAudio(); startGame(); return; }
+    if (state === 'dead' && deathTimer <= 0) { startGame(); return; }
+    const t = e.touches[0];
+    touchRef = { x: t.clientX, y: t.clientY };
+    touchSwiped = false;
+});
+
+canvas.addEventListener('touchmove', e => {
+    e.preventDefault();
+    if (!touchRef || state !== 'playing') return;
+    const now = performance.now();
+    if (now - lastSwipeTime < SWIPE_COOLDOWN) return;
+    const t = e.touches[0];
+    const dx = t.clientX - touchRef.x;
+    const dy = t.clientY - touchRef.y;
+    if (Math.abs(dx) >= SWIPE_THRESHOLD || Math.abs(dy) >= SWIPE_THRESHOLD) {
+        touchSwiped = true;
+        lastSwipeTime = now;
+        if (Math.abs(dx) > Math.abs(dy)) {
+            moveSnake(dx > 0 ? 1 : -1, 0);
+        } else if (dy < 0) {
+            moveSnake(0, -1);
+        } else {
+            moveSnake(0, 1);
+        }
+        touchRef = { x: t.clientX, y: t.clientY };
+    }
+});
+
+canvas.addEventListener('touchend', e => {
+    e.preventDefault();
+    if (!touchRef || state !== 'playing') { touchRef = null; return; }
+    if (!touchSwiped) {
+        // Tap relative to snake head = direction
+        const canvasRect = canvas.getBoundingClientRect();
+        const headScreenX = canvasRect.left + snake[0].x * TILE * scale + TILE * scale / 2;
+        const headScreenY = canvasRect.top + (snake[0].y * TILE - cam.y) * scale + TILE * scale / 2;
+        const tx = e.changedTouches[0].clientX - headScreenX;
+        const ty = e.changedTouches[0].clientY - headScreenY;
+        if (Math.abs(tx) > Math.abs(ty)) moveSnake(tx > 0 ? 1 : -1, 0);
+        else moveSnake(0, ty > 0 ? 1 : -1);
+    }
+    touchRef = null;
+});
+
+// ══════════════════════════════════════
+// ── RESIZE ──
+// ══════════════════════════════════════
+
+function resize() {
+    W = COLS * TILE;
+    const portrait = window.innerHeight > window.innerWidth;
+    if (portrait) {
+        // Mobile: fill width, rows fill remaining height
+        scale = Math.max(1, Math.floor(window.innerWidth / W));
+    } else {
+        // Desktop: fit ~28 rows in height, center horizontally
+        scale = Math.max(1, Math.floor(window.innerHeight / (28 * TILE)));
+    }
+    VISIBLE_ROWS = Math.floor(window.innerHeight / (TILE * scale));
+    H = VISIBLE_ROWS * TILE;
+    const pw = W * scale, ph = H * scale;
+    canvas.width = pw; canvas.height = ph;
+    canvas.style.width = pw + 'px';
+    canvas.style.height = ph + 'px';
+    canvas.style.position = 'absolute';
+    canvas.style.left = ((window.innerWidth - pw) / 2) + 'px';
+    canvas.style.top = ((window.innerHeight - ph) / 2) + 'px';
+    ctx.imageSmoothingEnabled = false;
+    ctx.setTransform(scale, 0, 0, scale, 0, 0);
+}
+window.addEventListener('resize', resize);
+resize();
+
+// ══════════════════════════════════════
+// ── DRAW HELPERS ──
+// ══════════════════════════════════════
+
+function tile3D(x, y, base, hl, sh) {
+    ctx.fillStyle = base;
+    ctx.fillRect(x, y, TILE, TILE);
+    ctx.fillStyle = hl;
+    ctx.fillRect(x, y, TILE, 1);
+    ctx.fillRect(x, y, 1, TILE);
+    ctx.fillStyle = sh;
+    ctx.fillRect(x, y + TILE - 1, TILE, 1);
+    ctx.fillRect(x + TILE - 1, y, 1, TILE);
+}
+
+function aliveFace(px, py) {
+    ctx.fillStyle = C.springDark;
+    ctx.fillRect(px + 1, py + 2, 3, 3);
+    ctx.fillRect(px + 7, py + 2, 3, 3);
+    ctx.fillStyle = '#FFFFF0';
+    ctx.fillRect(px + 2, py + 2, 1, 1);
+    ctx.fillRect(px + 8, py + 2, 1, 1);
+    ctx.fillStyle = 'rgba(255,255,240,0.35)';
+    ctx.fillRect(px + 2, py + 4, 1, 1);
+    ctx.fillRect(px + 8, py + 4, 1, 1);
+    ctx.fillStyle = C.springDark;
+    ctx.fillRect(px + 4, py + 7, 1, 1);
+    ctx.fillRect(px + 7, py + 7, 1, 1);
+    ctx.fillRect(px + 5, py + 8, 2, 1);
+}
+
+function springCoil(px, py) {
+    ctx.fillStyle = C.springHL;
+    ctx.fillRect(px + 2, py + 2, 4, 2);
+    ctx.fillRect(px + 6, py + 5, 4, 2);
+    ctx.fillRect(px + 2, py + 8, 4, 2);
+}
+
+function drawSaw(px, py, now) {
+    const frame = Math.floor(now / 120) % 4;
+    const x = px, y = py;
+
+    // ── Disc body (round-ish with metallic shading) ──
+    // Shadow layer (bottom-right bias)
+    ctx.fillStyle = C.sawDark;       // #484858
+    ctx.fillRect(x+3, y+3, 6, 7);
+    ctx.fillRect(x+2, y+4, 8, 5);
+    ctx.fillRect(x+4, y+2, 4, 8);
+
+    // Base metal
+    ctx.fillStyle = C.saw;           // #888898
+    ctx.fillRect(x+3, y+3, 6, 6);
+    ctx.fillRect(x+2, y+4, 8, 4);
+    ctx.fillRect(x+4, y+2, 4, 8);
+
+    // Highlight edge (top-left)
+    ctx.fillStyle = C.sawHL;         // #B0B0C0
+    ctx.fillRect(x+4, y+2, 4, 1);   // top edge
+    ctx.fillRect(x+3, y+3, 1, 1);   // top-left curve
+    ctx.fillRect(x+2, y+4, 1, 3);   // left edge
+
+    // Specular glint (shifts with frame)
+    ctx.fillStyle = '#D0D0E0';
+    const glintPos = [
+        [x+4, y+3], [x+7, y+3], [x+7, y+7], [x+4, y+7]
+    ][frame];
+    ctx.fillRect(glintPos[0], glintPos[1], 1, 1);
+
+    // ── Teeth (8 positions, 4 extended per frame) ──
+    // Tooth colors: edge dark, face bright
+    const edge = '#303040';
+    const face = C.sawHL;
+    const tip  = '#D0D0E0';
+
+    // Tooth positions: [tipX, tipY, baseW, baseH, edgeX, edgeY]
+    // Cardinal: N, E, S, W
+    const teethCardinal = [
+        // North tooth
+        () => {
+            ctx.fillStyle = face; ctx.fillRect(x+5, y+0, 2, 2);
+            ctx.fillStyle = edge; ctx.fillRect(x+4, y+1, 1, 1);
+            ctx.fillStyle = tip;  ctx.fillRect(x+5, y+0, 1, 1);
+        },
+        // East tooth
+        () => {
+            ctx.fillStyle = face; ctx.fillRect(x+10, y+5, 2, 2);
+            ctx.fillStyle = edge; ctx.fillRect(x+10, y+4, 1, 1);
+            ctx.fillStyle = tip;  ctx.fillRect(x+11, y+5, 1, 1);
+        },
+        // South tooth
+        () => {
+            ctx.fillStyle = face; ctx.fillRect(x+5, y+10, 2, 2);
+            ctx.fillStyle = edge; ctx.fillRect(x+7, y+10, 1, 1);
+            ctx.fillStyle = C.sawDark; ctx.fillRect(x+5, y+11, 2, 1);
+        },
+        // West tooth
+        () => {
+            ctx.fillStyle = face; ctx.fillRect(x+0, y+5, 2, 2);
+            ctx.fillStyle = edge; ctx.fillRect(x+1, y+7, 1, 1);
+            ctx.fillStyle = tip;  ctx.fillRect(x+0, y+5, 1, 1);
+        },
+    ];
+    // Diagonal: NE, SE, SW, NW
+    const teethDiagonal = [
+        // NE tooth
+        () => {
+            ctx.fillStyle = face; ctx.fillRect(x+9, y+1, 2, 2);
+            ctx.fillStyle = edge; ctx.fillRect(x+9, y+1, 1, 1);
+            ctx.fillStyle = tip;  ctx.fillRect(x+10, y+1, 1, 1);
+        },
+        // SE tooth
+        () => {
+            ctx.fillStyle = face; ctx.fillRect(x+9, y+9, 2, 2);
+            ctx.fillStyle = C.sawDark; ctx.fillRect(x+10, y+10, 1, 1);
+            ctx.fillStyle = edge; ctx.fillRect(x+9, y+10, 1, 1);
+        },
+        // SW tooth
+        () => {
+            ctx.fillStyle = face; ctx.fillRect(x+1, y+9, 2, 2);
+            ctx.fillStyle = C.sawDark; ctx.fillRect(x+1, y+10, 1, 1);
+            ctx.fillStyle = edge; ctx.fillRect(x+2, y+10, 1, 1);
+        },
+        // NW tooth
+        () => {
+            ctx.fillStyle = face; ctx.fillRect(x+1, y+1, 2, 2);
+            ctx.fillStyle = edge; ctx.fillRect(x+1, y+2, 1, 1);
+            ctx.fillStyle = tip;  ctx.fillRect(x+1, y+1, 1, 1);
+        },
+    ];
+
+    // Frame 0: cardinal extended, diagonal flush
+    // Frame 1: diagonal extended, cardinal flush
+    // Frame 2: cardinal extended (highlight shifted), diagonal flush
+    // Frame 3: diagonal extended (highlight shifted), cardinal flush
+    if (frame === 0 || frame === 2) {
+        teethCardinal.forEach(fn => fn());
+    } else {
+        teethDiagonal.forEach(fn => fn());
+    }
+
+    // ── Center bolt ──
+    ctx.fillStyle = C.sawDark;
+    ctx.fillRect(x+5, y+5, 2, 2);
+    // Bolt highlight (rotates with frame)
+    ctx.fillStyle = '#606070';
+    const boltHL = [[x+5,y+5],[x+6,y+5],[x+6,y+6],[x+5,y+6]][frame];
+    ctx.fillRect(boltHL[0], boltHL[1], 1, 1);
+}
+
+// ══════════════════════════════════════
+// ── DRAW ──
+// ══════════════════════════════════════
+
+function draw() {
+    const now = performance.now();
+    ctx.fillStyle = C.bg;
+    ctx.fillRect(0, 0, W, H);
+
+    if (state === 'title') {
+        ctx.fillStyle = C.spring;
+        ctx.font = 'bold 10px monospace';
+        ctx.textAlign = 'center';
+        ctx.fillText('SNAKE', W / 2, H / 2 - 22);
+        ctx.fillText('DESCENT', W / 2, H / 2 - 10);
+        ctx.fillStyle = C.text;
+        ctx.font = '5px monospace';
+        ctx.fillText('swipe to move', W / 2, H / 2 + 8);
+        ctx.fillText('tap sides to dodge', W / 2, H / 2 + 16);
+        ctx.fillStyle = 'rgba(224,208,184,0.4)';
+        ctx.font = '4px monospace';
+        ctx.fillText('tap or press any key', W / 2, H / 2 + 30);
+        // Animated snake
+        for (let i = 0; i < 4; i++) {
+            const sx = W / 2 - 24 + i * TILE + Math.sin(now / 400 + i) * 2;
+            const sy = H / 2 + 46 + Math.sin(now / 300) * 2 + Math.sin(now / 300 + i * 0.8) * 3;
+            tile3D(sx, sy, C.spring, C.springHL, C.springDark);
+            if (i === 0) aliveFace(sx, sy);
+            else springCoil(sx, sy);
+        }
+        return;
+    }
+
+    // Camera
+    if (snake.length > 0) {
+        cam.targetY = snake[0].y * TILE - H * 0.35;
+        cam.targetY = Math.max(0, cam.targetY);
+    }
+    cam.y += (cam.targetY - cam.y) * 0.15;
+
+    cam.sx = screenShake > 0.1 ? (Math.random() - 0.5) * screenShake : 0;
+    cam.sy = screenShake > 0.1 ? (Math.random() - 0.5) * screenShake : 0;
+    screenShake *= 0.85;
+
+    ctx.save();
+    ctx.translate(Math.floor(cam.sx), -Math.floor(cam.y + cam.sy));
+
+    const topR = Math.max(0, Math.floor(cam.y / TILE) - 1);
+    const botR = Math.min(gridRows - 1, Math.floor((cam.y + H) / TILE) + 1);
+
+    // Terrain + spikes
+    for (let r = topR; r <= botR; r++) {
+        for (let c = 0; c < COLS; c++) {
+            const t = grid[r][c];
+            const px = c * TILE, py = r * TILE;
+            if (t === 1) {
+                tile3D(px, py, C.tile, C.tileHL, C.tileSH);
+            } else if (t === 2) {
+                // Mine: dark body + red horns
+                const cx = px + 6, cy = py + 6;
+                ctx.fillStyle = '#383040';
+                ctx.fillRect(px + 3, py + 3, 6, 6);
+                ctx.fillRect(px + 4, py + 2, 4, 8);
+                ctx.fillRect(px + 2, py + 4, 8, 4);
+                // Horns
+                ctx.fillStyle = C.spike;
+                ctx.fillRect(px + 2, py + 2, 2, 2);
+                ctx.fillRect(px + 8, py + 2, 2, 2);
+                ctx.fillRect(px + 2, py + 8, 2, 2);
+                ctx.fillRect(px + 8, py + 8, 2, 2);
+                // Highlight dot
+                ctx.fillStyle = '#F08060';
+                ctx.fillRect(px + 5, py + 5, 2, 2);
+            } else if (t === 3) {
+                drawSaw(px, py, now);
+            }
+        }
+    }
+
+    // Snake
+    if (snakeAlive && snake.length > 0) {
+        for (let i = snake.length - 1; i >= 0; i--) {
+            const s = snake[i];
+            const px = s.x * TILE;
+            let py = s.y * TILE + fallOffset;
+            if (i === 0 && headBob > 0) py += Math.sin(headBob * Math.PI) * -2;
+
+            tile3D(px, py, C.spring, C.springHL, C.springDark);
+            if (i === 0) aliveFace(px, py);
+            else springCoil(px, py);
+        }
+
+        // Direction ghost
+        if (state === 'playing' && !falling) {
+            const h = snake[0];
+            const nx = h.x + snakeDir.x, ny = h.y + snakeDir.y;
+            if (nx >= 0 && nx < COLS && ny >= 0 && ny < gridRows && !blocked(nx, ny)) {
+                ctx.globalAlpha = 0.15 + 0.08 * Math.sin(now / 300);
+                ctx.fillStyle = C.springHL;
+                ctx.fillRect(nx * TILE + 2, ny * TILE + 2, TILE - 4, TILE - 4);
+                ctx.globalAlpha = 1;
+            }
+        }
+    }
+
+    // Particles
+    for (const p of particles) {
+        ctx.globalAlpha = Math.max(0, p.life / 0.8);
+        ctx.fillStyle = p.color;
+        ctx.fillRect(p.x - p.size / 2, p.y - p.size / 2, p.size, p.size);
+    }
+    ctx.globalAlpha = 1;
+
+    // Severed chunks (tumbling snake bits)
+    for (const ch of chunks) {
+        ctx.globalAlpha = Math.max(0, ch.life / 1.2);
+        ctx.save();
+        ctx.translate(ch.x, ch.y);
+        ctx.rotate(ch.rot);
+        const s = ch.size;
+        // Green body chunk
+        tile3D(-s/2, -s/2, C.spring, C.springHL, C.springDark);
+        // Coil marking
+        ctx.fillStyle = C.springDark;
+        ctx.fillRect(-1, -1, 2, 2);
+        // Red gore at cut end
+        ctx.fillStyle = '#D03040';
+        ctx.fillRect(-s/2, -1, 2, 3);
+        ctx.restore();
+    }
+    ctx.globalAlpha = 1;
+
+    // Float texts
+    for (const ft of floatTexts) {
+        ctx.globalAlpha = Math.max(0, ft.life / 1.5);
+        ctx.fillStyle = ft.color;
+        ctx.font = 'bold 5px monospace';
+        ctx.textAlign = 'center';
+        ctx.fillText(ft.text, ft.x + TILE / 2, ft.y);
+    }
+    ctx.globalAlpha = 1;
+
+    ctx.restore();
+
+    // White flash
+    if (whiteFlash > 0.01) {
+        ctx.globalAlpha = whiteFlash;
+        ctx.fillStyle = '#FFFFF0';
+        ctx.fillRect(0, 0, W, H);
+        ctx.globalAlpha = 1;
+    }
+
+    // HUD
+    ctx.fillStyle = C.text;
+    ctx.font = 'bold 5px monospace';
+    ctx.textAlign = 'left';
+    ctx.fillText('depth ' + depth, 2, 7);
+    ctx.textAlign = 'right';
+    ctx.fillText('len ' + snakeLen, W - 2, 7);
+
+    ctx.fillStyle = 'rgba(224,208,184,0.4)';
+    ctx.font = '4px monospace';
+    ctx.textAlign = 'left';
+    if (deaths > 0) ctx.fillText(deaths + 'd ' + moveCount + 'm', 2, H - 3);
+    if (bestDepth > depth) {
+        ctx.textAlign = 'right';
+        ctx.fillText('best ' + bestDepth, W - 2, H - 3);
+    }
+
+    if (moveCount < 5) {
+        ctx.fillStyle = 'rgba(224,208,184,0.25)';
+        ctx.font = '4px monospace';
+        ctx.textAlign = 'center';
+        ctx.fillText('swipe or arrows  r=reset', W / 2, H - 10);
+    }
+
+    // Dead overlay
+    if (state === 'dead' && deathTimer <= 0.5) {
+        ctx.fillStyle = 'rgba(208,48,64,0.12)';
+        ctx.fillRect(0, 0, W, H);
+        ctx.fillStyle = C.spike;
+        ctx.font = 'bold 8px monospace';
+        ctx.textAlign = 'center';
+        ctx.fillText('DEAD', W / 2, H / 2 - 8);
+        ctx.fillStyle = C.text;
+        ctx.font = '4px monospace';
+        ctx.fillText('depth ' + depth, W / 2, H / 2 + 4);
+        if (bestDepth > 0) ctx.fillText('best ' + bestDepth, W / 2, H / 2 + 12);
+        ctx.fillStyle = 'rgba(224,208,184,0.5)';
+        ctx.fillText('tap / key to restart', W / 2, H / 2 + 24);
+    }
+}
+
+// ══════════════════════════════════════
+// ── LOOP ──
+// ══════════════════════════════════════
+
+let lastTime = 0;
+function loop(ts) {
+    const dt = Math.min(0.05, (ts - lastTime) / 1000);
+    lastTime = ts;
+
+    if (headBob > 0) headBob = Math.max(0, headBob - dt * 6);
+    if (deathTimer > 0) deathTimer -= dt;
+    if (whiteFlash > 0) whiteFlash *= 0.88;
+
+    const wasFalling = falling;
+    if (falling) {
+        fallOffset += dt * 400;
+        if (fallOffset >= 0) { fallOffset = 0; falling = false; }
+    }
+
+    for (let i = particles.length - 1; i >= 0; i--) {
+        const p = particles[i];
+        p.x += p.vx * dt; p.y += p.vy * dt;
+        p.vy += 200 * dt; p.life -= dt;
+        if (p.life <= 0) particles.splice(i, 1);
+    }
+    for (let i = floatTexts.length - 1; i >= 0; i--) {
+        const f = floatTexts[i];
+        f.y += f.vy * dt; f.life -= dt;
+        if (f.life <= 0) floatTexts.splice(i, 1);
+    }
+    // Chunk physics — fly, tumble, gravity
+    for (let i = chunks.length - 1; i >= 0; i--) {
+        const ch = chunks[i];
+        ch.x += ch.vx * dt; ch.y += ch.vy * dt;
+        ch.vy += 250 * dt; // gravity
+        ch.rot += ch.vr * dt; // tumble
+        ch.life -= dt;
+        // Trail guts as they fly
+        if (Math.random() < 0.3) {
+            particles.push({
+                x: ch.x, y: ch.y,
+                vx: (Math.random() - 0.5) * 20,
+                vy: (Math.random() - 0.5) * 20,
+                color: Math.random() < 0.7 ? '#40A030' : '#D03040',
+                life: 0.2 + Math.random() * 0.3,
+                size: 1 + Math.random()
+            });
+        }
+        if (ch.life <= 0) chunks.splice(i, 1);
+    }
+
+    // Gravity: drop when airborne, that's it
+    if (snakeAlive && state === 'playing' && !falling) {
+        if (!snakeSupported()) {
+            gravityTimer += dt;
+            if (gravityTimer >= GRAVITY_TICK) {
+                gravityTimer = 0;
+                gravityDrop();
+            }
+        }
+    }
+    // Play land sound when fall animation finishes and snake is now on ground
+    if (!falling && wasFalling && snakeAlive && snakeSupported()) {
+        SFX.land();
+        // Check stuck after landing
+        if (isStuck()) {
+            spawnText(snake[0].x * TILE, snake[0].y * TILE - TILE, 'STUCK!', C.spike);
+            SFX.stuck();
+            die();
+        }
+    }
+
+    draw();
+    requestAnimationFrame(loop);
+}
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>

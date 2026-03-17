@@ -1,0 +1,876 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no">
+<title>AFTERGLOW</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{width:100%;height:100%;overflow:hidden;background:#05050a;touch-action:none}
+canvas{display:block;margin:auto;position:absolute;top:50%;left:50%;transform:translate(-50%,-50%)}
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<script>
+'use strict';
+
+// === CONFIG ===
+const COLS = 14, ROWS = 10, TILE = 32;
+const GW = COLS * TILE, GH = ROWS * TILE; // 448 x 320 game world
+const ECHO_DELAY = 120; // frames (2s at 60fps)
+const SPEED = 1.8; // px per frame (~3.4 tiles/sec)
+const PLAYER_R = 6, ECHO_R = 5;
+const TRAIL_LEN = 30;
+
+// === COLORS ===
+const C_BG       = '#0a0a14';
+const C_WALL     = '#1a1a2e';
+const C_WALL_TOP = '#252540';
+const C_FLOOR    = '#0e0e1c';
+const C_PLAYER   = '#ffdc64';
+const C_ECHO     = '#aaccff';
+const C_ECHO_DIM = '#4466aa';
+const C_BUTTON_OFF = '#2a4a2a';
+const C_BUTTON_ON  = '#44dd44';
+const C_DOOR     = '#cc8833';
+const C_DOOR_OPEN = '#33281a';
+const C_SPIKE_ON  = '#ee3333';
+const C_SPIKE_OFF = '#331111';
+const C_GOAL     = '#ffe088';
+
+// === AUDIO ===
+let audioCtx = null;
+function initAudio() {
+    if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    if (audioCtx.state === 'suspended') audioCtx.resume();
+}
+
+function playTone(freq, dur, type = 'sine', vol = 0.2) {
+    if (!audioCtx) return;
+    const o = audioCtx.createOscillator();
+    const g = audioCtx.createGain();
+    o.type = type; o.frequency.value = freq;
+    g.gain.setValueAtTime(vol, audioCtx.currentTime);
+    g.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + dur);
+    o.connect(g); g.connect(audioCtx.destination);
+    o.start(); o.stop(audioCtx.currentTime + dur);
+}
+function sfxButton()  { playTone(440, 0.08, 'square', 0.15); setTimeout(() => playTone(554, 0.08, 'square', 0.1), 40); }
+function sfxDoor()    { playTone(523, 0.12, 'sine', 0.2); setTimeout(() => playTone(659, 0.15, 'sine', 0.15), 80); }
+function sfxDeath()   { playTone(80, 0.25, 'sawtooth', 0.25); playTone(75, 0.25, 'sawtooth', 0.15); }
+function sfxComplete(){ [523,659,784,1047].forEach((f,i) => setTimeout(() => playTone(f, 0.18, 'sine', 0.2), i * 90)); }
+function sfxEcho() {
+    if (!audioCtx) return;
+    const o = audioCtx.createOscillator(), g = audioCtx.createGain();
+    const lfo = audioCtx.createOscillator(), lg = audioCtx.createGain();
+    o.type = 'sine'; o.frequency.value = 1200;
+    lfo.type = 'sine'; lfo.frequency.value = 8; lg.gain.value = 50;
+    lfo.connect(lg); lg.connect(o.frequency);
+    o.connect(g); g.connect(audioCtx.destination);
+    g.gain.setValueAtTime(0.1, audioCtx.currentTime);
+    g.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.4);
+    o.start(); lfo.start();
+    o.stop(audioCtx.currentTime + 0.4); lfo.stop(audioCtx.currentTime + 0.4);
+}
+
+// ambient drone
+let ambOsc = null, ambGain = null;
+function startAmbient(freq) {
+    if (!audioCtx) return;
+    stopAmbient();
+    ambOsc = audioCtx.createOscillator();
+    ambGain = audioCtx.createGain();
+    ambOsc.type = 'sine'; ambOsc.frequency.value = freq;
+    ambGain.gain.value = 0.04;
+    ambOsc.connect(ambGain); ambGain.connect(audioCtx.destination);
+    ambOsc.start();
+}
+function stopAmbient() {
+    if (ambOsc) { try { ambOsc.stop(); } catch(e){} ambOsc = null; }
+}
+
+// === LEVELS ===
+// # = wall, . = floor, P = player start, G = goal
+// buttons, doors, spikes defined separately
+const LEVELS = [
+    { // Level 1: "Hello" — see your echo
+        name: 'Hello',
+        map: [
+            '##############',
+            '#............#',
+            '#............#',
+            '#.P..........#',
+            '#...........G#',
+            '#............#',
+            '#............#',
+            '#............#',
+            '#............#',
+            '##############',
+        ],
+        buttons: [], doors: [], spikes: [],
+        ambient: 100,
+        hint: 'Move. Watch what follows.',
+    },
+    { // Level 2: "Wait For It" — echo presses button
+        name: 'Wait For It',
+        map: [
+            '##############',
+            '#............#',
+            '#............#',
+            '#.P..........#',
+            '#.......#....#',
+            '#.......#...G#',
+            '#.......#....#',
+            '#............#',
+            '#............#',
+            '##############',
+        ],
+        buttons: [{ x: 5, y: 3, id: 0 }],
+        doors: [{ x: 8, y: 5, buttonId: 0 }],
+        spikes: [],
+        ambient: 130,
+        hint: 'You were there. Soon, so is your echo.',
+    },
+    { // Level 3: "Watch Your Step" — survive with your echo
+        name: 'Watch Your Step',
+        map: [
+            '##############',
+            '#............#',
+            '#.P..........#',
+            '#............#',
+            '#............#',
+            '#............#',
+            '#............#',
+            '#..........G.#',
+            '#............#',
+            '##############',
+        ],
+        buttons: [], doors: [],
+        spikes: [
+            { x: 4, y: 3, cycle: 180, on: 90, offset: 0 },
+            { x: 5, y: 3, cycle: 180, on: 90, offset: 0 },
+            { x: 6, y: 3, cycle: 180, on: 90, offset: 0 },
+            { x: 7, y: 3, cycle: 180, on: 90, offset: 0 },
+            { x: 4, y: 6, cycle: 180, on: 90, offset: 60 },
+            { x: 5, y: 6, cycle: 180, on: 90, offset: 60 },
+            { x: 6, y: 6, cycle: 180, on: 90, offset: 60 },
+            { x: 7, y: 6, cycle: 180, on: 90, offset: 60 },
+        ],
+        ambient: 160,
+        hint: 'Your echo walks where you walked. Was it safe?',
+    },
+    { // Level 4: "Duet" — cooperate with echo
+        name: 'Duet',
+        map: [
+            '##############',
+            '#............#',
+            '#.P..........#',
+            '#............#',
+            '#....#..#....#',
+            '#....#..#....#',
+            '#....#..#....#',
+            '#............#',
+            '#............#',
+            '##############',
+        ],
+        buttons: [
+            { x: 3, y: 5, id: 0 },
+            { x: 10, y: 5, id: 1 },
+        ],
+        doors: [{ x: 6, y: 5, buttonId: 0, buttonId2: 1 }],
+        spikes: [],
+        ambient: 200,
+        hint: 'Two buttons. One you. One your echo.',
+    },
+    { // Level 5: "The Dance" — everything
+        name: 'The Dance',
+        map: [
+            '##############',
+            '#.P..........#',
+            '#............#',
+            '#............#',
+            '#............#',
+            '#.......#....#',
+            '#.......#....#',
+            '#..........G.#',
+            '#............#',
+            '##############',
+        ],
+        buttons: [{ x: 5, y: 4, id: 0 }],
+        doors: [{ x: 8, y: 6, buttonId: 0 }],
+        spikes: [
+            { x: 3, y: 2, cycle: 180, on: 80, offset: 0 },
+            { x: 4, y: 2, cycle: 180, on: 80, offset: 0 },
+            { x: 3, y: 6, cycle: 180, on: 80, offset: 70 },
+            { x: 4, y: 6, cycle: 180, on: 80, offset: 70 },
+            { x: 5, y: 6, cycle: 180, on: 80, offset: 70 },
+        ],
+        ambient: 250,
+        hint: 'Dance.',
+    },
+];
+
+// === CANVAS SETUP ===
+const canvas = document.getElementById('c');
+const ctx = canvas.getContext('2d');
+let scale = 1;
+
+function resize() {
+    const w = window.innerWidth, h = window.innerHeight;
+    const ratio = GW / GH;
+    let cw, ch;
+    if (w / h > ratio) { ch = h; cw = h * ratio; }
+    else { cw = w; ch = w / ratio; }
+    canvas.width = cw; canvas.height = ch;
+    scale = cw / GW;
+}
+window.addEventListener('resize', resize);
+resize();
+
+// === INPUT ===
+const keys = {};
+window.addEventListener('keydown', e => { keys[e.key] = true; if (['ArrowUp','ArrowDown','ArrowLeft','ArrowRight',' '].includes(e.key)) e.preventDefault(); });
+window.addEventListener('keyup', e => keys[e.key] = false);
+
+let touchCenter = null, touchDir = { x: 0, y: 0 };
+canvas.addEventListener('touchstart', e => {
+    e.preventDefault(); initAudio();
+    const t = e.touches[0];
+    const r = canvas.getBoundingClientRect();
+    touchCenter = { x: t.clientX - r.left, y: t.clientY - r.top };
+}, { passive: false });
+canvas.addEventListener('touchmove', e => {
+    e.preventDefault();
+    if (!touchCenter) return;
+    const t = e.touches[0];
+    const r = canvas.getBoundingClientRect();
+    const dx = (t.clientX - r.left) - touchCenter.x;
+    const dy = (t.clientY - r.top) - touchCenter.y;
+    const mag = Math.sqrt(dx * dx + dy * dy);
+    if (mag > 8) { touchDir.x = dx / mag; touchDir.y = dy / mag; }
+    else { touchDir.x = 0; touchDir.y = 0; }
+}, { passive: false });
+canvas.addEventListener('touchend', e => { e.preventDefault(); touchCenter = null; touchDir.x = 0; touchDir.y = 0; }, { passive: false });
+canvas.addEventListener('click', () => initAudio());
+
+function getInput() {
+    let dx = 0, dy = 0;
+    if (keys['ArrowLeft'] || keys['a'] || keys['A']) dx--;
+    if (keys['ArrowRight'] || keys['d'] || keys['D']) dx++;
+    if (keys['ArrowUp'] || keys['w'] || keys['W']) dy--;
+    if (keys['ArrowDown'] || keys['s'] || keys['S']) dy++;
+    dx += touchDir.x; dy += touchDir.y;
+    const mag = Math.sqrt(dx * dx + dy * dy);
+    if (mag > 0.1) return { x: dx / mag, y: dy / mag };
+    return { x: 0, y: 0 };
+}
+
+// === GAME STATE ===
+let state = 'title'; // title | playing | dead | complete | ending
+let levelIdx = 0;
+let frame = 0;
+let player = { x: 0, y: 0 };
+let echoActive = false;
+let echoPos = { x: 0, y: 0 };
+let echoTrail = [];
+let posBuf = []; // position buffer for echo delay
+let buttons = []; // runtime button states
+let doors = [];   // runtime door states
+let spikes = [];  // runtime spike refs
+let walls = [];   // wall tile positions
+let deathTimer = 0;
+let completeTimer = 0;
+let completePhase = 0; // 0=echo speedup, 1=merge flash, 2=fade out, 3=next level fade in
+let shakeX = 0, shakeY = 0, shakeDur = 0;
+let deadEntity = null; // 'player' or 'echo'
+let hintAlpha = 1;
+let titleAnim = 0;
+
+function loadLevel(idx) {
+    const lv = LEVELS[idx];
+    walls = [];
+    buttons = lv.buttons.map(b => ({ ...b, pressed: false }));
+    doors = lv.doors.map(d => ({ ...d, open: false }));
+    spikes = lv.spikes.map(s => ({ ...s }));
+    posBuf = [];
+    echoActive = false;
+    echoTrail = [];
+    frame = 0;
+    hintAlpha = 1;
+    deadEntity = null;
+
+    for (let y = 0; y < ROWS; y++) {
+        for (let x = 0; x < COLS; x++) {
+            const ch = lv.map[y][x];
+            if (ch === '#') walls.push({ x, y });
+            if (ch === 'P') { player.x = x * TILE + TILE / 2; player.y = y * TILE + TILE / 2; }
+        }
+    }
+
+    echoPos.x = player.x;
+    echoPos.y = player.y;
+    startAmbient(lv.ambient);
+}
+
+function getGoalPos() {
+    const lv = LEVELS[levelIdx];
+    for (let y = 0; y < ROWS; y++)
+        for (let x = 0; x < COLS; x++)
+            if (lv.map[y][x] === 'G') return { x: x * TILE + TILE / 2, y: y * TILE + TILE / 2 };
+    return { x: GW / 2, y: GH / 2 };
+}
+
+// === COLLISION ===
+function isWall(gx, gy) {
+    const tx = Math.floor(gx / TILE), ty = Math.floor(gy / TILE);
+    if (tx < 0 || tx >= COLS || ty < 0 || ty >= ROWS) return true;
+    if (LEVELS[levelIdx].map[ty][tx] === '#') return true;
+    // closed doors are walls
+    for (const d of doors) {
+        if (d.x === tx && d.y === ty && !d.open) return true;
+    }
+    return false;
+}
+
+function resolveCircle(ent, r) {
+    // Check 4 surrounding tiles
+    const tx = Math.floor(ent.x / TILE), ty = Math.floor(ent.y / TILE);
+    for (let dy = -1; dy <= 1; dy++) {
+        for (let dx = -1; dx <= 1; dx++) {
+            const cx = tx + dx, cy = ty + dy;
+            if (cx < 0 || cx >= COLS || cy < 0 || cy >= ROWS) continue;
+            let blocked = LEVELS[levelIdx].map[cy][cx] === '#';
+            if (!blocked) {
+                for (const d of doors) {
+                    if (d.x === cx && d.y === cy && !d.open) { blocked = true; break; }
+                }
+            }
+            if (!blocked) continue;
+            // AABB collision
+            const rx = cx * TILE, ry = cy * TILE;
+            const nearX = Math.max(rx, Math.min(ent.x, rx + TILE));
+            const nearY = Math.max(ry, Math.min(ent.y, ry + TILE));
+            const ddx = ent.x - nearX, ddy = ent.y - nearY;
+            const dist = Math.sqrt(ddx * ddx + ddy * ddy);
+            if (dist < r && dist > 0.01) {
+                const overlap = r - dist;
+                ent.x += (ddx / dist) * overlap;
+                ent.y += (ddy / dist) * overlap;
+            } else if (dist < 0.01) {
+                // Center is inside tile — push out along nearest edge
+                const midX = rx + TILE / 2, midY = ry + TILE / 2;
+                const ex = ent.x - midX, ey = ent.y - midY;
+                if (Math.abs(ex) > Math.abs(ey)) {
+                    ent.x = ex > 0 ? rx + TILE + r : rx - r;
+                } else {
+                    ent.y = ey > 0 ? ry + TILE + r : ry - r;
+                }
+            }
+        }
+    }
+}
+
+function inTile(ex, ey, tx, ty, margin = 0.2) {
+    const m = TILE * margin;
+    return ex > tx * TILE + m && ex < (tx + 1) * TILE - m &&
+           ey > ty * TILE + m && ey < (ty + 1) * TILE - m;
+}
+
+function spikeActive(s) {
+    return ((frame + s.offset) % s.cycle) < s.on;
+}
+
+function checkHazard(ex, ey) {
+    for (const s of spikes) {
+        if (spikeActive(s) && inTile(ex, ey, s.x, s.y, 0.25)) return true;
+    }
+    return false;
+}
+
+// === UPDATE ===
+function update() {
+    if (state === 'title') { titleAnim++; return; }
+    if (state === 'dead') {
+        deathTimer--;
+        if (shakeDur > 0) { shakeX = (Math.random() - 0.5) * 4; shakeY = (Math.random() - 0.5) * 4; shakeDur--; }
+        else { shakeX = 0; shakeY = 0; }
+        if (deathTimer <= 0) { state = 'playing'; loadLevel(levelIdx); }
+        return;
+    }
+    if (state === 'complete') {
+        completeTimer--;
+        if (completePhase === 0 && completeTimer <= 0) {
+            // merge phase
+            completePhase = 1; completeTimer = 30;
+        } else if (completePhase === 1 && completeTimer <= 0) {
+            // fade out
+            completePhase = 2; completeTimer = 30;
+        } else if (completePhase === 2 && completeTimer <= 0) {
+            // next level
+            levelIdx++;
+            if (levelIdx >= LEVELS.length) {
+                state = 'ending'; completeTimer = 300;
+                stopAmbient();
+                return;
+            }
+            completePhase = 3; completeTimer = 30;
+            loadLevel(levelIdx);
+        } else if (completePhase === 3 && completeTimer <= 0) {
+            state = 'playing';
+        }
+        // during phase 0, fast-forward echo
+        if (completePhase === 0 && posBuf.length > 0) {
+            for (let i = 0; i < 8 && posBuf.length > 0; i++) {
+                const p = posBuf.shift();
+                echoPos.x = p.x; echoPos.y = p.y;
+            }
+        }
+        return;
+    }
+    if (state === 'ending') {
+        completeTimer--;
+        if (completeTimer <= 0) { state = 'title'; levelIdx = 0; }
+        return;
+    }
+    if (state !== 'playing') return;
+
+    frame++;
+    if (hintAlpha > 0) hintAlpha -= 0.005;
+
+    // Input
+    const inp = getInput();
+    player.x += inp.x * SPEED;
+    player.y += inp.y * SPEED;
+
+    // Wall collision
+    resolveCircle(player, PLAYER_R);
+
+    // Record position
+    posBuf.push({ x: player.x, y: player.y });
+
+    // Echo activation
+    if (!echoActive && posBuf.length >= ECHO_DELAY) {
+        echoActive = true;
+        sfxEcho();
+    }
+
+    // Echo movement
+    if (echoActive && posBuf.length > ECHO_DELAY) {
+        const p = posBuf[posBuf.length - ECHO_DELAY];
+        echoPos.x = p.x;
+        echoPos.y = p.y;
+        // Trail
+        echoTrail.push({ x: echoPos.x, y: echoPos.y });
+        if (echoTrail.length > TRAIL_LEN) echoTrail.shift();
+    }
+
+    // Trim buffer (keep only what we need + some margin)
+    while (posBuf.length > ECHO_DELAY + 10) posBuf.shift();
+
+    // Button logic
+    let anyButtonChanged = false;
+    for (const b of buttons) {
+        const wasPressed = b.pressed;
+        b.pressed = inTile(player.x, player.y, b.x, b.y, 0.15);
+        if (!b.pressed && echoActive) {
+            b.pressed = inTile(echoPos.x, echoPos.y, b.x, b.y, 0.15);
+        }
+        if (b.pressed !== wasPressed) anyButtonChanged = true;
+    }
+
+    // Door logic
+    for (const d of doors) {
+        const wasOpen = d.open;
+        if (d.buttonId2 !== undefined) {
+            // dual button door
+            const b1 = buttons.find(b => b.id === d.buttonId);
+            const b2 = buttons.find(b => b.id === d.buttonId2);
+            d.open = b1 && b1.pressed && b2 && b2.pressed;
+        } else {
+            const b = buttons.find(b => b.id === d.buttonId);
+            d.open = b && b.pressed;
+        }
+        if (d.open !== wasOpen) {
+            if (d.open) sfxDoor();
+        }
+    }
+    if (anyButtonChanged) sfxButton();
+
+    // Hazard check — player
+    if (checkHazard(player.x, player.y)) {
+        die('player'); return;
+    }
+    // Hazard check — echo
+    if (echoActive && checkHazard(echoPos.x, echoPos.y)) {
+        die('echo'); return;
+    }
+
+    // Goal check
+    const goal = getGoalPos();
+    const gdx = player.x - goal.x, gdy = player.y - goal.y;
+    if (gdx * gdx + gdy * gdy < (TILE * 0.4) ** 2) {
+        levelComplete();
+    }
+}
+
+function die(who) {
+    sfxDeath();
+    state = 'dead';
+    deathTimer = 60;
+    shakeDur = 15;
+    deadEntity = who;
+}
+
+function levelComplete() {
+    sfxComplete();
+    state = 'complete';
+    completePhase = 0;
+    completeTimer = 40;
+}
+
+// === RENDER ===
+function render() {
+    const s = scale;
+    ctx.save();
+    ctx.setTransform(s, 0, 0, s, shakeX * s, shakeY * s);
+
+    // Background
+    ctx.fillStyle = C_BG;
+    ctx.fillRect(0, 0, GW, GH);
+
+    if (state === 'title') {
+        renderTitle();
+        ctx.restore();
+        return;
+    }
+    if (state === 'ending') {
+        renderEnding();
+        ctx.restore();
+        return;
+    }
+
+    // Floor
+    ctx.fillStyle = C_FLOOR;
+    for (let y = 0; y < ROWS; y++)
+        for (let x = 0; x < COLS; x++)
+            if (LEVELS[levelIdx].map[y][x] !== '#')
+                ctx.fillRect(x * TILE + 1, y * TILE + 1, TILE - 2, TILE - 2);
+
+    // Walls
+    for (const w of walls) {
+        ctx.fillStyle = C_WALL;
+        ctx.fillRect(w.x * TILE, w.y * TILE, TILE, TILE);
+        ctx.fillStyle = C_WALL_TOP;
+        ctx.fillRect(w.x * TILE + 1, w.y * TILE + 1, TILE - 2, TILE - 4);
+    }
+
+    // Spikes
+    for (const sp of spikes) {
+        const active = spikeActive(sp);
+        const cx = sp.x * TILE + TILE / 2, cy = sp.y * TILE + TILE / 2;
+        ctx.fillStyle = active ? C_SPIKE_ON : C_SPIKE_OFF;
+        ctx.fillRect(sp.x * TILE + 4, sp.y * TILE + 4, TILE - 8, TILE - 8);
+        if (active) {
+            // spike triangles
+            ctx.fillStyle = '#ff5555';
+            const m = 6;
+            for (let i = 0; i < 4; i++) {
+                ctx.save();
+                ctx.translate(cx, cy);
+                ctx.rotate(i * Math.PI / 2);
+                ctx.beginPath();
+                ctx.moveTo(-m, m);
+                ctx.lineTo(0, -m);
+                ctx.lineTo(m, m);
+                ctx.closePath();
+                ctx.fill();
+                ctx.restore();
+            }
+        }
+    }
+
+    // Buttons
+    for (const b of buttons) {
+        ctx.fillStyle = b.pressed ? C_BUTTON_ON : C_BUTTON_OFF;
+        ctx.beginPath();
+        ctx.arc(b.x * TILE + TILE / 2, b.y * TILE + TILE / 2, TILE * 0.3, 0, Math.PI * 2);
+        ctx.fill();
+        if (b.pressed) {
+            ctx.fillStyle = 'rgba(68, 221, 68, 0.2)';
+            ctx.beginPath();
+            ctx.arc(b.x * TILE + TILE / 2, b.y * TILE + TILE / 2, TILE * 0.5, 0, Math.PI * 2);
+            ctx.fill();
+        }
+    }
+
+    // Doors
+    for (const d of doors) {
+        if (d.open) {
+            ctx.fillStyle = C_DOOR_OPEN;
+            ctx.fillRect(d.x * TILE + 2, d.y * TILE + 2, TILE - 4, TILE - 4);
+        } else {
+            ctx.fillStyle = C_DOOR;
+            ctx.fillRect(d.x * TILE + 1, d.y * TILE + 1, TILE - 2, TILE - 2);
+            // door cross pattern
+            ctx.strokeStyle = '#aa6622';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.moveTo(d.x * TILE + 4, d.y * TILE + 4);
+            ctx.lineTo((d.x + 1) * TILE - 4, (d.y + 1) * TILE - 4);
+            ctx.moveTo((d.x + 1) * TILE - 4, d.y * TILE + 4);
+            ctx.lineTo(d.x * TILE + 4, (d.y + 1) * TILE - 4);
+            ctx.stroke();
+        }
+    }
+
+    // Goal
+    const goal = getGoalPos();
+    const gpulse = 0.7 + 0.3 * Math.sin(frame * 0.05);
+    ctx.fillStyle = C_GOAL;
+    ctx.globalAlpha = gpulse;
+    ctx.beginPath();
+    ctx.arc(goal.x, goal.y, TILE * 0.35, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.globalAlpha = gpulse * 0.3;
+    ctx.beginPath();
+    ctx.arc(goal.x, goal.y, TILE * 0.55, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.globalAlpha = 1;
+
+    // Echo trail
+    if (echoActive || state === 'complete') {
+        for (let i = 0; i < echoTrail.length; i++) {
+            const t = i / echoTrail.length;
+            ctx.globalAlpha = t * 0.3;
+            ctx.fillStyle = C_ECHO_DIM;
+            ctx.beginPath();
+            ctx.arc(echoTrail[i].x, echoTrail[i].y, ECHO_R * t * 0.8 + 1, 0, Math.PI * 2);
+            ctx.fill();
+        }
+        ctx.globalAlpha = 1;
+    }
+
+    // Echo
+    if (echoActive || state === 'complete') {
+        // Glow
+        const eg = ctx.createRadialGradient(echoPos.x, echoPos.y, 0, echoPos.x, echoPos.y, ECHO_R * 3);
+        eg.addColorStop(0, 'rgba(170, 200, 255, 0.5)');
+        eg.addColorStop(0.5, 'rgba(100, 140, 220, 0.15)');
+        eg.addColorStop(1, 'rgba(60, 80, 180, 0)');
+        ctx.fillStyle = eg;
+        ctx.beginPath();
+        ctx.arc(echoPos.x, echoPos.y, ECHO_R * 3, 0, Math.PI * 2);
+        ctx.fill();
+        // Body
+        ctx.fillStyle = C_ECHO;
+        ctx.beginPath();
+        ctx.arc(echoPos.x, echoPos.y, ECHO_R, 0, Math.PI * 2);
+        ctx.fill();
+    }
+
+    // Player
+    if (state !== 'dead' || deadEntity !== 'player' || (deathTimer % 8 < 4)) {
+        // Glow
+        const pg = ctx.createRadialGradient(player.x, player.y, 0, player.x, player.y, PLAYER_R * 3);
+        pg.addColorStop(0, 'rgba(255, 220, 100, 0.6)');
+        pg.addColorStop(0.5, 'rgba(255, 180, 50, 0.2)');
+        pg.addColorStop(1, 'rgba(200, 140, 30, 0)');
+        ctx.fillStyle = pg;
+        ctx.beginPath();
+        ctx.arc(player.x, player.y, PLAYER_R * 3, 0, Math.PI * 2);
+        ctx.fill();
+        // Body
+        ctx.fillStyle = C_PLAYER;
+        ctx.beginPath();
+        ctx.arc(player.x, player.y, PLAYER_R, 0, Math.PI * 2);
+        ctx.fill();
+    }
+
+    // Death flash on the entity that died
+    if (state === 'dead' && deathTimer > 40) {
+        const ent = deadEntity === 'player' ? player : echoPos;
+        ctx.fillStyle = 'rgba(255, 80, 80, 0.5)';
+        ctx.beginPath();
+        ctx.arc(ent.x, ent.y, 20, 0, Math.PI * 2);
+        ctx.fill();
+    }
+
+    // Complete: merge flash
+    if (state === 'complete' && completePhase === 1) {
+        const t = 1 - completeTimer / 30;
+        ctx.fillStyle = `rgba(255, 240, 200, ${0.6 * (1 - t)})`;
+        ctx.beginPath();
+        ctx.arc(player.x, player.y, 10 + t * 60, 0, Math.PI * 2);
+        ctx.fill();
+    }
+
+    // Fade overlay for transitions
+    if (state === 'complete' && completePhase === 2) {
+        ctx.fillStyle = `rgba(5, 5, 10, ${1 - completeTimer / 30})`;
+        ctx.fillRect(0, 0, GW, GH);
+    }
+    if (state === 'complete' && completePhase === 3) {
+        ctx.fillStyle = `rgba(5, 5, 10, ${completeTimer / 30})`;
+        ctx.fillRect(0, 0, GW, GH);
+    }
+
+    // Level name + hint
+    if (state === 'playing' && hintAlpha > 0) {
+        ctx.globalAlpha = Math.min(hintAlpha, 1);
+        ctx.fillStyle = '#ffffff';
+        ctx.font = `${14}px sans-serif`;
+        ctx.textAlign = 'center';
+        ctx.fillText(`- ${LEVELS[levelIdx].name} -`, GW / 2, 20);
+        if (LEVELS[levelIdx].hint) {
+            ctx.font = `${9}px sans-serif`;
+            ctx.fillStyle = '#888888';
+            ctx.fillText(LEVELS[levelIdx].hint, GW / 2, 34);
+        }
+        ctx.globalAlpha = 1;
+    }
+
+    // Touch joystick visual
+    if (touchCenter) {
+        ctx.globalAlpha = 0.2;
+        ctx.strokeStyle = '#ffffff';
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.arc(touchCenter.x / s, touchCenter.y / s, 24, 0, Math.PI * 2);
+        ctx.stroke();
+        const ix = touchCenter.x / s + touchDir.x * 16;
+        const iy = touchCenter.y / s + touchDir.y * 16;
+        ctx.fillStyle = '#ffffff';
+        ctx.beginPath();
+        ctx.arc(ix, iy, 6, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.globalAlpha = 1;
+    }
+
+    ctx.restore();
+}
+
+function renderTitle() {
+    const t = titleAnim;
+    // animated demo: circle doing a loop
+    const cx = GW / 2 + Math.sin(t * 0.02) * 60;
+    const cy = GH / 2 + 20 + Math.cos(t * 0.02) * 30;
+    const ex = GW / 2 + Math.sin((t - ECHO_DELAY) * 0.02) * 60;
+    const ey = GH / 2 + 20 + Math.cos((t - ECHO_DELAY) * 0.02) * 30;
+
+    // echo trail
+    for (let i = 0; i < 20; i++) {
+        const tt = t - ECHO_DELAY - i * 3;
+        const tx = GW / 2 + Math.sin(tt * 0.02) * 60;
+        const ty = GH / 2 + 20 + Math.cos(tt * 0.02) * 30;
+        ctx.globalAlpha = (1 - i / 20) * 0.25;
+        ctx.fillStyle = C_ECHO_DIM;
+        ctx.beginPath();
+        ctx.arc(tx, ty, 3 - i * 0.1, 0, Math.PI * 2);
+        ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+
+    // echo
+    ctx.fillStyle = C_ECHO;
+    ctx.beginPath();
+    ctx.arc(ex, ey, ECHO_R, 0, Math.PI * 2);
+    ctx.fill();
+
+    // player
+    const pg = ctx.createRadialGradient(cx, cy, 0, cx, cy, PLAYER_R * 3);
+    pg.addColorStop(0, 'rgba(255, 220, 100, 0.6)');
+    pg.addColorStop(0.5, 'rgba(255, 180, 50, 0.2)');
+    pg.addColorStop(1, 'rgba(200, 140, 30, 0)');
+    ctx.fillStyle = pg;
+    ctx.beginPath();
+    ctx.arc(cx, cy, PLAYER_R * 3, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = C_PLAYER;
+    ctx.beginPath();
+    ctx.arc(cx, cy, PLAYER_R, 0, Math.PI * 2);
+    ctx.fill();
+
+    // title
+    ctx.fillStyle = C_PLAYER;
+    ctx.font = 'bold 28px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('AFTERGLOW', GW / 2, GH / 2 - 50);
+
+    // subtitle
+    ctx.fillStyle = C_ECHO;
+    ctx.font = '10px sans-serif';
+    ctx.fillText('dance with your echo', GW / 2, GH / 2 - 32);
+
+    // prompt
+    const blink = Math.sin(t * 0.06) * 0.4 + 0.6;
+    ctx.globalAlpha = blink;
+    ctx.fillStyle = '#888888';
+    ctx.font = '11px sans-serif';
+    ctx.fillText('tap or press any key', GW / 2, GH - 30);
+    ctx.globalAlpha = 1;
+
+    // credits
+    ctx.fillStyle = '#333344';
+    ctx.font = '8px sans-serif';
+    ctx.fillText('made by Iris', GW / 2, GH - 12);
+}
+
+function renderEnding() {
+    const t = 1 - completeTimer / 300;
+    ctx.fillStyle = C_PLAYER;
+    ctx.globalAlpha = Math.min(t * 3, 1);
+    ctx.font = '16px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('You danced with your echo.', GW / 2, GH / 2 - 20);
+    ctx.globalAlpha = Math.max(0, Math.min((t - 0.3) * 3, 1));
+    ctx.fillStyle = C_ECHO;
+    ctx.font = '10px sans-serif';
+    ctx.fillText('And for a moment, you were whole.', GW / 2, GH / 2 + 10);
+    ctx.globalAlpha = Math.max(0, Math.min((t - 0.6) * 3, 1));
+    ctx.fillStyle = '#555566';
+    ctx.font = '9px sans-serif';
+    ctx.fillText('made by Iris', GW / 2, GH / 2 + 40);
+    ctx.globalAlpha = 1;
+
+    // fade out near end
+    if (completeTimer < 30) {
+        ctx.fillStyle = `rgba(5, 5, 10, ${1 - completeTimer / 30})`;
+        ctx.fillRect(0, 0, GW, GH);
+    }
+}
+
+// === START ===
+let started = false;
+function tryStart() {
+    if (state === 'title' && !started) {
+        started = true;
+        initAudio();
+        state = 'playing';
+        loadLevel(0);
+    } else if (state === 'title' && started) {
+        state = 'playing';
+        loadLevel(0);
+    }
+}
+
+window.addEventListener('keydown', e => {
+    if (state === 'title') tryStart();
+});
+canvas.addEventListener('touchstart', () => {
+    if (state === 'title') tryStart();
+}, { passive: true });
+canvas.addEventListener('click', () => {
+    if (state === 'title') tryStart();
+});
+
+// === MAIN LOOP ===
+function loop() {
+    update();
+    render();
+    requestAnimationFrame(loop);
+}
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>

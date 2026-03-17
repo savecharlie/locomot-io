@@ -1,0 +1,1643 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>Lucky Harvest</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap');
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+:root {
+  --bg: #2d1b00;
+  --panel: #4a2f0a;
+  --panel-light: #6b4423;
+  --border: #1a0f00;
+  --gold: #ffd700;
+  --gold-dim: #b8960f;
+  --text: #f5e6c8;
+  --text-dim: #a89070;
+  --green: #4a8c3f;
+  --green-light: #6db85a;
+  --red: #c44040;
+  --blue: #4080c4;
+  --pink: #e06080;
+  --grass1: #5a9e45;
+  --grass2: #4d8a3b;
+  --dirt: #8b6914;
+  --cell-size: 80px;
+}
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: 'Press Start 2P', monospace;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  overflow-x: hidden;
+  image-rendering: pixelated;
+}
+
+#game-container {
+  max-width: 600px;
+  width: 100%;
+  padding: 8px;
+}
+
+/* HEADER */
+#header {
+  background: var(--panel);
+  border: 3px solid var(--border);
+  border-radius: 4px;
+  padding: 8px 12px;
+  margin-bottom: 8px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+#header .stat {
+  font-size: 9px;
+  line-height: 1.6;
+}
+
+#header .stat .val {
+  color: var(--gold);
+}
+
+#header .stat .label {
+  color: var(--text-dim);
+}
+
+.season-spring { color: #6db85a; }
+.season-summer { color: #e8c840; }
+.season-fall { color: #d08030; }
+.season-winter { color: #80c0e0; }
+
+/* FARM GRID */
+#farm-wrapper {
+  background: var(--panel);
+  border: 3px solid var(--border);
+  border-radius: 4px;
+  padding: 8px;
+  margin-bottom: 8px;
+}
+
+#farm-grid {
+  display: grid;
+  grid-template-columns: repeat(4, var(--cell-size));
+  grid-template-rows: repeat(4, var(--cell-size));
+  gap: 3px;
+  justify-content: center;
+}
+
+.cell {
+  width: var(--cell-size);
+  height: var(--cell-size);
+  border-radius: 3px;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: transform 0.1s;
+  overflow: hidden;
+}
+
+.cell:hover { transform: scale(1.05); }
+.cell.selected { outline: 3px solid var(--gold); outline-offset: -1px; }
+
+.cell-grass {
+  background: var(--grass1);
+  box-shadow: inset 0 0 0 1px var(--grass2);
+}
+.cell-grass:nth-child(odd) { background: var(--grass2); box-shadow: inset 0 0 0 1px var(--grass1); }
+
+.cell .emoji {
+  font-size: 36px;
+  line-height: 1;
+  filter: contrast(1.1);
+  transition: transform 0.3s;
+  z-index: 2;
+}
+
+.cell .name-tag {
+  font-size: 6px;
+  color: #fff;
+  background: rgba(0,0,0,0.6);
+  padding: 1px 3px;
+  border-radius: 2px;
+  position: absolute;
+  bottom: 2px;
+  white-space: nowrap;
+  z-index: 3;
+  max-width: 76px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.cell .mood-icon {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  font-size: 14px;
+  z-index: 3;
+}
+
+.cell .hunger-icon {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  font-size: 12px;
+  z-index: 3;
+}
+
+.cell .combo-flash {
+  position: absolute;
+  inset: 0;
+  background: rgba(255, 215, 0, 0.4);
+  z-index: 1;
+  animation: comboFlash 0.6s ease-out forwards;
+  pointer-events: none;
+}
+
+@keyframes comboFlash {
+  0% { opacity: 1; }
+  100% { opacity: 0; }
+}
+
+.cell .bond-indicator {
+  position: absolute;
+  top: 2px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 10px;
+  z-index: 3;
+}
+
+/* SPIN ANIMATION */
+.cell.spinning .emoji {
+  animation: slotSpin 0.6s ease-out;
+}
+
+@keyframes slotSpin {
+  0% { transform: translateY(-60px); opacity: 0; }
+  60% { transform: translateY(8px); opacity: 1; }
+  80% { transform: translateY(-3px); }
+  100% { transform: translateY(0); }
+}
+
+.cell.landing .emoji {
+  animation: landBounce 0.3s ease-out;
+}
+
+@keyframes landBounce {
+  0% { transform: scale(1.3); }
+  50% { transform: scale(0.9); }
+  100% { transform: scale(1); }
+}
+
+/* COMBO POPUP */
+.combo-popup {
+  position: fixed;
+  font-size: 11px;
+  color: var(--gold);
+  text-shadow: 2px 2px 0 #000;
+  z-index: 100;
+  pointer-events: none;
+  animation: comboRise 1.5s ease-out forwards;
+  white-space: nowrap;
+}
+
+@keyframes comboRise {
+  0% { opacity: 1; transform: translateY(0) scale(1); }
+  50% { opacity: 1; transform: translateY(-30px) scale(1.2); }
+  100% { opacity: 0; transform: translateY(-60px) scale(0.8); }
+}
+
+/* CONTROLS */
+#controls {
+  background: var(--panel);
+  border: 3px solid var(--border);
+  border-radius: 4px;
+  padding: 8px;
+  margin-bottom: 8px;
+  text-align: center;
+}
+
+#spin-btn {
+  font-family: 'Press Start 2P', monospace;
+  font-size: 12px;
+  background: linear-gradient(to bottom, #e8a020, #c07010);
+  color: #fff;
+  border: 3px solid var(--border);
+  border-radius: 4px;
+  padding: 12px 32px;
+  cursor: pointer;
+  text-shadow: 1px 1px 0 rgba(0,0,0,0.5);
+  transition: all 0.1s;
+  width: 100%;
+}
+
+#spin-btn:hover { background: linear-gradient(to bottom, #f0b030, #d08020); transform: translateY(-1px); }
+#spin-btn:active { transform: translateY(1px); }
+#spin-btn:disabled { background: #555; color: #888; cursor: not-allowed; transform: none; }
+
+/* ACTIONS */
+#actions {
+  background: var(--panel);
+  border: 3px solid var(--border);
+  border-radius: 4px;
+  padding: 8px;
+  margin-bottom: 8px;
+  display: none;
+}
+
+#actions-header {
+  font-size: 8px;
+  color: var(--text-dim);
+  margin-bottom: 6px;
+  text-align: center;
+}
+
+#actions-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 4px;
+}
+
+.action-btn {
+  font-family: 'Press Start 2P', monospace;
+  font-size: 7px;
+  background: var(--panel-light);
+  color: var(--text);
+  border: 2px solid var(--border);
+  border-radius: 3px;
+  padding: 8px 4px;
+  cursor: pointer;
+  text-align: center;
+  transition: all 0.1s;
+  line-height: 1.4;
+}
+
+.action-btn:hover { background: #7d5530; transform: translateY(-1px); }
+.action-btn:disabled { opacity: 0.4; cursor: not-allowed; transform: none; }
+.action-btn .cost { color: var(--gold-dim); display: block; font-size: 6px; margin-top: 2px; }
+
+/* SHELTER (adoption panel) */
+#shelter {
+  background: var(--panel);
+  border: 3px solid var(--border);
+  border-radius: 4px;
+  padding: 8px;
+  margin-bottom: 8px;
+  display: none;
+}
+
+#shelter-header {
+  font-size: 8px;
+  color: var(--text-dim);
+  margin-bottom: 6px;
+  text-align: center;
+}
+
+#shelter-options {
+  display: flex;
+  gap: 6px;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
+.shelter-card {
+  background: var(--panel-light);
+  border: 2px solid var(--border);
+  border-radius: 4px;
+  padding: 8px;
+  cursor: pointer;
+  text-align: center;
+  min-width: 90px;
+  transition: all 0.1s;
+}
+
+.shelter-card:hover { border-color: var(--gold); transform: translateY(-2px); }
+.shelter-card .emoji { font-size: 28px; display: block; margin-bottom: 4px; }
+.shelter-card .info { font-size: 6px; color: var(--text-dim); line-height: 1.5; }
+.shelter-card .cost { font-size: 7px; color: var(--gold); margin-top: 4px; }
+
+/* ANIMAL INFO TOOLTIP */
+#animal-info {
+  background: var(--panel);
+  border: 3px solid var(--gold-dim);
+  border-radius: 4px;
+  padding: 8px;
+  margin-bottom: 8px;
+  display: none;
+  font-size: 7px;
+  line-height: 1.8;
+}
+
+#animal-info .title { font-size: 9px; color: var(--gold); margin-bottom: 4px; }
+#animal-info .stat-bar { display: flex; align-items: center; gap: 4px; }
+#animal-info .bar { height: 8px; border-radius: 2px; flex: 1; background: var(--border); overflow: hidden; }
+#animal-info .bar-fill { height: 100%; border-radius: 2px; transition: width 0.3s; }
+#animal-info .bar-mood { background: var(--green); }
+#animal-info .bar-hunger { background: var(--blue); }
+
+/* LOG */
+#log {
+  background: var(--panel);
+  border: 3px solid var(--border);
+  border-radius: 4px;
+  padding: 8px;
+  max-height: 120px;
+  overflow-y: auto;
+  margin-bottom: 8px;
+}
+
+#log-entries {
+  font-size: 7px;
+  line-height: 1.8;
+  color: var(--text-dim);
+}
+
+#log-entries .entry { margin-bottom: 2px; }
+#log-entries .entry-combo { color: var(--gold); }
+#log-entries .entry-bad { color: var(--red); }
+#log-entries .entry-bond { color: var(--pink); }
+#log-entries .entry-event { color: var(--green-light); }
+
+/* RENT OVERLAY */
+#rent-overlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.8);
+  z-index: 200;
+  justify-content: center;
+  align-items: center;
+}
+
+#rent-overlay.show { display: flex; }
+
+#rent-panel {
+  background: var(--panel);
+  border: 4px solid var(--gold-dim);
+  border-radius: 6px;
+  padding: 20px;
+  text-align: center;
+  max-width: 350px;
+}
+
+#rent-panel h2 { font-size: 12px; color: var(--gold); margin-bottom: 12px; }
+#rent-panel p { font-size: 8px; line-height: 1.8; margin-bottom: 8px; }
+#rent-panel .amount { font-size: 16px; color: var(--gold); margin: 8px 0; }
+
+#pay-rent-btn {
+  font-family: 'Press Start 2P', monospace;
+  font-size: 10px;
+  background: linear-gradient(to bottom, #e8a020, #c07010);
+  color: #fff;
+  border: 3px solid var(--border);
+  border-radius: 4px;
+  padding: 10px 24px;
+  cursor: pointer;
+  margin-top: 8px;
+}
+
+/* GAME OVER */
+#gameover-overlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.9);
+  z-index: 300;
+  justify-content: center;
+  align-items: center;
+}
+
+#gameover-overlay.show { display: flex; }
+
+#gameover-panel {
+  background: var(--panel);
+  border: 4px solid var(--red);
+  border-radius: 6px;
+  padding: 24px;
+  text-align: center;
+  max-width: 380px;
+}
+
+#gameover-panel h2 { font-size: 14px; color: var(--red); margin-bottom: 12px; }
+#gameover-panel p { font-size: 8px; line-height: 2; margin-bottom: 4px; }
+#gameover-panel .val { color: var(--gold); }
+
+#restart-btn {
+  font-family: 'Press Start 2P', monospace;
+  font-size: 10px;
+  background: linear-gradient(to bottom, #50a040, #308020);
+  color: #fff;
+  border: 3px solid var(--border);
+  border-radius: 4px;
+  padding: 10px 24px;
+  cursor: pointer;
+  margin-top: 12px;
+}
+
+/* TITLE SCREEN */
+#title-screen {
+  position: fixed;
+  inset: 0;
+  background: var(--bg);
+  z-index: 400;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  text-align: center;
+}
+
+#title-screen h1 {
+  font-size: 20px;
+  color: var(--gold);
+  text-shadow: 3px 3px 0 #000;
+  margin-bottom: 8px;
+}
+
+#title-screen .subtitle {
+  font-size: 8px;
+  color: var(--text-dim);
+  margin-bottom: 32px;
+  line-height: 2;
+}
+
+#start-btn {
+  font-family: 'Press Start 2P', monospace;
+  font-size: 12px;
+  background: linear-gradient(to bottom, #e8a020, #c07010);
+  color: #fff;
+  border: 3px solid var(--border);
+  border-radius: 4px;
+  padding: 14px 40px;
+  cursor: pointer;
+  animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.05); }
+}
+
+#title-screen .farm-preview {
+  font-size: 32px;
+  margin-bottom: 24px;
+  letter-spacing: 8px;
+}
+
+/* SCROLLBAR */
+::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar-track { background: var(--border); }
+::-webkit-scrollbar-thumb { background: var(--panel-light); border-radius: 3px; }
+
+/* RESPONSIVE */
+@media (max-width: 380px) {
+  :root { --cell-size: 68px; }
+  .cell .emoji { font-size: 30px; }
+}
+</style>
+</head>
+<body>
+
+<!-- TITLE SCREEN -->
+<div id="title-screen">
+  <div class="farm-preview">🐔🌾🐄🌻</div>
+  <h1>LUCKY HARVEST</h1>
+  <div class="subtitle">
+    A slot machine farming game<br>
+    where your animals have feelings
+  </div>
+  <button id="start-btn" onclick="startGame()">START FARM</button>
+</div>
+
+<!-- MAIN GAME -->
+<div id="game-container" style="display:none">
+
+  <!-- HEADER -->
+  <div id="header">
+    <div class="stat"><span class="label">DAY</span> <span class="val" id="day-num">1</span></div>
+    <div class="stat"><span class="label" id="season-label">SPRING</span></div>
+    <div class="stat"><span class="label">GOLD</span> <span class="val" id="gold-num">50</span></div>
+    <div class="stat"><span class="label">RENT</span> <span class="val" id="rent-num">10</span></div>
+    <div class="stat"><span class="label">DEBT</span> <span class="val" id="debt-num">0</span></div>
+  </div>
+
+  <!-- ANIMAL INFO (shown when clicking a cell) -->
+  <div id="animal-info"></div>
+
+  <!-- FARM GRID -->
+  <div id="farm-wrapper">
+    <div id="farm-grid"></div>
+  </div>
+
+  <!-- SPIN BUTTON -->
+  <div id="controls">
+    <button id="spin-btn" onclick="doSpin()">NEW DAY</button>
+  </div>
+
+  <!-- ACTIONS -->
+  <div id="actions">
+    <div id="actions-header">ACTIONS LEFT: <span id="actions-left">3</span></div>
+    <div id="actions-grid">
+      <button class="action-btn" onclick="doAction('feed')">FEED ALL<span class="cost" id="feed-cost">-0g</span></button>
+      <button class="action-btn" onclick="doAction('adopt')">ADOPT<span class="cost">-5g</span></button>
+      <button class="action-btn" onclick="doAction('play')">PLAY WITH<span class="cost">free</span></button>
+      <button class="action-btn" onclick="doAction('build')">BUILD<span class="cost">-8g</span></button>
+      <button class="action-btn" onclick="doAction('breed')">BREED<span class="cost">bonded pair</span></button>
+      <button class="action-btn" onclick="doAction('release')">RELEASE<span class="cost">select one</span></button>
+    </div>
+  </div>
+
+  <!-- SHELTER -->
+  <div id="shelter">
+    <div id="shelter-header">CHOOSE AN ANIMAL TO ADOPT</div>
+    <div id="shelter-options"></div>
+    <button class="action-btn" style="margin-top:8px;width:100%" onclick="closeShelter()">CANCEL</button>
+  </div>
+
+  <!-- LOG -->
+  <div id="log">
+    <div id="log-entries"></div>
+  </div>
+
+</div>
+
+<!-- RENT OVERLAY -->
+<div id="rent-overlay">
+  <div id="rent-panel">
+    <h2>RENT DAY</h2>
+    <p>The Landlord demands payment.</p>
+    <div class="amount" id="rent-amount"></div>
+    <p id="rent-status"></p>
+    <button id="pay-rent-btn" onclick="payRent()">PAY</button>
+  </div>
+</div>
+
+<!-- GAME OVER -->
+<div id="gameover-overlay">
+  <div id="gameover-panel">
+    <h2>FARM LOST</h2>
+    <p>You couldn't make rent.</p>
+    <p>Days survived: <span class="val" id="go-days">0</span></p>
+    <p>Animals cared for: <span class="val" id="go-animals">0</span></p>
+    <p>Total gold earned: <span class="val" id="go-gold">0</span></p>
+    <p>Best combo: <span class="val" id="go-combo">-</span></p>
+    <button id="restart-btn" onclick="location.reload()">TRY AGAIN</button>
+  </div>
+</div>
+
+<script>
+// ============================================================
+// LUCKY HARVEST - Game Engine
+// ============================================================
+
+// --- SPECIES DEFINITIONS ---
+const SPECIES = {
+  chicken:  { emoji: '🐔', name: 'Chicken',  base: 3,  type: 'animal', size: 'small',  tier: 1, adoptCost: 5 },
+  cow:      { emoji: '🐄', name: 'Cow',      base: 5,  type: 'animal', size: 'large',  tier: 2, adoptCost: 12 },
+  sheep:    { emoji: '🐑', name: 'Sheep',     base: 4,  type: 'animal', size: 'medium', tier: 1, adoptCost: 8 },
+  pig:      { emoji: '🐷', name: 'Pig',       base: 4,  type: 'animal', size: 'medium', tier: 1, adoptCost: 8 },
+  dog:      { emoji: '🐕', name: 'Dog',       base: 2,  type: 'animal', size: 'medium', tier: 1, adoptCost: 6 },
+  cat:      { emoji: '🐈', name: 'Cat',       base: 2,  type: 'animal', size: 'small',  tier: 1, adoptCost: 6 },
+  duck:     { emoji: '🦆', name: 'Duck',      base: 3,  type: 'animal', size: 'small',  tier: 1, adoptCost: 6 },
+  goat:     { emoji: '🐐', name: 'Goat',      base: 4,  type: 'animal', size: 'medium', tier: 2, adoptCost: 10 },
+  horse:    { emoji: '🐴', name: 'Horse',     base: 6,  type: 'animal', size: 'large',  tier: 2, adoptCost: 15 },
+  rabbit:   { emoji: '🐰', name: 'Rabbit',    base: 2,  type: 'animal', size: 'small',  tier: 1, adoptCost: 4 },
+  bee:      { emoji: '🐝', name: 'Bee',       base: 1,  type: 'animal', size: 'small',  tier: 1, adoptCost: 4 },
+  wheat:    { emoji: '🌾', name: 'Wheat',     base: 2,  type: 'crop',   size: 'small',  tier: 1, adoptCost: 3 },
+  flower:   { emoji: '🌻', name: 'Flower',    base: 1,  type: 'crop',   size: 'small',  tier: 1, adoptCost: 3 },
+  pumpkin:  { emoji: '🎃', name: 'Pumpkin',   base: 3,  type: 'crop',   size: 'medium', tier: 2, adoptCost: 5 },
+  corn:     { emoji: '🌽', name: 'Corn',      base: 2,  type: 'crop',   size: 'small',  tier: 1, adoptCost: 3 },
+  barn:     { emoji: '🏠', name: 'Barn',      base: 0,  type: 'building', size: 'large', tier: 1, adoptCost: 8 },
+  fox:      { emoji: '🦊', name: 'Fox',       base: 0,  type: 'threat', size: 'medium', tier: 1, adoptCost: 0 },
+  wolf:     { emoji: '🐺', name: 'Wolf',      base: 0,  type: 'threat', size: 'large',  tier: 2, adoptCost: 0 },
+  crow:     { emoji: '🐦‍⬛', name: 'Crow',   base: 0,  type: 'threat', size: 'small',  tier: 1, adoptCost: 0 },
+};
+
+// Available for adoption at start
+const STARTER_SPECIES = ['chicken', 'sheep', 'wheat', 'flower', 'cat', 'dog', 'rabbit', 'duck', 'bee', 'corn'];
+const TIER2_SPECIES = ['cow', 'pig', 'goat', 'horse', 'pumpkin', 'barn'];
+const THREAT_SPECIES = ['fox', 'wolf', 'crow'];
+
+// --- NAMES ---
+const FIRST_NAMES = [
+  'Mittens','Patches','Clover','Daisy','Pepper','Nugget','Biscuit','Maple','Willow','Rosie',
+  'Hazel','Sage','Bramble','Pebble','Sunny','Fern','Rusty','Sprout','Pickles','Mochi',
+  'Waffles','Turnip','Juniper','Olive','Basil','Honey','Chestnut','Clementine','Dottie','Fizz',
+  'Ginger','Nutmeg','Parsnip','Toffee','Butterscotch','Cinnamon','Dandelion','Acorn','Misty','Poppy',
+  'Truffle','Peanut','Cocoa','Pudding','Dumpling','Cricket','Luna','Stella','Bean','Pip'
+];
+
+// --- PERSONALITY TRAITS ---
+const TRAITS = ['social','shy','brave','lazy','curious','foodie','grumpy','playful'];
+
+// --- COMBOS ---
+const COMBOS = [
+  { name: 'BREAKFAST!',   emoji: '🍳', need: ['chicken','wheat'],    gold: 8,  msg: 'made a hearty breakfast' },
+  { name: 'HONEY!',       emoji: '🍯', need: ['bee','flower'],       gold: 10, msg: 'produced sweet honey' },
+  { name: 'WOOL!',        emoji: '🧶', need: ['sheep','sheep'],      gold: 6,  msg: 'sheared a fine fleece' },
+  { name: 'TRUFFLE!',     emoji: '🍄', need: ['pig','corn'],         gold: 12, msg: 'sniffed out a truffle' },
+  { name: 'MILK!',        emoji: '🥛', need: ['cow','wheat'],        gold: 7,  msg: 'fresh milk delivered' },
+  { name: 'BOUQUET!',     emoji: '💐', need: ['flower','flower'],    gold: 5,  msg: 'arranged a lovely bouquet' },
+  { name: 'GUARD!',       emoji: '🛡️', need: ['dog','barn'],         gold: 4,  msg: 'guarding the barn' },
+  { name: 'MOUSER!',      emoji: '🐭', need: ['cat','barn'],         gold: 4,  msg: 'caught all the mice' },
+  { name: 'PIE!',         emoji: '🥧', need: ['pumpkin','wheat'],    gold: 9,  msg: 'baked a delicious pie' },
+  { name: 'OMELETTE!',    emoji: '🍳', need: ['chicken','corn'],     gold: 7,  msg: 'whipped up an omelette' },
+  { name: 'DUCK POND!',   emoji: '💧', need: ['duck','duck'],        gold: 6,  msg: 'splashing happily' },
+  { name: 'COMPANIONS!',  emoji: '❤️', need: ['dog','cat'],          gold: 5,  msg: 'became unlikely friends' },
+  { name: 'GRAZING!',     emoji: '🌿', need: ['goat','flower'],      gold: 6,  msg: 'grazing contentedly' },
+  { name: 'RIDE!',        emoji: '🏇', need: ['horse','barn'],       gold: 8,  msg: 'ready for a ride' },
+  { name: 'BURROW!',      emoji: '🕳️', need: ['rabbit','rabbit'],   gold: 5,  msg: 'dug a cozy burrow' },
+  // THREAT COUNTERS
+  { name: 'CHASE!',       emoji: '💨', need: ['dog','fox'],          gold: 6,  msg: 'chased the fox away!', killThreat: 'fox' },
+  { name: 'SCARE!',       emoji: '😱', need: ['dog','wolf'],         gold: 4,  msg: 'scared the wolf off!', killThreat: 'wolf' },
+  { name: 'POUNCE!',      emoji: '🐾', need: ['cat','crow'],         gold: 3,  msg: 'caught the pesky crow!', killThreat: 'crow' },
+];
+
+// Predator-prey relationships (threat → target species)
+const PREDATION = {
+  fox:  ['chicken', 'rabbit', 'duck'],
+  wolf: ['sheep', 'goat', 'rabbit'],
+  crow: ['corn', 'wheat', 'flower'],
+};
+
+// Species compatibility (for friendship bonus)
+const COMPATIBLE = [
+  ['chicken','duck'], ['cow','horse'], ['sheep','goat'], ['cat','rabbit'],
+  ['dog','horse'], ['bee','flower'], ['rabbit','duck'], ['pig','goat'],
+];
+
+// --- GAME STATE ---
+let G = {};
+let selectedCell = null;
+let selectingFor = null; // 'play' | 'release' | 'breed1' | 'breed2' | null
+let breedFirst = null;
+let totalGoldEarned = 0;
+let totalAnimals = 0;
+let bestCombo = '-';
+let nextId = 1;
+
+function initState() {
+  G = {
+    day: 0,
+    season: 'spring',
+    gold: 50,
+    debt: 0,
+    missedRents: 0,
+    grid: Array(16).fill(null), // flat 4x4
+    phase: 'spin', // spin | action | rent | gameover
+    actionsLeft: 0,
+    log: [],
+    daysSinceLastFed: 0,
+    comboHistory: [],
+  };
+  nextId = 1;
+  totalGoldEarned = 0;
+  totalAnimals = 0;
+  bestCombo = '-';
+  selectedCell = null;
+  selectingFor = null;
+
+  // Place starting animals
+  placeAnimal(createAnimal('chicken'), 0);
+  placeAnimal(createAnimal('wheat'), 1);
+  placeAnimal(createAnimal('chicken'), 5);
+  placeAnimal(createAnimal('flower'), 10);
+}
+
+// --- ANIMAL CREATION ---
+function createAnimal(speciesId) {
+  const sp = SPECIES[speciesId];
+  const animal = {
+    id: 'a' + (nextId++),
+    species: speciesId,
+    name: FIRST_NAMES[Math.floor(Math.random() * FIRST_NAMES.length)],
+    mood: 60 + Math.floor(Math.random() * 20), // 60-80
+    hunger: 80 + Math.floor(Math.random() * 20), // 80-100
+    age: 'adult',
+    traits: [TRAITS[Math.floor(Math.random() * TRAITS.length)]],
+    bonds: [],
+    daysAlive: 0,
+    stars: 1,
+    consecutiveHappy: 0,
+    consecutiveSad: 0,
+  };
+  totalAnimals++;
+  return animal;
+}
+
+function placeAnimal(animal, cellIdx) {
+  G.grid[cellIdx] = animal;
+}
+
+// --- GRID HELPERS ---
+function getNeighbors(idx) {
+  const row = Math.floor(idx / 4);
+  const col = idx % 4;
+  const neighbors = [];
+  if (row > 0) neighbors.push(idx - 4);
+  if (row < 3) neighbors.push(idx + 4);
+  if (col > 0) neighbors.push(idx - 1);
+  if (col < 3) neighbors.push(idx + 1);
+  return neighbors;
+}
+
+function getOccupied() {
+  return G.grid.map((a, i) => a ? i : -1).filter(i => i >= 0);
+}
+
+function getAnimals() {
+  return G.grid.filter(a => a && SPECIES[a.species].type === 'animal');
+}
+
+function getAllOccupants() {
+  return G.grid.filter(a => a !== null);
+}
+
+function getEmptyCells() {
+  return G.grid.map((a, i) => a === null ? i : -1).filter(i => i >= 0);
+}
+
+// --- MOOD HELPERS ---
+function moodEmoji(mood) {
+  if (mood >= 80) return '😍';
+  if (mood >= 60) return '😊';
+  if (mood >= 40) return '😐';
+  if (mood >= 20) return '😢';
+  return '😡';
+}
+
+function moodMultiplier(mood) {
+  if (mood >= 80) return 2.5;
+  if (mood >= 60) return 1.5;
+  if (mood >= 40) return 1.0;
+  if (mood >= 20) return 0.5;
+  return 0;
+}
+
+function hungerEmoji(hunger) {
+  if (hunger <= 20) return '⚠️';
+  if (hunger <= 40) return '🍽️';
+  return '';
+}
+
+// --- SPIN ---
+function doSpin() {
+  if (G.phase === 'gameover') return;
+
+  G.day++;
+  updateSeason();
+
+  // Shuffle all occupants to random positions
+  const occupants = [];
+  const empties = [];
+  for (let i = 0; i < 16; i++) {
+    if (G.grid[i]) {
+      occupants.push(G.grid[i]);
+    }
+  }
+
+  // Fisher-Yates shuffle of positions
+  const positions = Array.from({length: 16}, (_, i) => i);
+  for (let i = positions.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [positions[i], positions[j]] = [positions[j], positions[i]];
+  }
+
+  // Clear grid and place shuffled
+  G.grid = Array(16).fill(null);
+  for (let i = 0; i < occupants.length; i++) {
+    G.grid[positions[i]] = occupants[i];
+  }
+
+  // Maybe spawn a threat
+  maybeSpawnThreat();
+
+  // Age all animals
+  for (const a of getAllOccupants()) {
+    if (SPECIES[a.species].type === 'animal') {
+      a.daysAlive++;
+      a.hunger = Math.max(0, a.hunger - 10);
+      G.daysSinceLastFed++;
+    }
+  }
+
+  // Animate spin
+  animateSpin(() => {
+    // Resolve adjacency
+    const income = resolveAdjacency();
+
+    // Update mood from hunger
+    for (const a of getAllOccupants()) {
+      if (SPECIES[a.species].type !== 'animal') continue;
+      if (a.hunger <= 20) {
+        a.mood = Math.max(0, a.mood - 10);
+        if (a.hunger <= 0) {
+          a.mood = Math.max(0, a.mood - 10);
+        }
+      }
+    }
+
+    // Track consecutive mood
+    for (const a of getAllOccupants()) {
+      if (SPECIES[a.species].type !== 'animal') continue;
+      if (a.mood >= 60) {
+        a.consecutiveHappy++;
+        a.consecutiveSad = 0;
+        // Star evolution
+        if (a.consecutiveHappy >= 5 && a.stars < 5) {
+          a.stars++;
+          a.consecutiveHappy = 0;
+          addLog(`${a.name} the ${SPECIES[a.species].name} evolved to ${'⭐'.repeat(a.stars)}!`, 'event');
+        }
+      } else if (a.mood < 40) {
+        a.consecutiveSad++;
+        a.consecutiveHappy = 0;
+        if (a.consecutiveSad >= 5 && a.stars > 1) {
+          a.stars--;
+          a.consecutiveSad = 0;
+          addLog(`${a.name} is losing their spark... now ${'⭐'.repeat(a.stars)}`, 'bad');
+        }
+      }
+    }
+
+    // Add gold
+    G.gold += income;
+    totalGoldEarned += income;
+
+    // Check rent (every 5 days)
+    if (G.day % 5 === 0) {
+      G.phase = 'rent';
+      showRent();
+    } else {
+      G.phase = 'action';
+      G.actionsLeft = 3;
+      showActions();
+    }
+
+    renderAll();
+  });
+}
+
+function maybeSpawnThreat() {
+  // 20% chance after day 3, increasing
+  const chance = G.day < 4 ? 0 : Math.min(0.35, 0.15 + G.day * 0.01);
+  if (Math.random() < chance) {
+    const empty = getEmptyCells();
+    if (empty.length > 0) {
+      const tier = G.day >= 10 ? THREAT_SPECIES : THREAT_SPECIES.filter(t => SPECIES[t].tier <= 1);
+      const sp = tier[Math.floor(Math.random() * tier.length)];
+      const cell = empty[Math.floor(Math.random() * empty.length)];
+      const threat = createAnimal(sp);
+      threat.mood = 50;
+      threat.hunger = 100;
+      G.grid[cell] = threat;
+      addLog(`A wild ${SPECIES[sp].name} appeared on the farm!`, 'bad');
+    }
+  }
+}
+
+function updateSeason() {
+  const seasons = ['spring','summer','fall','winter'];
+  const idx = Math.floor((G.day - 1) / 7) % 4;
+  G.season = seasons[idx];
+}
+
+// --- ADJACENCY RESOLUTION ---
+function resolveAdjacency() {
+  let totalIncome = 0;
+  const combosFired = [];
+  const killed = new Set();
+  const comboUsed = new Set(); // prevent double-counting
+
+  // Check all combos
+  for (let i = 0; i < 16; i++) {
+    if (!G.grid[i]) continue;
+    const a = G.grid[i];
+    const neighbors = getNeighbors(i);
+
+    for (const ni of neighbors) {
+      if (!G.grid[ni]) continue;
+      const b = G.grid[ni];
+
+      // Check each combo
+      for (const combo of COMBOS) {
+        const pair = [a.species, b.species].sort().join('+');
+        const need = [...combo.need].sort().join('+');
+        const comboKey = combo.name + ':' + [i, ni].sort().join(',');
+
+        if (pair === need && !comboUsed.has(comboKey)) {
+          comboUsed.add(comboKey);
+          combosFired.push({ combo, cells: [i, ni] });
+          totalIncome += combo.gold;
+
+          // Kill threat if applicable
+          if (combo.killThreat) {
+            const threatIdx = a.species === combo.killThreat ? i : ni;
+            killed.add(threatIdx);
+          }
+        }
+      }
+    }
+  }
+
+  // Predation (threats eat prey)
+  for (let i = 0; i < 16; i++) {
+    if (!G.grid[i]) continue;
+    const a = G.grid[i];
+    if (!PREDATION[a.species]) continue;
+
+    const neighbors = getNeighbors(i);
+    for (const ni of neighbors) {
+      if (!G.grid[ni] || killed.has(ni) || killed.has(i)) continue;
+      const b = G.grid[ni];
+      if (PREDATION[a.species].includes(b.species)) {
+        killed.add(ni);
+        addLog(`The ${SPECIES[a.species].name} attacked ${b.name} the ${SPECIES[b.species].name}!`, 'bad');
+
+        // Nearby animals grieve
+        for (const gni of getNeighbors(ni)) {
+          if (G.grid[gni] && SPECIES[G.grid[gni].species].type === 'animal') {
+            G.grid[gni].mood = Math.max(0, G.grid[gni].mood - 15);
+            // Bond grief
+            const bond = G.grid[gni].bonds.find(b => b.id === G.grid[ni]?.id);
+            if (bond) {
+              G.grid[gni].mood = Math.max(0, G.grid[gni].mood - 20);
+              addLog(`${G.grid[gni].name} is grieving the loss of ${G.grid[ni].name}...`, 'bond');
+            }
+          }
+        }
+      }
+    }
+  }
+
+  // Remove killed
+  for (const ki of killed) {
+    G.grid[ki] = null;
+  }
+
+  // Base income from all surviving occupants
+  for (let i = 0; i < 16; i++) {
+    if (!G.grid[i]) continue;
+    const a = G.grid[i];
+    const sp = SPECIES[a.species];
+    if (sp.type === 'threat') continue;
+
+    let base = sp.base;
+    if (sp.type === 'animal') {
+      base = Math.round(base * moodMultiplier(a.mood));
+      base = Math.round(base * (0.8 + a.stars * 0.2));
+    }
+    totalIncome += base;
+  }
+
+  // Friendship/compatibility bonuses
+  for (let i = 0; i < 16; i++) {
+    if (!G.grid[i]) continue;
+    const a = G.grid[i];
+    if (SPECIES[a.species].type !== 'animal') continue;
+
+    const neighbors = getNeighbors(i);
+    for (const ni of neighbors) {
+      if (!G.grid[ni]) continue;
+      const b = G.grid[ni];
+      if (SPECIES[b.species].type !== 'animal') continue;
+
+      // Same species bonus
+      if (a.species === b.species) {
+        a.mood = Math.min(100, a.mood + 5);
+      }
+
+      // Compatible species
+      const compat = COMPATIBLE.some(([x,y]) =>
+        (a.species === x && b.species === y) || (a.species === y && b.species === x)
+      );
+      if (compat) {
+        a.mood = Math.min(100, a.mood + 3);
+        totalIncome += 1;
+      }
+
+      // Bond strengthening
+      let bond = a.bonds.find(b => b.id === G.grid[ni].id);
+      if (!bond) {
+        bond = { id: G.grid[ni].id, name: G.grid[ni].name, strength: 0 };
+        a.bonds.push(bond);
+      }
+      bond.strength++;
+
+      // New bond formed!
+      if (bond.strength === 3) {
+        addLog(`${a.name} and ${G.grid[ni].name} became friends!`, 'bond');
+        a.mood = Math.min(100, a.mood + 10);
+      }
+
+      // Strong bond reunion bonus
+      if (bond.strength >= 3) {
+        a.mood = Math.min(100, a.mood + 5);
+        totalIncome += 2;
+      }
+
+      // Trait interactions
+      if (a.traits.includes('social') && b.traits.includes('shy')) {
+        b.mood = Math.min(100, b.mood + 3); // social helps shy
+      }
+      if (a.traits.includes('grumpy') && b.traits.includes('shy')) {
+        b.mood = Math.max(0, b.mood - 5); // grumpy scares shy
+      }
+      if (a.traits.includes('playful') && b.traits.includes('playful')) {
+        totalIncome += 1; // they play together!
+      }
+    }
+
+    // Separation sadness (bonded but not adjacent)
+    for (const bond of a.bonds) {
+      if (bond.strength >= 3) {
+        const bonded = G.grid.findIndex(o => o && o.id === bond.id);
+        if (bonded >= 0 && !neighbors.includes(bonded)) {
+          a.mood = Math.max(0, a.mood - 3);
+        }
+        // Bond target gone (dead/released)
+        if (bonded < 0) {
+          a.mood = Math.max(0, a.mood - 8);
+        }
+      }
+    }
+  }
+
+  // Mood propagation (happy neighbors lift mood, sad drag down)
+  const moodDeltas = Array(16).fill(0);
+  for (let i = 0; i < 16; i++) {
+    if (!G.grid[i] || SPECIES[G.grid[i].species].type !== 'animal') continue;
+    const neighbors = getNeighbors(i);
+    for (const ni of neighbors) {
+      if (!G.grid[ni] || SPECIES[G.grid[ni].species].type !== 'animal') continue;
+      if (G.grid[ni].mood >= 70) moodDeltas[i] += 2;
+      else if (G.grid[ni].mood <= 30) moodDeltas[i] -= 2;
+    }
+  }
+  for (let i = 0; i < 16; i++) {
+    if (G.grid[i] && SPECIES[G.grid[i].species].type === 'animal') {
+      G.grid[i].mood = Math.max(0, Math.min(100, G.grid[i].mood + moodDeltas[i]));
+    }
+  }
+
+  // Show combo popups
+  for (const { combo, cells } of combosFired) {
+    showComboPopup(combo, cells);
+    addLog(`${combo.emoji} ${combo.name} ${combo.msg} (+${combo.gold}g)`, 'combo');
+    if (!bestCombo || combo.gold > (G.comboHistory[0]?.gold || 0)) {
+      bestCombo = combo.name;
+    }
+    G.comboHistory.unshift(combo);
+  }
+
+  if (totalIncome > 0) {
+    addLog(`Day ${G.day}: Earned ${totalIncome}g total`, 'event');
+  }
+
+  return totalIncome;
+}
+
+// --- COMBO POPUP ---
+function showComboPopup(combo, cells) {
+  const gridEl = document.getElementById('farm-grid');
+  const rect = gridEl.children[cells[0]]?.getBoundingClientRect();
+  if (!rect) return;
+
+  const popup = document.createElement('div');
+  popup.className = 'combo-popup';
+  popup.textContent = `${combo.emoji} ${combo.name} +${combo.gold}g`;
+  popup.style.left = rect.left + 'px';
+  popup.style.top = rect.top + 'px';
+  document.body.appendChild(popup);
+
+  // Flash cells
+  for (const ci of cells) {
+    const cell = gridEl.children[ci];
+    if (cell) {
+      const flash = document.createElement('div');
+      flash.className = 'combo-flash';
+      cell.appendChild(flash);
+      setTimeout(() => flash.remove(), 600);
+    }
+  }
+
+  setTimeout(() => popup.remove(), 1500);
+}
+
+// --- SPIN ANIMATION ---
+function animateSpin(callback) {
+  const gridEl = document.getElementById('farm-grid');
+  const cells = gridEl.children;
+  const btn = document.getElementById('spin-btn');
+  btn.disabled = true;
+
+  // Stagger animation by column
+  for (let i = 0; i < 16; i++) {
+    const col = i % 4;
+    const delay = col * 100;
+    setTimeout(() => {
+      cells[i].classList.add('spinning');
+      renderCell(i);
+    }, delay);
+  }
+
+  setTimeout(() => {
+    for (let i = 0; i < 16; i++) {
+      cells[i].classList.remove('spinning');
+      cells[i].classList.add('landing');
+    }
+    setTimeout(() => {
+      for (let i = 0; i < 16; i++) {
+        cells[i].classList.remove('landing');
+      }
+      btn.disabled = false;
+      callback();
+    }, 300);
+  }, 600);
+}
+
+// --- ACTIONS ---
+function showActions() {
+  document.getElementById('actions').style.display = 'block';
+  document.getElementById('shelter').style.display = 'none';
+  document.getElementById('spin-btn').style.display = 'none';
+  updateActionsUI();
+}
+
+function hideActions() {
+  document.getElementById('actions').style.display = 'none';
+  document.getElementById('shelter').style.display = 'none';
+  document.getElementById('spin-btn').style.display = 'block';
+}
+
+function updateActionsUI() {
+  document.getElementById('actions-left').textContent = G.actionsLeft;
+  const animalCount = getAnimals().length;
+  const feedCost = animalCount * 2;
+  document.getElementById('feed-cost').textContent = `-${feedCost}g`;
+
+  // Disable buttons based on state
+  const btns = document.querySelectorAll('.action-btn');
+  btns.forEach(b => b.disabled = G.actionsLeft <= 0);
+
+  // Specific disables
+  if (G.gold < feedCost) btns[0].disabled = true;
+  if (G.gold < 5 || getEmptyCells().length === 0) btns[1].disabled = true;
+  if (getAnimals().length === 0) btns[2].disabled = true;
+  if (G.gold < 8 || getEmptyCells().length === 0) btns[3].disabled = true;
+  // Breed: need 2 same-species adults
+  const canBreed = findBreedablePairs().length > 0;
+  if (!canBreed || getEmptyCells().length === 0) btns[4].disabled = true;
+  if (getAllOccupants().length === 0) btns[5].disabled = true;
+}
+
+function doAction(type) {
+  if (G.actionsLeft <= 0) return;
+
+  switch (type) {
+    case 'feed': {
+      const animals = getAnimals();
+      const cost = animals.length * 2;
+      if (G.gold < cost) return;
+      G.gold -= cost;
+      for (const a of getAllOccupants()) {
+        if (SPECIES[a.species].type === 'animal') {
+          a.hunger = Math.min(100, a.hunger + 30);
+          a.mood = Math.min(100, a.mood + 5);
+        }
+      }
+      G.daysSinceLastFed = 0;
+      addLog(`Fed all animals! (-${cost}g)`, 'event');
+      G.actionsLeft--;
+      break;
+    }
+    case 'adopt': {
+      if (G.gold < 5 || getEmptyCells().length === 0) return;
+      showShelter();
+      return; // don't decrement yet
+    }
+    case 'play': {
+      if (getAnimals().length === 0) return;
+      selectingFor = 'play';
+      addLog('Click an animal to play with it!', 'event');
+      renderAll();
+      return;
+    }
+    case 'build': {
+      if (G.gold < 8 || getEmptyCells().length === 0) return;
+      const empty = getEmptyCells();
+      const cell = empty[Math.floor(Math.random() * empty.length)];
+      const barn = createAnimal('barn');
+      barn.name = 'Barn';
+      barn.mood = 50;
+      G.grid[cell] = barn;
+      G.gold -= 8;
+      addLog('Built a new barn!', 'event');
+      G.actionsLeft--;
+      break;
+    }
+    case 'breed': {
+      const pairs = findBreedablePairs();
+      if (pairs.length === 0 || getEmptyCells().length === 0) return;
+      // Pick random pair for now
+      const pair = pairs[Math.floor(Math.random() * pairs.length)];
+      const parent1 = G.grid[pair[0]];
+      const parent2 = G.grid[pair[1]];
+      const baby = createAnimal(parent1.species);
+      baby.age = 'baby';
+      baby.mood = 80;
+      baby.stars = 1;
+      // Inherit a trait from each parent
+      baby.traits = [
+        parent1.traits[Math.floor(Math.random() * parent1.traits.length)],
+      ];
+      if (parent2.traits.length > 0 && Math.random() > 0.5) {
+        baby.traits.push(parent2.traits[Math.floor(Math.random() * parent2.traits.length)]);
+      }
+      // Maybe mutation
+      if (Math.random() < 0.2) {
+        baby.traits.push(TRAITS[Math.floor(Math.random() * TRAITS.length)]);
+        addLog(`${baby.name} was born with a unique trait!`, 'event');
+      }
+      const empty = getEmptyCells();
+      G.grid[empty[Math.floor(Math.random() * empty.length)]] = baby;
+      addLog(`${parent1.name} and ${parent2.name} had a baby: ${baby.name}!`, 'bond');
+      parent1.mood = Math.min(100, parent1.mood + 15);
+      parent2.mood = Math.min(100, parent2.mood + 15);
+      G.actionsLeft--;
+      break;
+    }
+    case 'release': {
+      if (getAllOccupants().length === 0) return;
+      selectingFor = 'release';
+      addLog('Click an animal to release it...', 'bad');
+      renderAll();
+      return;
+    }
+  }
+
+  if (G.actionsLeft <= 0) {
+    finishActionPhase();
+  } else {
+    updateActionsUI();
+  }
+  renderAll();
+}
+
+function findBreedablePairs() {
+  const pairs = [];
+  for (let i = 0; i < 16; i++) {
+    if (!G.grid[i] || SPECIES[G.grid[i].species].type !== 'animal') continue;
+    if (G.grid[i].age === 'baby') continue;
+    const neighbors = getNeighbors(i);
+    for (const ni of neighbors) {
+      if (ni <= i) continue; // avoid duplicates
+      if (!G.grid[ni] || G.grid[ni].species !== G.grid[i].species) continue;
+      if (G.grid[ni].age === 'baby') continue;
+      // Check bond
+      const bond = G.grid[i].bonds.find(b => b.id === G.grid[ni].id);
+      if (bond && bond.strength >= 2) {
+        pairs.push([i, ni]);
+      }
+    }
+  }
+  return pairs;
+}
+
+function cellClicked(idx) {
+  if (selectingFor === 'play' && G.grid[idx] && SPECIES[G.grid[idx].species].type === 'animal') {
+    G.grid[idx].mood = Math.min(100, G.grid[idx].mood + 15);
+    addLog(`Played with ${G.grid[idx].name}! They're happier!`, 'event');
+    selectingFor = null;
+    G.actionsLeft--;
+    if (G.actionsLeft <= 0) finishActionPhase();
+    else updateActionsUI();
+    renderAll();
+    return;
+  }
+
+  if (selectingFor === 'release' && G.grid[idx]) {
+    const released = G.grid[idx];
+    addLog(`Released ${released.name} the ${SPECIES[released.species].name}. Goodbye...`, 'bad');
+    // Grief for bonded animals
+    for (let i = 0; i < 16; i++) {
+      if (!G.grid[i] || i === idx) continue;
+      const bond = G.grid[i].bonds?.find(b => b.id === released.id);
+      if (bond && bond.strength >= 3) {
+        G.grid[i].mood = Math.max(0, G.grid[i].mood - 20);
+        addLog(`${G.grid[i].name} is heartbroken...`, 'bond');
+      }
+    }
+    G.grid[idx] = null;
+    selectingFor = null;
+    G.actionsLeft--;
+    if (G.actionsLeft <= 0) finishActionPhase();
+    else updateActionsUI();
+    renderAll();
+    return;
+  }
+
+  // Otherwise show info
+  selectedCell = selectedCell === idx ? null : idx;
+  showAnimalInfo(idx);
+  renderAll();
+}
+
+function finishActionPhase() {
+  G.phase = 'spin';
+  hideActions();
+  selectingFor = null;
+  selectedCell = null;
+  renderAll();
+}
+
+// --- SKIP REMAINING ACTIONS ---
+function skipActions() {
+  finishActionPhase();
+}
+
+// --- SHELTER ---
+function showShelter() {
+  const shelter = document.getElementById('shelter');
+  const options = document.getElementById('shelter-options');
+  shelter.style.display = 'block';
+  options.innerHTML = '';
+
+  // Generate 3 random adoption options
+  const available = G.day >= 8 ? [...STARTER_SPECIES, ...TIER2_SPECIES] : STARTER_SPECIES;
+  const picks = [];
+  for (let i = 0; i < 3; i++) {
+    picks.push(available[Math.floor(Math.random() * available.length)]);
+  }
+
+  for (const sp of picks) {
+    const def = SPECIES[sp];
+    const card = document.createElement('div');
+    card.className = 'shelter-card';
+    card.innerHTML = `
+      <span class="emoji">${def.emoji}</span>
+      <div class="info">${def.name}<br>${def.type}</div>
+      <div class="cost">${def.adoptCost}g</div>
+    `;
+    card.onclick = () => adoptAnimal(sp);
+    options.appendChild(card);
+  }
+}
+
+function adoptAnimal(speciesId) {
+  const cost = SPECIES[speciesId].adoptCost;
+  if (G.gold < cost) return;
+  const empty = getEmptyCells();
+  if (empty.length === 0) return;
+
+  G.gold -= cost;
+  const animal = createAnimal(speciesId);
+  const cell = empty[Math.floor(Math.random() * empty.length)];
+  G.grid[cell] = animal;
+  addLog(`Adopted ${animal.name} the ${SPECIES[speciesId].name}! (-${cost}g)`, 'event');
+  G.actionsLeft--;
+
+  closeShelter();
+  if (G.actionsLeft <= 0) finishActionPhase();
+  else updateActionsUI();
+  renderAll();
+}
+
+function closeShelter() {
+  document.getElementById('shelter').style.display = 'none';
+}
+
+// --- ANIMAL INFO ---
+function showAnimalInfo(idx) {
+  const panel = document.getElementById('animal-info');
+  if (!G.grid[idx]) {
+    panel.style.display = 'none';
+    return;
+  }
+
+  const a = G.grid[idx];
+  const sp = SPECIES[a.species];
+  const bondNames = a.bonds.filter(b => b.strength >= 3).map(b => b.name).join(', ');
+
+  panel.style.display = 'block';
+  panel.innerHTML = `
+    <div class="title">${sp.emoji} ${a.name} the ${sp.name} ${'⭐'.repeat(a.stars)}</div>
+    <div>Age: ${a.age} | Traits: ${a.traits.join(', ')}</div>
+    <div class="stat-bar">Mood: ${moodEmoji(a.mood)}
+      <div class="bar"><div class="bar-fill bar-mood" style="width:${a.mood}%"></div></div>
+    </div>
+    ${sp.type === 'animal' ? `<div class="stat-bar">Hunger:
+      <div class="bar"><div class="bar-fill bar-hunger" style="width:${a.hunger}%"></div></div>
+    </div>` : ''}
+    ${bondNames ? `<div>Friends: ${bondNames}</div>` : ''}
+    <div>Days alive: ${a.daysAlive}</div>
+  `;
+}
+
+// --- RENT ---
+function getRentAmount() {
+  const bracket = Math.floor((G.day - 1) / 5);
+  return Math.floor(10 + bracket * 8 + bracket * bracket * 2);
+}
+
+function showRent() {
+  const amount = getRentAmount();
+  document.getElementById('rent-overlay').classList.add('show');
+  document.getElementById('rent-amount').textContent = `${amount}g`;
+
+  if (G.gold >= amount) {
+    document.getElementById('rent-status').textContent = `You have ${G.gold}g. Enough!`;
+    document.getElementById('pay-rent-btn').textContent = 'PAY RENT';
+  } else {
+    const shortfall = amount - G.gold;
+    document.getElementById('rent-status').textContent =
+      `You have ${G.gold}g. Short by ${shortfall}g! (Debt: ${G.debt + shortfall}g)`;
+    document.getElementById('pay-rent-btn').textContent = G.missedRents >= 2 ? 'GAME OVER' : 'GO INTO DEBT';
+  }
+
+  document.getElementById('rent-num').textContent = amount;
+}
+
+function payRent() {
+  const amount = getRentAmount();
+
+  if (G.gold >= amount) {
+    G.gold -= amount;
+    G.debt = Math.max(0, G.debt - Math.floor(amount * 0.1)); // pay off some debt
+    addLog(`Paid ${amount}g rent. The Landlord nods.`, 'event');
+    G.missedRents = 0;
+  } else {
+    const shortfall = amount - G.gold;
+    G.debt += shortfall;
+    G.gold = 0;
+    G.missedRents++;
+    addLog(`Couldn't make rent! Debt: ${G.debt}g (${G.missedRents}/3 missed)`, 'bad');
+
+    if (G.missedRents >= 3) {
+      document.getElementById('rent-overlay').classList.remove('show');
+      gameOver();
+      return;
+    }
+  }
+
+  document.getElementById('rent-overlay').classList.remove('show');
+  G.phase = 'action';
+  G.actionsLeft = 3;
+  showActions();
+  renderAll();
+}
+
+// --- GAME OVER ---
+function gameOver() {
+  G.phase = 'gameover';
+  document.getElementById('gameover-overlay').classList.add('show');
+  document.getElementById('go-days').textContent = G.day;
+  document.getElementById('go-animals').textContent = totalAnimals;
+  document.getElementById('go-gold').textContent = totalGoldEarned;
+  document.getElementById('go-combo').textContent = bestCombo;
+}
+
+// --- LOG ---
+function addLog(msg, type = '') {
+  G.log.unshift({ msg, type, day: G.day });
+  if (G.log.length > 50) G.log.pop();
+  renderLog();
+}
+
+function renderLog() {
+  const el = document.getElementById('log-entries');
+  el.innerHTML = G.log.slice(0, 15).map(e =>
+    `<div class="entry entry-${e.type}">${e.msg}</div>`
+  ).join('');
+}
+
+// --- RENDERING ---
+function renderAll() {
+  // Header
+  document.getElementById('day-num').textContent = G.day;
+  const seasonLabel = document.getElementById('season-label');
+  seasonLabel.textContent = G.season.toUpperCase();
+  seasonLabel.className = `season-${G.season}`;
+  document.getElementById('gold-num').textContent = G.gold;
+  document.getElementById('rent-num').textContent = getRentAmount();
+  document.getElementById('debt-num').textContent = G.debt;
+  document.getElementById('debt-num').style.color = G.debt > 0 ? '#c44040' : 'var(--gold)';
+
+  // Grid
+  for (let i = 0; i < 16; i++) {
+    renderCell(i);
+  }
+
+  // Feed cost
+  const feedCost = getAnimals().length * 2;
+  document.getElementById('feed-cost').textContent = `-${feedCost}g`;
+
+  // Spin button state
+  const spinBtn = document.getElementById('spin-btn');
+  spinBtn.disabled = G.phase !== 'spin';
+  if (G.phase === 'action') {
+    spinBtn.style.display = 'none';
+  } else {
+    spinBtn.style.display = 'block';
+  }
+}
+
+function renderCell(i) {
+  const gridEl = document.getElementById('farm-grid');
+  const cell = gridEl.children[i];
+  if (!cell) return;
+
+  const a = G.grid[i];
+  cell.className = 'cell cell-grass' + (selectedCell === i ? ' selected' : '');
+
+  if (!a) {
+    cell.innerHTML = '';
+    return;
+  }
+
+  const sp = SPECIES[a.species];
+  let moodIcon = '';
+  let hungerIcon = '';
+  let bondIcon = '';
+
+  if (sp.type === 'animal') {
+    moodIcon = `<div class="mood-icon">${moodEmoji(a.mood)}</div>`;
+    hungerIcon = a.hunger <= 40 ? `<div class="hunger-icon">${hungerEmoji(a.hunger)}</div>` : '';
+  }
+
+  // Show bond hearts for strongly bonded neighbors
+  if (sp.type === 'animal') {
+    const neighbors = getNeighbors(i);
+    for (const ni of neighbors) {
+      if (G.grid[ni]) {
+        const bond = a.bonds.find(b => b.id === G.grid[ni].id);
+        if (bond && bond.strength >= 3) {
+          bondIcon = '<div class="bond-indicator">💕</div>';
+          break;
+        }
+      }
+    }
+  }
+
+  cell.innerHTML = `
+    ${moodIcon}${hungerIcon}${bondIcon}
+    <span class="emoji">${sp.emoji}</span>
+    <span class="name-tag">${a.name}</span>
+  `;
+}
+
+function buildGrid() {
+  const gridEl = document.getElementById('farm-grid');
+  gridEl.innerHTML = '';
+  for (let i = 0; i < 16; i++) {
+    const cell = document.createElement('div');
+    cell.className = 'cell cell-grass';
+    cell.onclick = () => cellClicked(i);
+    gridEl.appendChild(cell);
+  }
+}
+
+// --- START ---
+function startGame() {
+  document.getElementById('title-screen').style.display = 'none';
+  document.getElementById('game-container').style.display = 'block';
+  initState();
+  buildGrid();
+  addLog('Welcome to Lucky Harvest! Spin to start your first day.', 'event');
+  addLog('Your farm has a chicken, some wheat, another chicken, and a flower.', 'event');
+  renderAll();
+}
+
+// Add skip button to actions
+document.addEventListener('DOMContentLoaded', () => {
+  const actionsGrid = document.getElementById('actions-grid');
+  if (actionsGrid) {
+    // Add event listener for skip button
+    const actionsDiv = document.getElementById('actions');
+    const skipBtn = document.createElement('button');
+    skipBtn.className = 'action-btn';
+    skipBtn.style.marginTop = '6px';
+    skipBtn.style.gridColumn = '1 / -1';
+    skipBtn.innerHTML = 'DONE (NEXT DAY)<span class="cost">skip remaining actions</span>';
+    skipBtn.onclick = skipActions;
+    actionsDiv.appendChild(skipBtn);
+  }
+});
+</script>
+
+</body>
+</html>

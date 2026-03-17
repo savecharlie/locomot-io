@@ -1,0 +1,793 @@
+<!DOCTYPE html>
+<html><head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no,viewport-fit=cover">
+<title>COW CATCHER</title>
+<style>
+* { margin: 0; padding: 0; }
+html, body { background: #000; width: 100%; height: 100%; overflow: hidden; touch-action: none; }
+canvas { display: block; image-rendering: pixelated; image-rendering: crisp-edges;
+    width: 100%; height: 100%; object-fit: contain; }
+</style>
+</head>
+<body>
+<div id="wrap" style="position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:#000;overflow:hidden;">
+<canvas id="c"></canvas>
+</div>
+<script>
+'use strict';
+
+// ══════════════════════════════════════
+// ── GAME CONSTANTS ──
+// ══════════════════════════════════════
+
+const GW = 270, GH = 480; // 9:16 portrait
+const canvas = document.getElementById('c');
+const ctx = canvas.getContext('2d');
+canvas.width = GW; canvas.height = GH;
+ctx.imageSmoothingEnabled = false;
+
+const GRAVITY = 0.15;
+const BEAM_PULL = 0.35;
+const BEAM_LATERAL = 0.04;
+const COW_SIZE = 32;
+const UFO_SIZE = 40;
+const BEAM_MAX_RANGE = 300;
+const BEAM_ENERGY_MAX = 100;
+const BEAM_DRAIN = 0.4;
+const BEAM_RECHARGE = 0.25;
+const PLATFORM_H = 8;
+const SCROLL_BASE = 0.3;
+const SCROLL_ACCEL = 0.0001;
+
+// ══════════════════════════════════════
+// ── ASSET LOADING ──
+// ══════════════════════════════════════
+
+let assetsLoaded = 0;
+const ASSETS_TOTAL = 4;
+let gameReady = false;
+
+const cowRightImg = new Image();
+const cowFrontImg = new Image();
+const cowBackImg = new Image();
+const ufoIdleImg = new Image();
+const ufoBeamImg = new Image();
+
+function onAssetLoad() { if (++assetsLoaded >= ASSETS_TOTAL) gameReady = true; }
+
+cowRightImg.onload = onAssetLoad;
+cowFrontImg.onload = onAssetLoad;
+ufoIdleImg.onload = onAssetLoad;
+ufoBeamImg.onload = onAssetLoad;
+cowBackImg.onload = () => {}; // bonus, not counted
+
+cowRightImg.src = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAMAAAAAwCAYAAABHTnUeAAAETklEQVR42u2aMWsbSRiG3w2uAxeOPQXkQq5S5QgiyAhSCnwYbJkYF1GjMsTRL7jFhdn8AsUh1eFGLoyDVgZDQF0OTIwROVyl0hZaiLMcl5+wKaLZzI5X8tjWWOvz+4BAXs3AO+/szPfN5wEIIYQQQgghhBBCCCGEEEIIIYQQQgghhBBCCCGEEEII+b/y6c8/onKpFN1U/eVSKSqXStGm4yTGMFcoROIzrr9OG/p/s/y3dBue9I6j2Xwei0tVLFQq2G61AAA52wYAvH3zGs9fvMRpGCb61Ws1AEB1ZRnV1TV4e7s//l5dQ9/3reswfq5QiHofDwEAi0tVnIYhvL1deO1O3Ka6shzrUvWL32S8dgcbrnshD68C/Tfjv6W7cg/2PQyCAF67g0ZjHcX5cmymzPMXLwEgngi1zWw+H39vNrew3WoZnwgxAYtL1fhlEVoGQZBq7vtu90xbFdH3YfGxZXrnpP9m/Nfq+O3rl0heucLkt29enxEmRIk2AHCw7yXaNJtbaDTWAQDF+bLxCZD1yzum/NLIGsVEpekXvy1UKmg01jEIAuMLgP6b839GR7wwNWfbCfPTTBZhOg35+ftuFwf7Hry9XTwsPja287x79gCyfqF1EAQJ/TrI+sULZBr6b9b/mfMGcPfffwD8emZFjjJZF3VXMsXTnc+oWz9zzdMwHGt+s7mVmUMj/TePpTMJOdtOHK7qtRq2Wy3kbDs1DKdNjjBcDr8iZJtOITYdJxK5rlxFuIx+FdMpBP036/+d8xr0fd86PDqy+r4ff0QF4jQMEyd5nd1GDV3qqd8EG65rCZNksxYqldSdaKFSSXyX9acd2kwyaf/Vispt99+6ys4kSlm6+ZgQL6/44nwZqjHXxUnvOPLaHVRXlmNNaRrl5+p4p6V/lP+DIEitmIjfsqI/K/7PXGVn8tqdSDVdmKzuNvJO4+3txiWwvu9b375+iX757f6159jV1bW4Tj7uGQDkP/woy20PwjiSTVP/KP9l/aP8l1+42+7/RFa9qFPLK1IeRP5DF4+e3AMAfPr7P7iDEL2PhxgEQfzPGdN56EX0q7mqM2vHbd3hBMj667UaNlw3M/rp/zVEgHE70zDvS5bDcA+538twd/5CvVZLRIppmq+G2LRc1QUiAHj37AH6r46sYftI6J/myy/yZDkK9H3fGue/HKn7vm+ZKoPeBP8nsgBEaWvconi6gwg7nzE8xEUiFIsD3TRRrw+MWtSPXvk/07ih+dPIndWzwHkHRNV/0ScL3l/G/7lCIZqU/3cmMQD5fsm4QWTR/MQ4NCoqYgLS7qdM6+XX8VL4nzXP5QWs63/f960s+B+z6ThnbvjpVgEu08/EJFz0puGm40z1ZmjaGE56x1qasuK7+v7o3nS9zHwZNf4i4uV+5VIpE4PIkparzoPOleKsLV41EuguABBCCCGEEEIIIYQQQgghhBBCCCGEEEIIIYQQQsjt5Tugbwl3zp4jsQAAAABJRU5ErkJggg==';
+
+cowFrontImg.src = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAMAAAAAwCAYAAABHTnUeAAADbklEQVR42u2bMWvbQBiGX4dAtw4dhAd5UP6CBwdDO1VgKGlkMF60mNKhbeKhuwgh+CekIWM6eAkByw4GgzplMAmpoeQHxIMFtkVpfsJ16R12mzoUkujOfZ/FsgLh/V7d3ffd5xNACCGEEEIIIYQQQgghhBBCCCGEEEIIIYQQQgghhBBCCFke1hxH0IXl9T/zkKJrvq/uHTWbuB4OMyaZXvN9eOVNeJUqar6PnUbDOP30PwXxV4NLsRcE4mY6FjfTsfpuwmoqdV8NLsXNdCxmv18NLgX9Xy7/V+/7H9Z8HznbBgC8eu2p+4cH+6jXt5BfLwpdVyI5QEZxjHcfttX9XhQBALqdEHtBIHReieh/iiWQDCBrWbf+fZIkWqeyu/QDQMl1jdVP//9k5aGDKrmuul4UmI50OyG6nXAuBtOg/488g4uFgigWCuJmOp673gsCUSwUtK5DpX5ZO8sYZq9N0E//U9wDyJk7+wkA9fqWquV0ZpIkGMUxACBstVFyXeTXiwhPjo1aOel/ShNABuBVqmpTtiEGOM3kUXJdHDWbWj+Amu8jbLWVzvDkGPZZBK9SRXhyrOLSfQDR/5RS2NXgUqw5jlhzHNW+kqlYXuuuf7b9NpuGZYqm/8vj/71vgnO2jZrvI2tZGMUxcratNjFepTqXlnUja1nI2Tby68W5ckGm4cF5X2v99D/lCSC7DEfNJiZJovrRMpjBed+YOvrwYF/10XtRpGKT9amuA4j+pzgBJkky9zBkALP3dR5AUmfWstQPMaM4xiRJ5mLQXT/9T7EEkhuZSZKo1Gta/7nkupgkCbqdEDnbRtayVAxhq629fvqfYhcIALzyJnpRhA0xwCiO8fYJEL9wjRlAXnkTAPD0+zcAwKeXz7D15YcxA4j+p5gBZIqVq8/Xj9uqLtU5/QLA9XCYkRp7UYTnb3bx+f0uTjN51V7UvY1I/1PMAL8OWYmw1cZOo5E5uuVXO90HkFwl+xcXGQDoA8DZhRHvBdB/DUqg2RQ7e+pQBqD7mfRFJULYahul/3f/TdP/GP6vgPxzbUqWx//VRw1A82MEd5UIJuhfdN7HK29ip9EwV/8D+L/yEAGYcOjqb2Qta+5VQtNY1DM3YQIv0m/EcykWCmIvCPgiuWasOQ6fCyGEEIIIYQQQgghhBBCCCH/Cz8BwtFEBhsJRugAAAAASUVORK5CYII=';
+
+cowBackImg.src = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAMAAAAAwCAYAAABHTnUeAAAD6ElEQVR42u2cP2gTURzHv6l/cNUhVr0Ml6lTUYpECroFqpH0guLQiBSn0qZDZw/BEJ2Fa0oHBxcdSkuvpSmFDEKFUNFQcHJqhnvQNkOFLmoVzqG+I00btWC898L3s4Tklu/73u+93+/93l0AQgghhBBCCCGEEEIIIYQQQgghhBBCCCGEEEIIIa2Im6avs+71Rzd9+t+Z/ne1U7wcgB2Lamt+3DT99bc72gUR/Q9xAsRN0x/OZlFdq+Dz9qb/4huQt21tAujz9qY/nM3CnZ1Bda0CcSOJ6lpFm0lA//+ek+0YQHc0ipVyGQBgZQYBAC9fvdJm9em71n/ot1TawkatFtFBP/0POQNs1evYqteD7wPJpJa1s5UZDAKocTyqQ/8V2APojjs7AwCIGQaszCCGs1ma0oH+//OUEjdNv7pWOfKaJwR6+64qXUbkbdsfHx8L9MYM48D1s+cvKK2f/oecARrNT6UtpNIWPCEO7e5VTrvS/JHRHFJpC45ThCcEPCGU10//j8eJf7367H35iouXLmLo/gNMT03iduoWAGB3dxcAcObUabxZXX2i6up55tRp5J8+w1JpGQAwPTWJ584klkrL+LH3HZd7e5XWT/9DLIHk7OyOtu47DySTeFwoRFS9Ab/TLjdjqnaD6L8CJdCfBqBLO665c6JLJ4X+H4+2nAOUFl0AgOMUsVIuY3pqEjHDQCptaWG+1C83YxLZW9dFP/0PoQTqjkaDARzVhbDu3lO+hJAtOGC/Dde4iVRdP/1XIANIwe78QrCrl99VZqNWi+Rt25ett0bjm2+EytD/EDOAOzuD5gE09nJTaQuVd++UXYEa24iOU9xfdX4FkSwjVNZP/0PeBDcfXIyM5uAJEfSkW6VnFTeQVmYwqDtHRnNwnKLS+ul/yCVQqw5EzDAC4bqUETrqp/8hZ4DmB5ZkzSlFq96F+JN+mZJ11U///0MJJE32hICxWg527gCULx9a6f8wsV9GjI+PKb+RpP8hT4DSogtPCHyYyKHg1TGQTGJuqCd4xlv1ACotunCcYqC/tOjiyvVzQRCpDv0PeQLIXrNEHmbYsajy9edGrRbxhDhwWio1S/2qn6TS/xAnQPMBhR2Lou9aP9bf7qDg7dd3uhzFF7w65oZ6gmCS+lUPIPofcgaQKfbh6uFerTu/oPxrhe78AoazWWzUapE7rz8Fn7rolwGjs/9yMuvoPz5W3/tHPbMdN03/Y/W98i9m523bP+oFcurvzPjpatcKpDONjw900th00P+/NXbxBhxkpVzuiEnciYyM5vQVHzdNvz+R8Hkb20t/IuHr+k9whBBCCCGEEEIIIYS0h5+nxiwnuRPFFwAAAABJRU5ErkJggg==';
+
+ufoIdleImg.src = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAQAAAABACAYAAAD1Xam+AAAEtklEQVR42u3cb2gTZwDH8V+s+E6EGVBvcy9qmatDkQwJMhWnsxsyWCJksMFYKfoiAVGKQmGtg9G5Mdcy6rAgImO6CYaaMvBfnKBbQUJZHA41C6YvxnbOLYONvhNC9qK7W3pLbe0u6V3z/UChSS6Xfp97uMtd2koAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAKBWAnPxoqH14fLGg7FzlffdOJLclf0+E2iEQaeffq/01/UFuz7ve7fy9nhTeZ1zmfk8Eein32v9C+q513Pet7gUuOW8b+PB2Llqy86HvT799Hutv6leL/T2R52SpJeeef7p5qXGkualxpKxP+7/9XCBljmXXfnCc3dHz6XPzqcJQD/9XuyvyzuA2ezR5tNRgH76vdq/sBYrvXX3XlmSgsGgJOnVHS9rvKm8bnEpcOvr/Hc/zXQ95u9/liWpWCxKkta1tvji3JB++v3Sv7BW4cVi0f7Bp2JdBCn8eK9ZklatbhmrfLzy+cFg0F6/VycC/fT7rb8m7wCmCnde9bTCnbedA/GodXoR/fT7pd+1awBnUxfKuVy+6mOfnfnisdfnfM6hbWHD+jqbuuC588Na91tyuby82v9i7IBhfTVivx+3vys7AOuCxe2BSxpKDGgoMSDnYNw4ktw10/U5lz20LWykwq1mV+p8byrcan6ZeMvw0kUiu7/vsIb2tGtoT7ur/blcXol9p5TYd0oDgxnPXSQLrQ+X4z3Hjdb2lHn+RFdva3vKdO4E/m+/Na9uD1zyZH8t538ul7fn1e2+w6721/RTgFwub39FYrH/hK1a3TJW+XZn1eqWsd++urk+EotNeq5f0U+/1/tdu5hQ+bYkd+fOI5cdTiZV7VchI7HYpOUGR48akhTfsNfMfvqBfUR589gp8/XoTk9dCHL2918bsX/ezq2bzNn0Z6/2GpIU2t5tStKza9bYj3mxP95z3G5e1HLTfiy+Ye+s+p283u/2/K9Hv6uD+N77H9uDUPp52L6/6anIY69rcPSoEU7tMCUpE71iVE6iQ+8c8ORVYKu//9qI0TyYMo8VMycTwXDHWDxqOHcC08le7TVSnzSbkhTdP2ZYOwE/9Fvbriuz++SH4RMdzu03U+kH45KktmWLJ18P8ni/G/NfktIPJ9bRtihSs/4Fczlg6evjSl8fVyPKnr5s9JQi6ilFlD192WjEMShdHFbp4rAalRfmv6sfAw4nkwouX6ZNm7fMeq9X+bZxMPrvKYAkjXz7jYq/PvDsBrX6O7duMfvjUeOVibu7pzr6Z9qKJyVJZ6pcWNrebUb3Tz4F8Et/fPPEtovqiiR1z+boX+3I75d+N+Z/tSN/Lfpr8nsAhUJh0u0fsllNd35TbTDbQjvNauvzukKhoNdWrjArW6r1h9PBjn++7a7Wvzb0hm/7257YOW3/dNt/bSjkyyO7W/O/Hv2unktZH00El0/8fcMK40lX1nvf/EWS7L2fV/9clH76/dYfqMdAVJpuUKzYSl7f8PTT79f+QD0GwlJtQKpxnuf49R9E0E+/1/sDcz0oTvP930LRT38j9wMAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAgAl/AyMICEZ91WQpAAAAAElFTkSuQmCC';
+
+ufoBeamImg.src = 'data:image/png;base64,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';
+
+// ══════════════════════════════════════
+// ── GAME STATE ──
+// ══════════════════════════════════════
+
+let state = 'title'; // title, playing, gameover
+let score = 0;
+let highScore = parseInt(localStorage.getItem('cowCatcherHi') || '0');
+let scrollY = 0;
+let scrollSpeed = SCROLL_BASE;
+let time = 0;
+let shakeX = 0, shakeY = 0, shakeT = 0;
+
+// UFO
+let ufo = { x: GW / 2, y: 40, targetX: GW / 2, frame: 0, frameT: 0 };
+
+// Cow
+let cow = { x: GW / 2, y: GH - 80, vx: 0, vy: 0, onPlatform: false, frame: 0, frameT: 0,
+            spaghettiF: 0, alive: true, dir: 0 };
+
+// Beam
+let beam = { active: false, energy: BEAM_ENERGY_MAX };
+
+// Platforms
+let platforms = [];
+let platformIdCounter = 0;
+
+// Particles
+let particles = [];
+
+// Stars (parallax background)
+let stars = [];
+for (let i = 0; i < 60; i++) {
+    stars.push({
+        x: Math.random() * GW,
+        y: Math.random() * GH,
+        size: Math.random() < 0.3 ? 2 : 1,
+        speed: 0.1 + Math.random() * 0.4,
+        bright: 0.3 + Math.random() * 0.7
+    });
+}
+
+// Input
+let touch = { down: false, x: GW / 2, y: GH / 2 };
+let gamepad = { x: 0, beam: false };
+
+// ══════════════════════════════════════
+// ── PLATFORM GENERATION ──
+// ══════════════════════════════════════
+
+function makePlatform(y) {
+    const minW = 50;
+    const maxW = 140;
+    const w = minW + Math.random() * (maxW - minW);
+    const x = 10 + Math.random() * (GW - 20 - w);
+    const type = Math.random();
+    let ptype = 'solid';
+    if (time > 500 && type < 0.15) ptype = 'moving';
+    else if (time > 300 && type < 0.25) ptype = 'breakable';
+
+    return {
+        id: platformIdCounter++,
+        x, y, w, h: PLATFORM_H,
+        type: ptype,
+        moveDir: Math.random() < 0.5 ? 1 : -1,
+        moveSpeed: 0.3 + Math.random() * 0.5,
+        broken: false,
+        breakTimer: 0
+    };
+}
+
+function initPlatforms() {
+    platforms = [];
+    // Ground platform
+    platforms.push({ id: platformIdCounter++, x: 0, y: GH - 30, w: GW, h: PLATFORM_H, type: 'solid', moveDir: 0, moveSpeed: 0, broken: false, breakTimer: 0 });
+    // Generate upward
+    let py = GH - 80;
+    while (py > -200) {
+        py -= 40 + Math.random() * 60;
+        platforms.push(makePlatform(py));
+    }
+}
+
+function generatePlatformsAbove() {
+    // Find highest platform
+    let minY = Infinity;
+    for (const p of platforms) if (p.y < minY) minY = p.y;
+    // Generate more above if needed
+    const topEdge = scrollY - 100;
+    while (minY > topEdge) {
+        minY -= 40 + Math.random() * 60;
+        platforms.push(makePlatform(minY));
+    }
+}
+
+// ══════════════════════════════════════
+// ── PARTICLES ──
+// ══════════════════════════════════════
+
+function spawnParticles(x, y, count, color, speed) {
+    for (let i = 0; i < count; i++) {
+        const angle = Math.random() * Math.PI * 2;
+        const spd = speed * (0.5 + Math.random());
+        particles.push({
+            x, y,
+            vx: Math.cos(angle) * spd,
+            vy: Math.sin(angle) * spd,
+            life: 30 + Math.random() * 30,
+            maxLife: 60,
+            color,
+            size: 1 + Math.random() * 2
+        });
+    }
+}
+
+function triggerShake(intensity) {
+    shakeT = 8;
+    shakeX = (Math.random() - 0.5) * intensity;
+    shakeY = (Math.random() - 0.5) * intensity;
+}
+
+// ══════════════════════════════════════
+// ── SPAGHETTIFICATION RENDERER ──
+// ══════════════════════════════════════
+
+function drawCowSpaghettified(img, frameIdx, cx, cy, spaghettiF, dir) {
+    // spaghettiF: 0 = normal, 1 = fully spaghettified
+    const fw = 48, fh = 48; // frame size in spritesheet
+    const sx = frameIdx * fw;
+    const drawW = COW_SIZE;
+    const drawH = COW_SIZE;
+
+    if (spaghettiF < 0.05) {
+        // Normal draw
+        ctx.drawImage(img, sx, 0, fw, fh, cx - drawW/2, cy - drawH/2, drawW, drawH);
+        return;
+    }
+
+    // Strip-slice spaghettification
+    const strips = 16;
+    const stripH = fh / strips;
+    const destStripH = drawH / strips;
+
+    for (let i = 0; i < strips; i++) {
+        const t = i / strips; // 0 at top, 1 at bottom
+        // Stretch toward UFO (upward) — top strips stretch more
+        const stretchY = spaghettiF * (1 - t) * drawH * 0.8;
+        // Squeeze width as it stretches
+        const squeeze = 1 - spaghettiF * (1 - t) * 0.6;
+        const stripW = drawW * squeeze;
+        const stripX = cx - stripW / 2;
+        const stripY = cy - drawH/2 + destStripH * i - stretchY;
+
+        ctx.drawImage(img,
+            sx, stripH * i, fw, stripH,       // source
+            stripX, stripY, stripW, destStripH  // dest
+        );
+    }
+}
+
+// ══════════════════════════════════════
+// ── BEAM RENDERER ──
+// ══════════════════════════════════════
+
+function drawBeam(ux, uy, cx, cy, energy) {
+    const t = energy / BEAM_ENERGY_MAX;
+    const alpha = 0.3 + t * 0.4;
+
+    // Vortex beam — wide at cow, pinches at UFO
+    const steps = 20;
+    for (let i = 0; i <= steps; i++) {
+        const frac = i / steps; // 0=UFO, 1=cow
+        const y = uy + (cy - uy) * frac;
+        const width = 2 + Math.pow(frac, 0.5) * 20 * t;
+        const x = ux + (cx - ux) * frac;
+
+        // Swirl offset
+        const swirl = Math.sin(frac * 8 + time * 0.1) * frac * 4;
+
+        ctx.globalAlpha = alpha * (0.5 + frac * 0.5);
+        ctx.fillStyle = `hsl(${140 + frac * 40}, 80%, ${60 + frac * 20}%)`;
+        ctx.fillRect(x - width/2 + swirl, y - 2, width, (cy - uy) / steps + 2);
+    }
+
+    // Bright core
+    ctx.globalAlpha = alpha * 0.6;
+    ctx.strokeStyle = '#aaffcc';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(ux, uy);
+    for (let i = 1; i <= steps; i++) {
+        const frac = i / steps;
+        const y = uy + (cy - uy) * frac;
+        const x = ux + (cx - ux) * frac;
+        const swirl = Math.sin(frac * 8 + time * 0.1) * frac * 3;
+        ctx.lineTo(x + swirl, y);
+    }
+    ctx.stroke();
+
+    // Singularity glow at UFO
+    const grad = ctx.createRadialGradient(ux, uy + 10, 0, ux, uy + 10, 12);
+    grad.addColorStop(0, `rgba(180,255,200,${alpha})`);
+    grad.addColorStop(1, 'rgba(180,255,200,0)');
+    ctx.globalAlpha = 1;
+    ctx.fillStyle = grad;
+    ctx.fillRect(ux - 12, uy - 2, 24, 24);
+
+    ctx.globalAlpha = 1;
+}
+
+// ══════════════════════════════════════
+// ── INPUT HANDLING ──
+// ══════════════════════════════════════
+
+function getCanvasPos(clientX, clientY) {
+    const rect = canvas.getBoundingClientRect();
+    return {
+        x: (clientX - rect.left) / rect.width * GW,
+        y: (clientY - rect.top) / rect.height * GH
+    };
+}
+
+canvas.addEventListener('touchstart', e => {
+    e.preventDefault();
+    const t = e.touches[0];
+    const pos = getCanvasPos(t.clientX, t.clientY);
+    touch.down = true;
+    touch.x = pos.x;
+    touch.y = pos.y;
+    if (state === 'title' && gameReady) startGame();
+    else if (state === 'gameover') startGame();
+});
+
+canvas.addEventListener('touchmove', e => {
+    e.preventDefault();
+    const t = e.touches[0];
+    const pos = getCanvasPos(t.clientX, t.clientY);
+    touch.x = pos.x;
+    touch.y = pos.y;
+});
+
+canvas.addEventListener('touchend', e => {
+    e.preventDefault();
+    touch.down = false;
+});
+
+canvas.addEventListener('mousedown', e => {
+    const pos = getCanvasPos(e.clientX, e.clientY);
+    touch.down = true;
+    touch.x = pos.x;
+    touch.y = pos.y;
+    if (state === 'title' && gameReady) startGame();
+    else if (state === 'gameover') startGame();
+});
+
+canvas.addEventListener('mousemove', e => {
+    const pos = getCanvasPos(e.clientX, e.clientY);
+    touch.x = pos.x;
+});
+
+canvas.addEventListener('mouseup', () => { touch.down = false; });
+
+// Gamepad
+function pollGamepad() {
+    const gps = navigator.getGamepads ? navigator.getGamepads() : [];
+    for (const gp of gps) {
+        if (!gp) continue;
+        gamepad.x = Math.abs(gp.axes[0]) > 0.15 ? gp.axes[0] : 0;
+        gamepad.beam = gp.buttons[0]?.pressed || gp.buttons[1]?.pressed || false;
+        break;
+    }
+}
+
+// ══════════════════════════════════════
+// ── GAME LOGIC ──
+// ══════════════════════════════════════
+
+function startGame() {
+    state = 'playing';
+    score = 0;
+    scrollY = 0;
+    scrollSpeed = SCROLL_BASE;
+    time = 0;
+    platformIdCounter = 0;
+
+    ufo.x = GW / 2; ufo.y = 40; ufo.targetX = GW / 2;
+    cow.x = GW / 2; cow.y = GH - 60; cow.vx = 0; cow.vy = 0;
+    cow.onPlatform = false; cow.alive = true; cow.spaghettiF = 0; cow.dir = 0;
+    beam.active = false; beam.energy = BEAM_ENERGY_MAX;
+    particles = [];
+
+    initPlatforms();
+}
+
+function update(dt) {
+    if (state !== 'playing') return;
+    time++;
+
+    pollGamepad();
+
+    // UFO follows input
+    if (touch.down) {
+        ufo.targetX = touch.x;
+        beam.active = true;
+    } else if (gamepad.beam) {
+        ufo.targetX = Math.max(UFO_SIZE/2, Math.min(GW - UFO_SIZE/2, ufo.x + gamepad.x * 4));
+        beam.active = true;
+    } else {
+        if (gamepad.x !== 0) ufo.targetX = Math.max(UFO_SIZE/2, Math.min(GW - UFO_SIZE/2, ufo.x + gamepad.x * 4));
+        beam.active = false;
+    }
+
+    // Smooth UFO movement
+    ufo.x += (ufo.targetX - ufo.x) * 0.12;
+    ufo.x = Math.max(UFO_SIZE/2, Math.min(GW - UFO_SIZE/2, ufo.x));
+
+    // UFO animation
+    ufo.frameT++;
+    if (ufo.frameT > 8) { ufo.frameT = 0; ufo.frame = (ufo.frame + 1) % 4; }
+
+    // Beam energy
+    if (beam.active) {
+        beam.energy = Math.max(0, beam.energy - BEAM_DRAIN);
+        if (beam.energy <= 0) beam.active = false;
+    } else {
+        beam.energy = Math.min(BEAM_ENERGY_MAX, beam.energy + BEAM_RECHARGE);
+    }
+
+    // Cow physics
+    cow.vy += GRAVITY;
+
+    // Screen-space positions
+    const cowScreenY = cow.y - scrollY;
+    const ufoScreenY = ufo.y;
+    const dist = Math.sqrt((ufo.x - cow.x) ** 2 + (ufoScreenY - cowScreenY) ** 2);
+
+    if (beam.active && beam.energy > 0 && dist < BEAM_MAX_RANGE) {
+        // Pull cow toward UFO
+        cow.vy -= BEAM_PULL;
+        cow.vx += (ufo.x - cow.x) * BEAM_LATERAL;
+
+        // Spaghettification increases as cow gets closer to UFO
+        const closeness = 1 - dist / BEAM_MAX_RANGE;
+        cow.spaghettiF = Math.min(1, cow.spaghettiF + (closeness * 0.05));
+
+        // Particles along beam
+        if (time % 3 === 0) {
+            const px = cow.x + (Math.random() - 0.5) * 10;
+            const py = cow.y + (Math.random() - 0.5) * 10;
+            spawnParticles(px, py - scrollY, 1, '#aaffaa', 0.5);
+        }
+    } else {
+        // Return to normal
+        cow.spaghettiF = Math.max(0, cow.spaghettiF - 0.03);
+    }
+
+    // Apply velocity
+    cow.x += cow.vx;
+    cow.y += cow.vy;
+
+    // Friction
+    cow.vx *= 0.95;
+
+    // Wall bouncing
+    if (cow.x < COW_SIZE/2) { cow.x = COW_SIZE/2; cow.vx = Math.abs(cow.vx) * 0.5; }
+    if (cow.x > GW - COW_SIZE/2) { cow.x = GW - COW_SIZE/2; cow.vx = -Math.abs(cow.vx) * 0.5; }
+
+    // Direction
+    if (cow.vx > 0.3) cow.dir = 1;
+    else if (cow.vx < -0.3) cow.dir = -1;
+
+    // Platform collision
+    cow.onPlatform = false;
+    for (const p of platforms) {
+        if (p.broken) continue;
+
+        // Moving platforms
+        if (p.type === 'moving') {
+            p.x += p.moveDir * p.moveSpeed;
+            if (p.x < 0) { p.x = 0; p.moveDir = 1; }
+            if (p.x + p.w > GW) { p.x = GW - p.w; p.moveDir = -1; }
+        }
+
+        // Collision: cow landing on top of platform
+        const pScreenY = p.y - scrollY;
+        if (cow.vy > 0 &&
+            cowScreenY + COW_SIZE/2 >= pScreenY &&
+            cowScreenY + COW_SIZE/2 <= pScreenY + p.h + cow.vy + 2 &&
+            cow.x + COW_SIZE/3 > p.x &&
+            cow.x - COW_SIZE/3 < p.x + p.w) {
+
+            cow.y = p.y - COW_SIZE/2 + scrollY;
+            cow.vy = 0;
+            cow.onPlatform = true;
+
+            if (p.type === 'breakable') {
+                p.breakTimer++;
+                if (p.breakTimer > 30) {
+                    p.broken = true;
+                    spawnParticles(p.x + p.w/2, pScreenY, 8, '#8B7355', 1.5);
+                    triggerShake(3);
+                }
+            }
+
+            // Moving platform carries cow
+            if (p.type === 'moving') {
+                cow.x += p.moveDir * p.moveSpeed;
+            }
+        }
+    }
+
+    // Scrolling — camera follows cow upward
+    const targetScroll = cow.y - GH * 0.6;
+    if (targetScroll < scrollY) {
+        scrollY += (targetScroll - scrollY) * 0.08;
+    }
+
+    // Minimum scroll speed (game gets faster)
+    scrollSpeed = SCROLL_BASE + time * SCROLL_ACCEL;
+    scrollY -= scrollSpeed;
+
+    // Score based on height
+    const height = Math.floor(-scrollY / 10);
+    if (height > score) score = height;
+
+    // Generate more platforms
+    generatePlatformsAbove();
+
+    // Remove platforms below screen
+    platforms = platforms.filter(p => (p.y - scrollY) < GH + 50);
+
+    // Cow walk animation
+    cow.frameT++;
+    if (cow.frameT > 10) { cow.frameT = 0; cow.frame = (cow.frame + 1) % 4; }
+
+    // Update particles
+    for (const p of particles) {
+        p.x += p.vx;
+        p.y += p.vy;
+        p.vy += 0.02;
+        p.life--;
+    }
+    particles = particles.filter(p => p.life > 0);
+
+    // Shake decay
+    if (shakeT > 0) {
+        shakeT--;
+        shakeX = (Math.random() - 0.5) * shakeT;
+        shakeY = (Math.random() - 0.5) * shakeT;
+    } else {
+        shakeX = shakeY = 0;
+    }
+
+    // Game over — cow fell below screen
+    if (cowScreenY > GH + 50) {
+        state = 'gameover';
+        if (score > highScore) {
+            highScore = score;
+            localStorage.setItem('cowCatcherHi', highScore);
+        }
+        triggerShake(8);
+    }
+}
+
+// ══════════════════════════════════════
+// ── RENDERING ──
+// ══════════════════════════════════════
+
+function drawStars() {
+    for (const s of stars) {
+        const y = ((s.y + scrollY * s.speed) % GH + GH) % GH;
+        ctx.globalAlpha = s.bright * 0.7;
+        ctx.fillStyle = '#fff';
+        ctx.fillRect(s.x, y, s.size, s.size);
+    }
+    ctx.globalAlpha = 1;
+}
+
+function drawGround() {
+    const groundY = (GH - 30) - scrollY;
+    if (groundY > GH) return;
+    // Green pasture
+    const grad = ctx.createLinearGradient(0, groundY, 0, groundY + 60);
+    grad.addColorStop(0, '#4a7c3f');
+    grad.addColorStop(1, '#2d5a1e');
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, groundY, GW, GH - groundY + 100);
+
+    // Grass tufts
+    ctx.fillStyle = '#5a9c4f';
+    for (let x = 0; x < GW; x += 8) {
+        const h = 2 + Math.sin(x * 0.5) * 2;
+        ctx.fillRect(x, groundY - h, 3, h);
+    }
+}
+
+function drawPlatforms() {
+    for (const p of platforms) {
+        if (p.broken) continue;
+        const py = p.y - scrollY;
+        if (py < -20 || py > GH + 20) continue;
+
+        if (p.type === 'solid' && p.w === GW) continue; // ground drawn separately
+
+        // Platform body
+        let color1, color2;
+        if (p.type === 'solid') { color1 = '#8B7355'; color2 = '#6B5335'; }
+        else if (p.type === 'moving') { color1 = '#6688BB'; color2 = '#4466AA'; }
+        else { color1 = '#BB8855'; color2 = '#996633'; } // breakable
+
+        ctx.fillStyle = color1;
+        ctx.fillRect(p.x, py, p.w, p.h);
+        ctx.fillStyle = color2;
+        ctx.fillRect(p.x, py + p.h - 2, p.w, 2);
+
+        // Fence posts
+        ctx.fillStyle = color2;
+        ctx.fillRect(p.x, py - 4, 3, p.h + 4);
+        ctx.fillRect(p.x + p.w - 3, py - 4, 3, p.h + 4);
+
+        // Breakable crack indicator
+        if (p.type === 'breakable' && p.breakTimer > 0) {
+            ctx.fillStyle = '#333';
+            const cx = p.x + p.w/2;
+            ctx.fillRect(cx - 2, py + 1, 1, p.h - 2);
+            ctx.fillRect(cx + 1, py + 2, 1, p.h - 3);
+        }
+    }
+}
+
+function drawCow() {
+    const screenY = cow.y - scrollY;
+    if (screenY < -50 || screenY > GH + 50) return;
+
+    // Choose sprite based on state
+    let img = cowRightImg;
+    if (beam.active && cow.spaghettiF > 0.1) {
+        img = cowBackImg; // being pulled up, show back
+    } else if (cow.dir < 0) {
+        // Flip for left
+        ctx.save();
+        ctx.translate(cow.x, screenY);
+        ctx.scale(-1, 1);
+        drawCowSpaghettified(cowRightImg, cow.frame, 0, 0, cow.spaghettiF, cow.dir);
+        ctx.restore();
+        return;
+    }
+
+    drawCowSpaghettified(img, cow.frame, cow.x, screenY, cow.spaghettiF, cow.dir);
+}
+
+function drawUFO() {
+    const img = beam.active ? ufoBeamImg : ufoIdleImg;
+    const fw = 64, fh = 64;
+    const sx = ufo.frame * fw;
+    ctx.drawImage(img, sx, 0, fw, fh, ufo.x - UFO_SIZE/2, ufo.y - UFO_SIZE/2, UFO_SIZE, UFO_SIZE);
+}
+
+function drawBeamEffect() {
+    if (!beam.active || beam.energy <= 0) return;
+    const cowScreenY = cow.y - scrollY;
+    drawBeam(ufo.x, ufo.y + UFO_SIZE/2 - 5, cow.x, cowScreenY - COW_SIZE/4, beam.energy);
+}
+
+function drawParticles() {
+    for (const p of particles) {
+        const alpha = p.life / p.maxLife;
+        ctx.globalAlpha = alpha;
+        ctx.fillStyle = p.color;
+        ctx.fillRect(p.x - p.size/2, p.y - p.size/2, p.size, p.size);
+    }
+    ctx.globalAlpha = 1;
+}
+
+function drawHUD() {
+    // Score
+    ctx.fillStyle = '#fff';
+    ctx.font = 'bold 12px monospace';
+    ctx.textAlign = 'left';
+    ctx.fillText(`HEIGHT: ${score}m`, 5, 14);
+
+    // High score
+    ctx.textAlign = 'right';
+    ctx.fillStyle = '#aaa';
+    ctx.fillText(`BEST: ${highScore}m`, GW - 5, 14);
+
+    // Beam energy bar
+    const barW = 50, barH = 4;
+    const barX = GW / 2 - barW / 2;
+    const barY = 6;
+    ctx.fillStyle = '#333';
+    ctx.fillRect(barX, barY, barW, barH);
+    const fill = beam.energy / BEAM_ENERGY_MAX;
+    const hue = fill * 120; // red to green
+    ctx.fillStyle = `hsl(${hue}, 80%, 50%)`;
+    ctx.fillRect(barX, barY, barW * fill, barH);
+}
+
+function drawTitle() {
+    // Dark overlay
+    ctx.fillStyle = 'rgba(0,0,0,0.6)';
+    ctx.fillRect(0, 0, GW, GH);
+
+    // Title
+    ctx.fillStyle = '#7fff7f';
+    ctx.font = 'bold 28px monospace';
+    ctx.textAlign = 'center';
+    ctx.fillText('COW', GW/2, GH * 0.3);
+    ctx.fillText('CATCHER', GW/2, GH * 0.3 + 32);
+
+    // UFO icon
+    if (ufoIdleImg.complete) {
+        ctx.drawImage(ufoIdleImg, 0, 0, 64, 64, GW/2 - 30, GH * 0.42, 60, 60);
+    }
+
+    // Instructions
+    ctx.fillStyle = '#ccc';
+    ctx.font = '10px monospace';
+    ctx.fillText('TOUCH & HOLD to beam', GW/2, GH * 0.62);
+    ctx.fillText('Move finger to steer UFO', GW/2, GH * 0.62 + 16);
+    ctx.fillText('Pull the cow up through gaps!', GW/2, GH * 0.62 + 32);
+
+    // Start prompt
+    if (!gameReady) {
+        ctx.fillStyle = '#888';
+        ctx.font = '10px monospace';
+        ctx.fillText('LOADING...', GW/2, GH * 0.82);
+    } else {
+        const blink = Math.sin(Date.now() * 0.005) > 0;
+        if (blink) {
+            ctx.fillStyle = '#7fff7f';
+            ctx.font = 'bold 14px monospace';
+            ctx.fillText('TAP TO START', GW/2, GH * 0.82);
+        }
+    }
+
+    // High score
+    if (highScore > 0) {
+        ctx.fillStyle = '#aaa';
+        ctx.font = '10px monospace';
+        ctx.fillText(`BEST: ${highScore}m`, GW/2, GH * 0.88);
+    }
+}
+
+function drawGameOver() {
+    ctx.fillStyle = 'rgba(0,0,0,0.7)';
+    ctx.fillRect(0, 0, GW, GH);
+
+    ctx.fillStyle = '#ff6666';
+    ctx.font = 'bold 22px monospace';
+    ctx.textAlign = 'center';
+    ctx.fillText('COW LOST!', GW/2, GH * 0.35);
+
+    ctx.fillStyle = '#fff';
+    ctx.font = 'bold 16px monospace';
+    ctx.fillText(`${score}m`, GW/2, GH * 0.45);
+
+    if (score >= highScore && score > 0) {
+        ctx.fillStyle = '#ffdd44';
+        ctx.font = '10px monospace';
+        ctx.fillText('NEW RECORD!', GW/2, GH * 0.5);
+    }
+
+    const blink = Math.sin(Date.now() * 0.005) > 0;
+    if (blink) {
+        ctx.fillStyle = '#7fff7f';
+        ctx.font = 'bold 12px monospace';
+        ctx.fillText('TAP TO RETRY', GW/2, GH * 0.65);
+    }
+}
+
+function render() {
+    ctx.clearRect(0, 0, GW, GH);
+
+    // Sky gradient
+    const skyGrad = ctx.createLinearGradient(0, 0, 0, GH);
+    skyGrad.addColorStop(0, '#0a0a2e');
+    skyGrad.addColorStop(1, '#1a1a4e');
+    ctx.fillStyle = skyGrad;
+    ctx.fillRect(0, 0, GW, GH);
+
+    ctx.save();
+    ctx.translate(shakeX, shakeY);
+
+    drawStars();
+    drawGround();
+    drawPlatforms();
+    drawBeamEffect();
+    drawCow();
+    drawUFO();
+    drawParticles();
+    drawHUD();
+
+    ctx.restore();
+
+    if (state === 'title') drawTitle();
+    else if (state === 'gameover') drawGameOver();
+}
+
+// ══════════════════════════════════════
+// ── MAIN LOOP ──
+// ══════════════════════════════════════
+
+let lastTime = 0;
+function gameLoop(timestamp) {
+    const dt = Math.min(timestamp - lastTime, 33); // cap at ~30fps delta
+    lastTime = timestamp;
+
+    update(dt);
+    render();
+
+    requestAnimationFrame(gameLoop);
+}
+
+// Start loop immediately — render title even before assets load
+requestAnimationFrame(gameLoop);
+
+</script>
+</body>
+</html>

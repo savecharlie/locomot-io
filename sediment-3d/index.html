@@ -1,0 +1,3710 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<meta name="screen-orientation" content="landscape">
+
+<!-- SEO -->
+<title>SEDIMENT 3D - Die-to-Build Platformer | Free Browser Game</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<meta name="description" content="You ARE a shape in this free browser platformer. Die and your body becomes the level. Clear rows to crunch away deaths. Play instantly — no download.">
+<meta name="keywords" content="sediment game, shape platformer, die to build, browser game, free platformer, pixel art game, auto-runner, indie game, io game">
+<meta name="robots" content="index, follow">
+<link rel="canonical" href="https://locomot.io/sediment/">
+
+<!-- Open Graph -->
+<meta property="og:title" content="SEDIMENT - Die-to-Build Platformer">
+<meta property="og:description" content="You ARE a shape. Die and your body becomes the level. Clear rows to crunch away deaths. Free in your browser.">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://locomot.io/sediment/">
+<meta property="og:image" content="https://locomot.io/sediment/og-image.png">
+<meta property="og:site_name" content="LOCOMOT.IO">
+
+<!-- Twitter Card -->
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="SEDIMENT - Die-to-Build Platformer">
+<meta name="twitter:description" content="You ARE a shape. Die and your body becomes the level. Free browser game.">
+<meta name="twitter:image" content="https://locomot.io/sediment/og-image.png">
+
+<!-- Structured Data -->
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "VideoGame",
+  "name": "Sediment",
+  "description": "A die-to-build platformer where you ARE the shape. When you die, your body snaps to the grid and becomes terrain for future runs. Clear completed rows to crunch away deaths.",
+  "url": "https://locomot.io/sediment/",
+  "image": "https://locomot.io/sediment/og-image.png",
+  "genre": ["Platformer", "Puzzle", "Auto-runner"],
+  "gamePlatform": "Web Browser",
+  "operatingSystem": "Any",
+  "applicationCategory": "Game",
+  "playMode": "SinglePlayer",
+  "offers": {
+    "@type": "Offer",
+    "price": "0",
+    "priceCurrency": "USD"
+  },
+  "author": {
+    "@type": "Organization",
+    "name": "LOCOMOT.IO",
+    "url": "https://locomot.io"
+  }
+}
+</script>
+
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+html, body {
+    width: 100%; height: 100%; overflow: hidden;
+    background: #0C1020;
+    touch-action: none;
+    user-select: none;
+    -webkit-user-select: none;
+}
+#rotate-msg {
+    display: none;
+    position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+    background: #0C1020;
+    z-index: 999;
+    flex-direction: column;
+    align-items: center; justify-content: center;
+    text-align: center;
+    gap: 16px;
+    padding: 40px;
+}
+#rotate-msg .title {
+    color: #E8A838;
+    font: bold 28px monospace;
+    letter-spacing: 4px;
+}
+#rotate-msg .tagline {
+    color: rgba(232,168,56,0.4);
+    font: 10px monospace;
+    letter-spacing: 1px;
+}
+#rotate-msg .rotate-icon {
+    font-size: 40px;
+    animation: rock 1.5s ease-in-out infinite;
+}
+#rotate-msg .rotate-hint {
+    color: rgba(216,208,192,0.5);
+    font: 9px monospace;
+}
+#rotate-msg .version {
+    position: absolute;
+    bottom: 12px; right: 14px;
+    color: rgba(216,208,192,0.2);
+    font: 8px monospace;
+}
+@keyframes rock {
+    0%, 100% { transform: rotate(0deg); }
+    25% { transform: rotate(90deg); }
+    75% { transform: rotate(90deg); }
+}
+@media (orientation: portrait) {
+    #rotate-msg { display: flex; }
+    canvas { display: none !important; }
+}
+canvas { display: block; width: 100%; height: 100%; }
+#c { position: fixed; top: 0; left: 0; z-index: 10; image-rendering: pixelated; }
+#gl { position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: 1; }
+#pauseBtn {
+    position: fixed; top: 8px; right: 8px;
+    width: 36px; height: 36px;
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.1);
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    color: #fff;
+    font-size: 14px;
+    display: flex; align-items: center; justify-content: center;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+    z-index: 20;
+}
+#pauseBtn:active { background: rgba(255, 255, 255, 0.3); }
+#botBtn {
+    position: fixed; top: 8px; right: 52px;
+    width: 36px; height: 36px;
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.1);
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    color: rgba(216, 208, 192, 0.6);
+    font-size: 18px;
+    display: flex; align-items: center; justify-content: center;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+    z-index: 20;
+}
+#botBtn:active { background: rgba(255, 255, 255, 0.3); }
+#botBtn.active { background: rgba(128, 255, 128, 0.2); border-color: rgba(128, 255, 128, 0.5); }
+</style>
+</head>
+<body>
+<div id="rotate-msg">
+    <canvas id="splash-logo" width="48" height="48" style="image-rendering:pixelated;width:96px;height:96px;"></canvas>
+    <div class="title">SEDIMENT</div>
+    <div class="tagline">you are the shape</div>
+    <div class="rotate-icon">📱</div>
+    <div class="rotate-hint">rotate to play</div>
+    <div class="version" id="splash-version"></div>
+</div>
+<canvas id="gl"></canvas>
+<canvas id="c"></canvas>
+<div id="botBtn">&#129504;</div>
+<div id="pauseBtn">&#9646;&#9646;</div>
+<div id="dbg" style="position:fixed;bottom:4px;left:4px;color:rgba(216,208,192,0.3);font:8px monospace;z-index:100;pointer-events:none;"></div>
+<script>
+// ── SEDIMENT v2 ──
+// You ARE the shape. When you die, your body snaps to the grid.
+// Completed rows clear. Every player shapes the level.
+// by Ivy & Iris
+
+const canvas = document.getElementById('c');
+const ctx = canvas.getContext('2d');
+
+// ── Config ──
+const VERSION = 'v50';
+const TILE = 12;
+const GRAVITY = 700;
+const JUMP_FORCE = -280;
+const RUN_SPEED = 100;
+const WALL_SLIDE_SPEED = 40;
+const MIN_DISTANCE_FOR_CORPSE = 12; // tiles from spawn before death leaves blocks
+const MIN_DISTANCE_FOR_SPIKE_CORPSE = 22; // spike corpses pushed even further
+const COLUMN_CLEAR_THRESHOLD = 6; // filled tiles needed to clear a column (classic=10, tunnel=14)
+
+// ── Colors ──
+const C = {
+    bg: '#0C1020',           // deeper blue-black
+    tile: '#2E3450',         // bluer dark tiles
+    tileHL: '#484E6A',       // bluer highlight
+    tileSH: '#1C2038',       // bluer shadow
+    player: '#F0A830',       // warmer amber
+    playerDark: '#2A2040',   // blue-tinted dark
+    spike: '#D03040',        // warmer red
+    saw: '#E85838',          // warm orange-red
+    sawBlade: '#482838',     // bluer dark
+    solid: '#C0A890',        // warmer sandstone
+    solidHL: '#E0CBB0',      // warm cream highlight
+    solidSH: '#6A5860',      // blue-tinted shadow
+    spring: '#60C048',       // warmer green
+    springHL: '#B0E890',     // warm spring highlight
+    springDark: '#1C3828',   // bluer dark green
+    booster: '#5090D0',      // slightly warmer blue
+    boosterHL: '#90C8E8',    // warmer highlight
+    boosterDark: '#1C2848',  // deeper blue dark
+    corpseSpike: '#A02838',  // warm dark red
+    corpseSpikeHL: '#D85060',// warmer spike highlight
+    corpseSpikeDark: '#401828',// bluer spike dark
+    text: '#E0D0B8',         // warmer cream text
+    ghost: 'rgba(240,168,48,0.18)',
+    platform: '#5870A8',     // bluer platform
+    platformHL: '#8098D0',   // warmer platform highlight
+    platformSH: '#283858'    // bluer platform shadow
+};
+
+// Material color lookup
+function matColor(mat) {
+    if (mat === 'spring') return C.spring;
+    if (mat === 'booster') return C.booster;
+    if (mat === 'spike') return C.corpseSpike;
+    return C.solid;
+}
+function matHL(mat) {
+    if (mat === 'spring') return C.springHL;
+    if (mat === 'booster') return C.boosterHL;
+    if (mat === 'spike') return C.corpseSpikeHL;
+    return C.solidHL;
+}
+function matDark(mat) {
+    if (mat === 'spring') return C.springDark;
+    if (mat === 'booster') return C.boosterDark;
+    if (mat === 'spike') return C.corpseSpikeDark;
+    return C.solidSH;
+}
+
+// ══════════════════════════════════════
+// ── SOUND EFFECTS (procedural Web Audio) ──
+// ══════════════════════════════════════
+
+let audioCtx = null;
+let sfxMaster = null; // master gain node for all SFX
+let sfxMuted = false;
+let sfxVolume = 0.7;
+
+function ensureAudio() {
+    if (!audioCtx) {
+        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        sfxMaster = audioCtx.createGain();
+        sfxMaster.connect(audioCtx.destination);
+        sfxMaster.gain.value = sfxMuted ? 0 : sfxVolume;
+    }
+    if (audioCtx.state === 'suspended') audioCtx.resume();
+    return audioCtx;
+}
+
+function sfxDest() { return sfxMaster || ensureAudio() && sfxMaster; }
+
+const SFX = {
+    jump() {
+        const ctx = ensureAudio();
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.connect(gain); gain.connect(sfxDest());
+        osc.type = 'square';
+        osc.frequency.setValueAtTime(280, ctx.currentTime);
+        osc.frequency.exponentialRampToValueAtTime(560, ctx.currentTime + 0.08);
+        gain.gain.setValueAtTime(0.12, ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.1);
+        osc.start(ctx.currentTime);
+        osc.stop(ctx.currentTime + 0.1);
+    },
+    doubleJump() {
+        const ctx = ensureAudio();
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.connect(gain); gain.connect(sfxDest());
+        osc.type = 'square';
+        osc.frequency.setValueAtTime(400, ctx.currentTime);
+        osc.frequency.exponentialRampToValueAtTime(800, ctx.currentTime + 0.07);
+        gain.gain.setValueAtTime(0.1, ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.09);
+        osc.start(ctx.currentTime);
+        osc.stop(ctx.currentTime + 0.09);
+    },
+    death() {
+        const ctx = ensureAudio();
+        // Low thud
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.connect(gain); gain.connect(sfxDest());
+        osc.type = 'sawtooth';
+        osc.frequency.setValueAtTime(150, ctx.currentTime);
+        osc.frequency.exponentialRampToValueAtTime(40, ctx.currentTime + 0.2);
+        gain.gain.setValueAtTime(0.15, ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.25);
+        osc.start(ctx.currentTime);
+        osc.stop(ctx.currentTime + 0.25);
+        // Noise burst
+        const buf = ctx.createBuffer(1, ctx.sampleRate * 0.1, ctx.sampleRate);
+        const data = buf.getChannelData(0);
+        for (let i = 0; i < data.length; i++) data[i] = (Math.random() * 2 - 1) * (1 - i / data.length);
+        const noise = ctx.createBufferSource();
+        noise.buffer = buf;
+        const ng = ctx.createGain();
+        noise.connect(ng); ng.connect(sfxDest());
+        ng.gain.setValueAtTime(0.08, ctx.currentTime);
+        ng.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.1);
+        noise.start(ctx.currentTime);
+    },
+    spring() {
+        const ctx = ensureAudio();
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.connect(gain); gain.connect(sfxDest());
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(220, ctx.currentTime);
+        osc.frequency.exponentialRampToValueAtTime(880, ctx.currentTime + 0.12);
+        osc.frequency.exponentialRampToValueAtTime(660, ctx.currentTime + 0.2);
+        gain.gain.setValueAtTime(0.15, ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.25);
+        osc.start(ctx.currentTime);
+        osc.stop(ctx.currentTime + 0.25);
+    },
+    booster() {
+        const ctx = ensureAudio();
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.connect(gain); gain.connect(sfxDest());
+        osc.type = 'sawtooth';
+        osc.frequency.setValueAtTime(200, ctx.currentTime);
+        osc.frequency.exponentialRampToValueAtTime(600, ctx.currentTime + 0.15);
+        gain.gain.setValueAtTime(0.1, ctx.currentTime);
+        gain.gain.linearRampToValueAtTime(0.12, ctx.currentTime + 0.05);
+        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.2);
+        osc.start(ctx.currentTime);
+        osc.stop(ctx.currentTime + 0.2);
+    },
+    crunch() {
+        const ctx = ensureAudio();
+        // Satisfying chunky clear — layered
+        // Bass hit
+        const osc1 = ctx.createOscillator();
+        const g1 = ctx.createGain();
+        osc1.connect(g1); g1.connect(sfxDest());
+        osc1.type = 'square';
+        osc1.frequency.setValueAtTime(120, ctx.currentTime);
+        osc1.frequency.exponentialRampToValueAtTime(60, ctx.currentTime + 0.15);
+        g1.gain.setValueAtTime(0.12, ctx.currentTime);
+        g1.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.2);
+        osc1.start(ctx.currentTime);
+        osc1.stop(ctx.currentTime + 0.2);
+        // High sparkle
+        const osc2 = ctx.createOscillator();
+        const g2 = ctx.createGain();
+        osc2.connect(g2); g2.connect(sfxDest());
+        osc2.type = 'sine';
+        osc2.frequency.setValueAtTime(800, ctx.currentTime + 0.05);
+        osc2.frequency.exponentialRampToValueAtTime(1200, ctx.currentTime + 0.15);
+        g2.gain.setValueAtTime(0.001, ctx.currentTime);
+        g2.gain.linearRampToValueAtTime(0.08, ctx.currentTime + 0.05);
+        g2.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.25);
+        osc2.start(ctx.currentTime);
+        osc2.stop(ctx.currentTime + 0.25);
+        // Noise crunch
+        const buf = ctx.createBuffer(1, ctx.sampleRate * 0.08, ctx.sampleRate);
+        const data = buf.getChannelData(0);
+        for (let i = 0; i < data.length; i++) data[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / data.length, 2);
+        const noise = ctx.createBufferSource();
+        noise.buffer = buf;
+        const ng = ctx.createGain();
+        noise.connect(ng); ng.connect(sfxDest());
+        ng.gain.setValueAtTime(0.1, ctx.currentTime);
+        ng.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.08);
+        noise.start(ctx.currentTime);
+    },
+    levelComplete() {
+        const ctx = ensureAudio();
+        // Short fanfare — ascending arpeggio
+        const notes = [523, 659, 784, 1047]; // C5 E5 G5 C6
+        notes.forEach((freq, i) => {
+            const osc = ctx.createOscillator();
+            const gain = ctx.createGain();
+            osc.connect(gain); gain.connect(sfxDest());
+            osc.type = 'square';
+            const t = ctx.currentTime + i * 0.1;
+            osc.frequency.setValueAtTime(freq, t);
+            gain.gain.setValueAtTime(0.001, ctx.currentTime);
+            gain.gain.linearRampToValueAtTime(0.1, t);
+            gain.gain.setValueAtTime(0.1, t);
+            gain.gain.exponentialRampToValueAtTime(0.001, t + 0.2);
+            osc.start(t);
+            osc.stop(t + 0.2);
+        });
+        // Final chord
+        [1047, 1319, 1568].forEach(freq => {
+            const osc = ctx.createOscillator();
+            const gain = ctx.createGain();
+            osc.connect(gain); gain.connect(sfxDest());
+            osc.type = 'sine';
+            const t = ctx.currentTime + 0.4;
+            osc.frequency.setValueAtTime(freq, t);
+            gain.gain.setValueAtTime(0.001, ctx.currentTime);
+            gain.gain.linearRampToValueAtTime(0.06, t);
+            gain.gain.setValueAtTime(0.06, t);
+            gain.gain.exponentialRampToValueAtTime(0.001, t + 0.5);
+            osc.start(t);
+            osc.stop(t + 0.5);
+        });
+    },
+    wallSlide() {
+        const ctx = ensureAudio();
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.connect(gain); gain.connect(sfxDest());
+        osc.type = 'triangle';
+        osc.frequency.setValueAtTime(100 + Math.random() * 50, ctx.currentTime);
+        gain.gain.setValueAtTime(0.03, ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.05);
+        osc.start(ctx.currentTime);
+        osc.stop(ctx.currentTime + 0.05);
+    },
+    rotate() {
+        const ctx = ensureAudio();
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.connect(gain); gain.connect(sfxDest());
+        osc.type = 'square';
+        osc.frequency.setValueAtTime(440, ctx.currentTime);
+        osc.frequency.setValueAtTime(520, ctx.currentTime + 0.03);
+        gain.gain.setValueAtTime(0.06, ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.06);
+        osc.start(ctx.currentTime);
+        osc.stop(ctx.currentTime + 0.06);
+    },
+    spinBoost() {
+        const ctx = ensureAudio();
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.connect(gain); gain.connect(sfxDest());
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(300, ctx.currentTime);
+        osc.frequency.exponentialRampToValueAtTime(500, ctx.currentTime + 0.1);
+        gain.gain.setValueAtTime(0.08, ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.12);
+        osc.start(ctx.currentTime);
+        osc.stop(ctx.currentTime + 0.12);
+    },
+    spinBrake() {
+        const ctx = ensureAudio();
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.connect(gain); gain.connect(sfxDest());
+        osc.type = 'triangle';
+        osc.frequency.setValueAtTime(400, ctx.currentTime);
+        osc.frequency.exponentialRampToValueAtTime(200, ctx.currentTime + 0.1);
+        gain.gain.setValueAtTime(0.07, ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.12);
+        osc.start(ctx.currentTime);
+        osc.stop(ctx.currentTime + 0.12);
+    },
+    land() {
+        const ctx = ensureAudio();
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.connect(gain); gain.connect(sfxDest());
+        osc.type = 'triangle';
+        osc.frequency.setValueAtTime(160, ctx.currentTime);
+        osc.frequency.exponentialRampToValueAtTime(80, ctx.currentTime + 0.06);
+        gain.gain.setValueAtTime(0.08, ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.08);
+        osc.start(ctx.currentTime);
+        osc.stop(ctx.currentTime + 0.08);
+    },
+    win() {
+        const ctx = ensureAudio();
+        // Triumphant fanfare for beating the game
+        const melody = [523, 659, 784, 1047, 1319, 1568, 2093];
+        melody.forEach((freq, i) => {
+            const osc = ctx.createOscillator();
+            const gain = ctx.createGain();
+            osc.connect(gain); gain.connect(sfxDest());
+            osc.type = i < 4 ? 'square' : 'sine';
+            const t = ctx.currentTime + i * 0.12;
+            osc.frequency.setValueAtTime(freq, t);
+            gain.gain.setValueAtTime(0.001, ctx.currentTime);
+            gain.gain.linearRampToValueAtTime(0.1, t);
+            gain.gain.setValueAtTime(0.1, t);
+            gain.gain.exponentialRampToValueAtTime(0.001, t + 0.3);
+            osc.start(t);
+            osc.stop(t + 0.3);
+        });
+    }
+};
+
+// ══════════════════════════════════════
+// ── MUSIC ──
+// ══════════════════════════════════════
+
+let musicEl = null;
+let musicMuted = false;
+let musicVolume = 0.15; // default quieter
+let musicStarted = false;
+const VOLUME_STEPS = [0, 0.05, 0.10, 0.15, 0.25, 0.40, 0.60];
+
+function initMusic() {
+    if (musicEl) return;
+    musicEl = document.createElement('audio');
+    musicEl.loop = true;
+    // Try OGG first, fall back to MP3
+    const canOgg = musicEl.canPlayType('audio/ogg; codecs=opus');
+    musicEl.src = canOgg ? 'music.ogg' : 'music.mp3';
+    // Load saved preferences
+    try {
+        const saved = JSON.parse(localStorage.getItem('sediment_audio') || '{}');
+        if (saved.musicMuted !== undefined) musicMuted = saved.musicMuted;
+        if (saved.musicVolume !== undefined) musicVolume = saved.musicVolume;
+        if (saved.sfxMuted !== undefined) sfxMuted = saved.sfxMuted;
+    } catch(e) {}
+    musicEl.volume = musicVolume;
+    musicEl.muted = musicMuted;
+    if (sfxMaster) sfxMaster.gain.value = sfxMuted ? 0 : sfxVolume;
+}
+
+function startMusic() {
+    if (musicStarted) return;
+    initMusic();
+    musicStarted = true;
+    musicEl.play().catch(() => {}); // may fail without user gesture
+}
+
+function saveAudioPrefs() {
+    try { localStorage.setItem('sediment_audio', JSON.stringify({ musicMuted, musicVolume, sfxMuted })); } catch(e) {}
+}
+
+function toggleMusicMute() {
+    musicMuted = !musicMuted;
+    if (musicEl) musicEl.muted = musicMuted;
+    saveAudioPrefs();
+}
+
+function adjustMusicVolume(dir) {
+    // Find current step index and move
+    let idx = 0;
+    for (let i = 0; i < VOLUME_STEPS.length; i++) {
+        if (VOLUME_STEPS[i] <= musicVolume + 0.01) idx = i;
+    }
+    idx = Math.max(0, Math.min(VOLUME_STEPS.length - 1, idx + dir));
+    musicVolume = VOLUME_STEPS[idx];
+    if (musicEl) musicEl.volume = musicVolume;
+    if (musicVolume === 0) { musicMuted = true; if (musicEl) musicEl.muted = true; }
+    else if (musicMuted) { musicMuted = false; if (musicEl) musicEl.muted = false; }
+    saveAudioPrefs();
+}
+
+function toggleSfxMute() {
+    sfxMuted = !sfxMuted;
+    if (sfxMaster) sfxMaster.gain.value = sfxMuted ? 0 : sfxVolume;
+    saveAudioPrefs();
+}
+
+// ══════════════════════════════════════
+// ── SAVE / LOAD (localStorage) ──
+// ══════════════════════════════════════
+
+const SAVE_KEY = 'sediment_save';
+
+function saveProgress() {
+    try {
+        const data = {
+            highestLevel: player._highestLevel || currentLevel,
+            totalDeaths: player._totalDeaths || 0,
+            totalQuakes: player._totalQuakes || 0,
+            bestRun: player._bestRun || 0,
+            hasWon: player._hasWon || false
+        };
+        localStorage.setItem(SAVE_KEY, JSON.stringify(data));
+    } catch (e) { /* localStorage may be blocked */ }
+}
+
+function loadProgress() {
+    try {
+        const raw = localStorage.getItem(SAVE_KEY);
+        if (raw) {
+            const data = JSON.parse(raw);
+            player._highestLevel = data.highestLevel || 1;
+            player._totalDeaths = data.totalDeaths || 0;
+            player._totalQuakes = data.totalQuakes || data.totalCrunches || 0;
+            player._bestRun = data.bestRun || 0;
+            player._hasWon = data.hasWon || false;
+            return data;
+        }
+    } catch (e) {}
+    player._highestLevel = 1;
+    player._totalDeaths = 0;
+    player._totalQuakes = 0;
+    player._bestRun = 0;
+    player._hasWon = false;
+    return null;
+}
+
+// ── Game resolution ──
+const LEVEL_H_TILES = 14;
+let W, H, scale;
+function resize() {
+    const sw = window.innerWidth || document.documentElement.clientWidth || screen.width;
+    const sh = window.innerHeight || document.documentElement.clientHeight || screen.height;
+    if (sw < 1 || sh < 1) return;
+    scale = sh / (LEVEL_H_TILES * TILE);
+    W = Math.max(1, Math.floor(sw / scale));
+    H = LEVEL_H_TILES * TILE;
+    canvas.width = W;
+    canvas.height = H;
+    canvas.style.imageRendering = 'pixelated';
+}
+resize();
+window.addEventListener('resize', resize);
+window.addEventListener('orientationchange', () => { setTimeout(resize, 100); setTimeout(resize, 300); });
+let _resizeChecks = 0;
+const _resizeInterval = setInterval(() => {
+    resize();
+    if (++_resizeChecks > 10) clearInterval(_resizeInterval);
+}, 500);
+
+// ══════════════════════════════════════
+// ── TETROMINO SYSTEM ──
+// ══════════════════════════════════════
+
+// Shapes defined as cell offsets [col, row] from origin
+// 4 rotation states each, pre-computed for speed
+// ── SEDIMENT POLYOMINO SET ──
+// 9 shapes across 4 size tiers (geological naming)
+// Tier 1 (2 cells): Pebble | Tier 2 (3 cells): Shard, Flake
+// Tier 3 (4 cells): Shelf, Crag, Scree, Ridge | Tier 4 (5 cells): Ledge, Arch
+const SHAPES = {
+    Pebble: [ // 2 cells — domino
+        [[0,0],[1,0]],
+        [[1,0],[1,1]],
+        [[0,1],[1,1]],
+        [[0,0],[0,1]]
+    ],
+    Shard: [ // 3 cells — straight triomino (3x3 bbox)
+        [[0,1],[1,1],[2,1]],
+        [[1,0],[1,1],[1,2]],
+        [[0,1],[1,1],[2,1]],
+        [[1,0],[1,1],[1,2]]
+    ],
+    Flake: [ // 3 cells — L-triomino (2x2 bbox)
+        [[0,0],[1,0],[0,1]],
+        [[0,0],[0,1],[1,1]],
+        [[1,0],[0,1],[1,1]],
+        [[0,0],[1,0],[1,1]]
+    ],
+    Shelf: [ // 4 cells — I-bar (4x4 bbox)
+        [[0,1],[1,1],[2,1],[3,1]],
+        [[2,0],[2,1],[2,2],[2,3]],
+        [[0,2],[1,2],[2,2],[3,2]],
+        [[1,0],[1,1],[1,2],[1,3]]
+    ],
+    Crag: [ // 4 cells — T-shape (3x3 bbox)
+        [[0,0],[1,0],[2,0],[1,1]],
+        [[1,0],[1,1],[1,2],[0,1]],
+        [[1,1],[0,2],[1,2],[2,2]],
+        [[1,0],[1,1],[1,2],[2,1]]
+    ],
+    Scree: [ // 4 cells — S-shape (3x3 bbox)
+        [[1,0],[2,0],[0,1],[1,1]],
+        [[0,0],[0,1],[1,1],[1,2]],
+        [[1,1],[2,1],[0,2],[1,2]],
+        [[1,0],[1,1],[2,1],[2,2]]
+    ],
+    Ridge: [ // 4 cells — L-shape (3x3 bbox)
+        [[0,0],[1,0],[2,0],[0,1]],
+        [[0,0],[1,0],[1,1],[1,2]],
+        [[2,1],[0,2],[1,2],[2,2]],
+        [[1,0],[1,1],[1,2],[2,2]]
+    ],
+    Ledge: [ // 5 cells — pentomino L (4x4 bbox)
+        [[0,1],[1,1],[2,1],[3,1],[0,2]],
+        [[1,0],[2,0],[2,1],[2,2],[2,3]],
+        [[3,1],[0,2],[1,2],[2,2],[3,2]],
+        [[1,0],[1,1],[1,2],[1,3],[2,3]]
+    ],
+    Arch: [ // 5 cells — U-pentomino (3x3 bbox) — has a GAP
+        [[0,0],[2,0],[0,1],[1,1],[2,1]],
+        [[1,0],[2,0],[1,1],[1,2],[2,2]],
+        [[0,1],[1,1],[2,1],[0,2],[2,2]],
+        [[0,0],[1,0],[1,1],[0,2],[1,2]]
+    ]
+};
+
+const SHAPE_NAMES = ['Pebble','Shard','Flake','Shelf','Crag','Scree','Ridge','Ledge','Arch'];
+const MATERIAL_TYPES = ['solid', 'spring', 'booster'];
+// Spike material added in later levels — see pickMaterial()
+
+// Wall kick data by bounding box size
+const KICK_DATA_SMALL = [ // 2x2 bbox (Pebble, Flake)
+    [[0,0],[1,0],[-1,0],[0,-1],[0,1]],
+    [[0,0],[1,0],[-1,0],[0,-1],[0,1]],
+    [[0,0],[1,0],[-1,0],[0,-1],[0,1]],
+    [[0,0],[1,0],[-1,0],[0,-1],[0,1]]
+];
+const KICK_DATA = [ // 3x3 bbox (Shard, Crag, Scree, Ridge, Arch)
+    [[0,0],[-1,0],[-1,-1],[0,2],[-1,2]],
+    [[0,0],[1,0],[1,1],[0,-2],[1,-2]],
+    [[0,0],[1,0],[1,-1],[0,2],[1,2]],
+    [[0,0],[-1,0],[-1,1],[0,-2],[-1,-2]]
+];
+const KICK_DATA_I = [ // 4x4 bbox (Shelf, Ledge)
+    [[0,0],[-2,0],[1,0],[-2,1],[1,-2]],
+    [[0,0],[-1,0],[2,0],[-1,-2],[2,1]],
+    [[0,0],[2,0],[-1,0],[2,-1],[-1,2]],
+    [[0,0],[1,0],[-2,0],[1,2],[-2,-1]]
+];
+// Kick lookup per shape
+const SHAPE_KICKS = {
+    Pebble: KICK_DATA_SMALL, Shard: KICK_DATA, Flake: KICK_DATA_SMALL,
+    Shelf: KICK_DATA_I, Crag: KICK_DATA, Scree: KICK_DATA,
+    Ridge: KICK_DATA, Ledge: KICK_DATA_I, Arch: KICK_DATA
+};
+
+// Bag of 9 — all shapes before repeating
+let shapeBag = [];
+function nextShape() {
+    if (shapeBag.length === 0) {
+        shapeBag = [...SHAPE_NAMES];
+        // Fisher-Yates shuffle
+        for (let i = shapeBag.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [shapeBag[i], shapeBag[j]] = [shapeBag[j], shapeBag[i]];
+        }
+    }
+    return shapeBag.pop();
+}
+
+// Pick material — spike is a possible material (level 6+, 25% chance)
+function pickMaterial(lvl) {
+    if (lvl >= 6 && Math.random() < 0.25) return 'spike';
+    return MATERIAL_TYPES[Math.floor(Math.random() * 3)];
+}
+
+function getCells(shapeName, rotation) {
+    return SHAPES[shapeName][rotation];
+}
+
+// Bounding box of a shape rotation
+function shapeBounds(shapeName, rotation) {
+    const cells = getCells(shapeName, rotation);
+    let minC = 99, maxC = -99, minR = 99, maxR = -99;
+    for (const [c, r] of cells) {
+        if (c < minC) minC = c;
+        if (c > maxC) maxC = c;
+        if (r < minR) minR = r;
+        if (r > maxR) maxR = r;
+    }
+    return { minC, maxC, minR, maxR, w: maxC - minC + 1, h: maxR - minR + 1 };
+}
+
+// ══════════════════════════════════════
+// ── LEVEL ──
+// ══════════════════════════════════════
+
+const SEGMENT_W = 40;
+let levelH = 0;
+let level = [];      // terrain grid: 0=empty, 1=solid, 2=spike
+let corpseGrid = []; // placed blocks: null or {mat, age, eyes}
+let chasmColumns = new Set(); // columns that are chasm voids (below-level walls)
+let segments = [];
+let particles = [];
+let buzzsaws = [];
+let movingPlatforms = [];
+let fallingGroup = null; // {cells: [{x,y,mat,eyes}], drop:0, targetDrop:N, fallSpeed:0}
+let pendingClears = []; // {cells:[{x,y}], timer:0.35} — flash before delete
+let timeSlowTimer = 0; // brief time-slow for quake juice
+let encounterLabels = []; // [{text, x, y, color, timer}] — first-encounter pop-ups
+
+function encounterLabel(text, x, y, color) {
+    encounterLabels.push({ text, x, y, color, timer: 1.5 });
+}
+
+// ── Level system ──
+let currentLevel = 1;
+let levelDeaths = 0;
+let levelQuakes = 0;
+let quakeFlash = 0; // timer for "QUAKE!" flash on HUD
+let levelComplete = false;
+let levelTransitionTimer = 0;
+let levelTitleTimer = 0;
+let goalX = 0; // pixel X of the finish line
+let gameWon = false;
+let winTimer = 0;
+let winParticleTimer = 0;
+
+function getLevelDifficulty(lvl) {
+    return Math.min(10, 1 + (lvl - 1) * 0.39);
+}
+
+function getSegmentsForLevel(lvl) {
+    return Math.min(7, 3 + Math.floor((lvl - 1) * 0.2));
+}
+
+function generateSegment(segIndex, lvl) {
+    const h = LEVEL_H_TILES;
+    levelH = h;
+    const startX = segIndex * SEGMENT_W;
+    const baseDiff = getLevelDifficulty(lvl);
+    // Ramp within level: later segments slightly harder
+    const d = Math.min(10, baseDiff + segIndex * 0.3);
+
+    for (let y = 0; y < h; y++) {
+        if (!level[y]) level[y] = [];
+        if (!corpseGrid[y]) corpseGrid[y] = [];
+        for (let x = startX; x < startX + SEGMENT_W; x++) {
+            if (y === 0 || y === h - 1) {
+                level[y][x] = 1;
+            } else {
+                level[y][x] = 0;
+            }
+            corpseGrid[y][x] = null;
+        }
+    }
+
+    // ── Mechanic gating by level number ──
+    // L1: chasms only | L2: floor spikes | L4: ceiling spikes
+    // L6: spike material | L8: static platforms | L10: buzzsaws
+    // L12: moving platforms (H) | L14: spiked chasms | L16: spike walls
+    // L18: moving platforms (V) | L19-24: intensity
+
+    // Chasms (always) — with walls on edges so you can't go under
+    const numChasms = 2 + Math.floor(d * 0.8);
+    const chasmMinX = segIndex === 0 ? 18 : 3;
+    for (let i = 0; i < numChasms; i++) {
+        const cx = startX + chasmMinX + Math.floor(Math.random() * (SEGMENT_W - chasmMinX - 4));
+        const cw = 2 + Math.floor(Math.random() * (1 + d * 0.4));
+        for (let dx = 0; dx < cw; dx++) {
+            if (lvl >= 14 && Math.random() < Math.min(0.8, d * 0.1)) {
+                // Spiked chasms (level 14+)
+                level[h - 2][cx + dx] = 2;
+            } else {
+                level[h - 1][cx + dx] = 0;
+            }
+            chasmColumns.add(cx + dx); // track for below-level walls
+        }
+        // Deepen chasm — 3 tiles deep so corpses can't easily bridge
+        for (let dx = 0; dx < cw; dx++) {
+            if (level[h - 2]) level[h - 2][cx + dx] = 0;
+            if (level[h - 3]) level[h - 3][cx + dx] = 0;
+        }
+    }
+
+    // Floor spikes (level 2+)
+    if (lvl >= 2) {
+        const numSpikeFields = 1 + Math.floor(d * 0.6);
+        const spikeMinX = segIndex === 0 ? 18 : 3;
+        for (let i = 0; i < numSpikeFields; i++) {
+            const sx = startX + spikeMinX + Math.floor(Math.random() * (SEGMENT_W - spikeMinX - 3));
+            const sw = 2 + Math.floor(Math.random() * 3);
+            for (let dx = 0; dx < sw; dx++) {
+                if (level[h - 2] && level[h - 1][sx + dx] === 1) {
+                    level[h - 2][sx + dx] = 2;
+                }
+            }
+        }
+    }
+
+    // Ceiling spikes (level 4+)
+    if (lvl >= 4) {
+        const numCeilingSpikes = Math.max(1, Math.floor(d * 0.5));
+        for (let i = 0; i < numCeilingSpikes; i++) {
+            const sx = startX + 2 + Math.floor(Math.random() * (SEGMENT_W - 4));
+            if (level[1]) level[1][sx] = 2;
+            if (d > 6 && Math.random() < 0.4 && level[2]) level[2][sx] = 2;
+        }
+    }
+
+    // Static platforms (level 8+)
+    if (lvl >= 8) {
+        const numPlats = 1 + Math.floor(d * 0.3);
+        const platMinX = segIndex === 0 ? 20 : 4;
+        for (let i = 0; i < numPlats; i++) {
+            const px = startX + platMinX + Math.floor(Math.random() * (SEGMENT_W - platMinX - 6));
+            const pw = 2 + Math.floor(Math.random() * 3);
+            const py = 3 + Math.floor(Math.random() * (h - 6));
+            for (let dx = 0; dx < pw; dx++) {
+                if (level[py]) level[py][px + dx] = 1;
+            }
+        }
+    }
+
+    // Buzzsaws (level 10+)
+    if (lvl >= 10) {
+        const numSaws = Math.max(1, Math.floor((d - 4) * 0.6));
+        for (let i = 0; i < numSaws; i++) {
+            const sawX = (startX + 8 + Math.floor(Math.random() * (SEGMENT_W - 16))) * TILE;
+            const sawY = (2 + Math.floor(Math.random() * (h - 5))) * TILE;
+            const vertical = Math.random() < 0.5;
+            const range = (2 + Math.floor(Math.random() * 3)) * TILE;
+            buzzsaws.push({
+                x: sawX, y: sawY,
+                baseX: sawX, baseY: sawY,
+                r: 6, vertical, range,
+                speed: 30 + Math.random() * 40,
+                phase: Math.random() * Math.PI * 2,
+                spin: 0
+            });
+        }
+    }
+
+    // Moving platforms — horizontal (level 12+)
+    if (lvl >= 12) {
+        const numMoving = 1 + Math.floor((d - 5) * 0.4);
+        const movMinX = segIndex === 0 ? 22 : 5;
+        for (let i = 0; i < numMoving; i++) {
+            const mx = (startX + movMinX + Math.floor(Math.random() * (SEGMENT_W - movMinX - 8))) * TILE;
+            const my = (3 + Math.floor(Math.random() * (h - 6))) * TILE;
+            const vert = lvl >= 18 && Math.random() < 0.4; // vertical only level 18+
+            movingPlatforms.push({
+                x: mx, y: my, w: 3,
+                baseX: mx, baseY: my,
+                vertical: vert,
+                range: (2 + Math.floor(Math.random() * 2)) * TILE,
+                speed: 20 + Math.random() * 30,
+                phase: Math.random() * Math.PI * 2
+            });
+        }
+    }
+
+    // Spike walls (level 16+)
+    if (lvl >= 16) {
+        const numWalls = Math.max(1, Math.floor((d - 6) * 0.5));
+        for (let i = 0; i < numWalls; i++) {
+            const wx = startX + 6 + Math.floor(Math.random() * (SEGMENT_W - 12));
+            const wallH = 2 + Math.floor(Math.random() * 3);
+            const startY = h - 2 - wallH;
+            for (let dy = 0; dy < wallH; dy++) {
+                if (level[startY + dy]) level[startY + dy][wx] = 2;
+            }
+        }
+    }
+
+    // Safe spawn — generous clear zone so players don't hit walls immediately
+    if (segIndex === 0) {
+        for (let y = 1; y < h - 1; y++) {
+            for (let x = 0; x < 18; x++) {
+                if (level[y] && level[y][x] === 2) level[y][x] = 0;
+            }
+        }
+        for (let x = 0; x < 18; x++) {
+            level[h - 1][x] = 1;
+        }
+    }
+
+    segments.push(segIndex);
+}
+
+// ══════════════════════════════════════
+// ── COLLISION (tetromino-aware) ──
+// ══════════════════════════════════════
+
+// Check if a single tile-aligned cell overlaps solid terrain or corpse blocks
+// ALL corpse blocks are solid (sandstone, spring, booster) — you can't walk through any of them
+// Interactions (bounce, boost) happen at collision boundaries
+function tileIsSolid(tx, ty) {
+    if (ty < 0) return true; // ceiling
+    if (ty >= levelH) return !chasmColumns.has(tx); // solid below level, void only in chasms
+    if (level[ty] && level[ty][tx] === 1) return true;
+    if (corpseGrid[ty] && corpseGrid[ty][tx]) return true;
+    // Moving platforms
+    for (const p of movingPlatforms) {
+        const px1 = Math.floor(p.x / TILE);
+        const py = Math.floor(p.y / TILE);
+        if (ty === py && tx >= px1 && tx < px1 + p.w) return true;
+    }
+    return false;
+}
+
+// Check what corpse block is at a tile position (returns mat string or null)
+function corpseMatAt(tx, ty) {
+    if (ty < 0 || ty >= levelH) return null;
+    if (corpseGrid[ty] && corpseGrid[ty][tx]) return corpseGrid[ty][tx].mat;
+    return null;
+}
+
+// Check tiles adjacent to player's tetromino in a direction
+// Returns first matching material found, or null
+function checkAdjacentCorpse(px, py, shapeName, rotation, dir, mat) {
+    const cells = getCells(shapeName, rotation);
+    for (const [cx, cy] of cells) {
+        let checkTX, checkTY;
+        if (dir === 'below') {
+            checkTX = Math.floor((px + cx * TILE + TILE/2) / TILE);
+            checkTY = Math.floor((py + (cy + 1) * TILE) / TILE);
+        } else if (dir === 'above') {
+            checkTX = Math.floor((px + cx * TILE + TILE/2) / TILE);
+            checkTY = Math.floor((py + cy * TILE - 1) / TILE);
+        } else if (dir === 'right') {
+            checkTX = Math.floor((px + (cx + 1) * TILE) / TILE);
+            checkTY = Math.floor((py + cy * TILE + TILE/2) / TILE);
+        } else if (dir === 'left') {
+            checkTX = Math.floor((px + cx * TILE - 1) / TILE);
+            checkTY = Math.floor((py + cy * TILE + TILE/2) / TILE);
+        }
+        if (corpseMatAt(checkTX, checkTY) === mat) {
+            return { tx: checkTX, ty: checkTY };
+        }
+    }
+    return null;
+}
+
+function tileIsSpike(tx, ty) {
+    if (ty < 0 || ty >= levelH) return false;
+    return level[ty] && level[ty][tx] === 2;
+}
+
+// Check if a tetromino at pixel position (px, py) collides with solids
+// px, py is top-left of cell grid origin
+function tetSolid(px, py, shapeName, rotation) {
+    const cells = getCells(shapeName, rotation);
+    for (const [cx, cy] of cells) {
+        const worldX = px + cx * TILE;
+        const worldY = py + cy * TILE;
+        // Check all grid tiles this cell touches
+        const l = Math.floor(worldX / TILE);
+        const r = Math.floor((worldX + TILE - 1) / TILE);
+        const t = Math.floor(worldY / TILE);
+        const b = Math.floor((worldY + TILE - 1) / TILE);
+        for (let ty = t; ty <= b; ty++) {
+            for (let tx = l; tx <= r; tx++) {
+                if (tileIsSolid(tx, ty)) return true;
+            }
+        }
+    }
+    return false;
+}
+
+// Check if a tetromino overlaps a specific moving platform (pixel-level AABB)
+function tetOverlapsPlatform(px, py, shapeName, rotation, plat) {
+    const cells = getCells(shapeName, rotation);
+    const px1 = plat.x, py1 = plat.y;
+    const px2 = plat.x + plat.w * TILE, py2 = plat.y + TILE;
+    for (const [cx, cy] of cells) {
+        const cx1 = px + cx * TILE, cy1 = py + cy * TILE;
+        if (cx1 + TILE > px1 && cx1 < px2 && cy1 + TILE > py1 && cy1 < py2) return true;
+    }
+    return false;
+}
+
+// Check if two moving platforms overlap (AABB)
+function platformsOverlap(a, b) {
+    return a.x + a.w * TILE > b.x && a.x < b.x + b.w * TILE &&
+           a.y + TILE > b.y && a.y < b.y + TILE;
+}
+
+function tetSpike(px, py, shapeName, rotation) {
+    const cells = getCells(shapeName, rotation);
+    for (const [cx, cy] of cells) {
+        const worldX = px + cx * TILE + 1; // slight inset
+        const worldY = py + cy * TILE + 1;
+        const l = Math.floor(worldX / TILE);
+        const r = Math.floor((worldX + TILE - 3) / TILE);
+        const t = Math.floor(worldY / TILE);
+        const b = Math.floor((worldY + TILE - 3) / TILE);
+        for (let ty = t; ty <= b; ty++) {
+            for (let tx = l; tx <= r; tx++) {
+                if (tileIsSpike(tx, ty)) return true;
+            }
+        }
+    }
+    return false;
+}
+
+// Monte Carlo escape check: can the player get past the obstacle to the right?
+// Pixel-by-pixel upward scan + rotation with SRS kicks.
+// Returns true if any escape route exists (player should wait, not die).
+function canEscapeRight() {
+    const shape = player.shape;
+    const rot = player.rotation;
+    const maxUp = 8 * TILE; // jump + double jump reach
+
+    // 1) Scan upward pixel-by-pixel — continuous reachability check
+    //    Must be contiguous: if any height is blocked, can't reach higher
+    for (let dy = -1; dy >= -maxUp; dy--) {
+        const testY = player.y + dy;
+        // Can the piece exist at this height? (continuous upward path)
+        if (tetSolid(player.x, testY, shape, rot)) break;
+        // At this height, can we move right?
+        if (!tetSolid(player.x + 1, testY, shape, rot)) return true;
+    }
+
+    // 2) Check each rotation (CW and CCW) with SRS wall kicks
+    for (const dir of [1, -1]) {
+        const newRot = (rot + dir + 4) % 4;
+        const kicks = SHAPE_KICKS[shape] || KICK_DATA;
+        const kickIdx = dir === 1 ? rot : newRot;
+        const kickTests = kicks[kickIdx];
+
+        for (const [kx, ky] of kickTests) {
+            const testX = player.x + (dir === 1 ? kx : -kx) * TILE;
+            const testY = player.y + (dir === 1 ? -ky : ky) * TILE;
+            // Can rotated piece fit here?
+            if (!tetSolid(testX, testY, shape, newRot)) {
+                // Can it move right from there?
+                if (!tetSolid(testX + 1, testY, shape, newRot)) return true;
+                // Can it jump and clear from there? (pixel-by-pixel)
+                for (let dy = -1; dy >= -maxUp; dy--) {
+                    const jy = testY + dy;
+                    if (tetSolid(testX, jy, shape, newRot)) break;
+                    if (!tetSolid(testX + 1, jy, shape, newRot)) return true;
+                }
+            }
+        }
+    }
+
+    return false; // truly stuck — no escape route found
+}
+
+// (tetCorpseInteraction removed — interactions now use checkAdjacentCorpse at collision boundaries)
+
+// ══════════════════════════════════════
+// ── PLAYER ──
+// ══════════════════════════════════════
+
+const player = {
+    x: 2 * TILE, y: 0,
+    vx: RUN_SPEED, vy: 0,
+    shape: 'Crag',
+    rotation: 0,
+    material: 'solid',
+    onGround: false,
+    onWall: 0,
+    dead: false,
+    facing: 1,
+    squash: 1,
+    trail: [],
+    boostTimer: 0,
+    deathCount: 0,
+    quakeCount: 0,
+    quakeTimer: 0,
+    distance: 0,
+    bestDistance: 0,
+    spawnX: 2 * TILE,
+    // Double jump
+    jumpsLeft: 2,
+    coyoteTimer: 0,
+    deathTimer: 0,
+    stuckTimer: 0,
+    stuckHighX: 0
+};
+
+const cam = { x: 0, y: 0, sx: 0, sy: 0, shake: 0 };
+const flash = { a: 0, r: 1, g: 1, b: 1 };
+let paused = false;
+let started = false;
+let tutorialStep = 3; // 0=jump, 1=rotate, 2=place, 3=done
+let tutorialComplete = false;
+
+
+// Next piece preview
+let nextPieceShape = null;
+let nextPieceMaterial = null;
+
+function rollNextPiece() {
+    nextPieceShape = nextShape();
+    nextPieceMaterial = pickMaterial(currentLevel);
+}
+
+function initLevel(lvl) {
+    level = [];
+    corpseGrid = [];
+    chasmColumns = new Set();
+    segments = [];
+    particles = [];
+    buzzsaws = [];
+    movingPlatforms = [];
+    fallingGroup = null;
+    pendingClears = [];
+    // Clear 3D meshes on level change
+    if (scene3) {
+        for (const [, mesh] of terrainMeshes) scene3.remove(mesh);
+        for (const [, entry] of corpseMeshes) scene3.remove(entry.mesh);
+        for (const [, mesh] of spikeMeshes) scene3.remove(mesh);
+        terrainMeshes.clear();
+        corpseMeshes.clear();
+        spikeMeshes.clear();
+    }
+    levelComplete = false;
+    levelTransitionTimer = 0;
+    levelDeaths = 0;
+    levelQuakes = 0;
+    quakeFlash = 0;
+    levelTitleTimer = 3.0;
+
+    // Tutorial on level 1 (first time only)
+    if (lvl === 1 && !tutorialComplete) {
+        tutorialStep = 0;
+    } else {
+        tutorialStep = 3;
+    }
+
+    if (!player._hasRun) {
+    }
+
+    // Generate all segments for this level
+    const numSegments = getSegmentsForLevel(lvl);
+    for (let i = 0; i < numSegments; i++) {
+        generateSegment(i, lvl);
+    }
+
+    // Goal line near the end of the last segment
+    goalX = (numSegments * SEGMENT_W - 4) * TILE;
+
+    const h = LEVEL_H_TILES;
+
+    const spawnH = h;
+    // Use pre-rolled next piece if available, otherwise roll fresh
+    if (nextPieceShape) {
+        player.shape = nextPieceShape;
+        player.material = nextPieceMaterial;
+    } else {
+        player.shape = nextShape();
+        player.material = pickMaterial(currentLevel);
+    }
+    player.rotation = 0;
+    rollNextPiece(); // pre-roll for preview
+    player.x = 2 * TILE;
+    const _spawnBounds = shapeBounds(player.shape, 0);
+    player.y = (spawnH - 2 - _spawnBounds.maxR) * TILE;
+    player.spawnX = player.x;
+    player.vx = RUN_SPEED;
+    player.vy = 0;
+    player.dead = false;
+    player.distance = 0;
+    player.squash = 1;
+    player.trail = [];
+    player.boostTimer = 0;
+    player.jumpsLeft = 2;
+    player.coyoteTimer = 0;
+    player.stuckTimer = 0;
+    player.stuckHighX = player.x;
+    player._hasRun = true;
+    cam.x = 0; cam.y = 0;
+}
+
+function init() {
+    loadProgress();
+    currentLevel = 1;
+    initLevel(currentLevel);
+    if (!renderer3) init3D();
+}
+
+function hardReset() {
+    player._hasRun = false;
+    player.deathCount = 0;
+    player.quakeCount = 0;
+    player.quakeTimer = 0;
+    player.bestDistance = 0;
+    player._hitSpring = false;
+    player._hitBooster = false;
+    shapeBag = [];
+    currentLevel = 1;
+    tutorialComplete = false;
+    gameWon = false;
+    encounterLabels = [];
+    init();
+}
+
+// ══════════════════════════════════════
+// ── THREE.JS 3D RENDERER ──
+// ══════════════════════════════════════
+
+const DEPTH = TILE * 1.0;          // extrusion depth
+const BLOCK_TILT = -0.35;          // per-block X rotation to show top face
+const BLOCK_TILT_Z = 0.08;         // subtle Z rotation for style
+
+let scene3, camera3, renderer3;
+let terrainMeshes = new Map();     // "y,x" -> mesh
+let corpseMeshes = new Map();
+let playerMeshes = [];
+let spikeMeshes = new Map();
+
+// Reusable geometries and materials
+let boxGeo, spikeGeo;
+const mat3 = {};
+
+function hexToVec3(hex) {
+    const r = parseInt(hex.slice(1,3), 16) / 255;
+    const g = parseInt(hex.slice(3,5), 16) / 255;
+    const b = parseInt(hex.slice(5,7), 16) / 255;
+    return new THREE.Color(r, g, b);
+}
+
+function init3D() {
+    const glCanvas = document.getElementById('gl');
+    renderer3 = new THREE.WebGLRenderer({ canvas: glCanvas, antialias: false, alpha: false });
+    renderer3.setPixelRatio(1); // crisp pixels
+    renderer3.setClearColor(hexToVec3(C.bg), 1);
+
+    scene3 = new THREE.Scene();
+
+    // Orthographic camera — matches the game's internal coordinate system
+    // W and H are set by resize(): H = LEVEL_H_TILES * TILE (168), W varies by aspect
+    const gw = W || 300;
+    const gh = H || 168;
+    const Z = 1.05; // slight breathing room
+    camera3 = new THREE.OrthographicCamera(
+        -gw * Z / 2, gw * Z / 2,
+        gh * Z / 2, -gh * Z / 2,
+        -500, 500
+    );
+    camera3.position.set(0, 0, 100);
+
+    // Don't tilt scene (pivots at origin, breaks alignment)
+    // Instead we'll tilt the camera's lookAt angle in draw3D
+
+    // Lighting
+    const ambient = new THREE.AmbientLight(0xffffff, 0.55);
+    scene3.add(ambient);
+    const dirLight = new THREE.DirectionalLight(0xffffff, 0.6);
+    dirLight.position.set(1, -1, 2);
+    scene3.add(dirLight);
+    // Rim light from below for dramatic depth
+    const rimLight = new THREE.DirectionalLight(0x4466aa, 0.25);
+    rimLight.position.set(-1, 2, -1);
+    scene3.add(rimLight);
+
+    // Shared geometry
+    boxGeo = new THREE.BoxGeometry(TILE, TILE, DEPTH);
+    spikeGeo = new THREE.ConeGeometry(TILE * 0.45, TILE * 0.8, 4);
+
+    // Materials (MeshLambertMaterial for lighting response)
+    mat3.tile = new THREE.MeshLambertMaterial({ color: hexToVec3(C.tileHL) }); // brighter in 3D (tile too dark)
+    mat3.solid = new THREE.MeshLambertMaterial({ color: hexToVec3(C.solid) });
+    mat3.spring = new THREE.MeshLambertMaterial({ color: hexToVec3(C.spring) });
+    mat3.booster = new THREE.MeshLambertMaterial({ color: hexToVec3(C.booster) });
+    mat3.spike = new THREE.MeshLambertMaterial({ color: hexToVec3(C.spike) });
+    mat3.corpseSpike = new THREE.MeshLambertMaterial({ color: hexToVec3(C.corpseSpike) });
+    mat3.player = new THREE.MeshLambertMaterial({ color: hexToVec3(C.player) });
+    mat3.platform = new THREE.MeshLambertMaterial({ color: hexToVec3(C.platform) });
+    mat3.saw = new THREE.MeshLambertMaterial({ color: hexToVec3(C.saw) });
+
+    resize3D();
+}
+
+function resize3D() {
+    if (!renderer3) return;
+    renderer3.setSize(window.innerWidth, window.innerHeight);
+    // Use the game's actual W and H (set by resize())
+    const gw = W || 300;
+    const gh = H || 168;
+    const Z = 1.05;
+    camera3.left = -gw * Z / 2;
+    camera3.right = gw * Z / 2;
+    camera3.top = gh * Z / 2;
+    camera3.bottom = -gh * Z / 2;
+    camera3.updateProjectionMatrix();
+}
+
+function getMat3(matType) {
+    if (matType === 'spring') return mat3.spring;
+    if (matType === 'booster') return mat3.booster;
+    if (matType === 'spike') return mat3.corpseSpike;
+    return mat3.solid;
+}
+
+function draw3D() {
+    if (!renderer3) return;
+
+    const camX = cam.x + cam.sx;
+    const camY = cam.y + cam.sy;
+
+    // Camera position — center on same area as 2D camera
+    // 2D draws from (camX, camY) to (camX+W, camY+H)
+    const gw = W || 300;
+    const gh = H || 168;
+    const cx3 = camX + gw / 2;
+    const cy3 = -(camY + gh / 2);
+    // Camera stays flat (matches 2D overlay) — blocks themselves are tilted
+    camera3.position.set(cx3, cy3, 100);
+    camera3.lookAt(cx3, cy3, 0);
+
+    // Visible tile range (with margin)
+    const tl = Math.max(0, Math.floor(camX / TILE) - 2);
+    const tr = Math.floor((camX + W) / TILE) + 2;
+    const tt = Math.max(0, Math.floor(camY / TILE) - 2);
+    const tb = Math.min((levelH || 14) - 1, Math.floor((camY + H) / TILE) + 2);
+
+    // Track which keys we've seen this frame
+    const seenTerrain = new Set();
+    const seenCorpse = new Set();
+
+    // TERRAIN TILES
+    for (let y = tt; y <= tb; y++) {
+        for (let x = tl; x <= tr; x++) {
+            if (!level[y] || level[y][x] === undefined) continue;
+            const t = level[y][x];
+            const key = y + ',' + x;
+            seenTerrain.add(key);
+
+            if (t === 1) {
+                // Solid terrain
+                if (!terrainMeshes.has(key)) {
+                    const mesh = new THREE.Mesh(boxGeo, mat3.tile);
+                    mesh.position.set(x * TILE + TILE/2, -(y * TILE + TILE/2), 0);
+                    mesh.rotation.x = BLOCK_TILT;
+                    mesh.rotation.z = BLOCK_TILT_Z;
+                    scene3.add(mesh);
+                    terrainMeshes.set(key, mesh);
+                }
+            } else if (t === 2) {
+                // Spike
+                if (!spikeMeshes.has(key)) {
+                    const mesh = new THREE.Mesh(spikeGeo, mat3.spike);
+                    if (y <= 1) {
+                        // Ceiling spike pointing down
+                        mesh.rotation.z = Math.PI;
+                        mesh.position.set(x * TILE + TILE/2, -(y * TILE + TILE/2), 0);
+                    } else if (y >= (levelH || 14) - 2) {
+                        // Floor spike pointing up
+                        mesh.position.set(x * TILE + TILE/2, -(y * TILE + TILE/2), 0);
+                    } else {
+                        // Side spike pointing left
+                        mesh.rotation.z = Math.PI / 2;
+                        mesh.position.set(x * TILE + TILE/2, -(y * TILE + TILE/2), 0);
+                    }
+                    scene3.add(mesh);
+                    spikeMeshes.set(key, mesh);
+                }
+            }
+        }
+    }
+
+    // Remove off-screen terrain
+    for (const [key, mesh] of terrainMeshes) {
+        if (!seenTerrain.has(key)) {
+            scene3.remove(mesh);
+            terrainMeshes.delete(key);
+        }
+    }
+    for (const [key, mesh] of spikeMeshes) {
+        if (!seenTerrain.has(key)) {
+            scene3.remove(mesh);
+            spikeMeshes.delete(key);
+        }
+    }
+
+    // CORPSE BLOCKS (placed dead shapes)
+    for (let y = tt; y <= tb; y++) {
+        for (let x = tl; x <= tr; x++) {
+            if (!corpseGrid[y] || !corpseGrid[y][x]) continue;
+            const block = corpseGrid[y][x];
+            const key = y + ',' + x;
+            seenCorpse.add(key);
+
+            if (!corpseMeshes.has(key)) {
+                const meshMat = getMat3(block.mat);
+                const mesh = new THREE.Mesh(boxGeo, meshMat);
+                mesh.position.set(x * TILE + TILE/2, -(y * TILE + TILE/2), DEPTH * 0.1);
+                mesh.rotation.x = BLOCK_TILT;
+                mesh.rotation.z = BLOCK_TILT_Z;
+                scene3.add(mesh);
+                corpseMeshes.set(key, { mesh, mat: block.mat });
+            }
+            // Animate: fade in via scale
+            const entry = corpseMeshes.get(key);
+            const age = Math.min(1, block.age || 0);
+            entry.mesh.scale.set(age, age, age);
+
+            // Clearing flash
+            if (block.clearing) {
+                const blink = Math.sin(performance.now() / 40) > 0;
+                entry.mesh.material = blink
+                    ? new THREE.MeshLambertMaterial({ color: 0xFFFFF0 })
+                    : getMat3(block.mat);
+            }
+        }
+    }
+    // Remove off-screen or cleared corpses
+    for (const [key, entry] of corpseMeshes) {
+        if (!seenCorpse.has(key)) {
+            scene3.remove(entry.mesh);
+            corpseMeshes.delete(key);
+        }
+    }
+
+    // PLAYER (tetromino blocks)
+    // Remove old player meshes
+    for (const m of playerMeshes) scene3.remove(m);
+    playerMeshes = [];
+
+    if (!player.dead) {
+        const cells = getCells(player.shape, player.rotation);
+        for (let i = 0; i < cells.length; i++) {
+            const [cx, cy] = cells[i];
+            const px = player.x + cx * TILE;
+            const py = player.y + cy * TILE;
+
+            // Squash/stretch
+            const centerX = player.x + getShapeCenterX(player.shape, player.rotation);
+            const centerY = player.y + getShapeCenterY(player.shape, player.rotation);
+            const sx = 1 / player.squash;
+            const sy = player.squash;
+            const drawX = centerX + (px - centerX) * sx;
+            const drawY = centerY + (py - centerY) * sy;
+
+            const playerMat = getMat3(player.material);
+            const mesh = new THREE.Mesh(boxGeo, playerMat);
+            mesh.position.set(drawX + TILE/2, -(drawY + TILE/2), DEPTH * 0.3);
+            mesh.scale.set(sx, sy, 1);
+            mesh.rotation.x = BLOCK_TILT;
+            mesh.rotation.z = BLOCK_TILT_Z;
+            scene3.add(mesh);
+            playerMeshes.push(mesh);
+        }
+
+        // Quake golden glow
+        if (player.quakeTimer > 0) {
+            const pulse = 0.4 + 0.4 * Math.sin(performance.now() / 80);
+            for (const m of playerMeshes) {
+                m.material = new THREE.MeshLambertMaterial({
+                    color: 0xFFD080,
+                    emissive: 0xFFD080,
+                    emissiveIntensity: pulse * 0.3
+                });
+            }
+        }
+    }
+
+    // FALLING GROUP (dying corpse animation)
+    if (fallingGroup) {
+        for (const cell of fallingGroup.cells) {
+            const px = cell.x * TILE;
+            const py = cell.y * TILE + fallingGroup.drop;
+            const mesh = new THREE.Mesh(boxGeo, getMat3(cell.mat));
+            mesh.position.set(px + TILE/2, -(py + TILE/2), DEPTH * 0.15);
+            mesh.rotation.x = BLOCK_TILT;
+            mesh.rotation.z = BLOCK_TILT_Z;
+            scene3.add(mesh);
+            playerMeshes.push(mesh); // reuse cleanup array
+        }
+    }
+
+    // BUZZSAWS
+    if (typeof buzzsaws !== 'undefined') {
+        for (const saw of buzzsaws) {
+            // Draw as spinning box (saws are rare, just make them visible)
+            const mesh = new THREE.Mesh(
+                new THREE.SphereGeometry(TILE * 0.45, 6, 6),
+                mat3.saw
+            );
+            mesh.position.set(saw.x + TILE/2, -(saw.y + TILE/2), DEPTH * 0.2);
+            mesh.rotation.z = performance.now() / 200;
+            scene3.add(mesh);
+            playerMeshes.push(mesh);
+        }
+    }
+
+    // MOVING PLATFORMS
+    if (typeof movingPlatforms !== 'undefined') {
+        for (const plat of movingPlatforms) {
+            for (let i = 0; i < plat.w; i++) {
+                const mesh = new THREE.Mesh(boxGeo, mat3.platform);
+                mesh.position.set(plat.x + i * TILE + TILE/2, -(plat.y + TILE/2), 0);
+                mesh.rotation.x = BLOCK_TILT;
+                mesh.rotation.z = BLOCK_TILT_Z;
+                scene3.add(mesh);
+                playerMeshes.push(mesh);
+            }
+        }
+    }
+
+    renderer3.render(scene3, camera3);
+}
+
+// Hook into resize
+const _origResize = resize;
+resize = function() {
+    _origResize();
+    resize3D();
+};
+
+// ── Particles ──
+function spawnP(x, y, color, count, speed, life) {
+    for (let i = 0; i < count; i++) {
+        const a = Math.random() * Math.PI * 2;
+        const s = speed * (0.5 + Math.random() * 0.5);
+        particles.push({
+            x, y, vx: Math.cos(a) * s, vy: Math.sin(a) * s - speed * 0.3,
+            life: life * (0.5 + Math.random() * 0.5), maxLife: life,
+            color, size: 1 + Math.random()
+        });
+    }
+}
+
+// ══════════════════════════════════════
+// ── DEATH + GRID SNAP + GRAVITY ──
+// ══════════════════════════════════════
+
+function die() {
+    if (player.dead) return;
+    if (player.quakeTimer > 0) return; // can't die while invincible
+    player.dead = true;
+    player.deathTimer = 0;
+    player.deathCount++;
+    levelDeaths++;
+    console.log('HIGHLIGHT:DEATH:' + performance.now().toFixed(0));
+    player._totalDeaths = (player._totalDeaths || 0) + 1;
+
+    cam.shake = Math.max(cam.shake, 6);
+    flash.a = 0.6; flash.r = 0.91; flash.g = 0.66; flash.b = 0.22;
+    SFX.death();
+
+    const cells = getCells(player.shape, player.rotation);
+    const cx = player.x + getShapeCenterX(player.shape, player.rotation);
+    const cy = player.y + getShapeCenterY(player.shape, player.rotation);
+    spawnP(cx, cy, C.player, 12, 80, 0.4);
+    spawnP(cx, cy, C.spike, 6, 50, 0.3);
+
+    // Check minimum distance
+    const distFromSpawn = Math.floor((player.x - player.spawnX) / TILE);
+
+    // Spike corpses need more distance to avoid nasty pileups near spawn
+    const minDist = player.material === 'spike' ? MIN_DISTANCE_FOR_SPIKE_CORPSE : MIN_DISTANCE_FOR_CORPSE;
+    if (distFromSpawn >= minDist) {
+        // Snap each cell to the grid — clamp to valid range so chasm deaths still place blocks
+        const groupCells = [];
+        for (let i = 0; i < cells.length; i++) {
+            const [cellC, cellR] = cells[i];
+            const worldPx = player.x + cellC * TILE;
+            const worldPy = player.y + cellR * TILE;
+            const gridX = Math.round(worldPx / TILE);
+            const gridY = Math.max(0, Math.min(Math.round(worldPy / TILE), levelH - 1));
+            if (gridX >= 0) {
+                groupCells.push({ x: gridX, y: gridY, mat: player.material, eyes: i === 0 });
+            }
+        }
+
+        // Compute how far this group can fall as a unit
+        const targetDrop = computeGroupDrop(groupCells);
+
+        // Create falling group — they fall together, maintaining shape
+        fallingGroup = {
+            cells: groupCells,
+            drop: 0,
+            targetDrop,
+            fallSpeed: 0
+        };
+
+        // Snap particles at each cell
+        for (const { x: gx, y: gy } of groupCells) {
+            spawnP(gx * TILE + TILE/2, gy * TILE + TILE/2, matColor(player.material), 3, 40, 0.25);
+        }
+    }
+}
+
+function getShapeCenterX(shapeName, rotation) {
+    const cells = getCells(shapeName, rotation);
+    let sum = 0;
+    for (const [c, r] of cells) sum += c;
+    return (sum / cells.length) * TILE + TILE / 2;
+}
+
+function getShapeCenterY(shapeName, rotation) {
+    const cells = getCells(shapeName, rotation);
+    let sum = 0;
+    for (const [c, r] of cells) sum += r;
+    return (sum / cells.length) * TILE + TILE / 2;
+}
+
+// Compute how far a group of cells can fall as a unit
+function computeGroupDrop(cells) {
+    for (let drop = 0; drop < levelH; drop++) {
+        // Can the group drop one more tile?
+        for (const { x: gx, y: gy } of cells) {
+            const testY = gy + drop + 1;
+            if (testY >= levelH) return drop;
+            // Blocked by terrain or existing corpse?
+            const blocked = (level[testY] && level[testY][gx] === 1) ||
+                            (corpseGrid[testY] && corpseGrid[testY][gx]);
+            if (blocked) return drop;
+        }
+    }
+    return 0;
+}
+
+// Update falling group — all cells fall together
+function updateFallingGroup(dt) {
+    if (!fallingGroup) return;
+
+    fallingGroup.fallSpeed += 600 * dt;
+    fallingGroup.drop += fallingGroup.fallSpeed * dt;
+
+    if (fallingGroup.drop >= fallingGroup.targetDrop) {
+        // Landed! Place all cells
+        fallingGroup.drop = fallingGroup.targetDrop;
+        for (const cell of fallingGroup.cells) {
+            const landY = cell.y + fallingGroup.targetDrop;
+            if (landY >= 0 && landY < levelH) {
+                if (!corpseGrid[landY]) corpseGrid[landY] = [];
+                if (!(level[landY] && level[landY][cell.x] === 1)) {
+                    if (cell.mat === 'spike') {
+                        // Spike material → becomes permanent terrain spike
+                        if (!level[landY]) level[landY] = [];
+                        level[landY][cell.x] = 2;
+                    } else {
+                        corpseGrid[landY][cell.x] = { mat: cell.mat, eyes: cell.eyes, age: 0, deathNum: player.deathCount };
+                        // Non-spike corpses neutralize terrain spikes
+                        if (level[landY] && level[landY][cell.x] === 2) {
+                            level[landY][cell.x] = 0;
+                        }
+                    }
+                }
+            }
+            spawnP(cell.x * TILE + TILE/2, (cell.y + fallingGroup.targetDrop) * TILE + TILE, C.tile, 3, 25, 0.15);
+        }
+        cam.shake = Math.max(cam.shake, 2);
+        fallingGroup = null;
+        checkRowClears();
+    }
+}
+
+// ══════════════════════════════════════
+// ── ROW CLEARING ──
+// ══════════════════════════════════════
+
+function checkRowClears() {
+    const maxGenX = segments.length * SEGMENT_W;
+    let cleared = false;
+
+    // VERTICAL column clearing — 6+ CONSECUTIVE non-spike corpse blocks
+    // clearColumn already clears the whole column, so just need to detect threshold
+    for (let x = 0; x < maxGenX; x++) {
+        let run = 0;
+        let found = false;
+        for (let y = 0; y < levelH; y++) {
+            const b = corpseGrid[y] && corpseGrid[y][x];
+            if (b && b.mat !== 'spike') {
+                run++;
+            } else {
+                if (run >= COLUMN_CLEAR_THRESHOLD) { found = true; break; }
+                run = 0;
+            }
+        }
+        if (run >= COLUMN_CLEAR_THRESHOLD) found = true;
+        if (found) {
+            clearColumn(x);
+            cleared = true;
+        }
+    }
+
+    // HORIZONTAL row clearing — 6+ CONSECUTIVE non-spike corpse blocks
+    // Let runs grow past 6 — clear the full segment when it ends
+    for (let y = 1; y < levelH - 1; y++) {
+        let run = 0;
+        let runStart = 0;
+        for (let x = 0; x < maxGenX; x++) {
+            const b = corpseGrid[y] && corpseGrid[y][x];
+            if (b && b.mat !== 'spike') {
+                if (run === 0) runStart = x;
+                run++;
+            } else {
+                if (run >= COLUMN_CLEAR_THRESHOLD) {
+                    clearRowSegment(y, runStart, runStart + run - 1);
+                    cleared = true;
+                }
+                run = 0;
+            }
+        }
+        // Check run at end of row
+        if (run >= COLUMN_CLEAR_THRESHOLD) {
+            clearRowSegment(y, runStart, runStart + run - 1);
+            cleared = true;
+        }
+    }
+
+    // Gravity now applied when pendingClears timers expire
+}
+
+function onQuake(clearCells) {
+    player.quakeCount++;
+    levelQuakes++;
+    player._totalQuakes = (player._totalQuakes || 0) + 1;
+    console.log('HIGHLIGHT:QUAKE:' + performance.now().toFixed(0));
+
+    // RESURRECT: piece rises from the dead at the quake location
+    if (player.dead && clearCells && clearCells.length > 0) {
+        // Find rightmost cell of the clear — resurrect there (furthest forward)
+        let maxX = 0, resY = 0;
+        for (const c of clearCells) {
+            if (c.x >= maxX) { maxX = c.x; resY = c.y; }
+        }
+        player.x = maxX * TILE;
+        player.y = (resY - 2) * TILE; // above the cleared row
+        player.vx = RUN_SPEED;
+        player.vy = -200; // pop up dramatically
+        player.dead = false;
+        player.deathTimer = 0;
+        player.onGround = false;
+        player.jumpsLeft = 2;
+        player.spinCooldown = 0;
+        player.rotateCooldown = 0;
+        player.squash = 0.5;
+        player.trail = [];
+        player.boostTimer = 0;
+        player.distance = 0;
+        // Refund the death — it was productive
+        if (player.deathCount > 0) player.deathCount--;
+        console.log('HIGHLIGHT:RESURRECT:' + performance.now().toFixed(0));
+        // Roll a new piece
+        player.shape = nextPieceShape;
+        player.material = nextPieceMaterial;
+        player.rotation = 0;
+        rollNextPiece();
+        // Blast radius — destroy nearby corpses and spikes
+        const blastR = 3; // tiles
+        const pcx = Math.floor(player.x / TILE);
+        const pcy = Math.floor(player.y / TILE);
+        for (let by = pcy - blastR; by <= pcy + blastR; by++) {
+            for (let bx = pcx - blastR; bx <= pcx + blastR; bx++) {
+                if (by < 0 || by >= levelH || bx < 0) continue;
+                // Destroy corpses
+                if (corpseGrid[by] && corpseGrid[by][bx]) {
+                    spawnP(bx * TILE + TILE/2, by * TILE + TILE/2, matColor(corpseGrid[by][bx].mat), 4, 30, 0.2);
+                    corpseGrid[by][bx] = null;
+                }
+                // Destroy spike tiles
+                if (level[by] && level[by][bx] === 2) {
+                    spawnP(bx * TILE + TILE/2, by * TILE + TILE/2, C.spike, 4, 30, 0.2);
+                    level[by][bx] = 0;
+                }
+            }
+        }
+    }
+
+    SFX.crunch();
+    timeSlowTimer = 0.3; // brief time-slow for juice
+    // Stack invincibility — 5s base, combos stack +5s each
+    player.quakeTimer += 5.0;
+    quakeFlash = 1.5;
+    // Screen shake — bigger for combos
+    const combo = player.quakeTimer > 5.5 ? Math.floor(player.quakeTimer / 5) + 1 : 0;
+    if (combo >= 2) console.log('HIGHLIGHT:COMBO:' + performance.now().toFixed(0) + ':x' + combo);
+    cam.shake = Math.max(cam.shake, combo >= 2 ? 12 : 8);
+    // Big screen feedback
+    const cx = player.x + getShapeCenterX(player.shape, player.rotation);
+    const cy = player.y + getShapeCenterY(player.shape, player.rotation);
+    const wasResurrected = !player.dead && clearCells && clearCells.length > 0;
+    const label = wasResurrected ? 'RESURRECT!' : (combo >= 2 ? `QUAKE x${combo}!` : 'QUAKE!');
+    encounterLabel(label, cx, cy - 10, '#FFD080');
+}
+
+function clearColumn(x) {
+    const cells = [];
+    for (let y = 0; y < levelH; y++) {
+        if (corpseGrid[y] && corpseGrid[y][x]) {
+            cells.push({ x, y });
+            corpseGrid[y][x].clearing = true;
+        }
+    }
+    if (cells.length) {
+        pendingClears.push({ cells, timer: 0.35 });
+        onQuake(cells);
+    }
+}
+
+function clearRowSegment(y, startX, endX) {
+    const cells = [];
+    for (let x = startX; x <= endX; x++) {
+        if (corpseGrid[y] && corpseGrid[y][x]) {
+            cells.push({ x, y });
+            corpseGrid[y][x].clearing = true;
+        }
+    }
+    if (cells.length) {
+        pendingClears.push({ cells, timer: 0.35 });
+        onQuake(cells);
+    }
+}
+
+function updatePendingClears(dt) {
+    for (let i = pendingClears.length - 1; i >= 0; i--) {
+        const pc = pendingClears[i];
+        pc.timer -= dt;
+        if (pc.timer <= 0) {
+            // Actually delete + particles
+            cam.shake = Math.max(cam.shake, 8);
+            flash.a = 0.6; flash.r = 1; flash.g = 0.94; flash.b = 0.82;
+            for (const c of pc.cells) {
+                if (corpseGrid[c.y] && corpseGrid[c.y][c.x]) {
+                    const block = corpseGrid[c.y][c.x];
+                    spawnP(c.x * TILE + TILE/2, c.y * TILE + TILE/2, matColor(block.mat), 3, 80, 0.4);
+                    corpseGrid[c.y][c.x] = null;
+                }
+            }
+            // Big burst at center of group — extra juice
+            let cx = 0, cy = 0;
+            for (const c of pc.cells) { cx += c.x; cy += c.y; }
+            cx = (cx / pc.cells.length) * TILE + TILE/2;
+            cy = (cy / pc.cells.length) * TILE + TILE/2;
+            spawnP(cx, cy, C.player, 20, 140, 0.6);
+            spawnP(cx, cy, '#FFF0D0', 8, 100, 0.4);
+            spawnP(cx, cy, C.spring, 5, 80, 0.3);
+            pendingClears.splice(i, 1);
+            applyCorpseGravity();
+        }
+    }
+}
+
+function applyCorpseGravity() {
+    // For each column, drop corpse blocks down into empty spaces
+    const maxX = segments.length * SEGMENT_W;
+    let dropped = false;
+
+    // Work bottom to top
+    for (let x = 0; x < maxX; x++) {
+        for (let y = levelH - 2; y >= 1; y--) {
+            if (!corpseGrid[y] || !corpseGrid[y][x]) continue;
+            // This cell has a corpse block — check if it can fall
+            let newY = y;
+            for (let ty = y + 1; ty < levelH; ty++) {
+                const isSolid = (level[ty] && level[ty][x] === 1) || (corpseGrid[ty] && corpseGrid[ty][x]);
+                if (isSolid) break;
+                newY = ty;
+            }
+            if (newY !== y) {
+                if (!corpseGrid[newY]) corpseGrid[newY] = [];
+                corpseGrid[newY][x] = corpseGrid[y][x];
+                corpseGrid[y][x] = null;
+                dropped = true;
+            }
+        }
+    }
+
+    // If blocks dropped, check for cascading clears
+    if (dropped) {
+        checkRowClears();
+    }
+}
+
+// ══════════════════════════════════════
+// ── ROTATION ──
+// ══════════════════════════════════════
+
+function tryRotate(dir) {
+    // dir: 1 = clockwise, -1 = counter-clockwise
+    // Rate limit: max ~4 rotations/sec
+    if (player.rotateCooldown > 0) return false;
+    const oldRot = player.rotation;
+    const newRot = (oldRot + dir + 4) % 4;
+    const kicks = SHAPE_KICKS[player.shape] || KICK_DATA;
+
+    // Determine kick table index
+    let kickIdx;
+    if (dir === 1) {
+        kickIdx = oldRot; // 0→1, 1→2, 2→3, 3→0
+    } else {
+        // Reverse: use the target→old kicks, but negated
+        kickIdx = newRot;
+    }
+
+    const kickTests = kicks[kickIdx];
+    for (const [kx, ky] of kickTests) {
+        const testX = player.x + (dir === 1 ? kx : -kx) * TILE;
+        const testY = player.y + (dir === 1 ? -ky : ky) * TILE;
+        if (!tetSolid(testX, testY, player.shape, newRot)) {
+            player.x = testX;
+            player.y = testY;
+            player.rotation = newRot;
+            player.squash = 1.15;
+            const cx = player.x + getShapeCenterX(player.shape, player.rotation);
+            const cy = player.y + getShapeCenterY(player.shape, player.rotation);
+            // Spin boost (CW only, with cooldown)
+            if (dir === 1 && (!player.spinCooldown || player.spinCooldown <= 0)) {
+                spawnP(cx, cy, matColor(player.material), 3, 20, 0.1);
+                player.vx = 200;
+                player.boostTimer = 0.5;
+                player.spinCooldown = 1.0;
+                SFX.spinBoost();
+            }
+            player.rotateCooldown = 0.25;
+            return true;
+        }
+    }
+    return false; // rotation failed
+}
+
+// ══════════════════════════════════════
+// ── RESPAWN ──
+// ══════════════════════════════════════
+
+function respawn() {
+    const h = LEVEL_H_TILES;
+    player.shape = nextPieceShape;
+    player.material = nextPieceMaterial;
+    player.rotation = 0;
+    rollNextPiece(); // pre-roll for preview
+    player.x = 2 * TILE;
+    // Spawn high enough that the tallest piece clears the floor
+    const bounds = shapeBounds(player.shape, 0);
+    player.y = (h - 2 - bounds.maxR) * TILE;
+    player.spawnX = player.x;
+    player.vx = RUN_SPEED;
+    player.vy = 0;
+    player.dead = false;
+    player.onGround = false;
+    player.squash = 0.5;
+    player.trail = [];
+    player.boostTimer = 0;
+    // NOTE: quakeTimer is NOT reset here — invincibility persists through respawn
+    player.jumpsLeft = 2;
+    player.spinCooldown = 0;
+    player.rotateCooldown = 0;
+    player.coyoteTimer = 0;
+    player.distance = 0;
+    player.stuckTimer = 0;
+    player.stuckHighX = player.x;
+    cam.x = 0; cam.y = 0;
+}
+
+// ══════════════════════════════════════
+// ── INPUT ──
+// ══════════════════════════════════════
+
+let jumpBuffered = false;
+let _skipBtnBounds = null; // {x,y,w,h} in game pixels when pause menu is showing
+let _muteBtnBounds = null;
+let _volDownBounds = null;
+let _volUpBounds = null;
+let _sfxBtnBounds = null;
+let _levelLeftBounds = null;
+let _levelRightBounds = null;
+let _pauseSelectedLevel = 1;
+let touchStartX = 0, touchStartY = 0;
+let touchStartTime = 0;
+let touchHandled = false;
+const SWIPE_THRESHOLD = 25; // pixels
+
+// Input method detection — desktop vs touch
+let isTouch = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0);
+let lastInputWasTouch = isTouch;
+
+function ctrlHint(action) {
+    if (lastInputWasTouch) {
+        if (action === 'jump') return 'tap = jump';
+        if (action === 'die') return 'swipe \u2193 = die';
+        if (action === 'rotate') return 'swipe \u2190\u2192 = rotate';
+        return 'tap=jump  swipe \u2193=die  swipe \u2190\u2192=rotate';
+    } else {
+        if (action === 'jump') return 'SPACE / W = jump';
+        if (action === 'die') return 'X / S = die';
+        if (action === 'rotate') return 'A / D = rotate';
+        return 'SPACE=jump  X=die  A/D=rotate';
+    }
+}
+
+function doJump() {
+    if (!started) { started = true; startMusic(); return; }
+    if (tutorialStep === 0) tutorialStep = 1;
+    jumpBuffered = true;
+}
+
+function doDie() {
+    if (!started) { started = true; startMusic(); return; }
+    if (tutorialStep === 0) return; // blocked until jump
+    if (tutorialStep === 2) { tutorialStep = 3; tutorialComplete = true; }
+    die();
+}
+
+function doRotateCW() {
+    if (!started || player.dead) return;
+    if (tutorialStep === 0) return; // blocked until jump
+    if (tutorialStep === 1) tutorialStep = 2;
+    tryRotate(1);
+}
+
+function doRotateCCW() {
+    if (!started || player.dead) return;
+    if (tutorialStep === 0) return; // blocked until jump
+    if (tutorialStep === 1) tutorialStep = 2;
+    tryRotate(-1);
+}
+
+// Touch input — tap=jump, swipe down=die, swipe left/right=rotate
+canvas.addEventListener('touchstart', (e) => {
+    e.preventDefault();
+    lastInputWasTouch = true;
+    const t = e.changedTouches[0];
+    touchStartX = t.clientX;
+    touchStartY = t.clientY;
+    touchStartTime = performance.now();
+    touchHandled = false;
+}, { passive: false });
+
+canvas.addEventListener('touchmove', (e) => {
+    e.preventDefault();
+    if (touchHandled) return;
+    const t = e.changedTouches[0];
+    const dx = t.clientX - touchStartX;
+    const dy = t.clientY - touchStartY;
+
+    if (Math.abs(dy) > SWIPE_THRESHOLD && dy > 0 && Math.abs(dy) > Math.abs(dx)) {
+        // Swipe down = voluntary death
+        touchHandled = true;
+        doDie();
+    } else if (Math.abs(dx) > SWIPE_THRESHOLD && Math.abs(dx) > Math.abs(dy)) {
+        touchHandled = true;
+        if (dx > 0) doRotateCW();
+        else doRotateCCW();
+    }
+}, { passive: false });
+
+canvas.addEventListener('touchend', (e) => {
+    e.preventDefault();
+    if (!touchHandled) {
+        const elapsed = performance.now() - touchStartTime;
+        if (elapsed < 300) {
+            // Check if tapping pause menu buttons
+            if (paused) {
+                const t = e.changedTouches[0];
+                const rect = canvas.getBoundingClientRect();
+                const tapX = (t.clientX - rect.left) / rect.width * W;
+                const tapY = (t.clientY - rect.top) / rect.height * H;
+                if (_skipBtnBounds) {
+                    const b = _skipBtnBounds;
+                    if (tapX >= b.x && tapX <= b.x + b.w && tapY >= b.y && tapY <= b.y + b.h) {
+                        restartLevel();
+                        return;
+                    }
+                }
+                if (_levelLeftBounds) {
+                    const b = _levelLeftBounds;
+                    if (tapX >= b.x && tapX <= b.x + b.w && tapY >= b.y && tapY <= b.y + b.h) {
+                        pauseLevelLeft();
+                        return;
+                    }
+                }
+                if (_levelRightBounds) {
+                    const b = _levelRightBounds;
+                    if (tapX >= b.x && tapX <= b.x + b.w && tapY >= b.y && tapY <= b.y + b.h) {
+                        pauseLevelRight();
+                        return;
+                    }
+                }
+                if (_volDownBounds) {
+                    const b = _volDownBounds;
+                    if (tapX >= b.x && tapX <= b.x + b.w && tapY >= b.y && tapY <= b.y + b.h) {
+                        adjustMusicVolume(-1);
+                        return;
+                    }
+                }
+                if (_volUpBounds) {
+                    const b = _volUpBounds;
+                    if (tapX >= b.x && tapX <= b.x + b.w && tapY >= b.y && tapY <= b.y + b.h) {
+                        adjustMusicVolume(1);
+                        return;
+                    }
+                }
+                if (_sfxBtnBounds) {
+                    const b = _sfxBtnBounds;
+                    if (tapX >= b.x && tapX <= b.x + b.w && tapY >= b.y && tapY <= b.y + b.h) {
+                        toggleSfxMute();
+                        return;
+                    }
+                }
+                // Tap anywhere else = resume
+                togglePause();
+                return;
+            }
+            doJump();
+        }
+    }
+}, { passive: false });
+
+// Keyboard
+document.addEventListener('keydown', (e) => {
+    if (e.repeat) return;
+    lastInputWasTouch = false;
+    if (e.code === 'Space' || e.code === 'ArrowUp' || e.code === 'KeyW') doJump();
+    if (e.code === 'ArrowDown' || e.code === 'KeyS' || e.code === 'KeyX') doDie();
+    if (e.code === 'ArrowRight' || e.code === 'KeyD') doRotateCW();
+    if (e.code === 'ArrowLeft' || e.code === 'KeyA') doRotateCCW();
+    if (e.code === 'KeyR') hardReset();
+    if (e.code === 'KeyP' || e.code === 'Escape') togglePause();
+    if (e.code === 'KeyN' && paused) restartLevel();
+    if (e.code === 'KeyM') toggleMusicMute();
+    if (e.code === 'KeyF') toggleSfxMute();
+    if (e.code === 'Comma' && paused) adjustMusicVolume(-1);
+    if (e.code === 'Period' && paused) adjustMusicVolume(1);
+    if (e.code === 'BracketLeft' && paused) pauseLevelLeft();
+    if (e.code === 'BracketRight' && paused) pauseLevelRight();
+    if (e.code === 'KeyB') { toggleBot(); }
+});
+
+// Pause
+function togglePause() {
+    paused = !paused;
+    document.getElementById('pauseBtn').innerHTML = paused ? '&#9654;' : '&#9646;&#9646;';
+    if (paused) _pauseSelectedLevel = currentLevel;
+}
+
+function restartLevel() {
+    if (!paused) return;
+    paused = false;
+    document.getElementById('pauseBtn').innerHTML = '&#9646;&#9646;';
+    initLevel(currentLevel);
+}
+
+function pauseLevelLeft() {
+    if (_pauseSelectedLevel > 1) {
+        _pauseSelectedLevel--;
+        currentLevel = _pauseSelectedLevel;
+        initLevel(currentLevel);
+    }
+}
+
+function pauseLevelRight() {
+    if (_pauseSelectedLevel < 24) {
+        _pauseSelectedLevel++;
+        currentLevel = _pauseSelectedLevel;
+        initLevel(currentLevel);
+    }
+}
+
+document.getElementById('pauseBtn').addEventListener('touchstart', (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    togglePause();
+}, { passive: false });
+
+document.getElementById('pauseBtn').addEventListener('click', (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    togglePause();
+});
+
+// Bot toggle button
+function toggleBot() {
+    if (typeof nnAgent === 'undefined') return;
+    nnAgent.toggle();
+    document.getElementById('botBtn').classList.toggle('active', nnAgent.active);
+}
+document.getElementById('botBtn').addEventListener('touchstart', (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    toggleBot();
+}, { passive: false });
+document.getElementById('botBtn').addEventListener('click', (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    toggleBot();
+});
+
+// Click on pause menu buttons (desktop)
+canvas.addEventListener('click', (e) => {
+    if (paused) {
+        const rect = canvas.getBoundingClientRect();
+        const clickX = (e.clientX - rect.left) / rect.width * W;
+        const clickY = (e.clientY - rect.top) / rect.height * H;
+        if (_skipBtnBounds) {
+            const b = _skipBtnBounds;
+            if (clickX >= b.x && clickX <= b.x + b.w && clickY >= b.y && clickY <= b.y + b.h) {
+                restartLevel();
+                return;
+            }
+        }
+        if (_levelLeftBounds) {
+            const b = _levelLeftBounds;
+            if (clickX >= b.x && clickX <= b.x + b.w && clickY >= b.y && clickY <= b.y + b.h) {
+                pauseLevelLeft();
+                return;
+            }
+        }
+        if (_levelRightBounds) {
+            const b = _levelRightBounds;
+            if (clickX >= b.x && clickX <= b.x + b.w && clickY >= b.y && clickY <= b.y + b.h) {
+                pauseLevelRight();
+                return;
+            }
+        }
+        if (_volDownBounds) {
+            const b = _volDownBounds;
+            if (clickX >= b.x && clickX <= b.x + b.w && clickY >= b.y && clickY <= b.y + b.h) {
+                adjustMusicVolume(-1);
+                return;
+            }
+        }
+        if (_volUpBounds) {
+            const b = _volUpBounds;
+            if (clickX >= b.x && clickX <= b.x + b.w && clickY >= b.y && clickY <= b.y + b.h) {
+                adjustMusicVolume(1);
+                return;
+            }
+        }
+        if (_sfxBtnBounds) {
+            const b = _sfxBtnBounds;
+            if (clickX >= b.x && clickX <= b.x + b.w && clickY >= b.y && clickY <= b.y + b.h) {
+                toggleSfxMute();
+                return;
+            }
+        }
+        // Click anywhere else = resume
+        togglePause();
+    }
+});
+
+// ══════════════════════════════════════
+// ── UPDATE ──
+// ══════════════════════════════════════
+
+let lastTime = 0;
+
+function update(dt) {
+    if (paused || !started) return;
+
+    // Win screen — just tick timer and spawn celebration particles
+    if (gameWon) {
+        winTimer += dt;
+        winParticleTimer -= dt;
+        if (winParticleTimer <= 0) {
+            winParticleTimer = 0.15;
+            const px = Math.random() * W;
+            const py = H * 0.3 + Math.random() * H * 0.2;
+            const colors = [C.player, C.spring, C.booster, '#FFF0D0', '#FFD080'];
+            spawnP(px + cam.x, py + cam.y, colors[Math.floor(Math.random() * colors.length)], 3, 50, 0.8);
+        }
+        // Allow tap/key to continue to endless mode
+        if (winTimer > 2 && jumpBuffered) {
+            jumpBuffered = false;
+            gameWon = false;
+            currentLevel = 25;
+            initLevel(currentLevel);
+        }
+        // Keep particles alive
+        for (let i = particles.length - 1; i >= 0; i--) {
+            const p = particles[i];
+            p.x += p.vx * dt; p.y += p.vy * dt;
+            p.vy += 60 * dt; p.life -= dt;
+            if (p.life <= 0) particles.splice(i, 1);
+        }
+        return;
+    }
+
+    // Time-slow effect (quake juice)
+    if (timeSlowTimer > 0) {
+        timeSlowTimer -= dt;
+        dt *= 0.3; // slow everything to 30% speed
+    }
+
+    // Update encounter labels
+    for (let i = encounterLabels.length - 1; i >= 0; i--) {
+        encounterLabels[i].timer -= dt;
+        encounterLabels[i].y -= 20 * dt; // float upward
+        if (encounterLabels[i].timer <= 0) encounterLabels.splice(i, 1);
+    }
+
+    if (levelTitleTimer > 0) levelTitleTimer -= dt;
+
+    // Level complete — freeze gameplay, count down to next level
+    if (levelComplete) {
+        levelTransitionTimer -= dt;
+        // Keep particles alive during transition
+        for (let i = particles.length - 1; i >= 0; i--) {
+            const p = particles[i];
+            p.x += p.vx * dt; p.y += p.vy * dt;
+            p.vy += 180 * dt; p.life -= dt;
+            if (p.life <= 0) particles.splice(i, 1);
+        }
+        if (flash.a > 0) flash.a -= dt * 2; // slower flash fade
+        if (cam.shake > 0) { cam.sx = (Math.random()*2-1)*cam.shake; cam.sy = (Math.random()*2-1)*cam.shake; cam.shake *= (1-6*dt); if (cam.shake < 0.3) cam.shake = 0; }
+        if (levelTransitionTimer <= 0) {
+            if (currentLevel >= 24 && !player._hasWon) {
+                // BEAT THE GAME!
+                player._hasWon = true;
+                player._highestLevel = Math.max(player._highestLevel || 1, 25);
+                player._bestRun = Math.max(player._bestRun || 0, 24);
+                saveProgress();
+                gameWon = true;
+                winTimer = 0;
+                winParticleTimer = 0;
+                return;
+            }
+            currentLevel++;
+            if (currentLevel > (player._highestLevel || 1)) {
+                player._highestLevel = currentLevel;
+            }
+            player._bestRun = Math.max(player._bestRun || 0, currentLevel - 1);
+            saveProgress();
+            initLevel(currentLevel);
+        }
+        return;
+    }
+
+    // Particles
+    for (let i = particles.length - 1; i >= 0; i--) {
+        const p = particles[i];
+        p.x += p.vx * dt;
+        p.y += p.vy * dt;
+        p.vy += 180 * dt;
+        p.life -= dt;
+        if (p.life <= 0) particles.splice(i, 1);
+    }
+
+    // Flash
+    if (flash.a > 0) flash.a -= dt * 4;
+    if (quakeFlash > 0) quakeFlash -= dt;
+
+    // Quake invincibility countdown + sparkle trail
+    if (player.quakeTimer > 0) {
+        player.quakeTimer -= dt;
+        if (Math.random() < 0.5) {
+            const cx = player.x + getShapeCenterX(player.shape, player.rotation);
+            const cy = player.y + getShapeCenterY(player.shape, player.rotation);
+            spawnP(cx + (Math.random() - 0.5) * 24, cy + (Math.random() - 0.5) * 24,
+                Math.random() < 0.5 ? '#FFD080' : C.player, 1, 25, 0.4);
+        }
+    }
+
+    // Falling group
+    updateFallingGroup(dt);
+
+    // Clear animations
+    updatePendingClears(dt);
+
+    // Camera — use bounding box center of shape
+    const shapeCX = player.x + getShapeCenterX(player.shape, player.rotation);
+    const targetX = shapeCX - W / 2 + 40;
+    cam.x += (targetX - cam.x) * 6 * dt;
+    cam.y = 0;
+    if (cam.shake > 0) {
+        cam.sx = (Math.random() * 2 - 1) * cam.shake;
+        cam.sy = (Math.random() * 2 - 1) * cam.shake;
+        cam.shake *= (1 - 10 * dt);
+        if (cam.shake < 0.3) { cam.shake = 0; cam.sx = 0; cam.sy = 0; }
+    }
+
+    if (player.dead) {
+        player.deathTimer += dt;
+        if (player.deathTimer > 0.5) respawn();
+        return;
+    }
+
+    // NN agent: inject actions when in bot mode (rate-limited to ~8 actions/sec)
+    if (typeof nnAgent !== 'undefined' && nnAgent.active) {
+        if (!nnAgent._cooldown) nnAgent._cooldown = 0;
+        if (!nnAgent._jumpCD) nnAgent._jumpCD = 0;
+        // Reset jump cooldown on landing
+        if (player.onGround && !nnAgent._wasGround) nnAgent._jumpCD = 0;
+        nnAgent._wasGround = player.onGround;
+        if (nnAgent._jumpCD > 0) nnAgent._jumpCD -= dt;
+        nnAgent._cooldown -= dt;
+        if (nnAgent._cooldown <= 0) {
+            const act = nnAgent.getAction();
+            if (act === 1 && nnAgent._jumpCD <= 0) {
+                jumpBuffered = true;
+                nnAgent._jumpCD = 0.25;
+            }
+            else if (act === 2) tryRotate(1);
+            else if (act === 3) tryRotate(-1);
+            // no voluntary die — stuck detector jumps instead, hazards handle death
+            nnAgent._cooldown = 0.12;
+        }
+    }
+
+    // Squash lerp
+    player.squash += (1 - player.squash) * 10 * dt;
+
+    // Trail (only during spin boost/brake or on booster material)
+    if (player.boostTimer > 0) player.trail.unshift({ x: player.x, y: player.y, life: 0.12 });
+    for (let i = player.trail.length - 1; i >= 0; i--) {
+        player.trail[i].life -= dt;
+        if (player.trail[i].life <= 0) player.trail.splice(i, 1);
+    }
+    while (player.trail.length > 4) player.trail.pop();
+
+    // Boost timer
+    if (player.boostTimer > 0) player.boostTimer -= dt;
+    if (player.spinCooldown > 0) player.spinCooldown -= dt;
+    if (player.rotateCooldown > 0) player.rotateCooldown -= dt;
+
+    // Auto-run (frozen during tutorial step 0)
+    if (tutorialStep === 0) {
+        player.vx = 0;
+    } else if (player.boostTimer <= 0) {
+        player.vx = RUN_SPEED;
+        player.facing = 1;
+    }
+
+    // Gravity
+    player.vy += GRAVITY * dt;
+    if (player.vy > 400) player.vy = 400;
+
+    // Wall detection
+    player.onWall = 0;
+    if (!player.onGround) {
+        // Check right side of bounding box
+        const bounds = shapeBounds(player.shape, player.rotation);
+        const rightEdge = player.x + (bounds.maxC + 1) * TILE;
+        // Check if any cell has solid to its right
+        const cells = getCells(player.shape, player.rotation);
+        for (const [cx, cy] of cells) {
+            const checkX = player.x + (cx + 1) * TILE;
+            const checkY = player.y + cy * TILE;
+            if (tileIsSolid(Math.floor(checkX / TILE), Math.floor((checkY + TILE/2) / TILE))) {
+                player.onWall = 1;
+                break;
+            }
+        }
+    }
+
+    // Wall slide
+    if (player.onWall !== 0 && player.vy > 0) {
+        player.vy = Math.min(player.vy, WALL_SLIDE_SPEED);
+        if (Math.random() < 0.3) {
+            const bounds = shapeBounds(player.shape, player.rotation);
+            spawnP(player.x + (bounds.maxC + 1) * TILE, player.y + bounds.h * TILE / 2, C.tile, 1, 15, 0.2);
+        }
+    }
+
+    // Coyote time
+    if (player.onGround) {
+        player.coyoteTimer = 0.06;
+        player.jumpsLeft = 2;
+    } else {
+        player.coyoteTimer -= dt;
+    }
+
+    // Jump
+    if (jumpBuffered) {
+        jumpBuffered = false;
+        if (player.onWall !== 0) {
+            player.vx = -player.onWall * 180;
+            player.vy = JUMP_FORCE * 0.9;
+            player.facing = -player.onWall;
+            player.jumpsLeft = 1;
+            player.boostTimer = 0.15;
+            player.squash = 1.3;
+            const bounds = shapeBounds(player.shape, player.rotation);
+            spawnP(player.x + (bounds.maxC + 1) * TILE, player.y + bounds.h * TILE / 2, C.tile, 4, 40, 0.2);
+            SFX.jump();
+        } else if (player.onGround || player.coyoteTimer > 0) {
+            player.vy = JUMP_FORCE;
+            player.onGround = false;
+            player.coyoteTimer = 0;
+            player.jumpsLeft = 1;
+            player.squash = 1.3;
+            const cx = player.x + getShapeCenterX(player.shape, player.rotation);
+            const bounds = shapeBounds(player.shape, player.rotation);
+            spawnP(cx, player.y + (bounds.maxR + 1) * TILE, C.player, 3, 25, 0.15);
+            SFX.jump();
+        } else if (player.jumpsLeft > 0) {
+            player.vy = JUMP_FORCE * 0.7;
+            player.jumpsLeft = 0;
+            player.squash = 1.2;
+            const cx = player.x + getShapeCenterX(player.shape, player.rotation);
+            const bounds = shapeBounds(player.shape, player.rotation);
+            spawnP(cx, player.y + (bounds.maxR + 1) * TILE, 'rgba(232,168,56,0.5)', 4, 35, 0.2);
+            SFX.doubleJump();
+        }
+    }
+
+    // Move X
+    const wasInAir = !player.onGround;
+    let hitWallX = false;
+    const dx = player.vx * dt;
+    if (dx !== 0) {
+        const sign = dx > 0 ? 1 : -1;
+        const steps = Math.ceil(Math.abs(dx));
+        for (let i = 0; i < steps; i++) {
+            const step = Math.min(1, Math.abs(dx) - i) * sign;
+            if (!tetSolid(player.x + step, player.y, player.shape, player.rotation)) {
+                player.x += step;
+            } else {
+                hitWallX = true;
+                player.vx = 0;
+                break;
+            }
+        }
+    }
+
+    // Booster: hit from side during X movement
+    if (hitWallX) {
+        const dir = dx > 0 ? 'right' : 'left';
+        const bh = checkAdjacentCorpse(player.x, player.y, player.shape, player.rotation, dir, 'booster');
+        if (bh) {
+            const now = performance.now() / 1000;
+            const key = `${bh.tx},${bh.ty}`;
+            if (!player._lastBoost || player._lastBoost.key !== key || (now - player._lastBoost.time) > 0.5) {
+                player._lastBoost = { key, time: now };
+                player.vx = (dx > 0 ? 1 : -1) * 350;
+                player.vy = JUMP_FORCE * 0.5;
+                player.jumpsLeft = 1;
+                player.boostTimer = 0.25;
+                player.squash = 1.5;
+                cam.shake = Math.max(cam.shake, 4);
+                spawnP(bh.tx * TILE + TILE/2, bh.ty * TILE + TILE/2, C.booster, 7, 70, 0.3);
+                SFX.booster();
+                if (!player._hitBooster) { player._hitBooster = true; encounterLabel('BOOST!', bh.tx * TILE + TILE/2, bh.ty * TILE + TILE/2, C.booster); }
+            }
+        }
+    }
+
+    // Move Y
+    const prevVY = player.vy;
+    player.onGround = false;
+    let hitCeiling = false;
+    const dy = player.vy * dt;
+    if (dy !== 0) {
+        const sign = dy > 0 ? 1 : -1;
+        const steps = Math.ceil(Math.abs(dy));
+        for (let i = 0; i < steps; i++) {
+            const step = Math.min(1, Math.abs(dy) - i) * sign;
+            if (!tetSolid(player.x, player.y + step, player.shape, player.rotation)) {
+                player.y += step;
+            } else {
+                if (player.vy > 0) {
+                    player.onGround = true;
+                    if (wasInAir && player.vy > 80) {
+                        player.squash = 0.6;
+                        const cx = player.x + getShapeCenterX(player.shape, player.rotation);
+                        const bounds = shapeBounds(player.shape, player.rotation);
+                        spawnP(cx, player.y + (bounds.maxR + 1) * TILE, C.player, 3, 30, 0.2);
+                        if (player.vy > 250) cam.shake = Math.max(cam.shake, 2);
+                        SFX.land();
+                    }
+                } else {
+                    hitCeiling = true;
+                }
+                player.vy = 0;
+                break;
+            }
+        }
+    }
+    if (tetSolid(player.x, player.y + 1, player.shape, player.rotation)) player.onGround = true;
+
+    // ── Corpse block interactions (at collision boundaries) ──
+
+    // SPRING: landed on top → bounce UP
+    if (player.onGround && prevVY > 0) {
+        const sh = checkAdjacentCorpse(player.x, player.y, player.shape, player.rotation, 'below', 'spring');
+        if (sh) {
+            player.vy = JUMP_FORCE * 1.5;
+            player.onGround = false;
+            player.jumpsLeft = 1;
+            player.squash = 1.4;
+            cam.shake = Math.max(cam.shake, 3);
+            spawnP(sh.tx * TILE + TILE/2, sh.ty * TILE, C.spring, 5, 60, 0.3);
+            SFX.spring();
+            if (!player._hitSpring) { player._hitSpring = true; encounterLabel('BOUNCE!', sh.tx * TILE + TILE/2, sh.ty * TILE, C.spring); }
+        }
+    }
+
+    // SPRING: hit from below → bounce DOWN
+    if (hitCeiling && prevVY < 0) {
+        const sh = checkAdjacentCorpse(player.x, player.y, player.shape, player.rotation, 'above', 'spring');
+        if (sh) {
+            player.vy = Math.abs(JUMP_FORCE) * 1.2; // positive = downward
+            player.squash = 0.7;
+            cam.shake = Math.max(cam.shake, 2);
+            spawnP(sh.tx * TILE + TILE/2, (sh.ty + 1) * TILE, C.spring, 4, 50, 0.25);
+            SFX.spring();
+        }
+    }
+
+    // BOOSTER: standing on top → accelerate forward
+    if (player.onGround) {
+        const bh = checkAdjacentCorpse(player.x, player.y, player.shape, player.rotation, 'below', 'booster');
+        if (bh) {
+            const now = performance.now() / 1000;
+            const key = `${bh.tx},${bh.ty}`;
+            if (!player._lastBoost || player._lastBoost.key !== key || (now - player._lastBoost.time) > 0.5) {
+                player._lastBoost = { key, time: now };
+                player.vx = player.facing * 350;
+                player.vy = JUMP_FORCE * 0.3;
+                player.jumpsLeft = 1;
+                player.boostTimer = 0.25;
+                player.squash = 1.5;
+                cam.shake = Math.max(cam.shake, 4);
+                spawnP(bh.tx * TILE + TILE/2, bh.ty * TILE + TILE/2, C.booster, 7, 70, 0.3);
+                SFX.booster();
+                if (!player._hitBooster) { player._hitBooster = true; encounterLabel('BOOST!', bh.tx * TILE + TILE/2, bh.ty * TILE + TILE/2, C.booster); }
+            }
+        }
+    }
+
+    // Stuck detection — Monte Carlo look-ahead
+    // Uses hitWallX from actual movement (not re-check) + escape simulation
+    // If no escape route exists → die. If escape exists → wait forever (timing buzzsaws etc.)
+    if (hitWallX && dx > 0 && !canEscapeRight()) {
+        player.stuckTimer += dt;
+        if (player.stuckTimer > 0.5) {
+            die();
+            return;
+        }
+    } else {
+        player.stuckTimer = 0;
+    }
+
+    // Void death (auto-bounce when invincible)
+    if (player.y > levelH * TILE + 20) {
+        if (player.quakeTimer > 0) {
+            // Bounce back up from chasm bottom
+            player.vy = -420;
+            player.y = levelH * TILE - TILE;
+            player.grounded = false;
+            player.jumpsLeft = 2;
+            cam.shake = Math.max(cam.shake, 6);
+            SFX.spring();
+        } else {
+            die();
+            return;
+        }
+    }
+
+    // Update moving platforms + carry/push player + platform-platform collision
+    for (const p of movingPlatforms) {
+        const prevX = p.x, prevY = p.y;
+        const t = performance.now() / 1000;
+        if (p.vertical) {
+            p.y = p.baseY + Math.sin(t * p.speed * 0.05 + p.phase) * p.range;
+        } else {
+            p.x = p.baseX + Math.sin(t * p.speed * 0.05 + p.phase) * p.range;
+        }
+
+        // Platform-platform collision: if overlapping another, clamp back
+        for (const other of movingPlatforms) {
+            if (other === p) continue;
+            if (platformsOverlap(p, other)) {
+                if (p.vertical) {
+                    // Push apart vertically
+                    if (p.y < other.y) {
+                        p.y = other.y - TILE;
+                    } else {
+                        p.y = other.y + TILE;
+                    }
+                } else {
+                    // Push apart horizontally
+                    if (p.x < other.x) {
+                        p.x = other.x - p.w * TILE;
+                    } else {
+                        p.x = other.x + other.w * TILE;
+                    }
+                }
+            }
+        }
+
+        // Push corpse blocks out of the way (chain-push entire rows)
+        {
+            const ptx1 = Math.floor(p.x / TILE);
+            const ptx2 = Math.floor((p.x + p.w * TILE - 1) / TILE);
+            const pty = Math.floor(p.y / TILE);
+            const pty2 = Math.floor((p.y + TILE - 1) / TILE);
+            for (let ty = pty; ty <= pty2; ty++) {
+                for (let tx = ptx1; tx <= ptx2; tx++) {
+                    if (ty < 0 || ty >= levelH || !corpseGrid[ty] || !corpseGrid[ty][tx]) continue;
+                    if (p.vertical) {
+                        const dir = (p.y - prevY) >= 0 ? 1 : -1;
+                        // Collect chain of corpses in push direction
+                        const chain = [];
+                        let scan = ty;
+                        while (scan >= 0 && scan < levelH && corpseGrid[scan] && corpseGrid[scan][tx]) {
+                            chain.push(scan);
+                            scan += dir;
+                        }
+                        // scan is now the first empty/wall tile after the chain
+                        // Check if any tile in the chain is still inside the platform
+                        // and find the first open slot past the platform
+                        let openSlot = scan;
+                        while (openSlot >= 0 && openSlot < levelH) {
+                            const px2 = openSlot * TILE;
+                            if (px2 + TILE > p.y && px2 < p.y + TILE) { openSlot += dir; continue; }
+                            break;
+                        }
+                        const wallBlock = openSlot < 1 || openSlot >= levelH ||
+                                          (level[openSlot] && level[openSlot][tx] === 1);
+                        if (!wallBlock) {
+                            // Shift entire chain by 1 in dir (work from far end)
+                            for (let i = chain.length - 1; i >= 0; i--) {
+                                const from = chain[i], to = from + dir;
+                                if (to >= 1 && to < levelH) {
+                                    if (!corpseGrid[to]) corpseGrid[to] = [];
+                                    corpseGrid[to][tx] = corpseGrid[from][tx];
+                                }
+                                corpseGrid[from][tx] = null;
+                            }
+                        } else {
+                            // Chain is against a wall — crush the last block, shift rest
+                            if (chain.length > 0) {
+                                const crushIdx = chain[chain.length - 1];
+                                const crushBlock = corpseGrid[crushIdx][tx];
+                                spawnP(tx * TILE + TILE/2, crushIdx * TILE + TILE/2, matColor(crushBlock.mat), 6, 50, 0.3);
+                                corpseGrid[crushIdx][tx] = null;
+                                for (let i = chain.length - 2; i >= 0; i--) {
+                                    const from = chain[i], to = from + dir;
+                                    if (to >= 1 && to < levelH) {
+                                        if (!corpseGrid[to]) corpseGrid[to] = [];
+                                        corpseGrid[to][tx] = corpseGrid[from][tx];
+                                    }
+                                    corpseGrid[from][tx] = null;
+                                }
+                            }
+                        }
+                    } else {
+                        const dir = (p.x - prevX) >= 0 ? 1 : -1;
+                        const maxX = segments.length * SEGMENT_W;
+                        // Collect chain
+                        const chain = [];
+                        let scan = tx;
+                        while (scan >= 0 && scan < maxX && corpseGrid[ty] && corpseGrid[ty][scan]) {
+                            chain.push(scan);
+                            scan += dir;
+                        }
+                        let openSlot = scan;
+                        while (openSlot >= 0 && openSlot < maxX) {
+                            const px2 = openSlot * TILE;
+                            if (px2 + TILE > p.x && px2 < p.x + p.w * TILE) { openSlot += dir; continue; }
+                            break;
+                        }
+                        const wallBlock = openSlot < 0 || openSlot >= maxX ||
+                                          (level[ty] && level[ty][openSlot] === 1);
+                        if (!wallBlock) {
+                            for (let i = chain.length - 1; i >= 0; i--) {
+                                const from = chain[i], to = from + dir;
+                                if (to >= 0 && to < maxX) {
+                                    if (!corpseGrid[ty]) corpseGrid[ty] = [];
+                                    corpseGrid[ty][to] = corpseGrid[ty][from];
+                                }
+                                corpseGrid[ty][from] = null;
+                            }
+                        } else {
+                            if (chain.length > 0) {
+                                const crushIdx = chain[chain.length - 1];
+                                const crushBlock = corpseGrid[ty][crushIdx];
+                                spawnP(crushIdx * TILE + TILE/2, ty * TILE + TILE/2, matColor(crushBlock.mat), 6, 50, 0.3);
+                                corpseGrid[ty][crushIdx] = null;
+                                for (let i = chain.length - 2; i >= 0; i--) {
+                                    const from = chain[i], to = from + dir;
+                                    if (to >= 0 && to < maxX) {
+                                        if (!corpseGrid[ty]) corpseGrid[ty] = [];
+                                        corpseGrid[ty][to] = corpseGrid[ty][from];
+                                    }
+                                    corpseGrid[ty][from] = null;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        if (!player.dead) {
+            const deltaX = p.x - prevX;
+            const deltaY = p.y - prevY;
+
+            // Carry player if standing on this platform
+            const cells = getCells(player.shape, player.rotation);
+            let carried = false;
+            for (const [cx, cy] of cells) {
+                const footTX = Math.floor((player.x + cx * TILE + TILE/2) / TILE);
+                const footTY = Math.floor((player.y + (cy + 1) * TILE) / TILE);
+                const px1 = Math.floor(prevX / TILE);
+                const ppy = Math.floor(prevY / TILE);
+                if (footTY === ppy && footTX >= px1 && footTX < px1 + p.w) {
+                    player.x += deltaX;
+                    player.y += deltaY;
+                    carried = true;
+                    break;
+                }
+            }
+
+            // Push player if platform moved into them (and wasn't already carried)
+            if (!carried && tetOverlapsPlatform(player.x, player.y, player.shape, player.rotation, p)) {
+                // Push in the platform's movement direction
+                const pushX = deltaX, pushY = deltaY;
+                let pushed = false;
+
+                // Try pushing by the platform delta first
+                if (!tetSolid(player.x + pushX, player.y + pushY, player.shape, player.rotation) ||
+                    !tetOverlapsPlatform(player.x + pushX, player.y + pushY, player.shape, player.rotation, p)) {
+                    player.x += pushX;
+                    player.y += pushY;
+                    pushed = true;
+                }
+
+                // If still overlapping, nudge pixel by pixel away from platform center
+                if (!pushed || tetOverlapsPlatform(player.x, player.y, player.shape, player.rotation, p)) {
+                    const platCX = p.x + (p.w * TILE) / 2;
+                    const platCY = p.y + TILE / 2;
+                    const playerCX = player.x + getShapeCenterX(player.shape, player.rotation);
+                    const bounds = shapeBounds(player.shape, player.rotation);
+                    const playerCY = player.y + ((bounds.minR + bounds.maxR) / 2) * TILE;
+                    const awayX = playerCX >= platCX ? 1 : -1;
+                    const awayY = playerCY >= platCY ? 1 : -1;
+
+                    for (let nudge = 1; nudge <= TILE * 2; nudge++) {
+                        // Try horizontal push
+                        if (!tetSolid(player.x + awayX * nudge, player.y, player.shape, player.rotation) &&
+                            !tetOverlapsPlatform(player.x + awayX * nudge, player.y, player.shape, player.rotation, p)) {
+                            player.x += awayX * nudge;
+                            pushed = true;
+                            break;
+                        }
+                        // Try vertical push
+                        if (!tetSolid(player.x, player.y + awayY * nudge, player.shape, player.rotation) &&
+                            !tetOverlapsPlatform(player.x, player.y + awayY * nudge, player.shape, player.rotation, p)) {
+                            player.y += awayY * nudge;
+                            pushed = true;
+                            break;
+                        }
+                    }
+
+                    // Completely stuck — crushed
+                    if (!pushed && tetOverlapsPlatform(player.x, player.y, player.shape, player.rotation, p)) {
+                        die();
+                        return;
+                    }
+                }
+            }
+        }
+    }
+
+    // Update buzzsaws
+    for (const saw of buzzsaws) {
+        saw.spin += dt * 8;
+        const t = performance.now() / 1000;
+        if (saw.vertical) {
+            saw.y = saw.baseY + Math.sin(t * saw.speed * 0.05 + saw.phase) * saw.range;
+        } else {
+            saw.x = saw.baseX + Math.sin(t * saw.speed * 0.05 + saw.phase) * saw.range;
+        }
+    }
+
+    // Spike check (skipped during quake invincibility)
+    if (player.quakeTimer <= 0 && tetSpike(player.x, player.y, player.shape, player.rotation)) {
+        die();
+        return;
+    }
+
+    // Buzzsaw collision (skipped during quake invincibility)
+    if (player.quakeTimer <= 0) {
+        const sawCells = getCells(player.shape, player.rotation);
+        for (const saw of buzzsaws) {
+            for (const [cx, cy] of sawCells) {
+                const cellX = player.x + cx * TILE;
+                const cellY = player.y + cy * TILE;
+                const nearX = Math.max(cellX, Math.min(saw.x, cellX + TILE));
+                const nearY = Math.max(cellY, Math.min(saw.y, cellY + TILE));
+                const ddx = nearX - saw.x;
+                const ddy = nearY - saw.y;
+                if (ddx * ddx + ddy * ddy < saw.r * saw.r) {
+                    die();
+                    return;
+                }
+            }
+        }
+    }
+
+    // Track distance (only while alive and inside the level)
+    if (!player.dead && player.y >= 0 && player.y < levelH * TILE) {
+        player.distance = Math.max(player.distance, Math.floor(player.x / TILE));
+        if (player.distance > player.bestDistance) player.bestDistance = player.distance;
+    }
+
+    // Goal detection — any cell crosses the finish line?
+    const bounds = shapeBounds(player.shape, player.rotation);
+    const rightmostX = player.x + (bounds.maxC + 1) * TILE;
+    if (!levelComplete && rightmostX >= goalX) {
+        levelComplete = true;
+        levelTransitionTimer = 3.0;
+        console.log('HIGHLIGHT:LEVEL_COMPLETE:' + performance.now().toFixed(0) + ':L' + currentLevel);
+        cam.shake = Math.max(cam.shake, 10);
+        flash.a = 1.0; flash.r = 0.91; flash.g = 0.84; flash.b = 0.42;
+        // Big celebration particles
+        const cx = player.x + getShapeCenterX(player.shape, player.rotation);
+        const cy = player.y + getShapeCenterY(player.shape, player.rotation);
+        spawnP(cx, cy, C.player, 30, 120, 0.6);
+        spawnP(cx, cy, '#FFF0D0', 20, 80, 0.5);
+        if (currentLevel >= 24) {
+            SFX.win();
+        } else {
+            SFX.levelComplete();
+        }
+    }
+}
+
+// ══════════════════════════════════════
+// ── DRAW ──
+// ══════════════════════════════════════
+
+let _dbgF = 0;
+function draw() {
+    if (_dbgF++ % 20 === 0) {
+        document.getElementById('dbg').textContent =
+            `${VERSION} L${currentLevel} ${player.shape}${player.rotation} ${player.material} p:${Math.floor(player.x)},${Math.floor(player.y)} d:${player.distance}`;
+    }
+    // Clear to transparent — 3D canvas shows through behind
+    ctx.clearRect(0, 0, W, H);
+
+    ctx.save();
+    ctx.translate(-Math.floor(cam.x + cam.sx), -Math.floor(cam.y + cam.sy));
+
+    // Visible tile range
+    const tl = Math.max(0, Math.floor(cam.x / TILE) - 1);
+    const tr = Math.floor((cam.x + W) / TILE) + 1;
+    const tt = Math.max(0, Math.floor(cam.y / TILE) - 1);
+    const tb = Math.min(levelH - 1, Math.floor((cam.y + H) / TILE) + 1);
+
+    // Terrain tiles — handled by 3D renderer
+
+    // Corpse blocks — 3D renderer handles bodies, but draw faces as 2D overlay
+    for (let y = tt; y <= tb; y++) {
+        for (let x = tl; x <= tr; x++) {
+            if (!corpseGrid[y] || !corpseGrid[y][x]) continue;
+            const block = corpseGrid[y][x];
+            block.age = Math.min(1, (block.age || 0) + 0.02);
+
+            // Material decoration on corpse blocks (2D overlay)
+            const px = x * TILE;
+            const py = y * TILE;
+            ctx.globalAlpha = block.age;
+            if (block.mat === 'spring') {
+                ctx.fillStyle = C.springHL;
+                ctx.fillRect(px + 2, py + 2, 4, 2);
+                ctx.fillRect(px + 6, py + 5, 4, 2);
+                ctx.fillRect(px + 2, py + 8, 4, 2);
+            } else if (block.mat === 'booster') {
+                ctx.fillStyle = C.boosterHL;
+                ctx.beginPath();
+                ctx.moveTo(px + 9, py + TILE/2);
+                ctx.lineTo(px + 4, py + TILE/2 - 3);
+                ctx.lineTo(px + 4, py + TILE/2 + 3);
+                ctx.fill();
+            }
+
+            // Dead face — X eyes + tongue out (2D overlay)
+            if (block.eyes) {
+                ctx.fillStyle = matDark(block.mat);
+                // Left eye X
+                ctx.fillRect(px + 1, py + 1, 1, 1);
+                ctx.fillRect(px + 3, py + 1, 1, 1);
+                ctx.fillRect(px + 2, py + 2, 1, 1);
+                ctx.fillRect(px + 1, py + 3, 1, 1);
+                ctx.fillRect(px + 3, py + 3, 1, 1);
+                // Right eye X
+                ctx.fillRect(px + 7, py + 1, 1, 1);
+                ctx.fillRect(px + 9, py + 1, 1, 1);
+                ctx.fillRect(px + 8, py + 2, 1, 1);
+                ctx.fillRect(px + 7, py + 3, 1, 1);
+                ctx.fillRect(px + 9, py + 3, 1, 1);
+                // Mouth line
+                ctx.fillRect(px + 3, py + 6, 5, 1);
+                // Tongue blep
+                ctx.fillStyle = '#E07080';
+                ctx.fillRect(px + 6, py + 7, 2, 2);
+            }
+            ctx.globalAlpha = 1;
+        }
+    }
+
+    // Falling group face (scared!) — 2D overlay
+    if (fallingGroup) {
+        for (const cell of fallingGroup.cells) {
+            if (cell.eyes) {
+                const px = cell.x * TILE;
+                const py = (cell.y + fallingGroup.drop) * TILE;
+                ctx.fillStyle = matDark(cell.mat);
+                ctx.fillRect(px + 1, py + 2, 3, 3);
+                ctx.fillRect(px + 7, py + 2, 3, 3);
+                ctx.fillStyle = '#FFFFF0';
+                ctx.fillRect(px + 2, py + 2, 1, 1);
+                ctx.fillRect(px + 8, py + 2, 1, 1);
+                ctx.fillStyle = matDark(cell.mat);
+                ctx.fillRect(px + 5, py + 7, 1, 1);
+                ctx.fillRect(px + 4, py + 8, 1, 1);
+                ctx.fillRect(px + 6, py + 8, 1, 1);
+                ctx.fillRect(px + 5, py + 9, 1, 1);
+            }
+        }
+    }
+
+    // Goal line — golden finish
+    if (goalX > cam.x - 20 && goalX < cam.x + W + 20) {
+        const pulse = 0.6 + 0.4 * Math.sin(performance.now() / 200);
+        ctx.globalAlpha = pulse * 0.7;
+        ctx.fillStyle = C.player;
+        ctx.fillRect(goalX, 0, 3, H);
+        // Glow effect
+        ctx.globalAlpha = pulse * 0.15;
+        ctx.fillRect(goalX - 4, 0, 11, H);
+        ctx.globalAlpha = 1;
+    }
+
+    // Buzzsaws + moving platforms — handled by 3D renderer
+
+    // Ghost preview — where your piece would snap on death
+    if (!player.dead && started) {
+        const cells = getCells(player.shape, player.rotation);
+        ctx.globalAlpha = 0.15;
+        for (const [cx, cy] of cells) {
+            const worldPx = player.x + cx * TILE;
+            const worldPy = player.y + cy * TILE;
+            const gridX = Math.floor(worldPx / TILE);
+            const gridY = Math.round(worldPy / TILE);
+            ctx.fillStyle = matColor(player.material);
+            ctx.fillRect(gridX * TILE, gridY * TILE, TILE, TILE);
+        }
+        ctx.globalAlpha = 1;
+    }
+
+    // Player trail (only behind the player)
+    if (!player.dead) {
+        const cells = getCells(player.shape, player.rotation);
+        for (const t of player.trail) {
+            const a = t.life / 0.12;
+            ctx.globalAlpha = a * 0.2;
+            ctx.fillStyle = matColor(player.material);
+            for (const [cx, cy] of cells) {
+                const cellRight = t.x + cx * TILE + TILE;
+                if (cellRight > player.x) continue;
+                ctx.fillRect(t.x + cx * TILE + 1, t.y + cy * TILE + 1, TILE - 2, TILE - 2);
+            }
+        }
+        ctx.globalAlpha = 1;
+    }
+
+    // Quake invincibility golden glow
+    if (!player.dead && player.quakeTimer > 0) {
+        const cells = getCells(player.shape, player.rotation);
+        const pulse = 0.4 + 0.4 * Math.sin(performance.now() / 80);
+        // Flashing warning when about to expire
+        const expiring = player.quakeTimer < 1.0;
+        const alpha = expiring ? (Math.sin(performance.now() / 50) > 0 ? pulse : 0) : pulse;
+        ctx.globalAlpha = alpha;
+        ctx.fillStyle = '#FFD080'; // golden glow
+        for (const [cx, cy] of cells) {
+            const px = player.x + cx * TILE;
+            const py = player.y + cy * TILE;
+            ctx.fillRect(px - 3, py - 3, TILE + 6, TILE + 6);
+        }
+        ctx.globalAlpha = 1;
+    }
+
+    // Player tetromino body — handled by 3D renderer
+    // But draw kawaii face as 2D overlay on top
+    if (!player.dead) {
+        const cells = getCells(player.shape, player.rotation);
+        const mat = player.material;
+
+        for (let i = 0; i < cells.length; i++) {
+            const [cx, cy] = cells[i];
+            const px = player.x + cx * TILE;
+            const py = player.y + cy * TILE;
+
+            const centerX = player.x + getShapeCenterX(player.shape, player.rotation);
+            const centerY = player.y + getShapeCenterY(player.shape, player.rotation);
+            const sx = 1 / player.squash;
+            const sy = player.squash;
+            const drawX = centerX + (px - centerX) * sx + (TILE * (1 - sx)) / 2;
+            const drawY = centerY + (py - centerY) * sy + (TILE * (1 - sy)) / 2;
+            const drawW = TILE * sx;
+            const drawH = TILE * sy;
+
+            // Eyes on first cell — kawaii alive!
+            if (i === 0) {
+                const ey = drawY + 2 * sy;
+                const sh = player.facing * 1;
+                // Dark eye sockets 3x2
+                ctx.fillStyle = matDark(mat);
+                ctx.fillRect(drawX + 1 + sh, ey, 3, 3);
+                ctx.fillRect(drawX + 7 + sh, ey, 3, 3);
+                // Catchlight sparkle (top corner, shifts with facing)
+                const cx = player.facing >= 0 ? 2 : 0;
+                ctx.fillStyle = '#FFFFF0';
+                ctx.fillRect(drawX + 1 + sh + cx, ey, 1, 1);
+                ctx.fillRect(drawX + 7 + sh + cx, ey, 1, 1);
+                // Lower gleam (subtle life)
+                ctx.fillStyle = 'rgba(255,255,240,0.35)';
+                ctx.fillRect(drawX + 2 + sh, ey + 2, 1, 1);
+                ctx.fillRect(drawX + 8 + sh, ey + 2, 1, 1);
+                // Mouth — smile on ground, O when airborne
+                ctx.fillStyle = matDark(mat);
+                if (player.onGround) {
+                    // Kawaii smile :3
+                    ctx.fillRect(drawX + 4, ey + 5, 1, 1);
+                    ctx.fillRect(drawX + 7, ey + 5, 1, 1);
+                    ctx.fillRect(drawX + 5, ey + 6, 2, 1);
+                } else {
+                    // Surprised O (rounded)
+                    ctx.fillRect(drawX + 6, ey + 4, 1, 1);
+                    ctx.fillRect(drawX + 5, ey + 5, 1, 1);
+                    ctx.fillRect(drawX + 7, ey + 5, 1, 1);
+                    ctx.fillRect(drawX + 6, ey + 6, 1, 1);
+                }
+            }
+
+            // Material decoration on other cells
+            if (i > 0) {
+                if (mat === 'spike') {
+                    // Warning spikes on the live piece — small triangles pointing right (forward)
+                    ctx.fillStyle = C.corpseSpikeHL;
+                    ctx.beginPath();
+                    ctx.moveTo(drawX + drawW, drawY + 1);
+                    ctx.lineTo(drawX + 2, drawY + drawH/2);
+                    ctx.lineTo(drawX + drawW, drawY + drawH - 1);
+                    ctx.fill();
+                } else if (mat === 'spring') {
+                    // Zigzag spring coil — chunky 2px-tall rungs
+                    ctx.fillStyle = C.springHL;
+                    ctx.fillRect(drawX + 2, drawY + 2, 4, 2);
+                    ctx.fillRect(drawX + 6, drawY + 5, 4, 2);
+                    ctx.fillRect(drawX + 2, drawY + 8, 4, 2);
+                } else if (mat === 'booster') {
+                    ctx.fillStyle = C.boosterHL;
+                    ctx.beginPath();
+                    const d = player.facing;
+                    ctx.moveTo(drawX + drawW/2 + d * 3.5, drawY + drawH/2);
+                    ctx.lineTo(drawX + drawW/2 - d * 2, drawY + drawH/2 - 2.5);
+                    ctx.lineTo(drawX + drawW/2 - d * 2, drawY + drawH/2 + 2.5);
+                    ctx.fill();
+                }
+            }
+        }
+
+        // Wall slide indicator
+        if (player.onWall !== 0) {
+            ctx.globalAlpha = 0.4;
+            ctx.fillStyle = C.player;
+            const bounds = shapeBounds(player.shape, player.rotation);
+            const wx = player.onWall > 0 ? player.x + (bounds.maxC + 1) * TILE : player.x + bounds.minC * TILE - 2;
+            ctx.fillRect(wx, player.y + bounds.minR * TILE + 1, 2, bounds.h * TILE - 2);
+            ctx.globalAlpha = 1;
+        }
+    }
+
+    // Golden tint overlay during quake invincibility (drawn ON TOP of player)
+    if (!player.dead && player.quakeTimer > 0) {
+        const cells = getCells(player.shape, player.rotation);
+        const pulse = 0.3 + 0.25 * Math.sin(performance.now() / 100);
+        const expiring = player.quakeTimer < 1.0;
+        const tint = expiring ? (Math.sin(performance.now() / 50) > 0 ? pulse : 0.05) : pulse;
+        ctx.globalAlpha = tint;
+        ctx.fillStyle = '#FFD040'; // bright gold tint
+        for (const [cx, cy] of cells) {
+            const px = player.x + cx * TILE;
+            const py = player.y + cy * TILE;
+            ctx.fillRect(px, py, TILE, TILE);
+        }
+        ctx.globalAlpha = 1;
+    }
+
+    // Particles
+    for (const p of particles) {
+        ctx.globalAlpha = p.life / p.maxLife;
+        ctx.fillStyle = p.color;
+        ctx.fillRect(p.x, p.y, p.size, p.size);
+    }
+    ctx.globalAlpha = 1;
+
+    // First-encounter labels
+    for (const lbl of encounterLabels) {
+        const fade = Math.min(1, lbl.timer * 2);
+        const scale = 1 + (1.5 - lbl.timer) * 0.3;
+        ctx.globalAlpha = fade;
+        ctx.fillStyle = lbl.color;
+        ctx.font = `bold ${Math.round(8 * scale)}px monospace`;
+        ctx.textAlign = 'center';
+        ctx.fillText(lbl.text, lbl.x, lbl.y);
+        ctx.textAlign = 'left';
+    }
+    ctx.globalAlpha = 1;
+
+    ctx.restore();
+
+    // ── HUD ──
+    ctx.fillStyle = C.player;
+    ctx.font = '8px monospace';
+    ctx.fillText(`LEVEL ${currentLevel}`, 4, 10);
+    ctx.fillStyle = C.text;
+    ctx.font = '7px monospace';
+    const totalDist = getSegmentsForLevel(currentLevel) * SEGMENT_W;
+    const progress = Math.min(100, Math.floor(player.distance / totalDist * 100));
+    const deathStr = `${progress}%  deaths: ${player.deathCount}`;
+    // Flash gold during quake invincibility
+    if (player.quakeTimer > 0) {
+        ctx.fillStyle = `rgba(232,168,56,${0.5 + 0.5 * Math.sin(performance.now() / 80)})`;
+    }
+    ctx.fillText(deathStr, 4, 20);
+    // Show quake count + invincibility timer
+    if (player.quakeCount > 0) {
+        const deathTextW = ctx.measureText(deathStr).width;
+        ctx.fillStyle = '#FFD080';
+        const qText = player.quakeTimer > 0
+            ? `  QUAKE! ${Math.ceil(player.quakeTimer)}s`
+            : `  quakes: ${player.quakeCount}`;
+        ctx.fillText(qText, 4 + deathTextW, 20);
+    }
+
+    // NN bot indicator
+    if (typeof nnAgent !== 'undefined' && nnAgent.active) {
+        ctx.fillStyle = '#80FF80';
+        ctx.font = '7px monospace';
+        ctx.fillText('BOT', W - 22, 10);
+    }
+
+    // Shape + material indicator
+    ctx.fillStyle = matColor(player.material);
+    ctx.font = '7px monospace';
+    ctx.fillText(`${player.shape}-piece  ${player.material}`, 4, 32);
+
+    // Next piece preview (top-right, left of pause button)
+    if (nextPieceShape && started && !player.dead) {
+        const previewX = W - 52;
+        const previewY = 4;
+        ctx.globalAlpha = 0.4;
+        ctx.fillStyle = C.text;
+        ctx.font = '6px monospace';
+        ctx.textAlign = 'right';
+        ctx.fillText('NEXT', previewX - 2, previewY + 6);
+        ctx.textAlign = 'left';
+        ctx.globalAlpha = 0.7;
+        // Draw mini tetromino (half-size tiles)
+        const miniTile = 5;
+        const nextCells = getCells(nextPieceShape, 0);
+        const nextBounds = shapeBounds(nextPieceShape, 0);
+        const offsetX = previewX - nextBounds.minC * miniTile;
+        const offsetY = previewY - nextBounds.minR * miniTile + 1;
+        for (const [cx, cy] of nextCells) {
+            ctx.fillStyle = matColor(nextPieceMaterial);
+            ctx.fillRect(offsetX + cx * miniTile, offsetY + cy * miniTile, miniTile - 1, miniTile - 1);
+        }
+        ctx.globalAlpha = 1;
+    }
+
+    // Tutorial prompts (level 1) or controls hint
+    if (tutorialStep < 3 && started) {
+        const pulse = 0.6 + 0.3 * Math.sin(performance.now() / 400);
+        ctx.globalAlpha = pulse;
+        ctx.fillStyle = C.player;
+        ctx.font = '8px monospace';
+        ctx.textAlign = 'center';
+        if (tutorialStep === 0) ctx.fillText(lastInputWasTouch ? 'tap to jump' : 'SPACE to jump', W/2, H/2 + 8);
+        else if (tutorialStep === 1) ctx.fillText(lastInputWasTouch ? 'swipe \u2190 \u2192 to rotate' : 'A / D to rotate', W/2, H/2 + 8);
+        else if (tutorialStep === 2) ctx.fillText(lastInputWasTouch ? 'swipe \u2193 to place' : 'X to place', W/2, H/2 + 8);
+        ctx.textAlign = 'left';
+        ctx.globalAlpha = 1;
+    } else if (player.deathCount < 3 && started) {
+        ctx.globalAlpha = Math.max(0, 1 - player.distance / 20);
+        ctx.fillStyle = 'rgba(216,208,192,0.35)';
+        ctx.font = '6px monospace';
+        ctx.textAlign = 'center';
+        ctx.fillText(ctrlHint('all'), W/2, H - 6);
+        ctx.textAlign = 'left';
+        ctx.globalAlpha = 1;
+    }
+
+    // Flash
+    if (flash.a > 0) {
+        ctx.globalAlpha = flash.a * 0.3;
+        ctx.fillStyle = `rgb(${flash.r*255},${flash.g*255},${flash.b*255})`;
+        ctx.fillRect(0, 0, W, H);
+        ctx.globalAlpha = 1;
+    }
+
+    // Start screen
+    if (!started) {
+        ctx.fillStyle = 'rgba(16, 16, 30, 0.88)';
+        ctx.fillRect(0, 0, W, H);
+        ctx.textAlign = 'center';
+        ctx.fillStyle = C.player;
+        ctx.font = '14px monospace';
+        ctx.fillText('SEDIMENT', W/2, H/2 - 28);
+        ctx.fillStyle = 'rgba(232,168,56,0.45)';
+        ctx.font = '7px monospace';
+        ctx.fillText('you are the shape', W/2, H/2 - 12);
+        ctx.fillStyle = C.text;
+        ctx.font = '7px monospace';
+        ctx.fillText(lastInputWasTouch ? 'tap to start' : 'press any key', W/2, H/2 + 10);
+        ctx.fillStyle = 'rgba(216,208,192,0.3)';
+        ctx.font = '6px monospace';
+        ctx.fillText(ctrlHint('all'), W/2, H/2 + 24);
+
+        // Animated kawaii T-piece running across
+        const runT = performance.now() / 1000;
+        const runX = ((runT * 40) % (W + 60)) - 30;
+        const runY = H/2 + 42;
+        const bounce = Math.abs(Math.sin(runT * 8)) * 4;
+        const tileS = 6; // mini tile size
+        const tCells = [[0,0],[1,0],[2,0],[1,1]]; // T-piece
+        ctx.globalAlpha = 0.5;
+        for (let i = 0; i < tCells.length; i++) {
+            const [cx, cy] = tCells[i];
+            const px = runX + cx * tileS;
+            const py = runY - bounce + cy * tileS;
+            ctx.fillStyle = C.solid;
+            ctx.fillRect(px, py, tileS - 1, tileS - 1);
+            // Eyes on first cell
+            if (i === 0) {
+                ctx.fillStyle = C.solidSH;
+                ctx.fillRect(px, py, 1, 1);
+                ctx.fillRect(px + 3, py, 1, 1);
+                ctx.fillStyle = '#FFFFF0';
+                ctx.fillRect(px + 1, py, 1, 1);
+                ctx.fillRect(px + 4, py, 1, 1);
+            }
+        }
+        ctx.globalAlpha = 1;
+
+        // Saved progress hint
+        if (player._highestLevel > 1) {
+            ctx.fillStyle = 'rgba(216,208,192,0.3)';
+            ctx.font = '6px monospace';
+            ctx.fillText(`best: level ${player._bestRun || player._highestLevel - 1}`, W/2, H/2 + 38);
+        }
+
+        // locomot.io link
+        ctx.fillStyle = 'rgba(208,204,196,0.15)';
+        ctx.font = '6px monospace';
+        ctx.textAlign = 'left';
+        ctx.fillText('locomot.io', 4, H - 4);
+        ctx.textAlign = 'right';
+        ctx.fillText(VERSION, W - 4, H - 4);
+        ctx.textAlign = 'left';
+    }
+
+
+    // Level title (fades in at start of each level)
+    if (levelTitleTimer > 0 && started && !levelComplete) {
+        const fade = levelTitleTimer < 1 ? levelTitleTimer : Math.min(1, (3 - levelTitleTimer) * 2);
+        ctx.globalAlpha = fade;
+        ctx.textAlign = 'center';
+        ctx.fillStyle = C.player;
+        ctx.font = '14px monospace';
+        ctx.fillText(`LEVEL ${currentLevel}`, W/2, H/2 - 16);
+        ctx.fillStyle = 'rgba(232,168,56,0.5)';
+        ctx.font = '7px monospace';
+        const LEVEL_NAMES = [
+            '', 'the shallows', 'the thorns', 'the overhang', 'blood stone',
+            'the scaffolding', 'sawdust', 'the conveyor', 'the pit',
+            'the gauntlet', 'vertigo', 'the furnace', 'the core'
+        ];
+        const hellName = LEVEL_NAMES[currentLevel] || `circle ${currentLevel}`;
+        ctx.fillText(hellName, W/2, H/2);
+        ctx.textAlign = 'left';
+        ctx.globalAlpha = 1;
+    }
+
+    // Level complete overlay
+    if (levelComplete) {
+        const fade = Math.min(1, (3 - levelTransitionTimer) * 3);
+        ctx.globalAlpha = fade * 0.7;
+        ctx.fillStyle = C.bg;
+        ctx.fillRect(0, 0, W, H);
+        ctx.globalAlpha = fade;
+        ctx.textAlign = 'center';
+        ctx.fillStyle = C.player;
+        ctx.font = '14px monospace';
+        ctx.fillText(`LEVEL ${currentLevel} CLEAR`, W/2, H/2 - 20);
+        ctx.fillStyle = C.text;
+        ctx.font = '7px monospace';
+        ctx.fillText(`deaths: ${levelDeaths}${levelQuakes > 0 ? `  quakes: ${levelQuakes}` : ''}`, W/2, H/2);
+        ctx.fillStyle = 'rgba(216,208,192,0.5)';
+        ctx.font = '6px monospace';
+        if (levelTransitionTimer > 0) {
+            ctx.fillText(`next level in ${Math.ceil(levelTransitionTimer)}...`, W/2, H/2 + 14);
+        }
+        ctx.textAlign = 'left';
+        ctx.globalAlpha = 1;
+    }
+
+    // Win screen
+    if (gameWon) {
+        const fade = Math.min(1, winTimer * 2);
+        ctx.fillStyle = `rgba(16, 16, 30, ${fade * 0.9})`;
+        ctx.fillRect(0, 0, W, H);
+
+        ctx.globalAlpha = fade;
+        ctx.textAlign = 'center';
+
+        // Title
+        const titlePulse = 1 + Math.sin(winTimer * 3) * 0.05;
+        ctx.fillStyle = C.player;
+        ctx.font = `${Math.round(16 * titlePulse)}px monospace`;
+        ctx.fillText('CONGRATULATIONS', W/2, H/2 - 40);
+
+        // Subtitle
+        ctx.fillStyle = '#FFF0D0';
+        ctx.font = '8px monospace';
+        ctx.fillText('you escaped the sediment', W/2, H/2 - 20);
+
+        // Stats
+        ctx.fillStyle = C.text;
+        ctx.font = '7px monospace';
+        ctx.fillText(`deaths: ${player.deathCount}  quakes: ${player.quakeCount}`, W/2, H/2 + 4);
+
+        // Continue hint
+        if (winTimer > 2) {
+            const blink = Math.sin(winTimer * 4) > 0;
+            if (blink) {
+                ctx.fillStyle = 'rgba(216,208,192,0.5)';
+                ctx.font = '6px monospace';
+                ctx.fillText(lastInputWasTouch ? 'tap to enter endless mode' : 'press any key for endless mode', W/2, H/2 + 36);
+            }
+        }
+
+        // Render floating particles on win screen
+        ctx.save();
+        ctx.translate(-Math.floor(cam.x + cam.sx), -Math.floor(cam.y + cam.sy));
+        for (const p of particles) {
+            ctx.globalAlpha = p.life / p.maxLife;
+            ctx.fillStyle = p.color;
+            ctx.fillRect(p.x, p.y, p.size, p.size);
+        }
+        ctx.restore();
+
+        ctx.textAlign = 'left';
+        ctx.globalAlpha = 1;
+    }
+
+    // Pause
+    if (paused) {
+        ctx.fillStyle = 'rgba(16, 16, 30, 0.8)';
+        ctx.fillRect(0, 0, W, H);
+        ctx.fillStyle = C.text;
+        ctx.font = '12px monospace';
+        ctx.textAlign = 'center';
+        ctx.fillText('PAUSED', W/2, H/2 - 24);
+        ctx.font = '7px monospace';
+        ctx.fillStyle = 'rgba(216,208,192,0.5)';
+        ctx.fillText('tap to resume', W/2, H/2 - 8);
+
+        // Skip level button
+        const skipY = H/2 + 8;
+        const skipW = 70, skipH = 16;
+        const skipX = W/2 - skipW/2;
+        ctx.fillStyle = 'rgba(232,168,56,0.2)';
+        ctx.fillRect(skipX, skipY - skipH/2, skipW, skipH);
+        ctx.strokeStyle = 'rgba(232,168,56,0.5)';
+        ctx.lineWidth = 1;
+        ctx.strokeRect(skipX, skipY - skipH/2, skipW, skipH);
+        ctx.fillStyle = C.player;
+        ctx.font = '7px monospace';
+        ctx.fillText('RESTART', W/2, skipY + 3);
+
+        // Store button bounds for tap detection (in screen coords)
+        _skipBtnBounds = { x: skipX, y: skipY - skipH/2, w: skipW, h: skipH };
+
+        // Level selector row: [ < ] LEVEL X [ > ]
+        {
+            const lvlY = skipY + 22;
+            const lvlBtnW = 16, lvlBtnH = 14;
+            const lvlLabelW = 70;
+            const lvlTotalW = lvlBtnW + lvlLabelW + lvlBtnW;
+            const lvlStartX = W/2 - lvlTotalW/2;
+
+            // "<" button
+            const canGoLeft = _pauseSelectedLevel > 1;
+            ctx.fillStyle = canGoLeft ? 'rgba(104,187,196,0.2)' : 'rgba(216,208,192,0.05)';
+            ctx.fillRect(lvlStartX, lvlY - lvlBtnH/2, lvlBtnW, lvlBtnH);
+            ctx.strokeStyle = canGoLeft ? 'rgba(104,187,196,0.5)' : 'rgba(216,208,192,0.15)';
+            ctx.lineWidth = 1;
+            ctx.strokeRect(lvlStartX, lvlY - lvlBtnH/2, lvlBtnW, lvlBtnH);
+            ctx.fillStyle = canGoLeft ? '#68BBC4' : 'rgba(216,208,192,0.2)';
+            ctx.font = '8px monospace';
+            ctx.fillText('<', lvlStartX + lvlBtnW/2, lvlY + 3);
+
+            // Level label
+            ctx.fillStyle = 'rgba(104,187,196,0.8)';
+            ctx.font = '6px monospace';
+            ctx.fillText('LEVEL ' + _pauseSelectedLevel, lvlStartX + lvlBtnW + lvlLabelW/2, lvlY + 2);
+
+            // ">" button
+            const canGoRight = _pauseSelectedLevel < 24;
+            const lvlPlusX = lvlStartX + lvlBtnW + lvlLabelW;
+            ctx.fillStyle = canGoRight ? 'rgba(104,187,196,0.2)' : 'rgba(216,208,192,0.05)';
+            ctx.fillRect(lvlPlusX, lvlY - lvlBtnH/2, lvlBtnW, lvlBtnH);
+            ctx.strokeStyle = canGoRight ? 'rgba(104,187,196,0.5)' : 'rgba(216,208,192,0.15)';
+            ctx.lineWidth = 1;
+            ctx.strokeRect(lvlPlusX, lvlY - lvlBtnH/2, lvlBtnW, lvlBtnH);
+            ctx.fillStyle = canGoRight ? '#68BBC4' : 'rgba(216,208,192,0.2)';
+            ctx.font = '8px monospace';
+            ctx.fillText('>', lvlPlusX + lvlBtnW/2, lvlY + 3);
+
+            _levelLeftBounds = { x: lvlStartX, y: lvlY - lvlBtnH/2, w: lvlBtnW, h: lvlBtnH };
+            _levelRightBounds = { x: lvlPlusX, y: lvlY - lvlBtnH/2, w: lvlBtnW, h: lvlBtnH };
+        }
+
+        // Music volume row: [  -  ] MUSIC XX% [  +  ]
+        const volY = skipY + 44;
+        const volBtnW = 16, volBtnH = 14;
+        const volLabelW = 70;
+        const volTotalW = volBtnW + volLabelW + volBtnW;
+        const volStartX = W/2 - volTotalW/2;
+
+        // "-" button
+        ctx.fillStyle = 'rgba(216,208,192,0.15)';
+        ctx.fillRect(volStartX, volY - volBtnH/2, volBtnW, volBtnH);
+        ctx.strokeStyle = 'rgba(216,208,192,0.3)';
+        ctx.lineWidth = 1;
+        ctx.strokeRect(volStartX, volY - volBtnH/2, volBtnW, volBtnH);
+        ctx.fillStyle = C.text;
+        ctx.font = '8px monospace';
+        ctx.fillText('-', volStartX + volBtnW/2, volY + 3);
+
+        // Volume label
+        const volPct = musicMuted ? 'OFF' : Math.round(musicVolume * 100) + '%';
+        ctx.fillStyle = musicMuted ? 'rgba(200,56,72,0.7)' : 'rgba(216,208,192,0.6)';
+        ctx.font = '6px monospace';
+        ctx.fillText('MUSIC ' + volPct, volStartX + volBtnW + volLabelW/2, volY + 2);
+
+        // "+" button
+        const plusX = volStartX + volBtnW + volLabelW;
+        ctx.fillStyle = 'rgba(216,208,192,0.15)';
+        ctx.fillRect(plusX, volY - volBtnH/2, volBtnW, volBtnH);
+        ctx.strokeStyle = 'rgba(216,208,192,0.3)';
+        ctx.lineWidth = 1;
+        ctx.strokeRect(plusX, volY - volBtnH/2, volBtnW, volBtnH);
+        ctx.fillStyle = C.text;
+        ctx.font = '8px monospace';
+        ctx.fillText('+', plusX + volBtnW/2, volY + 3);
+
+        _volDownBounds = { x: volStartX, y: volY - volBtnH/2, w: volBtnW, h: volBtnH };
+        _volUpBounds = { x: plusX, y: volY - volBtnH/2, w: volBtnW, h: volBtnH };
+
+        // SFX toggle button
+        const sfxY = volY + 20;
+        const sfxW = 70, sfxH = 14;
+        const sfxX = W/2 - sfxW/2;
+        ctx.fillStyle = sfxMuted ? 'rgba(200,56,72,0.2)' : 'rgba(88,184,72,0.2)';
+        ctx.fillRect(sfxX, sfxY - sfxH/2, sfxW, sfxH);
+        ctx.strokeStyle = sfxMuted ? 'rgba(200,56,72,0.5)' : 'rgba(88,184,72,0.5)';
+        ctx.lineWidth = 1;
+        ctx.strokeRect(sfxX, sfxY - sfxH/2, sfxW, sfxH);
+        ctx.fillStyle = sfxMuted ? '#C83848' : C.spring;
+        ctx.font = '6px monospace';
+        ctx.fillText(sfxMuted ? 'SFX: OFF' : 'SFX: ON', W/2, sfxY + 2);
+
+        _sfxBtnBounds = { x: sfxX, y: sfxY - sfxH/2, w: sfxW, h: sfxH };
+        _muteBtnBounds = null; // replaced by new controls
+        ctx.textAlign = 'left';
+    } else {
+        _skipBtnBounds = null;
+        _muteBtnBounds = null;
+        _volDownBounds = null;
+        _volUpBounds = null;
+        _sfxBtnBounds = null;
+        _levelLeftBounds = null;
+        _levelRightBounds = null;
+    }
+}
+
+// ── Loop ──
+function loop(time) {
+    const dt = Math.min((time - lastTime) / 1000, 1/20);
+    lastTime = time;
+    update(dt);
+    draw3D();
+    draw();
+    requestAnimationFrame(loop);
+}
+
+document.getElementById('splash-version').textContent = VERSION;
+
+// Draw splash logo: S-piece with kawaii eyes
+(function() {
+    const lc = document.getElementById('splash-logo');
+    if (!lc) return;
+    const cx = lc.getContext('2d');
+    cx.imageSmoothingEnabled = false;
+    const t = 12; // tile size in logo
+    // S-tetromino upright: (0,0)(0,1) left, (1,1)(1,2) right
+    const cells = [[0,0],[0,1],[1,1],[1,2]];
+    const ox = 12, oy = 0;
+    for (const [gx,gy] of cells) {
+        const x = ox + gx * t, y = oy + gy * t;
+        cx.fillStyle = C.solid;
+        cx.fillRect(x, y, t, t);
+        cx.fillStyle = C.solidHL;
+        cx.fillRect(x, y, t, 1);
+        cx.fillRect(x, y, 1, t);
+        cx.fillStyle = C.solidSH;
+        cx.fillRect(x, y + t - 1, t, 1);
+        cx.fillRect(x + t - 1, y, 1, t);
+    }
+    // Kawaii eyes on cell (0,0)
+    const ex = ox, ey = oy;
+    cx.fillStyle = C.solidSH;
+    cx.fillRect(ex + 1, ey + 2, 3, 3);
+    cx.fillRect(ex + 7, ey + 2, 3, 3);
+    cx.fillStyle = '#FFFFF0';
+    cx.fillRect(ex + 2, ey + 2, 1, 1);
+    cx.fillRect(ex + 8, ey + 2, 1, 1);
+    cx.fillStyle = 'rgba(255,255,240,0.35)';
+    cx.fillRect(ex + 2, ey + 4, 1, 1);
+    cx.fillRect(ex + 8, ey + 4, 1, 1);
+})();
+
+init();
+requestAnimationFrame(loop);
+</script>
+<script src="nn_agent.js"></script>
+<script>
+// Load NN weights on startup (silently fails if not available)
+if (typeof nnAgent !== 'undefined') {
+    nnAgent.load('nn_weights.json');
+}
+
+// Auto-play mode: ?autoplay=1 enables NN agent immediately
+if (new URLSearchParams(location.search).has('autoplay')) {
+    const waitForAgent = setInterval(() => {
+        if (typeof nnAgent !== 'undefined' && nnAgent.load) {
+            nnAgent.load('nn_weights.json').then(() => {
+                toggleBot();
+                console.log('Auto-play enabled');
+            });
+            clearInterval(waitForAgent);
+        }
+    }, 100);
+}
+</script>
+</body>
+</html>

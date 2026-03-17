@@ -1,434 +1,224 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta name="apple-mobile-web-app-capable" content="yes">
-  <meta name="mobile-web-app-capable" content="yes">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no"
+    />
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+    <meta http-equiv="Pragma" content="no-cache" />
+    <meta http-equiv="Expires" content="0" />
+    <title>Inkjet</title>
+    <script type="module" crossorigin src="/assets/index-UWBhQJFJ.js"></script>
+    <link rel="stylesheet" crossorigin href="/assets/index-DLaqv8s6.css">
+  </head>
+  <body>
+    <div class="page-shell">
+      <div class="bg-orb orb-a"></div>
+      <div class="bg-orb orb-b"></div>
+      <div class="bg-grid"></div>
 
-  <!-- SEO -->
-  <title>LOCOMOT.IO - Free Browser Games & Creative Tools</title>
-  <meta name="description" content="Free browser games and creative tools. Inkjet (multiplayer paint arena), Flail (ragdoll sword combat), Sediment (die-to-build platformer), Locomot (train combat), Figure 8 (ice puzzle), PixPad (pixel art editor), and more.">
-  <meta name="keywords" content="browser games, free games, io games, multiplayer games, inkjet, paint game, arena shooter, pixel art, platformer, puzzle games, creative tools, flail game, sediment game">
-  <link rel="canonical" href="https://locomot.io/">
+      <!-- Tutorial overlay -->
+      <div id="tutorial-overlay" class="tutorial-overlay">
+        <div class="tutorial-pages">
+          <!-- Page 1: Shoot to Move -->
+          <div class="tutorial-page active" data-page="0">
+            <div class="tut-scene">
+              <div class="tut-grid-lines"></div>
+              <div class="tut-squid tut-squid-anim"></div>
+              <div class="tut-trail tut-trail-anim"></div>
+              <div class="tut-bullet tut-bullet-anim"></div>
+              <div class="tut-bullet tut-bullet-anim-2"></div>
+              <div class="tut-finger tut-finger-anim"></div>
+              <div class="tut-recoil-arrow tut-arrow-anim"></div>
+            </div>
+            <h2 class="tut-heading">shoot to move</h2>
+            <p class="tut-body">drag to fire — recoil pushes you backward</p>
+          </div>
 
-  <!-- Open Graph -->
-  <meta property="og:title" content="LOCOMOT.IO - Free Browser Games & Creative Tools">
-  <meta property="og:description" content="Inkjet, Flail, Sediment, Locomot, Figure 8, PixPad, Sand Buddy, and more - all free in your browser.">
-  <meta property="og:type" content="website">
-  <meta property="og:url" content="https://locomot.io/">
-  <meta property="og:image" content="https://locomot.io/og-image.png">
+          <!-- Page 2: Paint the Arena -->
+          <div class="tutorial-page" data-page="1">
+            <div class="tut-scene">
+              <div class="tut-grid-lines"></div>
+              <div class="tut-squid tut-squid-paint"></div>
+              <div class="tut-bullet tut-bullet-paint"></div>
+              <div class="tut-wall tut-wall-top"></div>
+              <div class="tut-wall tut-wall-right"></div>
+              <div class="tut-paint-glow tut-paint-anim"></div>
+              <div class="tut-paint-glow tut-paint-anim-2"></div>
+            </div>
+            <h2 class="tut-heading">paint the arena</h2>
+            <p class="tut-body">bullets bounce off walls and claim them in your color</p>
+          </div>
 
-  <!-- Twitter Card -->
-  <meta name="twitter:card" content="summary_large_image">
-  <meta name="twitter:title" content="LOCOMOT.IO - Free Browser Games & Creative Tools">
-  <meta name="twitter:description" content="Flail, Sediment, Locomot, Figure 8, PixPad, Sand Buddy, and more - all free in your browser.">
-  <meta name="twitter:image" content="https://locomot.io/og-image.png">
+          <!-- Page 3: Burst Rivals -->
+          <div class="tutorial-page" data-page="2">
+            <div class="tut-scene">
+              <div class="tut-grid-lines"></div>
+              <div class="tut-squid tut-squid-burst-shooter"></div>
+              <div class="tut-enemy tut-enemy-anim"></div>
+              <div class="tut-bullet tut-bullet-burst"></div>
+              <div class="tut-burst-ring tut-burst-anim"></div>
+            </div>
+            <h2 class="tut-heading">burst rivals</h2>
+            <p class="tut-body">kill to claim a huge paint radius around their death</p>
+          </div>
+        </div>
 
-  <meta name="robots" content="index, follow">
-  <meta name="theme-color" content="#1D2B30">
-  <meta name="app-version" content="v420">
-  <link rel="manifest" href="/manifest.json">
-
-  <!-- Structured Data -->
-  <script type="application/ld+json">
-  {
-    "@context": "https://schema.org",
-    "@type": "WebSite",
-    "name": "LOCOMOT.IO",
-    "url": "https://locomot.io/",
-    "description": "Free browser games and creative tools. Flail, Sediment, Locomot, Figure 8, Sand Buddy, PixPad, and Live Portrait Painter.",
-    "author": {
-      "@type": "Organization",
-      "name": "LOCOMOT.IO"
-    }
-  }
-  </script>
-
-  <!-- Pixel Font -->
-  <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
-
-  <style>
-    * {
-      margin: 0;
-      padding: 0;
-      box-sizing: border-box;
-      -webkit-tap-highlight-color: transparent;
-    }
-
-    html, body {
-      width: 100%;
-      min-height: 100%;
-      background: #1D2B30;
-      font-family: 'Press Start 2P', monospace;
-      color: #68BBC4;
-      overscroll-behavior: none;
-    }
-
-    body {
-      padding: env(safe-area-inset-top) env(safe-area-inset-right)
-               env(safe-area-inset-bottom) env(safe-area-inset-left);
-    }
-
-    header {
-      text-align: center;
-      padding: 40px 20px 20px;
-    }
-
-    header h1 {
-      font-size: clamp(20px, 6vw, 36px);
-      color: #68BBC4;
-      text-shadow: 0 0 20px rgba(104, 187, 196, 0.5);
-      margin-bottom: 12px;
-      letter-spacing: 2px;
-    }
-
-    header p {
-      font-size: clamp(8px, 2.5vw, 12px);
-      color: #40ACBF;
-      letter-spacing: 4px;
-      text-transform: uppercase;
-    }
-
-    .game-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
-      gap: 16px;
-      padding: 20px;
-      max-width: 900px;
-      margin: 0 auto;
-    }
-
-    .game-card {
-      background: #2A474F;
-      border: 2px solid #40ACBF;
-      border-radius: 8px;
-      padding: 24px 16px;
-      text-decoration: none;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      text-align: center;
-      transition: transform 0.2s, border-color 0.2s, box-shadow 0.2s;
-      user-select: none;
-    }
-
-    .game-card:hover {
-      transform: translateY(-4px);
-      border-color: #68BBC4;
-      box-shadow: 0 8px 24px rgba(104, 187, 196, 0.25);
-    }
-
-    .game-card:active {
-      transform: translateY(0) scale(0.98);
-    }
-
-    .pixel-icon {
-      width: 64px;
-      height: 64px;
-      margin-bottom: 16px;
-      image-rendering: pixelated;
-      image-rendering: -moz-crisp-edges;
-      image-rendering: crisp-edges;
-    }
-
-    .game-card h2 {
-      font-size: 14px;
-      color: #68BBC4;
-      margin-bottom: 8px;
-      letter-spacing: 1px;
-    }
-
-    .game-card p {
-      font-size: 8px;
-      color: #40ACBF;
-      line-height: 1.4;
-    }
-
-    footer {
-      text-align: center;
-      padding: 30px 20px;
-      font-size: 8px;
-      color: #2A474F;
-    }
-
-    .kofi-btn {
-      display: inline-flex;
-      align-items: center;
-      gap: 8px;
-      background: #ff5e5b;
-      border: 2px solid #ff5e5b;
-      border-radius: 6px;
-      padding: 10px 16px;
-      text-decoration: none;
-      transition: transform 0.2s, box-shadow 0.2s;
-      margin-bottom: 16px;
-    }
-
-    .kofi-btn:hover {
-      transform: translateY(-2px);
-      box-shadow: 0 4px 12px rgba(255, 94, 91, 0.4);
-    }
-
-    .kofi-btn:active {
-      transform: translateY(0) scale(0.98);
-    }
-
-    .kofi-btn canvas {
-      width: 24px;
-      height: 24px;
-      image-rendering: pixelated;
-      image-rendering: -moz-crisp-edges;
-      image-rendering: crisp-edges;
-    }
-
-    .kofi-btn span {
-      font-size: 10px;
-      color: #fff;
-      letter-spacing: 0.5px;
-    }
-
-    @media (max-width: 600px) {
-      .kofi-btn {
-        padding: 8px 12px;
-      }
-      .kofi-btn span {
-        font-size: 8px;
-      }
-    }
-
-    /* Mobile adjustments */
-    @media (max-width: 600px) {
-      .game-grid {
-        grid-template-columns: 1fr;
-        padding: 16px;
-        gap: 12px;
-      }
-
-      .game-card {
-        flex-direction: row;
-        padding: 16px;
-        text-align: left;
-      }
-
-      .pixel-icon {
-        width: 48px;
-        height: 48px;
-        margin-bottom: 0;
-        margin-right: 16px;
-        flex-shrink: 0;
-      }
-
-      .game-card h2 {
-        font-size: 12px;
-        margin-bottom: 4px;
-      }
-
-      .game-card p {
-        font-size: 7px;
-      }
-    }
-  </style>
-</head>
-<body>
-  <header>
-    <h1>LOCOMOT.IO</h1>
-    <p>Games & Toys</p>
-  </header>
-
-  <main class="game-grid">
-    <a href="/inkjet/" class="game-card">
-      <canvas class="pixel-icon" data-emoji="🦑"></canvas>
-      <div>
-        <h2>INKJET</h2>
-        <p>Shoot to move. Paint to win.</p>
+        <div class="tut-nav">
+          <div class="tut-dots">
+            <span class="tut-dot active" data-dot="0"></span>
+            <span class="tut-dot" data-dot="1"></span>
+            <span class="tut-dot" data-dot="2"></span>
+          </div>
+          <button id="tut-next" class="tut-button" type="button">next</button>
+        </div>
       </div>
-    </a>
 
-    <a href="/flail.html" class="game-card">
-      <img src="/flail_logo.png" class="pixel-icon" alt="Flail" style="object-fit:contain;image-rendering:auto">
-      <div>
-        <h2>FLAIL</h2>
-        <p>Sword arms vs missiles</p>
+      <!-- Mode picker splash -->
+      <div id="splash-overlay" class="splash-overlay" hidden>
+        <div class="splash-content">
+          <h1 class="splash-title">inkjet</h1>
+          <p class="splash-sub">shoot to move. paint to win.</p>
+          <div class="splash-name-picker">
+            <div class="name-slot" data-slot="0">
+              <button class="slot-arrow slot-up" data-dir="up" type="button">&#9650;</button>
+              <span class="slot-char">a</span>
+              <button class="slot-arrow slot-down" data-dir="down" type="button">&#9660;</button>
+            </div>
+            <div class="name-slot" data-slot="1">
+              <button class="slot-arrow slot-up" data-dir="up" type="button">&#9650;</button>
+              <span class="slot-char">a</span>
+              <button class="slot-arrow slot-down" data-dir="down" type="button">&#9660;</button>
+            </div>
+            <div class="name-slot" data-slot="2">
+              <button class="slot-arrow slot-up" data-dir="up" type="button">&#9650;</button>
+              <span class="slot-char">a</span>
+              <button class="slot-arrow slot-down" data-dir="down" type="button">&#9660;</button>
+            </div>
+          </div>
+          <div class="splash-color-picker">
+            <label class="color-label">your color</label>
+            <div class="color-slider-row">
+              <input id="splash-hue" type="range" min="0" max="360" value="200" class="hue-slider" />
+              <div id="splash-color-preview" class="color-preview"></div>
+            </div>
+          </div>
+          <div class="splash-modes">
+            <button id="splash-ffa" class="splash-mode-btn" type="button">
+              <span class="mode-label">free for all</span>
+              <span class="mode-desc">every squid for themselves</span>
+            </button>
+            <button id="splash-teams" class="splash-mode-btn splash-teams" type="button">
+              <span class="mode-label">teams</span>
+              <span class="mode-desc">blue vs orange</span>
+            </button>
+          </div>
+        </div>
       </div>
-    </a>
 
-    <a href="/trains.html" class="game-card">
-      <canvas class="pixel-icon" data-emoji="🚂"></canvas>
-      <div>
-        <h2>LOCOMOT</h2>
-        <p>Train combat</p>
+      <!-- Win screen overlay -->
+      <div id="win-overlay" class="splash-overlay" hidden>
+        <div class="splash-content">
+          <h1 id="win-title" class="splash-title" style="font-size:2.4rem">you won</h1>
+          <p id="win-sub" class="splash-sub">crossed the victory line</p>
+          <div class="splash-modes">
+            <button id="win-play-again" class="splash-mode-btn" type="button">
+              <span class="mode-label">play again</span>
+              <span class="mode-desc">same mode, new maze</span>
+            </button>
+            <button id="win-switch-mode" class="splash-mode-btn splash-teams" type="button">
+              <span id="win-switch-label" class="mode-label">switch to teams</span>
+              <span class="mode-desc">try the other mode</span>
+            </button>
+          </div>
+        </div>
       </div>
-    </a>
 
-    <a href="/ice_skater/" class="game-card">
-      <img src="/ice_skater/skater_side_skating_16x24.png" class="pixel-icon" alt="Figure ∞" style="object-fit:contain;transform:scaleX(-1)">
-      <div>
-        <h2>FIGURE ∞</h2>
-        <p>Slide & solve puzzles</p>
-      </div>
-    </a>
+      <main class="arena-shell">
+        <canvas id="game" aria-label="Inkjet arena"></canvas>
 
-    <a href="/pixel.html" class="game-card">
-      <canvas class="pixel-icon" data-emoji="✏️"></canvas>
-      <div>
-        <h2>PIXPAD</h2>
-        <p>Create pixel art</p>
-      </div>
-    </a>
+        <div id="touch-anchor" class="touch-anchor" aria-hidden="true"></div>
+        <div id="touch-stick" class="touch-stick" aria-hidden="true"></div>
+        <div id="touch-line" class="touch-line" aria-hidden="true"></div>
 
-    <a href="/painter/" class="game-card">
-      <canvas class="pixel-icon" data-emoji="🖌️"></canvas>
-      <div>
-        <h2>PAINTER</h2>
-        <p>Live portrait painting</p>
-      </div>
-    </a>
+        <div class="brand-tag" aria-hidden="true">inkjet</div>
 
-    <a href="/sandbox/" class="game-card">
-      <img src="/sand-buddy-v2.png" class="pixel-icon" alt="Sand Buddy">
-      <div>
-        <h2>SAND BUDDY</h2>
-        <p>Falling sand game</p>
-      </div>
-    </a>
+        <div class="room-pill">
+          <span class="chip-label">room</span>
+          <strong id="room-readout">public</strong>
+        </div>
 
-    <a href="/sediment/" class="game-card">
-      <canvas class="pixel-icon" id="sediment-logo"></canvas>
-      <div>
-        <h2>SEDIMENT</h2>
-        <p>Your deaths build the way</p>
-      </div>
-    </a>
-  </main>
+        <button
+          id="settings-button"
+          class="settings-button"
+          type="button"
+          aria-expanded="false"
+          aria-controls="settings-panel"
+        >
+          menu
+        </button>
 
-  <footer>
-    <a href="https://ko-fi.com/sendivylove" class="kofi-btn" target="_blank" rel="noopener">
-      <canvas id="kofi-icon" data-emoji="☕"></canvas>
-      <span>Support on Ko-fi</span>
-    </a>
-    <div>LOCOMOT.IO</div>
-  </footer>
+        <section id="feed-banner" class="feed-banner feed-idle" aria-live="polite">
+          <span class="chip-label">feed</span>
+          <strong id="feed-readout">the tide is alive</strong>
+        </section>
 
-  <script>
-    // Convert emojis to pixel art using canvas
-    function pixelateEmoji(canvas, emoji, pixelSize = 16, displaySize = 64) {
-      canvas.width = pixelSize;
-      canvas.height = pixelSize;
+        <section class="player-badge">
+          <div id="player-color-swatch" class="player-color-swatch" aria-hidden="true"></div>
+          <div class="player-badge-copy">
+            <span id="player-name-readout" class="player-name-readout">drift</span>
+            <strong class="player-score-line">
+              <span id="kills-readout">—</span>
+              <span class="score-sep"></span>
+              <span id="paint-readout"></span>
+            </strong>
+          </div>
+        </section>
 
-      const ctx = canvas.getContext('2d');
-      ctx.imageSmoothingEnabled = false;
+        <section id="settings-panel" class="settings-panel" hidden>
+          <div class="settings-card">
+            <div class="settings-grid">
+              <div class="settings-row">
+                <span class="chip-label">status</span>
+                <strong id="status-readout">connecting</strong>
+              </div>
+              <div class="settings-row">
+                <span class="chip-label">leader</span>
+                <strong id="leader-readout">none</strong>
+              </div>
+              <div class="settings-row">
+                <span class="chip-label">mode</span>
+                <strong id="mode-readout">ffa</strong>
+              </div>
+              <div class="settings-row">
+                <span class="chip-label">crowd</span>
+                <strong id="population-readout">0</strong>
+              </div>
+              <div class="settings-row">
+                <span class="chip-label">health</span>
+                <strong id="health-readout">100</strong>
+              </div>
+              <div class="settings-row">
+                <span class="chip-label">shield</span>
+                <strong id="shield-readout">3</strong>
+              </div>
+              <div class="settings-row">
+                <span class="chip-label">hint</span>
+                <strong id="hint-readout">Drag in the lower half of the screen to steer recoil.</strong>
+              </div>
+            </div>
 
-      // Draw emoji
-      ctx.font = `${pixelSize * 0.85}px sans-serif`;
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-      ctx.fillText(emoji, pixelSize / 2, pixelSize / 2 + 1);
+            <div class="action-row">
+              <button id="invert-button" class="action-button" type="button">invert: off</button>
+              <button id="toggle-mode-button" class="action-button" type="button">switch to teams</button>
+              <button id="new-room-button" class="action-button alt" type="button">new tide</button>
+            </div>
+          </div>
+        </section>
+      </main>
+    </div>
 
-      // Set display size (CSS handles pixelation)
-      canvas.style.width = displaySize + 'px';
-      canvas.style.height = displaySize + 'px';
-    }
-
-    // Initialize all pixel icons (skip custom-drawn ones)
-    document.querySelectorAll('.pixel-icon[data-emoji]').forEach(canvas => {
-      const emoji = canvas.dataset.emoji;
-      const isMobile = window.innerWidth < 600;
-      pixelateEmoji(canvas, emoji, 16, isMobile ? 48 : 64);
-    });
-
-    // Initialize Ko-fi icon (smaller)
-    const kofiIcon = document.getElementById('kofi-icon');
-    if (kofiIcon) {
-      pixelateEmoji(kofiIcon, '☕', 12, 24);
-    }
-
-    // Sediment logo: Crag (T-piece) with kawaii eyes in spring green
-    const sedLogo = document.getElementById('sediment-logo');
-    if (sedLogo) {
-      const S = 48;
-      sedLogo.width = S;
-      sedLogo.height = S;
-      const sc = sedLogo.getContext('2d');
-      sc.imageSmoothingEnabled = false;
-      const isMob = window.innerWidth < 600;
-      sedLogo.style.width = (isMob ? 48 : 64) + 'px';
-      sedLogo.style.height = (isMob ? 48 : 64) + 'px';
-      sedLogo.style.imageRendering = 'pixelated';
-      const t = 12;
-      const cells = [[0,0],[1,0],[2,0],[1,1]]; // Crag T-piece
-      const col = '#60C048', hl = '#B0E890', sh = '#1C3828';
-      const ox = 6, oy = 6;
-      for (let i = 0; i < cells.length; i++) {
-        const [cx,cy] = cells[i];
-        const x = ox + cx * t, y = oy + cy * t;
-        sc.fillStyle = col;
-        sc.fillRect(x, y, t, t);
-        sc.fillStyle = hl;
-        sc.fillRect(x, y, t, 1);
-        sc.fillRect(x, y, 1, t);
-        sc.fillStyle = sh;
-        sc.fillRect(x, y + t - 1, t, 1);
-        sc.fillRect(x + t - 1, y, 1, t);
-        // Spring coil decoration on non-face cells
-        if (i > 0) {
-          sc.fillStyle = hl;
-          sc.fillRect(x + 2, y + 2, 4, 2);
-          sc.fillRect(x + 6, y + 5, 4, 2);
-          sc.fillRect(x + 2, y + 8, 4, 2);
-        }
-      }
-      // Kawaii eyes on cell (0,0)
-      const ex = ox, ey = oy;
-      sc.fillStyle = sh;
-      sc.fillRect(ex + 1, ey + 2, 3, 3);
-      sc.fillRect(ex + 7, ey + 2, 3, 3);
-      sc.fillStyle = '#FFFFF0';
-      sc.fillRect(ex + 2, ey + 2, 1, 1);
-      sc.fillRect(ex + 8, ey + 2, 1, 1);
-      sc.fillStyle = 'rgba(255,255,240,0.35)';
-      sc.fillRect(ex + 2, ey + 4, 1, 1);
-      sc.fillRect(ex + 8, ey + 4, 1, 1);
-      // Smile
-      sc.fillStyle = sh;
-      sc.fillRect(ex + 4, ey + 7, 1, 1);
-      sc.fillRect(ex + 7, ey + 7, 1, 1);
-      sc.fillRect(ex + 5, ey + 8, 2, 1);
-    }
-
-    // Sort games by popularity (Cloudflare analytics)
-    fetch('/api/popularity?' + Date.now()).then(r => r.json()).then(counts => {
-      const grid = document.querySelector('.game-grid');
-      const cards = [...grid.querySelectorAll('.game-card')];
-      cards.sort((a, b) => {
-        const aKey = a.getAttribute('href').replace(/^\//, '');
-        const bKey = b.getAttribute('href').replace(/^\//, '');
-        return (counts[bKey] || 0) - (counts[aKey] || 0);
-      });
-      for (const card of cards) grid.appendChild(card);
-    }).catch(() => {}); // fail silently — default order stays
-
-    // Auto-update: fetch version from server, reload if stale
-    fetch('/version.txt?' + Date.now()).then(r => r.text()).then(v => {
-      const serverVer = v.trim();
-      const localVer = document.querySelector('meta[name="app-version"]')?.content;
-      if (localVer && serverVer !== localVer) {
-        // Nuke old SW and caches, then reload
-        if ('serviceWorker' in navigator) {
-          navigator.serviceWorker.getRegistrations().then(regs => {
-            regs.forEach(r => r.unregister());
-          });
-          caches.keys().then(keys => keys.forEach(k => caches.delete(k)));
-        }
-        setTimeout(() => location.reload(true), 300);
-      }
-    }).catch(() => {});
-    // Register service worker
-    if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.register('/sw.js', { updateViaCache: 'none' }).then(reg => {
-        reg.update();
-      });
-    }
-  </script>
-</body>
+  </body>
 </html>

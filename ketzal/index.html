@@ -1,0 +1,2067 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>KETZAL</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+html, body {
+    width: 100%; height: 100%; overflow: hidden;
+    background: #081820;
+    touch-action: none;
+    user-select: none;
+    -webkit-user-select: none;
+}
+canvas { display: block; image-rendering: pixelated; }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<script>
+const canvas = document.getElementById('c');
+const ctx = canvas.getContext('2d');
+
+// ── Config ──
+const TILE = 16;
+const COLS = 8;
+let VISIBLE_ROWS = 22;
+const START_LENGTH = 3;
+const SECTION_H = 12;
+
+// ── Colors (Game Boy palette) ──
+const GB = { darkest: '#081820', dark: '#346856', mid: '#88c070', light: '#e0f8d0' };
+const C = {
+    bg: GB.darkest,
+    tile: GB.dark, tileHL: GB.mid, tileSH: GB.darkest,
+    spike: '#D03040',
+    spring: GB.mid, springHL: GB.light, springDark: GB.darkest,
+    saw: GB.dark, sawHL: GB.mid, sawDark: GB.darkest,
+    text: GB.light,
+    gold: GB.light,
+    lava: '#D03040', lavaHL: '#E06050', lavaDark: '#801808', lavaBright: '#F0A830'
+};
+
+// ── Ketzal Sprites (generated, base64) ──
+// Rules: GB palette, light top-left, per-brick shading, round tube snake
+// All directional sprites pre-generated — NO canvas rotation (avoids subpixel color fringing)
+const SPRITE = {};
+let spritesLoaded = 0;
+const SPRITES_TOTAL = 54;
+let gameReady = false;
+function loadSprite(name, b64) {
+    const img = new Image();
+    img.src = 'data:image/png;base64,' + b64;
+    img.onload = () => { SPRITE[name] = img; if (++spritesLoaded >= SPRITES_TOTAL) gameReady = true; };
+}
+
+loadSprite('body_h_full', 'iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAOklEQVR4nGNgGGjAaJIR9p8SA1hCIqTgnDUrnjGQwmdgYGBgosT2UQOoZADF6WAQeIFDQoEiLww8AAAjQg7/uBHixgAAAABJRU5ErkJggg==');
+loadSprite('body_h_med', 'iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAOElEQVR4nGNgGPKA0SQj7D8lBrCEREjBOWtWPGMghc/AwMDARIntowZAAMXRSLkLOCQUKHLBMAAAcXkO+3ywxDkAAAAASUVORK5CYII=');
+loadSprite('body_h_thin', 'iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAN0lEQVR4nGNgGAUUA8aOAwX/YZw1K54xhERIMRDLZ2BgYGCi1AUDbwCjSUbYf8LKaOiCUUAFAAAiRw2zOB4RWwAAAABJRU5ErkJggg==');
+loadSprite('body_v_full', 'iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAR0lEQVR4nGNkgAKTjLD/IRFSDLjAmhXP4OwrG04x/HjxgJGBgYGBCacOIgHFBrAgc5CdSZYBxIYBMhgNg9EwYGAYDGFAsQEAXZMZ2riGkrUAAAAASUVORK5CYII=');
+loadSprite('body_v_med', 'iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAASElEQVR4nGNkQAImGWH/QyKkGLCBNSueMTAwMDBc2XCK4ceLB4wwcSasqkkAFBvAgi4AcyrZBhAKA3QwGgajYcDAMBjCgGIDAELzGdrj2qDGAAAAAElFTkSuQmCC');
+loadSprite('body_v_thin', 'iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAQklEQVR4nGNkwAI6DhT8R+avWfGMgYGBgeHMjFWM6GqZsBlACqDYABZsgjAnk21ASIQU0QaOhsFoGDAwDIYwoNgAAKh/Ftp1vRn/AAAAAElFTkSuQmCC');
+loadSprite('head_full_down', 'iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAuUlEQVR4nGNkgAIOCYX/OgFmDPhASIQUAwMDA8OaFc8YzsxYxcjAwMDAhFcHEWDUgMFgAAs2QVh8U+SChogNDA0RG3DyMQz48eIBI7LEjQeoipH5sFSI4YIrG04xMDBAkqqGQgCKATD+mhXPUMRRbGVgYGAwyQj7z8CAOxwqHCag6EEJRA4Jhf8wdoRFAorGFScWwC3A6YUfLx4wwryBDSDnQoLAJCPs/4MfF/4/+HHhf8eBgv+41AEAawxBJkC8BXMAAAAASUVORK5CYII=');
+loadSprite('head_full_left', 'iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAxElEQVR4nGNgGGjAiEuCQ0LhP0kGcEgo/P/x4gEjh4TCf50AM9JcQKomZMDCwMDAgK45JEIKzl6z4hleA5hMMsL+r5lQxbBmQhVDSIQUw5UNpxgiLBIYGiI2EOUCpjUTqjAENRQCiNLMwAD1AjJoWEG8ZgYGBgamFScWkKQBwwUVDhMYGQ4wwOO8IWIDw40HGxg0FAKIcg0LAwMkpJFDHjkMkMWxAXhCMskI+39mxipGk4yw/4Q0YTUAHZhkhBGVlAceAACa1jO8RKrlbwAAAABJRU5ErkJggg==');
+loadSprite('head_full_right', 'iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAvklEQVR4nGNgGGjAaJIR9p8YhWdmrGLEakDHgQKiDGBgYGBYs+IZw5kZqxhNMsL+wwxkIUZjQ8QGOBthIcQQljUrnuHVHBIhxcDAwMBw48EGBg2FABTxMzOICAOYAcggwiKBgYGBgWHFiQUMTET4ACeIsEggPQwaVgSgyBHtghsPNmCIhRS0kRYG6AF+ZsYqRoJewBVLVzacYmBgIDIdIGv68eIBI4eEwv8fLx4wMjAwMDBySCgQlRJhGgYfAACmk0TbEkcrnQAAAABJRU5ErkJggg==');
+loadSprite('head_full_up', 'iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAsElEQVR4nGNgwAE6DhT8f/Djwv8HPy78N8kI+49LHQYwyQj7j6wZ2RAOCQUMg5jQNYdESOE0XCfAjAHdEEZsTsemec2KZwwMDAwMZ2asQtGDwjHJCPt/ZcMpBgYGBoaGFQEQOmID3HYGBgaGKxtOMfx48QCuD8ULMOffeLABxfYbDzbA5WAGYRiAHNIaCgEoitD5yOHAwoAGYE7HxUcHGAYwMCACjBjARFjJqAGD3wAAQ/1LyW2qudQAAAAASUVORK5CYII=');
+loadSprite('head_med_down', 'iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAArUlEQVR4nGNkQAIcEgr/dQLMGHCBkAgphjUrnjGcmbGKESbGhFM1kWDUgMFgAAs2wZAIKcoMYGBgYGiI2AChVwSg8NETGlYvrFnxjOHGgw0oYuh8rAb8ePGA8cqGUwwMDAwMGgoBKAphfORkzMDAwIDCYWBA5Ads4YCeDxgY8IRBhEUCCn/FiQVY1WGEwY8XDzBcBQPotuMFJhlh/x/8uPD/wY8L/zsOFPzHpQ4AifY3QQfwFUMAAAAASUVORK5CYII=');
+loadSprite('head_med_left', 'iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAjklEQVR4nGNgGPKAEZsgh4TCf5INQNakE2BGmgtMMsIwbAyJkGJgYGBgWLPiGV4DWEwywv6vmVDFwMDAwLDixAKGhogNDDcebGDQUAhgaFgRQNAFTDDNyEBDgbBGuAvQBYixFcUFK04sIEkDhgsqHCYwMhxggAciqWEAj0ZYTFzZcAouSZIByABbtA5jAADrKSp0Q4dW7wAAAABJRU5ErkJggg==');
+loadSprite('head_med_right', 'iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAqUlEQVR4nGNgGPKA0SQj7D+xis/MWMWILsYSEiFFUGNDxAYGBgYGBg4Jhf86AWYohrGsWfEMr2aYBTcebGDQUAiA80MiCv5XOExgJOgFbC6MsEhgYGBgYFhxYgEDE0H34wERFgkMLMQohIUBAwMDQ8OKABQ5ol1w48EGDLGQgjbC0QgLA2yBfWbGKkaCXkDWeGXDKTj7x4sHjAwMDAyMHBIKRCckmKZhBgAzrDQz+lqnOgAAAABJRU5ErkJggg==');
+loadSprite('head_med_up', 'iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAiElEQVR4nGNgwAE6DhT8f/Djwv8HPy78N8kI+49LHUHNhAxhQhfAZxuHhAKGHAsuxStOLCDKtRguuLLhFENDxAY4vyFiAwofrwEw5994gKoBxtcJMMPwBoYLGBgYGDQUAjD4IRFSWF2AEQYNKwLw8gkawMDAwLBmxTO8mpABVi+QAkYNGAwGAADl3jtVOo7eJgAAAABJRU5ErkJggg==');
+loadSprite('head_thin_down', 'iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAa0lEQVR4nGNkwAJMMsL+o4uFREgxVDhMYEQXZ8JmAClg1IDBYAALLomQCCn6uACrAVc2nGKIsEhAEUPn4zXgx4sHjCEFbShiChwGGMkYpwGkALwGRFgk4HQ61VyAFzz4ceH/gx8XMLI2MgAAsMwWpjew4OsAAAAASUVORK5CYII=');
+loadSprite('head_thin_left', 'iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAWklEQVR4nGNgGAUUA0ZsghwSCv91AsyIN8AkI+w/suCaCVUMK04sgLBXPMNvwIMfF+CaYZpQDCNgABNR7sQDWBQ4DBg7DhT8J6wUO8AaiA9+XPiPzTujgEYAAAxuGqVV80GwAAAAAElFTkSuQmCC');
+loadSprite('head_thin_right', 'iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAaklEQVR4nGNgGAUUA8aOAwX/iVEYYZHAoMBhwIhhgElGGF4DQiKkcMpVOExgZCHGdmyuYWBgYIj4kfCfiRwDkAHRLoiwSGAIKWhjYGBgYFizAkKfmbGKkWAYwMCVDacYfrx4gBGIo4AKAACZNhjQkp1QUQAAAABJRU5ErkJggg==');
+loadSprite('head_thin_up', 'iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAZElEQVR4nGNgwAMe/Ljw/8GPC//xqWHCJdFxoACu0SQjDKchOA0gFrDgk1xxYgFBAyh2AVYD0ANuzYQqBg4JBazhgNUAdKevOLGAQSfAjHgXkAJwBuKaFc+IMoA2gThqAJ0NAABkjBvRcpnP5AAAAABJRU5ErkJggg==');
+loadSprite('headtail_down', 'iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAj0lEQVR4nGNgoCUwyQj733Gg4D8+NUyEDFmz4hleeZwGmGSEwW3G5wqCLiAEsBqAbDshVxDlAnzhgGEAh4QCTv9icxltwoAUwIJLIiRCijIXRFgk4OUTNGDFiQV4+TCA4YUfLx4wMjCY/Ue3ccWJBQxnZqxixGUhBjDJCPv/4MeF/w9+XCCYoXACmAH41AAAYLk4yOnPpCEAAAAASUVORK5CYII=');
+loadSprite('headtail_left', 'iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAmUlEQVR4nGNgGAWMyBwOCYX/2BT9ePGAEZs4igEmGWFYNSODMzNWYRjECNO8ZkIVw4oTCxgiLBIYVpxYwLBmxTOiDGJ88OMC3OYVJxbAFeEzANkgJoKqcICQCCkGBgYGBhYFDgPGjgMF/yMsEojSwMDAwFDhMIHxzAwIG+6XjgMF/xkYGOBhgA1UOEzAHogwgCsmsIX+KEAAAPT+MkYKMrglAAAAAElFTkSuQmCC');
+loadSprite('headtail_right', 'iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAgklEQVR4nGNgGAWM+CRNMsL+YxM/M2MVXB9WAzoOFGDVGGGRwLDixAIGBgYGhgqHCYwYBiBrXLPiGYrmkAgpDIMqHCYwMsI0omtAB+gGwAATNttIAUwMDJBAQQ4YXADZ5pCCNgYFDgNGrJpwhT4ygFmI11YOCQWsBv148YCga0cSAAAxnyydZO82DgAAAABJRU5ErkJggg==');
+loadSprite('headtail_up', 'iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAlUlEQVR4nGNgwAMe/Ljw/8GPC//xqWHCJdFxoACu0SQjDK8hWDXDbIdhXIawoAvAFK44sQBDMYeEwv8fLx4wIoth9UKERQJePkED0G3H5hoYwPACDKxZ8QynJoIuIAVQ34AzM1YxYlPIwMDAgB4DeF0QEiFFngsYGBgYKhwmYNiEy2UUhwFeYJIRhjMJE+UCYsOBIgAAFoY9KIRkRS8AAAAASUVORK5CYII=');
+loadSprite('mine', 'iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAcElEQVR4nGNgwAM4JBT+c0go/MenhgmfJDEAbgC6Tch8fHKMuCTwgR8vHsD1UewFFmyCOgFmcPaVDafwGoAzDPABZLUspGjEZggjuQbAADw0STUIFhNM6AKkaEYxgFxAsQFwgC25ImN8avEaSvPcCABfuShL18ofBwAAAABJRU5ErkJggg==');
+loadSprite('tail_full_down', 'iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAlklEQVR4nGNkgAKTjLD/IRFSDAwMDAwRFgkM2EBIQRsDAwMDw5UNpxh+vHjAyMDAwMCEVSUJAG7AmRmrGNeseEZQA7LtDAwMDCzYFK04sQBDDJfh1PMCAwNhb6A7n/ougLkCXQzmKnTbcboAmzeubDhFnAtIBVgNwOYNbM6nnQsYGFDDAZf/8RoA88aaFc9wOh+vAXQDAM8WPQ6TypIOAAAAAElFTkSuQmCC');
+loadSprite('tail_full_left', 'iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAk0lEQVR4nGNgGHDAIaHwn0NC4T+5+ll0AswYGBgYGK5sYIAb8uPFA0aiDYAxYAYhG0aMQYwPflyA2xxS0Iah4MqGU3hdhWLAihMLUCTXrHiG1UBkw/AagAvADD4zYxUjCwG1WEFIhBTUAKRAJBasWfGM4cyMVXAvEDQA2bnY5Fmw+ZuQJhQD0DURqxFuACm2DU4AAM8CSTVGRN5IAAAAAElFTkSuQmCC');
+loadSprite('tail_full_right', 'iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAiElEQVR4nGNgGGjASK5Gk4yw/yQbANPEwMDAEBIhRbwLYBphmpABTgPwaYqwSICzWdA1YdOAD7AwMDAwdBwo+E9IIS7AxMDAwLBmxTOGNSuekWUAShhwSCj81wkww1CE7i3kMMAZiBwSCv8ZGBgYsBm4ZkIVYQOINYykhAQzCNkwspMysmEDCwDLJCFr40tSxAAAAABJRU5ErkJggg==');
+loadSprite('tail_full_up', 'iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAfElEQVR4nGNgoCUwyQj733Gg4D8+NUyUWoLTAA4Jhf8hEVJwl5BsgE6AGZwNM4gkA4gFWA3gkFDAcDIub9DGBcj+hwFc4YBhAMz52DRg8wZ1vcAhofAfm/NhICRCCsMVFLuABZvgmglVWBWvOLEAQwzuAkLOhwF0b1DsBQB+tB/p4tP2HgAAAABJRU5ErkJggg==');
+loadSprite('tail_med_down', 'iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAlklEQVR4nGNkQAImGWH/QyKkGBgYGBgiLBKQpRhCCtoYGBgYGK5sOMXw48UDRpg4EwOFAMWAMzNWMeJSCAPItjMwMDCwoCtYs+IZQ0iEFMOKEwswNF/ZcAq/C8gBGAZg88aaFc8YGBgwnU8bFyDbiAyw+Z92LsAWDtj8TzsXMDCghgMu/+M1ANkbuJyP1wBsLiHLAJoDAJ+GMkL7yEVYAAAAAElFTkSuQmCC');
+loadSprite('tail_med_left', 'iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAhklEQVR4nGNgGPqAQ0LhP4eEwn9y9bPoBJhBmWb/r2w4xcDAwMDw48UDRqINQOYgG8bAwMBAjIGMD35cgDt/xYkFDAwMDAxrVjzDqvjKhlMYhmE1gBCAWXBmxipGFgJqsYKQCCmoAWhhQIzNZ2asQvECCz5nIzsVlxoUFxCjAcMAcjQNMwAAfUU853MZrUUAAAAASUVORK5CYII=');
+loadSprite('tail_med_right', 'iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAeUlEQVR4nGNgGPKAkVyNJhlh/0k2AKYpJEKKOBdg04AOMAwwyQj7j08DAwMDQ4RFApzNwsDAwNBxoOA/Xh14ABMDAwPDmhXPGNaseEaWARhe4JBQ+K8TYIZVMcxryF7AG4gcEgr/GRgYGHAZSNAAYgwkOyHBDBsGAADBlRsIT5i69gAAAABJRU5ErkJggg==');
+loadSprite('tail_med_up', 'iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAdElEQVR4nGNgoCUwyQj733Gg4D8+NUyUWoLXgJAIKfIN4JBQgDvdJCMMpzdwGqATYEaUS2gTBsjOhwFc3qCNC5D9DwO4woH6LoD5H5uN2MKBYhewoAvA/B9hkYAivuLEAoaQCCmGMzPwuABb9KEDdG9Q7AUAhsMb38/HuiMAAAAASUVORK5CYII=');
+loadSprite('tail_thin_down', 'iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAbUlEQVR4nGNgwAJMMsL+dxwo+P/gx4X/D35c+G+SEfafQ0LhPza1TNgESQEUG8CIS6LjQAHcyWtWPGM4M2MVVrUD7wXaGbBmxTM4+8qGUwPgAuRQ//HiAc7YIugCZK+QZQAhQLEBeAG+TDR4AADjPSUA9z97fQAAAABJRU5ErkJggg==');
+loadSprite('tail_thin_left', 'iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAZElEQVR4nGNgGAUUA0YOCYX/MM6PFw8YSTWARSfADIlr9h9Z8sqGUwQNZnzw4wJc04oTC3DatGbFMxSDYYayEOvUkAgpZJcynJnxgIGBgYGBhRhbz8xYhdMLLMhOw6dwFNAQAAAxNCXrRAs7zwAAAABJRU5ErkJggg==');
+loadSprite('tail_thin_right', 'iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAUklEQVR4nGNgGAUUA0ZyNJlkhP0nygCYwpAIKcIuMMkI+49PITKIsEiAs1lgjCsbTjEwMJjBJYg1DK8XOCQU/jMwMDDoBJjhVENWIMIMHgVUAgD9OA7TtVD63wAAAABJRU5ErkJggg==');
+loadSprite('tail_thin_up', 'iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAWElEQVR4nGNgGNSAQ0Lhv0lG2H98apjwSeoEmDGEREjhtQSvAcQA2hpAyPl4DeCQUIAHHr6ApJ0XdALM4Gx8XhnksUC2AbAYiLBIYIiwSGBgYMAdEwPvBQAcNA9B/Ik21QAAAABJRU5ErkJggg==');
+loadSprite('turn_bl_full', 'iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAn0lEQVR4nGNkgAKTjLD/IRFSDAwMDAwRFgkMyGDFiQUo/DUrnjGcmbGKkYGBgYGJgQBA14wOGJFdQMgwZHBlwykGBgYGBhZkQZgXCIGGiA0MDSsCGBgYiPACPrBmxTPKDAiJkKLMAAYGMrywZsUzFD48EM/MWMV4Zgamho4DBfDYQddMlguobgALIQXYnI0sTrELGAkp4JBQICmJ0x8AAPHfJ4Y9UoALAAAAAElFTkSuQmCC');
+loadSprite('turn_bl_med', 'iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAnUlEQVR4nGNkQAImGWH/QyKkGCIsEpCFGVacWABnr1nxjOHMjFWMMD4TAwGArBkbwGsAIc0MDAwMjMgck4yw/wR1MDAwXNlwCs5mQZcMiZDCq7khYgNDw4oABgYGSHgQDAN8ICRCijIDGBiIiAVCACUMzsxYxXhmBqqCjgMF8IBds+IZ9V1AXS9gA9icjSzGiCGLBjgkFIhKXEMYAACzbCdarYsx6AAAAABJRU5ErkJggg==');
+loadSprite('turn_bl_thin', 'iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAbUlEQVR4nGNkwAI6DhT8j7BIgPNXnFjAwMDAwFDhMIERXS0TNgOQAUwzLoDXAEKa8RpAjGaCLiAGYAQKAwMkEAlpXLPiGQMDAwMDC7k2h0RIMTAw0MoLyICQd4h2AczP6ICoMIBpxmXIKKAQAAC9IBxkoBkrrwAAAABJRU5ErkJggg==');
+loadSprite('turn_br_full', 'iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAlElEQVR4nGNkgAKTjLD/IRFSDAwMDAwRFgkMyGDFiQUo/DUrnjGcmbGKkYGBgYGJgQBA14wOGE0ywv4TMgQbgLmABebsNSueMcDYhEBDxAY4m6AXCAGmCIsEjEAjyQCKXUCqhjUrnqHwWRgY8EdVhcMERrwuIBTPhAD9w4AkA9ADDBtAScpXNpzCUPDjxQO8gTjwAADB+Sg5/zhlIAAAAABJRU5ErkJggg==');
+loadSprite('turn_br_med', 'iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAkklEQVR4nGNkQAImGWH/QyKkGCIsEpCFGVacWABnr1nxjOHMjFWMMD4TAwGArBkbwGsAIc0MDAwMjCYZYf8JqkIDyF5gCYmQgkusWfGMAZmPDTREbEDhsyAH2JoVbaQ6hnAgEm0AMQGGDbAQ0lzhMIERpyQDAwMTuTbDDaBINzUMwEhIVzacQlHw48UDvGEwDAAAuyAozwpmmrgAAAAASUVORK5CYII=');
+loadSprite('turn_br_thin', 'iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAYUlEQVR4nGNkwAI6DhT8j7BIgPNXnFjAwMDAwFDhMIERXS0TNgOQAUwzLoDXAEKa8RpAjGaCLiAGsHQcKPhPkQHYQpsUAPcCOZoZGBgYWAhpxhb3KC4g12a4ARTpHgXUAQAQShp8pzsAfwAAAABJRU5ErkJggg==');
+loadSprite('turn_tl_full', 'iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAk0lEQVR4nGNgGGjASEiBSUbYf2ziVzacYmBgYGBgIWRASIQUhlhDxAaGhhUBDAwMDAxMhAzAB9aseEaZASERUpQZwMBAhhfWrHiGwocHoklG2H9sAYZPM1kuoLoBBNMBNmcji+N1AS7NyACelE0ywv7DkicpAG4Ah4TCf1jyJOSiKxtOMfx48YCRgQGLF4hxNjIAAF6CKXcnxQGyAAAAAElFTkSuQmCC');
+loadSprite('turn_tl_med', 'iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAgklEQVR4nGNgGPKAkZACk4yw/+hiVzacgrNZCBkQEiGFwm+I2MDQsCKAgYGBgWHNimcMTIQdid9wigxgYGCg3ACUMDDJCPuP7mdksGbFM+q7gLpewAawORtZDCUhmWSE/UdOJMQAFAM4JBT+wxIJLtdc2XCK4ceLB3B91A9EbH7GBwBP3CUBataz/QAAAABJRU5ErkJggg==');
+loadSprite('turn_tl_thin', 'iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAX0lEQVR4nGNgGAUUA0ZCCjoOFPzHJr5mxTMGBgYGBhZybQ6JkGJgYGBgYCLXABjA6gVczsYGiHYBzM/ogKgwgGnGZghRBoRESDGsWfGM4cyMVRhepjgQaWMArgCjiQsAUqUWgEld2e8AAAAASUVORK5CYII=');
+loadSprite('turn_tr_full', 'iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAmUlEQVR4nGNgGGjAaJIR9h+fgjMzVjHik2cJiZBiYGBgYFiz4hkDjI1qAH4XMBFyIiHAFGGRwBBhkUC+ARS7gFIDWBgYGBhWnFiAU0HHgQJ4LK1Z8YyBgYGB4cqGUww/XjxgZGBgYGDCp5kYQB0v4AMwZ5PlAkKaGRjQkvKVDacIaoABWCDC0zmHhML/hhUBeDVhjQVciogFAEkuMPiMs79uAAAAAElFTkSuQmCC');
+loadSprite('turn_tr_med', 'iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAj0lEQVR4nGNgGPKA0SQj7D8+BWdmrGLEJ88SEiEF56xZ8YwBmQ8xAL8LWCIsEpAMaMOvGgtgIlkHLgNWnFhAlgEshDR3HCiAB/KaFc8Yrmw4xfDjxQN4wDKRazPcAIp0M0C9gA+sWfEMrzxGQrqy4RRBW5HDACWVcUgo/G9YEYDXNRiBSNA6AgDDAEJ+RgcAc5IxuFJUxtQAAAAASUVORK5CYII=');
+loadSprite('turn_tr_thin', 'iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAZklEQVR4nGNgGAUUA8aOAwX/8SmocJjAiE+eJcIiAc5ZcWIByS5gokQzAwMDA+ODHxf+E6sZm3eYiNW8ZsUzrOJMWEWJ1MzAwMCANYSxxcyaFc8YzsxYhekFYlyAD9DGAHx+proLAE+oH+Q0FTOuAAAAAElFTkSuQmCC');
+loadSprite('wall_bottom', 'iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAbklEQVR4nGPkkFD4z0ABYHzw48L/FScWYJVsiNjAcOPBBgZ88ky4JNeseMbAwMCAUzNMngWZgwyubDiFoRibPCOlYcDSsCIAziHGz+jyTOjOJDVMWGASxPoZXZ7iMBhNB1RIB4wmGWGUxQKlXgAAZGZ049O5nPAAAAAASUVORK5CYII=');
+loadSprite('wall_center', 'iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAZUlEQVR4nGPkkFD4z0ABYHzw48L/FScWYJVsiNjAcOPBBgZ88ky4JNeseMbAwMCAUzNMngWZgwyubDiFoRibPCOlYcDSsCIAziHGz+jyTOjOJDVMWGASxPoZXZ7iMBhNB8MiHQAANYSFlSfALZQAAAAASUVORK5CYII=');
+loadSprite('wall_left', 'iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAdklEQVR4nGPsOFDwvyFiAwO5gIWBgYGhYUUAVsmGiA0MNx5sYFhxYgFOeSZcJq9Z8YyBgYEBp2aYPAsyBxlc2XAKQzE2eRZ0xdiciQ+ghAExfkaXh4cBsX5Gl4eHAbF+RpdnNMkI+48vDAiBYZAOqBsGQzMdAADyfISXZJIeKgAAAABJRU5ErkJggg==');
+loadSprite('wall_right', 'iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAg0lEQVR4nGPkkFD4z0AG0AkwY7iy4RQDy40HGxhWnFiAVVFDxAYGXPJrVjxjYGBgYGDCpRmmAJc8DLAgK0YGVzacwjAMG2AkNwzgLmhYEQDn4PMzNvmGiA0MTOjOJDVMWGAShPyMS57iMGB88OPCf3LSAUye7HQAkyc7HcDkR9MBAwMAt4uGkzseRscAAAAASUVORK5CYII=');
+loadSprite('wall_top', 'iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAdUlEQVR4nGN88OPCfwYKAMuKEwtwSjZEbGBoWBGAV54Jl+SaFc/w2gyTZ8Gl+MqGU3gNg8kzckgoUBYGyH5siNjAcOPBBgZc4YJNHh4GMGfi0oxLngUmQayf0eUpDgPGBz8u/CfFz+jyTKT6GV1+NB1QIR0AAMsqfTn0qNFwAAAAAElFTkSuQmCC');
+loadSprite('wall_top_left', 'iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAh0lEQVR4nGN88OPCfwYKAAsDAwPDihMLsEo2RGxgaFgRgFNzQ8QGBiZcmteseIbXZpg8Cy7FVzacwmsYTJ4FXTE2Z+IDLAwMDHB/NkRsYLjxYAPeMEGXZ0J3JqEwQZeHhwGxfkaXZzTJCPuPLwwIAZQwQAfEhAkTVhkG4sOE4nRA3TAYmukAABJOgZc2U5bzAAAAAElFTkSuQmCC');
+loadSprite('wall_top_right', 'iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAg0lEQVR4nGN88OPCfwYyQEhBG8OVDacYWFacWIBTUUPEBoaGFQF4DWLCJbFmxTOiXMKCS/GVDaeIMoyRQ0KBrDCAuwDZjw0RGxhuPNjAgCtc0OUbIjYgwgDmTFyaccmzwCQI+RmXPMVhwPjgx4X/xPoZmzwTqX5Glyc7HcDkR9MBAwMASYF90Z0DWIIAAAAASUVORK5CYII=');
+
+function drawSprite(name, x, y) {
+    if (!SPRITE[name]) return;
+    ctx.drawImage(SPRITE[name], 0, 0, 16, 16, x, y, TILE, TILE);
+}
+
+// Draw sprite rotated (0=up, 1=right, 2=down, 3=left)
+function drawSpriteRot(name, x, y, rot) {
+    if (!SPRITE[name]) return;
+    if (rot === 0) { drawSprite(name, x, y); return; }
+    ctx.save();
+    ctx.imageSmoothingEnabled = false;
+    ctx.translate(x + TILE/2, y + TILE/2);
+    ctx.rotate(rot * Math.PI / 2);
+    ctx.drawImage(SPRITE[name], 0, 0, 16, 16, -TILE/2, -TILE/2, TILE, TILE);
+    ctx.restore();
+}
+
+// Auto-tile: pick wall sprite based on neighbors
+function getWallSprite(r, c) {
+    const above = r > 0 && grid[r-1] && grid[r-1][c] === 1;
+    const below = grid[r+1] && grid[r+1][c] === 1;
+    const left  = c > 0 && grid[r][c-1] === 1;
+    const right = c < COLS-1 && grid[r][c+1] === 1;
+    if (c === 0) return 'wall_left';
+    if (c === COLS-1) return 'wall_right';
+    if (!above && below)  return left && right ? 'wall_top' : (!left ? 'wall_top_left' : 'wall_top_right');
+    if (above && !below)  return 'wall_bottom';
+    if (!above && !below) return 'wall_top';
+    return 'wall_center';
+}
+
+// Snake sprite picker: direction-aware with width tiers
+function getSnakeWidthTier(segIdx, totalLen) {
+    // Head grows to full size at length 5+
+    // Body tapers from head to tail
+    if (totalLen <= 2) return 'thin';
+    if (totalLen <= 4) return segIdx === 0 ? 'med' : 'thin';
+    // Length 5+: full-size head, taper toward tail
+    const ratio = segIdx / (totalLen - 1); // 0 = head, 1 = tail
+    if (ratio < 0.3) return 'full';
+    if (ratio < 0.7) return 'med';
+    return 'thin';
+}
+
+function getSnakeBodySprite(prevSeg, curSeg, nextSeg, segIdx, totalLen) {
+    const tier = getSnakeWidthTier(segIdx, totalLen);
+    // Direction: from previous (toward head) to next (toward tail)
+    const dx1 = curSeg.x - prevSeg.x; // direction FROM prev
+    const dy1 = curSeg.y - prevSeg.y;
+    const dx2 = nextSeg.x - curSeg.x; // direction TO next
+    const dy2 = nextSeg.y - curSeg.y;
+
+    // Is it a turn? (direction changes)
+    const isTurn = (dx1 !== dx2 || dy1 !== dy2);
+
+    if (!isTurn) {
+        // Straight piece
+        if (dy1 !== 0) return 'body_v_' + tier; // vertical
+        return 'body_h_' + tier; // horizontal
+    }
+
+    // Turn piece — figure out which corner
+    // Incoming direction + outgoing direction determines corner
+    // turn_tl = ┌ (enters from top or left, exits left or top)
+    // turn_tr = ┐ (enters from top or right)
+    // turn_bl = └ (enters from bottom or left)
+    // turn_br = ┘ (enters from bottom or right)
+
+    // dx1,dy1 = how we got here from prev; dx2,dy2 = how we go to next
+    // Arms = toward_prev + toward_next. ┌=tl ┐=tr └=bl ┘=br
+    if (dy1 ===  1 && dx2 ===  1) return 'turn_bl_' + tier; // UP+RIGHT = └
+    if (dy1 ===  1 && dx2 === -1) return 'turn_br_' + tier; // UP+LEFT = ┘
+    if (dy1 === -1 && dx2 ===  1) return 'turn_tl_' + tier; // DOWN+RIGHT = ┌
+    if (dy1 === -1 && dx2 === -1) return 'turn_tr_' + tier; // DOWN+LEFT = ┐
+    if (dx1 ===  1 && dy2 ===  1) return 'turn_tr_' + tier; // LEFT+DOWN = ┐
+    if (dx1 === -1 && dy2 ===  1) return 'turn_tl_' + tier; // RIGHT+DOWN = ┌
+    if (dx1 ===  1 && dy2 === -1) return 'turn_br_' + tier; // LEFT+UP = ┘
+    if (dx1 === -1 && dy2 === -1) return 'turn_bl_' + tier; // RIGHT+UP = └
+
+    return 'body_v_' + tier; // fallback
+}
+
+function getHeadSprite(totalLen) {
+    return 'head_' + getSnakeWidthTier(0, totalLen);
+}
+
+function getHeadDirSprite(headSeg, nextSeg, totalLen) {
+    // Use pre-generated directional sprites instead of canvas rotation
+    // This avoids subpixel color fringing (red/blue artifacts)
+    const base = getHeadSprite(totalLen);
+    if (!nextSeg) return base + '_up';
+    const dx = headSeg.x - nextSeg.x;
+    const dy = headSeg.y - nextSeg.y;
+    if (dy < 0) return base + '_up';
+    if (dx > 0) return base + '_right';
+    if (dy > 0) return base + '_down';
+    if (dx < 0) return base + '_left';
+    return base + '_up';
+}
+
+function getTailSprite(totalLen) {
+    // Tail uses the tier for its position (last segment) — always thinnest
+    return 'tail_' + getSnakeWidthTier(totalLen - 1, totalLen);
+}
+
+function getTailDirSprite(tailSeg, prevSeg, totalLen) {
+    // Use pre-generated directional sprites instead of canvas rotation
+    const base = getTailSprite(totalLen);
+    if (!prevSeg) return base + '_down';
+    const dx = tailSeg.x - prevSeg.x;
+    const dy = tailSeg.y - prevSeg.y;
+    // Tail points AWAY from prev segment
+    if (dy > 0) return base + '_down';  // prev above → point down
+    if (dx < 0) return base + '_left';  // prev to right → point left
+    if (dy < 0) return base + '_up';    // prev below → point up
+    if (dx > 0) return base + '_right'; // prev to left → point right
+    return base + '_down';
+}
+
+function getHeadtailDirSprite(dir) {
+    // Pre-generated headtail directions
+    if (dir.y < 0) return 'headtail_up';
+    if (dir.x > 0) return 'headtail_right';
+    if (dir.y > 0) return 'headtail_down';
+    if (dir.x < 0) return 'headtail_left';
+    return 'headtail_up';
+}
+
+// ══════════════════════════════════════
+// ── SFX (procedural Web Audio) ──
+// ══════════════════════════════════════
+
+let actx = null, sfxGain = null;
+function ensureAudio() {
+    if (!actx) {
+        actx = new (window.AudioContext || window.webkitAudioContext)();
+        sfxGain = actx.createGain();
+        sfxGain.connect(actx.destination);
+        sfxGain.gain.value = 0.7;
+    }
+    if (actx.state === 'suspended') actx.resume();
+    return actx;
+}
+function dest() { return sfxGain || ensureAudio() && sfxGain; }
+
+const SFX = {
+    move() {
+        const c = ensureAudio(), t = c.currentTime;
+        const o = c.createOscillator(), g = c.createGain();
+        o.connect(g); g.connect(dest());
+        o.type = 'square';
+        o.frequency.setValueAtTime(280, t);
+        o.frequency.exponentialRampToValueAtTime(400, t + 0.04);
+        g.gain.setValueAtTime(0.06, t);
+        g.gain.exponentialRampToValueAtTime(0.001, t + 0.06);
+        o.start(t); o.stop(t + 0.06);
+    },
+    bump() {
+        const c = ensureAudio(), t = c.currentTime;
+        const o = c.createOscillator(), g = c.createGain();
+        o.connect(g); g.connect(dest());
+        o.type = 'triangle';
+        o.frequency.setValueAtTime(160, t);
+        o.frequency.exponentialRampToValueAtTime(80, t + 0.06);
+        g.gain.setValueAtTime(0.08, t);
+        g.gain.exponentialRampToValueAtTime(0.001, t + 0.08);
+        o.start(t); o.stop(t + 0.08);
+    },
+    death() {
+        const c = ensureAudio(), t = c.currentTime;
+        const o = c.createOscillator(), g = c.createGain();
+        o.connect(g); g.connect(dest());
+        o.type = 'sawtooth';
+        o.frequency.setValueAtTime(150, t);
+        o.frequency.exponentialRampToValueAtTime(40, t + 0.2);
+        g.gain.setValueAtTime(0.15, t);
+        g.gain.exponentialRampToValueAtTime(0.001, t + 0.25);
+        o.start(t); o.stop(t + 0.25);
+        const buf = c.createBuffer(1, c.sampleRate * 0.1, c.sampleRate);
+        const d = buf.getChannelData(0);
+        for (let i = 0; i < d.length; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / d.length);
+        const n = c.createBufferSource(); n.buffer = buf;
+        const ng = c.createGain();
+        n.connect(ng); ng.connect(dest());
+        ng.gain.setValueAtTime(0.08, t);
+        ng.gain.exponentialRampToValueAtTime(0.001, t + 0.1);
+        n.start(t);
+    },
+    grow() {
+        const c = ensureAudio(), t = c.currentTime;
+        [523, 659, 784, 1047].forEach((f, i) => {
+            const o = c.createOscillator(), g = c.createGain();
+            o.connect(g); g.connect(dest());
+            o.type = 'square';
+            const st = t + i * 0.08;
+            o.frequency.setValueAtTime(f, st);
+            g.gain.setValueAtTime(0.001, t);
+            g.gain.linearRampToValueAtTime(0.1, st);
+            g.gain.exponentialRampToValueAtTime(0.001, st + 0.15);
+            o.start(st); o.stop(st + 0.15);
+        });
+    },
+    land() {
+        const c = ensureAudio(), t = c.currentTime;
+        const o = c.createOscillator(), g = c.createGain();
+        o.connect(g); g.connect(dest());
+        o.type = 'triangle';
+        o.frequency.setValueAtTime(160, t);
+        o.frequency.exponentialRampToValueAtTime(80, t + 0.06);
+        g.gain.setValueAtTime(0.06, t);
+        g.gain.exponentialRampToValueAtTime(0.001, t + 0.08);
+        o.start(t); o.stop(t + 0.08);
+    },
+    stuck() {
+        const c = ensureAudio(), t = c.currentTime;
+        const o = c.createOscillator(), g = c.createGain();
+        o.connect(g); g.connect(dest());
+        o.type = 'sawtooth';
+        o.frequency.setValueAtTime(200, t);
+        o.frequency.exponentialRampToValueAtTime(60, t + 0.3);
+        g.gain.setValueAtTime(0.1, t);
+        g.gain.exponentialRampToValueAtTime(0.001, t + 0.35);
+        o.start(t); o.stop(t + 0.35);
+    },
+    chop() {
+        const c = ensureAudio(), t = c.currentTime;
+        const o = c.createOscillator(), g = c.createGain();
+        o.connect(g); g.connect(dest());
+        o.type = 'sawtooth';
+        o.frequency.setValueAtTime(900, t);
+        o.frequency.exponentialRampToValueAtTime(120, t + 0.12);
+        g.gain.setValueAtTime(0.14, t);
+        g.gain.exponentialRampToValueAtTime(0.001, t + 0.15);
+        o.start(t); o.stop(t + 0.15);
+        const buf = c.createBuffer(1, c.sampleRate * 0.12, c.sampleRate);
+        const d = buf.getChannelData(0);
+        for (let i = 0; i < d.length; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / d.length, 0.5);
+        const n = c.createBufferSource(); n.buffer = buf;
+        const ng = c.createGain();
+        const flt = c.createBiquadFilter();
+        flt.type = 'lowpass'; flt.frequency.value = 800;
+        n.connect(flt); flt.connect(ng); ng.connect(dest());
+        ng.gain.setValueAtTime(0.15, t);
+        ng.gain.exponentialRampToValueAtTime(0.001, t + 0.12);
+        n.start(t);
+    },
+    levelUp() {
+        const c = ensureAudio(), t = c.currentTime;
+        // Triumphant ascending arpeggio
+        [523, 659, 784, 1047, 1319].forEach((f, i) => {
+            const o = c.createOscillator(), g = c.createGain();
+            o.connect(g); g.connect(dest());
+            o.type = 'square';
+            const st = t + i * 0.07;
+            o.frequency.setValueAtTime(f, st);
+            g.gain.setValueAtTime(0.001, t);
+            g.gain.linearRampToValueAtTime(0.12, st);
+            g.gain.exponentialRampToValueAtTime(0.001, st + 0.2);
+            o.start(st); o.stop(st + 0.2);
+        });
+        // Bright chime on top
+        const o2 = c.createOscillator(), g2 = c.createGain();
+        o2.connect(g2); g2.connect(dest());
+        o2.type = 'sine';
+        o2.frequency.setValueAtTime(1568, t + 0.3);
+        g2.gain.setValueAtTime(0.001, t);
+        g2.gain.linearRampToValueAtTime(0.1, t + 0.3);
+        g2.gain.exponentialRampToValueAtTime(0.001, t + 0.6);
+        o2.start(t + 0.3); o2.stop(t + 0.6);
+    },
+    sawBuzz() {
+        const c = ensureAudio(), t = c.currentTime;
+        const o = c.createOscillator(), g = c.createGain();
+        o.connect(g); g.connect(dest());
+        o.type = 'sawtooth';
+        o.frequency.setValueAtTime(90, t);
+        g.gain.setValueAtTime(0.02, t);
+        g.gain.exponentialRampToValueAtTime(0.001, t + 0.04);
+        o.start(t); o.stop(t + 0.04);
+    },
+    lavaDeath() {
+        const c = ensureAudio(), t = c.currentTime;
+        // Sizzle — filtered noise + low rumble
+        const buf = c.createBuffer(1, c.sampleRate * 0.3, c.sampleRate);
+        const d = buf.getChannelData(0);
+        for (let i = 0; i < d.length; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / d.length);
+        const n = c.createBufferSource(); n.buffer = buf;
+        const ng = c.createGain();
+        const flt = c.createBiquadFilter();
+        flt.type = 'bandpass'; flt.frequency.value = 2000; flt.Q.value = 3;
+        n.connect(flt); flt.connect(ng); ng.connect(dest());
+        ng.gain.setValueAtTime(0.12, t);
+        ng.gain.exponentialRampToValueAtTime(0.001, t + 0.3);
+        n.start(t);
+        // Low rumble
+        const o = c.createOscillator(), g = c.createGain();
+        o.connect(g); g.connect(dest());
+        o.type = 'sine';
+        o.frequency.setValueAtTime(50, t);
+        g.gain.setValueAtTime(0.1, t);
+        g.gain.exponentialRampToValueAtTime(0.001, t + 0.3);
+        o.start(t); o.stop(t + 0.3);
+    }
+};
+
+// ══════════════════════════════════════
+// ── JUICE ──
+// ══════════════════════════════════════
+
+let screenShake = 0, whiteFlash = 0;
+let particles = [], floatTexts = [];
+let lastLevel = 1;
+
+// Background stars — parallax depth
+const bgStars = [];
+for (let i = 0; i < 60; i++) bgStars.push({
+    x: Math.random(), y: Math.random() * 2000,
+    size: 1 + Math.random(), speed: 0.2 + Math.random() * 0.5,
+    alpha: 0.1 + Math.random() * 0.25
+});
+
+function spawnP(x, y, color, n, spread) {
+    for (let i = 0; i < n; i++) {
+        particles.push({
+            x, y,
+            vx: (Math.random() - 0.5) * spread,
+            vy: (Math.random() - 0.5) * spread - spread * 0.3,
+            color, life: 0.4 + Math.random() * 0.4,
+            size: 1 + Math.random() * 2
+        });
+    }
+}
+function spawnText(x, y, text, color) {
+    floatTexts.push({ x, y, text, color, life: 1.5, vy: -30 });
+}
+
+// Severed snake chunks that fly and tumble
+let chunks = [];
+function spawnChunk(x, y) {
+    const angle = Math.random() * Math.PI * 2;
+    const speed = 60 + Math.random() * 80;
+    chunks.push({
+        x, y,
+        vx: Math.cos(angle) * speed,
+        vy: Math.sin(angle) * speed - 80, // upward bias
+        rot: 0,
+        vr: (Math.random() - 0.5) * 15, // tumble speed
+        life: 1.2 + Math.random() * 0.6,
+        size: TILE * 0.7 + Math.random() * 3,
+    });
+}
+
+// ══════════════════════════════════════
+// ── STATE ──
+// ══════════════════════════════════════
+
+let W, H, scale;
+let state = 'title';
+let snakeLen = START_LENGTH;
+let deaths = 0, moveCount = 0, height = 0;
+let bestHeight = parseInt(localStorage.getItem('ketzalBest') || '0');
+
+let grid = [], gridRows = 0, sectionsGenerated = 0;
+let snake = [], snakeDir = { x: 0, y: -1 }, snakeAlive = true;
+let nextGrowth = SECTION_H * 3;
+let startRow = 0; // row where snake starts (bottom of playfield)
+let topGenerated = 0; // how far up we've generated
+
+let cam = { y: 0, targetY: 0, sx: 0, sy: 0 };
+let headBob = 0, deathTimer = 0;
+let fallOffset = 0, falling = false;
+let gravityTimer = 0;
+const GRAVITY_TICK = 0.35; // seconds between auto-drops (slow, deliberate)
+
+// Moving saws — patrol horizontally/vertically, bounce off walls
+let movingSaws = [];
+let sawTimer = 0;
+const SAW_TICK_BASE = 0.45; // base seconds between saw moves
+function currentLevel() { return Math.floor(height / SECTION_H) + 1; }
+function sawTick() { return Math.max(0.18, SAW_TICK_BASE - currentLevel() * 0.012); }
+
+// Rising lava — chases you upward
+let lavaY = 999; // current lava surface row (decreases = rises)
+const LAVA_BASE_SPEED = 0.7; // rows per second base
+function lavaSpeed() { return LAVA_BASE_SPEED + currentLevel() * 0.04; }
+let lavaBubbleTimer = 0;
+
+// ══════════════════════════════════════
+// ── ENDLESS LEVEL GEN (BFS-verified) ──
+// ══════════════════════════════════════
+
+function ensureRows(toRow) {
+    // Generate sections upward as needed
+    while (toRow < topGenerated) prependSection();
+    // Also ensure grid array is big enough downward
+    while (gridRows <= toRow + SECTION_H) {
+        grid[gridRows] = new Array(COLS).fill(0);
+        grid[gridRows][0] = 1;
+        grid[gridRows][COLS - 1] = 1;
+        gridRows++;
+    }
+}
+
+function prependSection() {
+    // Generate a section ABOVE the current top
+    const endR = topGenerated;
+    const startR = endR - SECTION_H;
+    topGenerated = startR;
+    const secNum = sectionsGenerated;
+    const diff = Math.min(secNum, 20);
+
+    // Ensure grid array exists for these rows
+    for (let r = startR; r < endR; r++) {
+        if (!grid[r]) grid[r] = new Array(COLS).fill(0);
+        grid[r][0] = 1;
+        grid[r][COLS - 1] = 1;
+        for (let c = 1; c < COLS - 1; c++) grid[r][c] = 0;
+    }
+
+    if (secNum === 0) { sectionsGenerated++; return; }
+
+    const lenAtHeight = START_LENGTH + Math.floor(secNum / 3);
+    const minGap = Math.max(2, Math.min(lenAtHeight, COLS - 3));
+
+    let tries = 0;
+    while (tries < 50) {
+        for (let r = startR; r < endR; r++)
+            for (let c = 1; c < COLS - 1; c++) grid[r][c] = 0;
+
+        // Shelves (ceilings to float up past)
+        const nShelves = 1 + Math.floor(diff * 0.3);
+        for (let s = 0; s < nShelves; s++) {
+            const r = startR + 2 + Math.floor(Math.random() * Math.max(1, SECTION_H - 4));
+            if (r >= endR) continue;
+            const inner = COLS - 2;
+            const gw = minGap;
+            const sw = Math.min(inner, gw + 1 + Math.floor(Math.random() * Math.max(1, inner - gw - 1)));
+            const sc = 1 + Math.floor(Math.random() * Math.max(1, inner - sw));
+            const gs = sc + Math.floor(Math.random() * Math.max(1, sw - gw));
+            for (let c = sc; c < sc + sw && c < COLS - 1; c++) {
+                if (c >= gs && c < gs + gw) continue;
+                grid[r][c] = 1;
+            }
+        }
+
+        // Saws — some static (grid), some moving (entity)
+        const maxSaws = Math.min(Math.floor(diff * 0.4) + 1, Math.floor((COLS - 2) * SECTION_H * 0.1));
+        const movingChance = Math.min(0.8, secNum >= 3 ? 0.4 + secNum * 0.02 : 0);
+        for (let s = 0; s < maxSaws; s++) {
+            const r = startR + 1 + Math.floor(Math.random() * (SECTION_H - 2));
+            const c = 1 + Math.floor(Math.random() * (COLS - 2));
+            if (r >= endR || grid[r][c] !== 0) continue;
+            if (Math.random() < movingChance) {
+                // Moving saw — horizontal or vertical patrol
+                const vert = secNum >= 8 && Math.random() < 0.3;
+                movingSaws.push({
+                    x: c, y: r,
+                    dx: vert ? 0 : (Math.random() < 0.5 ? 1 : -1),
+                    dy: vert ? (Math.random() < 0.5 ? 1 : -1) : 0
+                });
+            } else {
+                grid[r][c] = 3; // static saw
+            }
+        }
+
+        // BFS check (ascending)
+        if (bfsUpOK(startR, endR, lenAtHeight)) break;
+        tries++;
+    }
+
+    if (tries >= 50) {
+        for (let r = startR; r < endR; r++)
+            for (let c = 1; c < COLS - 1; c++) grid[r][c] = 0;
+        const fewSaws = Math.min(2, Math.floor(diff / 5));
+        for (let s = 0; s < fewSaws; s++) {
+            const r = startR + 2 + Math.floor(Math.random() * (SECTION_H - 4));
+            const c = 2 + Math.floor(Math.random() * (COLS - 4));
+            if (grid[r] && grid[r][c] === 0) grid[r][c] = 3;
+        }
+    }
+    sectionsGenerated++;
+}
+
+function bfsUpOK(startR, endR, sLen) {
+    // Check that a snake can float up through this section
+    sLen = sLen || START_LENGTH;
+    const visited = new Set();
+    const queue = [];
+
+    function isWall(x, y) { return x < 0 || x >= COLS || !grid[y] || grid[y][x] === 1; }
+    function headDeath(x, y) { return grid[y] && (grid[y][x] === 2 || grid[y][x] === 3); }
+
+    function stateKey(s) {
+        let k = '';
+        for (const seg of s) k += seg.x + ',' + seg.y + ';';
+        return k;
+    }
+
+    // Seed: try entering from bottom of section
+    for (let c = 1; c < COLS - 1; c++) {
+        let valid = true;
+        const s = [];
+        for (let i = 0; i < sLen; i++) {
+            const r = endR - 1 + i; // body extends below
+            if (!grid[r] || isWall(c, r) || headDeath(c, r)) { valid = false; break; }
+            s.push({ x: c, y: r });
+        }
+        if (!valid) continue;
+        const key = stateKey(s);
+        if (!visited.has(key)) {
+            visited.add(key);
+            queue.push(s);
+        }
+    }
+
+    const MAX_STATES = 30000;
+    let steps = 0;
+    const actions = [[0,-1],[0,1],[1,0],[-1,0]]; // up, down, right, left
+
+    while (queue.length > 0 && steps < MAX_STATES) {
+        const cur = queue.shift();
+        steps++;
+
+        if (cur[0].y <= startR) return true; // made it through
+
+        for (const [dx, dy] of actions) {
+            const hx = cur[0].x + dx, hy = cur[0].y + dy;
+            if (isWall(hx, hy) || headDeath(hx, hy)) continue;
+
+            // Self collision
+            let selfHit = false;
+            for (let i = 0; i < cur.length - 1; i++) {
+                if (cur[i].x === hx && cur[i].y === hy) { selfHit = true; break; }
+            }
+            if (selfHit) continue;
+
+            const ns = [{ x: hx, y: hy }];
+            for (let i = 0; i < cur.length - 1; i++) ns.push({ x: cur[i].x, y: cur[i].y });
+
+            const key = stateKey(ns);
+            if (!visited.has(key)) {
+                visited.add(key);
+                queue.push(ns);
+                if (ns[0].y <= startR) return true;
+            }
+        }
+    }
+    return false;
+}
+
+function appendSection() {
+    const startR = gridRows;
+    const endR = startR + SECTION_H;
+    const secNum = sectionsGenerated;
+    const diff = Math.min(secNum, 20);
+
+    for (let r = startR; r < endR; r++) {
+        grid[r] = new Array(COLS).fill(0);
+        grid[r][0] = 1;
+        grid[r][COLS - 1] = 1;
+    }
+    gridRows = endR;
+
+    if (secNum === 0) { sectionsGenerated++; return; } // spawn area clear
+
+    // Snake length at this depth
+    const lenAtDepth = START_LENGTH + Math.floor(endR / (SECTION_H * 3));
+    // Minimum gap width scales with snake length
+    const minGap = Math.max(2, Math.min(lenAtDepth, COLS - 3));
+
+    let tries = 0;
+    while (tries < 50) {
+        // Clear interior
+        for (let r = startR; r < endR; r++)
+            for (let c = 1; c < COLS - 1; c++) grid[r][c] = 0;
+
+        // Shelves with gaps (gap width scales with snake length)
+        const nShelves = 1 + Math.floor(diff * 0.3);
+        for (let s = 0; s < nShelves; s++) {
+            const r = startR + 2 + Math.floor(Math.random() * Math.max(1, SECTION_H - 4));
+            if (r >= endR) continue;
+            const inner = COLS - 2;
+            const gw = minGap;
+            const sw = Math.min(inner, gw + 1 + Math.floor(Math.random() * Math.max(1, inner - gw - 1)));
+            const sc = 1 + Math.floor(Math.random() * Math.max(1, inner - sw));
+            const gs = sc + Math.floor(Math.random() * Math.max(1, sw - gw));
+            for (let c = sc; c < sc + sw && c < COLS - 1; c++) {
+                if (c >= gs && c < gs + gw) continue;
+                grid[r][c] = 1;
+            }
+        }
+
+        // Saws — cap count so sections stay passable
+        const maxSaws = Math.min(Math.floor(diff * 0.4) + 1, Math.floor((COLS - 2) * SECTION_H * 0.1));
+        for (let s = 0; s < maxSaws; s++) {
+            const r = startR + 1 + Math.floor(Math.random() * (SECTION_H - 2));
+            const c = 1 + Math.floor(Math.random() * (COLS - 2));
+            if (r < endR && grid[r][c] === 0) grid[r][c] = 3;
+        }
+
+        if (bfsOK(startR, endR, lenAtDepth)) break;
+        tries++;
+    }
+
+    // If all tries failed, place just a few saws in an open section
+    if (tries >= 50) {
+        for (let r = startR; r < endR; r++)
+            for (let c = 1; c < COLS - 1; c++) grid[r][c] = 0;
+        // Scatter 1-2 saws so it's not completely empty
+        const fewSaws = Math.min(2, Math.floor(diff / 5));
+        for (let s = 0; s < fewSaws; s++) {
+            const r = startR + 2 + Math.floor(Math.random() * (SECTION_H - 4));
+            const c = 2 + Math.floor(Math.random() * (COLS - 4));
+            if (grid[r][c] === 0) grid[r][c] = 3;
+        }
+    }
+    sectionsGenerated++;
+}
+
+function bfsOK(startR, endR, sLen) {
+    // Physics-aware solver: simulates actual snake movement + gravity
+    sLen = sLen || START_LENGTH;
+    const exitR = endR - 1;
+    const visited = new Set();
+    const queue = [];
+
+    function isWall(x, y) { return x < 0 || x >= COLS || y < 0 || y >= gridRows || grid[y][x] === 1; }
+    function isSpikeAt(x, y) { return y >= 0 && y < gridRows && grid[y][x] === 2; }
+    function headDeath(x, y) { return isSpikeAt(x, y) || (y >= 0 && y < gridRows && grid[y][x] === 3); }
+
+    function stateKey(s) {
+        let k = '';
+        for (let i = 0; i < s.length; i++) k += s[i].x + ',' + s[i].y + ';';
+        return k;
+    }
+
+    function supported(s) {
+        for (const seg of s) {
+            const b = seg.y + 1;
+            if (b >= gridRows) return true;
+            if (grid[b][seg.x] === 1) return true;
+        }
+        return false;
+    }
+
+    function gravDrop(s) {
+        // Drop 1 cell if unsupported. Returns null if spike death.
+        if (supported(s)) return s;
+        for (const seg of s) {
+            if (seg.y + 1 >= gridRows || grid[seg.y + 1][seg.x] === 1) return s; // blocked
+        }
+        const ns = s.map(seg => ({ x: seg.x, y: seg.y + 1 }));
+        if (headDeath(ns[0].x, ns[0].y)) return null;
+        for (let i = 1; i < ns.length; i++) { if (isSpikeAt(ns[i].x, ns[i].y)) return null; }
+        return ns;
+    }
+
+    function settle(s) {
+        // Drop until supported or dead
+        let cur = s;
+        for (let i = 0; i < 50; i++) {
+            if (supported(cur)) return cur;
+            const next = gravDrop(cur);
+            if (!next) return null; // died
+            if (next === cur) return cur; // stuck
+            cur = next;
+        }
+        return cur;
+    }
+
+    function tryMove(s, dx, dy) {
+        if (dx === 0 && dy === 0) {
+            // Wait — just gravity
+            return gravDrop(s);
+        }
+
+        // Can't go up when straight vertical (matches real game rule)
+        if (dy === -1 && s.length >= 2 && s.every(seg => seg.x === s[0].x)) {
+            return null;
+        }
+
+        const hx = s[0].x + dx, hy = s[0].y + dy;
+
+        // Reverse check — flip if straight
+        if (s.length >= 2 && hx === s[1].x && hy === s[1].y) {
+            const allX = s.every(seg => seg.x === s[0].x);
+            const allY = s.every(seg => seg.y === s[0].y);
+            if (allX || allY) {
+                const flipped = s.slice().reverse();
+                return gravDrop(flipped);
+            }
+            return null; // can't reverse when not straight
+        }
+
+        if (isWall(hx, hy)) return null;
+        if (headDeath(hx, hy)) return null;
+
+        // Self collision (tail vacates)
+        for (let i = 0; i < s.length - 1; i++) {
+            if (s[i].x === hx && s[i].y === hy) return null;
+        }
+
+        // Move
+        const ns = [{ x: hx, y: hy }];
+        for (let i = 0; i < s.length - 1; i++) ns.push({ x: s[i].x, y: s[i].y });
+
+        // Gravity drop 1 cell after move
+        return gravDrop(ns);
+    }
+
+    // Seed: try all entry columns, snake vertical head at startR, body above
+    for (let c = 1; c < COLS - 1; c++) {
+        let valid = true;
+        const s = [];
+        for (let i = 0; i < sLen; i++) {
+            const r = startR - i;
+            if (r < 0 || isWall(c, r) || headDeath(c, r)) { valid = false; break; }
+            s.push({ x: c, y: r });
+        }
+        if (!valid) continue;
+
+        const settled = settle(s);
+        if (!settled) continue;
+
+        const key = stateKey(settled);
+        if (!visited.has(key)) {
+            visited.add(key);
+            queue.push(settled);
+        }
+    }
+
+    const MAX_STATES = sLen <= 3 ? 40000 : 80000;
+    let steps = 0;
+    const actions = [[0,1],[0,-1],[1,0],[-1,0],[0,0]];
+
+    while (queue.length > 0 && steps < MAX_STATES) {
+        const cur = queue.shift();
+        steps++;
+
+        if (cur[0].y >= exitR) return true;
+
+        for (const [dx, dy] of actions) {
+            const next = tryMove(cur, dx, dy);
+            if (!next) continue;
+
+            const key = stateKey(next);
+            if (!visited.has(key)) {
+                visited.add(key);
+                queue.push(next);
+
+                if (next[0].y >= exitR) return true;
+            }
+        }
+    }
+    return false;
+}
+
+function initWorld() {
+    grid = []; gridRows = 0; sectionsGenerated = 0;
+    // Start with a large grid — snake starts near row 200
+    startRow = 200;
+    topGenerated = startRow;
+    for (let r = 0; r <= startRow + 10; r++) {
+        grid[r] = new Array(COLS).fill(0);
+        grid[r][0] = 1;
+        grid[r][COLS - 1] = 1;
+    }
+    // Floor at bottom
+    grid[startRow + 1] = new Array(COLS).fill(1);
+    gridRows = startRow + 2;
+    // Generate sections above
+    for (let i = 0; i < 8; i++) prependSection();
+}
+
+// ══════════════════════════════════════
+// ── SNAKE ──
+// ══════════════════════════════════════
+
+function initSnake() {
+    snake = [];
+    const col = Math.floor(COLS / 2);
+    // Head above floor, body trailing below — all clear of solid tiles
+    const headRow = startRow - (snakeLen - 1);
+    for (let i = 0; i < snakeLen; i++)
+        snake.push({ x: col, y: headRow + i });
+    snakeDir = { x: 0, y: -1 };
+    snakeAlive = true;
+    fallOffset = 0; falling = false;
+    gravityTimer = 0;
+}
+
+function isStuck() {
+    if (!snakeAlive || !snakeSupported()) return false;
+    const dirs = [[0,1],[0,-1],[1,0],[-1,0]];
+    for (const [dx, dy] of dirs) {
+        const hx = snake[0].x + dx, hy = snake[0].y + dy;
+        // Check flip
+        if (snake.length >= 2 && hx === snake[1].x && hy === snake[1].y) {
+            const allX = snake.every(s => s.x === snake[0].x);
+            const allY = snake.every(s => s.y === snake[0].y);
+            if (allX || allY) return false; // can flip
+            continue;
+        }
+        if (blocked(hx, hy)) continue;
+        if (isSpike(hx, hy)) continue;
+        if (isSaw(hx, hy)) continue;
+        let selfHit = false;
+        for (let i = 0; i < snake.length - 1; i++) {
+            if (snake[i].x === hx && snake[i].y === hy) { selfHit = true; break; }
+        }
+        if (selfHit) continue;
+        return false; // at least one valid move
+    }
+    return true; // no valid moves
+}
+
+
+function blocked(x, y) {
+    if (x < 0 || x >= COLS || y < 0 || y >= gridRows) return true;
+    return grid[y][x] === 1;
+}
+
+function isSpike(x, y) {
+    return y >= 0 && y < gridRows && grid[y][x] === 2;
+}
+
+function isSaw(x, y) {
+    return y >= 0 && y < gridRows && grid[y][x] === 3;
+}
+
+function checkSaws() {
+    // Head on saw = death
+    if (isSaw(snake[0].x, snake[0].y)) { die(); return; }
+    // Body on saw = trim from that point
+    for (let i = 1; i < snake.length; i++) {
+        if (isSaw(snake[i].x, snake[i].y)) {
+            const cut = snake.splice(i);
+            snakeLen = snake.length;
+            // Gore! Green worm guts + severed chunks flying
+            for (const s of cut) {
+                const cx = s.x * TILE + TILE / 2, cy = s.y * TILE + TILE / 2;
+                // Green guts splatter
+                spawnP(cx, cy, '#40A030', 6, 100);
+                spawnP(cx, cy, '#80E060', 4, 80);
+                // Dark green goo drips
+                spawnP(cx, cy, '#1C5018', 3, 40);
+                // Severed chunk flies away
+                spawnChunk(cx, cy);
+            }
+            // Blood splat at cut point
+            const cutPt = snake[snake.length - 1];
+            spawnP(cutPt.x * TILE + TILE / 2, cutPt.y * TILE + TILE / 2, '#40A030', 8, 120);
+            spawnText(snake[0].x * TILE, snake[0].y * TILE - TILE, 'CHOPPED! -' + cut.length, '#80E060');
+            SFX.chop(); screenShake = 6;
+            return;
+        }
+    }
+}
+
+// ── MOVING SAW UPDATE ──
+function updateMovingSaws() {
+    for (const ms of movingSaws) {
+        const nx = ms.x + ms.dx;
+        const ny = ms.y + ms.dy;
+        // Bounce off walls, platforms, grid edges
+        if (nx <= 0 || nx >= COLS - 1 || ny < 0 || ny >= gridRows ||
+            (grid[ny] && grid[ny][nx] === 1)) {
+            ms.dx = -ms.dx;
+            ms.dy = -ms.dy;
+            // Bounce sparks
+            spawnP(ms.x * TILE + TILE / 2, ms.y * TILE + TILE / 2, '#FFD080', 3, 50);
+            spawnP(ms.x * TILE + TILE / 2, ms.y * TILE + TILE / 2, '#FFFFFF', 1, 30);
+            SFX.sawBuzz();
+        } else {
+            ms.x = nx;
+            ms.y = ny;
+            // Trail sparks while patrolling
+            if (Math.random() < 0.4) {
+                spawnP(ms.x * TILE + TILE / 2, ms.y * TILE + TILE / 2, '#888898', 1, 15);
+            }
+        }
+    }
+    // Check collision with snake
+    checkMovingSawCollision();
+}
+
+function isMovingSaw(x, y) {
+    for (const ms of movingSaws) if (ms.x === x && ms.y === y) return true;
+    return false;
+}
+
+function checkMovingSawCollision() {
+    if (!snakeAlive) return;
+    // Head on moving saw = death
+    if (isMovingSaw(snake[0].x, snake[0].y)) { die(); return; }
+    // Body on moving saw = trim
+    for (let i = 1; i < snake.length; i++) {
+        if (isMovingSaw(snake[i].x, snake[i].y)) {
+            const cut = snake.splice(i);
+            snakeLen = snake.length;
+            for (const s of cut) {
+                const cx = s.x * TILE + TILE / 2, cy = s.y * TILE + TILE / 2;
+                spawnP(cx, cy, '#40A030', 6, 100);
+                spawnP(cx, cy, '#80E060', 4, 80);
+                spawnP(cx, cy, '#1C5018', 3, 40);
+                spawnChunk(cx, cy);
+            }
+            const cutPt = snake[snake.length - 1];
+            spawnP(cutPt.x * TILE + TILE / 2, cutPt.y * TILE + TILE / 2, '#40A030', 8, 120);
+            spawnText(snake[0].x * TILE, snake[0].y * TILE - TILE, 'CHOPPED! -' + cut.length, '#80E060');
+            SFX.chop(); screenShake = 6;
+            return;
+        }
+    }
+}
+
+function snakeSupported() {
+    for (const s of snake) {
+        const b = s.y - 1;
+        if (b < 0) return true;
+        if (grid[b][s.x] === 1) return true;
+    }
+    return false;
+}
+
+function gravityDrop() {
+    // Float up exactly 1 cell. Returns true if moved.
+    if (!snakeAlive || snakeSupported()) return false;
+
+    let canFloat = true;
+    for (const s of snake) {
+        const b = s.y - 1;
+        if (b < 0 || grid[b][s.x] === 1) { canFloat = false; break; }
+    }
+    if (!canFloat) return false;
+
+    for (const s of snake) s.y--;
+
+    const h = startRow - snake[0].y;
+    if (h > height) { height = h; if (height > bestHeight) { bestHeight = height; localStorage.setItem('ketzalBest', bestHeight); } }
+
+    // Spike check
+    for (const s of snake) {
+        if (isSpike(s.x, s.y)) { die(); return true; }
+    }
+    // Saw check — head kills, body trims (static + moving)
+    if (isSaw(snake[0].x, snake[0].y)) { die(); return true; }
+    checkSaws();
+    checkMovingSawCollision();
+
+    // Animate 1-tile float
+    fallOffset = TILE;
+    falling = true;
+
+    // Growth check during float
+    if (height >= nextGrowth) {
+        snakeLen++;
+        const tail = snake[snake.length - 1];
+        snake.push({ x: tail.x, y: tail.y });
+        nextGrowth += SECTION_H * 3;
+        spawnText(snake[0].x * TILE, snake[0].y * TILE + TILE, 'GREW TO ' + snakeLen + '!', C.gold);
+        SFX.grow(); screenShake = 3;
+    }
+
+    return true;
+}
+
+function moveSnake(dx, dy) {
+    if (!snakeAlive || state !== 'playing') return;
+
+    // Can't go down if already straight vertical (gravity goes UP now)
+    if (dy === 1 && snake.length >= 2 && snake.every(s => s.x === snake[0].x)) {
+        SFX.bump(); return;
+    }
+
+    // Reverse check — if straight, flip head to other end
+    if (snake.length >= 2) {
+        if (snake[0].x + dx === snake[1].x && snake[0].y + dy === snake[1].y) {
+            const allSameX = snake.every(s => s.x === snake[0].x);
+            const allSameY = snake.every(s => s.y === snake[0].y);
+            if (allSameX || allSameY) {
+                moveCount++;
+                snake.reverse();
+                snakeDir = { x: dx, y: dy };
+                SFX.move(); headBob = 1;
+                gravityTimer = 0;
+                return;
+            }
+            SFX.bump(); screenShake = 2; return;
+        }
+    }
+
+    const hx = snake[0].x + dx, hy = snake[0].y + dy;
+    ensureRows(hy + VISIBLE_ROWS);
+
+    if (blocked(hx, hy)) { SFX.bump(); screenShake = 2; return; }
+
+    // Self collision (tail vacates)
+    for (let i = 0; i < snake.length - 1; i++) {
+        if (snake[i].x === hx && snake[i].y === hy) {
+            SFX.bump(); screenShake = 2; return;
+        }
+    }
+
+    moveCount++;
+
+    for (let i = snake.length - 1; i > 0; i--) {
+        snake[i].x = snake[i - 1].x;
+        snake[i].y = snake[i - 1].y;
+    }
+    snake[0].x = hx; snake[0].y = hy;
+    snakeDir = { x: dx, y: dy };
+    SFX.move(); headBob = 1;
+
+    // Move trail — dust behind the tail
+    const tail = snake[snake.length - 1];
+    spawnP(tail.x * TILE + TILE / 2, tail.y * TILE + TILE / 2, GB.dark, 2, 30);
+
+    const h = startRow - snake[0].y;
+    if (h > height) { height = h; if (height > bestHeight) { bestHeight = height; localStorage.setItem('ketzalBest', bestHeight); } }
+
+    // Level-up check
+    const lvl = currentLevel();
+    if (lvl > lastLevel) {
+        lastLevel = lvl;
+        SFX.levelUp();
+        screenShake = 5; whiteFlash = 0.3;
+        const cx = snake[0].x * TILE + TILE / 2, cy = snake[0].y * TILE;
+        spawnP(cx, cy, C.gold, 12, 150);
+        spawnP(cx, cy, '#FFE090', 8, 100);
+        spawnP(cx, cy, '#FFFFFF', 4, 80);
+        spawnText(cx, cy - TILE, 'LEVEL ' + lvl + '!', C.gold);
+    }
+
+    // Spike / Saw (static + moving)
+    if (isSpike(hx, hy)) { die(); return; }
+    if (isSaw(hx, hy)) { die(); return; }
+    if (isMovingSaw(hx, hy)) { die(); return; }
+    checkSaws();
+    checkMovingSawCollision();
+    if (!snakeAlive) return;
+
+    // Growth
+    if (height >= nextGrowth) {
+        snakeLen++;
+        const tail = snake[snake.length - 1];
+        snake.push({ x: tail.x, y: tail.y });
+        nextGrowth += SECTION_H * 3;
+        spawnText(snake[0].x * TILE, snake[0].y * TILE - TILE, 'GREW TO ' + snakeLen + '!', C.gold);
+        SFX.grow(); screenShake = 3;
+    }
+
+    // After a move, reset gravity timer so there's a brief pause before falling
+    gravityTimer = 0;
+    // Generate sections above as we rise
+    ensureRows(snake[0].y - VISIBLE_ROWS);
+
+    // Stuck check after every move (not just after falling)
+    if (snakeAlive && snakeSupported() && isStuck()) {
+        spawnText(snake[0].x * TILE, snake[0].y * TILE - TILE, 'STUCK!', C.spike);
+        SFX.stuck();
+        die();
+    }
+}
+
+function die() {
+    snakeAlive = false; state = 'dead';
+    deathTimer = 1.5; deaths++;
+    screenShake = 12; whiteFlash = 0.5;
+    SFX.death();
+    // CARNAGE — every segment explodes into guts
+    for (const s of snake) {
+        const cx = s.x * TILE + TILE / 2, cy = s.y * TILE + TILE / 2;
+        // Green guts explosion
+        spawnP(cx, cy, '#40A030', 8, 120);
+        spawnP(cx, cy, '#80E060', 5, 100);
+        spawnP(cx, cy, '#1C5018', 4, 60);
+        // Red cartoon blood splashes
+        spawnP(cx, cy, '#D03040', 3, 90);
+        spawnP(cx, cy, '#F06070', 2, 70);
+        // Severed chunks fly everywhere
+        spawnChunk(cx, cy);
+    }
+}
+
+function startGame() {
+    snakeLen = START_LENGTH; deaths = 0; moveCount = 0; chunks = [];
+    height = 0; nextGrowth = SECTION_H * 3;
+    movingSaws = []; sawTimer = 0; lastLevel = 1;
+    lavaY = startRow + 15; lavaBubbleTimer = 0; // starts well below snake
+    initWorld(); initSnake();
+    state = 'playing';
+    cam.y = snake[0].y * TILE - H * 0.6;
+    cam.targetY = cam.y;
+}
+
+// ══════════════════════════════════════
+// ── INPUT ──
+// ══════════════════════════════════════
+
+// ── UNIVERSAL CONTROLS ──
+// Tap zones = left/up/right | Swipe = move in direction | Hold = auto-advance
+// Swipe+hold = floating joystick (continuous, speed scales with distance)
+// No matter how you try to use it, it works.
+
+let touchRef = null, touchSwiped = false;
+let currentTouch = null;       // live finger position
+let joystickTimeout = null;    // adaptive-rate timeout chain
+let holdTimer = null;          // stationary hold → auto-up
+let joystickActive = false;    // for visual rendering
+const SWIPE_THRESHOLD = 30;
+const HOLD_DELAY = 280;        // ms before stationary hold triggers
+const JOYSTICK_DEAD = 18;      // dead zone in px
+const JOYSTICK_RADIUS = 70;    // max visual radius
+const JOYSTICK_FAST = 90;      // ms at max force
+const JOYSTICK_SLOW = 300;     // ms at min force
+let lastJoystickDir = { x: 0, y: -1 }; // direction persistence
+
+function joystickDir() {
+    if (!currentTouch || !touchRef) return lastJoystickDir;
+    const dx = currentTouch.x - touchRef.x;
+    const dy = currentTouch.y - touchRef.y;
+    const dist = Math.sqrt(dx * dx + dy * dy);
+    if (dist < JOYSTICK_DEAD) return { x: 0, y: -1 }; // dead zone → up
+    // Require dominant axis to be 1.4x the other to switch — prevents jitter
+    const ax = Math.abs(dx), ay = Math.abs(dy);
+    if (ax > ay * 1.4) lastJoystickDir = { x: dx > 0 ? 1 : -1, y: 0 };
+    else if (ay > ax * 1.4) lastJoystickDir = { x: 0, y: dy < 0 ? -1 : 1 };
+    // else: keep lastJoystickDir (in diagonal zone, don't switch)
+    return lastJoystickDir;
+}
+
+function joystickForce() {
+    if (!currentTouch || !touchRef) return 0;
+    const dx = currentTouch.x - touchRef.x;
+    const dy = currentTouch.y - touchRef.y;
+    const dist = Math.sqrt(dx * dx + dy * dy);
+    return Math.min(1, Math.max(0, (dist - JOYSTICK_DEAD) / (JOYSTICK_RADIUS - JOYSTICK_DEAD)));
+}
+
+function joystickRate() {
+    const f = joystickForce();
+    return JOYSTICK_SLOW - (JOYSTICK_SLOW - JOYSTICK_FAST) * f;
+}
+
+function startJoystick() {
+    stopJoystick();
+    joystickActive = true;
+    lastJoystickDir = { x: 0, y: -1 };
+    function tick() {
+        if (state !== 'playing' || !joystickActive) { stopJoystick(); return; }
+        const d = joystickDir();
+        moveSnake(d.x, d.y);
+        joystickTimeout = setTimeout(tick, joystickRate());
+    }
+    joystickTimeout = setTimeout(tick, joystickRate());
+}
+
+function stopJoystick() {
+    joystickActive = false;
+    if (joystickTimeout) { clearTimeout(joystickTimeout); joystickTimeout = null; }
+    if (holdTimer) { clearTimeout(holdTimer); holdTimer = null; }
+}
+
+function drawJoystick() {
+    if (!joystickActive || !touchRef || !currentTouch) return;
+    // Draw in screen space (reset transform)
+    ctx.save();
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    const cx = touchRef.x, cy = touchRef.y;
+    const tx = currentTouch.x, ty = currentTouch.y;
+    // Clamp thumb to radius
+    let dx = tx - cx, dy = ty - cy;
+    const dist = Math.sqrt(dx * dx + dy * dy);
+    const clampR = JOYSTICK_RADIUS * (window.devicePixelRatio || 1);
+    if (dist > clampR) { dx = dx / dist * clampR; dy = dy / dist * clampR; }
+    // Base ring
+    ctx.strokeStyle = 'rgba(255,255,255,0.18)';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.arc(cx, cy, clampR, 0, Math.PI * 2);
+    ctx.stroke();
+    // Dead zone hint
+    ctx.strokeStyle = 'rgba(255,255,255,0.08)';
+    ctx.beginPath();
+    ctx.arc(cx, cy, JOYSTICK_DEAD * (window.devicePixelRatio || 1), 0, Math.PI * 2);
+    ctx.stroke();
+    // Thumb dot
+    const thumbR = 10 * (window.devicePixelRatio || 1);
+    ctx.fillStyle = 'rgba(255,255,255,0.3)';
+    ctx.beginPath();
+    ctx.arc(cx + dx, cy + dy, thumbR, 0, Math.PI * 2);
+    ctx.fill();
+    // Direction indicator line
+    ctx.strokeStyle = 'rgba(255,255,255,0.12)';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.moveTo(cx, cy);
+    ctx.lineTo(cx + dx, cy + dy);
+    ctx.stroke();
+    ctx.restore();
+}
+
+document.addEventListener('keydown', e => {
+    if (state === 'title') { ensureAudio(); startGame(); return; }
+    if (state === 'dead' && deathTimer <= 0) { startGame(); return; }
+    if (state !== 'playing') return;
+    switch (e.key) {
+        case 'ArrowLeft': case 'a': case 'A': moveSnake(-1, 0); break;
+        case 'ArrowRight': case 'd': case 'D': moveSnake(1, 0); break;
+        case 'ArrowUp': case 'w': case 'W': moveSnake(0, -1); break;
+        case 'ArrowDown': case 's': case 'S': moveSnake(0, 1); break;
+        case 'r': case 'R': startGame(); break;
+    }
+    e.preventDefault();
+});
+
+// ── XBOX / GAMEPAD CONTROLS ──
+// D-pad or left stick = move, A = hop up, B/Start = restart
+let gpPrevButtons = [], gpPrevAxes = [0, 0];
+const GP_STICK_DEAD = 0.4;
+const GP_REPEAT_FIRST = 220;  // ms before first repeat
+const GP_REPEAT_RATE = 140;   // ms between repeats
+let gpRepeatDir = null, gpRepeatTimer = null, gpRepeatDelay = 0;
+
+function gpStartRepeat(dx, dy) {
+    if (gpRepeatDir && gpRepeatDir.x === dx && gpRepeatDir.y === dy) return;
+    gpStopRepeat();
+    gpRepeatDir = { x: dx, y: dy };
+    gpRepeatDelay = GP_REPEAT_FIRST;
+    gpRepeatTimer = setTimeout(function tick() {
+        if (state === 'playing' && gpRepeatDir) moveSnake(gpRepeatDir.x, gpRepeatDir.y);
+        gpRepeatTimer = setTimeout(tick, GP_REPEAT_RATE);
+    }, gpRepeatDelay);
+}
+
+function gpStopRepeat() {
+    gpRepeatDir = null;
+    if (gpRepeatTimer) { clearTimeout(gpRepeatTimer); gpRepeatTimer = null; }
+}
+
+function pollGamepad() {
+    const gps = navigator.getGamepads ? navigator.getGamepads() : [];
+    for (const gp of gps) {
+        if (!gp) continue;
+        const b = gp.buttons;
+        const prev = gpPrevButtons;
+
+        // Button just pressed helper
+        const pressed = i => b[i] && b[i].pressed && !(prev[i] && prev[i].pressed);
+
+        // A button (0) = hop up / start game
+        if (pressed(0)) {
+            if (state === 'title') { ensureAudio(); startGame(); }
+            else if (state === 'dead' && deathTimer <= 0) startGame();
+            else if (state === 'playing') moveSnake(0, -1);
+        }
+        // B (1) or Start (9) = restart
+        if (pressed(1) || pressed(9)) {
+            if (state === 'title') { ensureAudio(); startGame(); }
+            else if (state === 'dead' && deathTimer <= 0) startGame();
+        }
+
+        // D-pad: Up(12) Down(13) Left(14) Right(15)
+        if (state === 'playing') {
+            if (pressed(12)) moveSnake(0, -1);
+            if (pressed(13)) moveSnake(0, 1);
+            if (pressed(14)) moveSnake(-1, 0);
+            if (pressed(15)) moveSnake(1, 0);
+        }
+
+        // Left stick with repeat
+        const sx = gp.axes[0] || 0, sy = gp.axes[1] || 0;
+        if (state === 'playing') {
+            const ax = Math.abs(sx), ay = Math.abs(sy);
+            if (ax > GP_STICK_DEAD || ay > GP_STICK_DEAD) {
+                let dx = 0, dy = 0;
+                if (ax > ay) dx = sx > 0 ? 1 : -1;
+                else dy = sy > 0 ? 1 : -1;
+                // First deflection from center = immediate move
+                const pax = Math.abs(gpPrevAxes[0]), pay = Math.abs(gpPrevAxes[1]);
+                if (pax <= GP_STICK_DEAD && pay <= GP_STICK_DEAD) {
+                    moveSnake(dx, dy);
+                }
+                gpStartRepeat(dx, dy);
+            } else {
+                gpStopRepeat();
+            }
+        } else {
+            gpStopRepeat();
+        }
+
+        // Store previous state
+        gpPrevButtons = b.map ? Array.from(b).map(x => ({ pressed: x.pressed })) : [];
+        gpPrevAxes = [sx, sy];
+        break; // only first gamepad
+    }
+}
+
+canvas.addEventListener('touchstart', e => {
+    e.preventDefault();
+    if (state === 'title') { ensureAudio(); startGame(); return; }
+    if (state === 'dead' && deathTimer <= 0) { startGame(); return; }
+    const t = e.touches[0];
+    touchRef = { x: t.clientX, y: t.clientY };
+    currentTouch = { x: t.clientX, y: t.clientY };
+    touchSwiped = false;
+    // Stationary hold → start auto-advancing up
+    holdTimer = setTimeout(() => {
+        if (!touchSwiped && state === 'playing') {
+            touchSwiped = true;
+            moveSnake(0, -1);
+            startJoystick();
+        }
+    }, HOLD_DELAY);
+});
+
+canvas.addEventListener('touchmove', e => {
+    e.preventDefault();
+    if (!touchRef || state !== 'playing') return;
+    const t = e.touches[0];
+    currentTouch = { x: t.clientX, y: t.clientY };
+    if (touchSwiped) return; // already in joystick mode or swiped
+    const dx = t.clientX - touchRef.x;
+    const dy = t.clientY - touchRef.y;
+    const dist = Math.sqrt(dx * dx + dy * dy);
+    if (dist >= SWIPE_THRESHOLD) {
+        // First swipe: move one cell in dominant direction
+        if (holdTimer) { clearTimeout(holdTimer); holdTimer = null; }
+        touchSwiped = true;
+        const d = joystickDir();
+        moveSnake(d.x, d.y);
+        // Then enter joystick mode for hold-and-drag
+        startJoystick();
+    }
+});
+
+canvas.addEventListener('touchend', e => {
+    e.preventDefault();
+    stopJoystick();
+    if (!touchRef || state !== 'playing') { touchRef = null; return; }
+    if (!touchSwiped) {
+        // Tap zones: left third = left, center = up, right third = right
+        const screenW = window.innerWidth;
+        const tx = touchRef.x;
+        if (tx < screenW / 3) moveSnake(-1, 0);
+        else if (tx > screenW * 2 / 3) moveSnake(1, 0);
+        else moveSnake(0, -1);
+    }
+    touchRef = null;
+    currentTouch = null;
+    touchSwiped = false;
+});
+
+// ══════════════════════════════════════
+// ── RESIZE ──
+// ══════════════════════════════════════
+
+function resize() {
+    W = COLS * TILE;
+    const portrait = window.innerHeight > window.innerWidth;
+    if (portrait) {
+        // Mobile: fill width, rows fill remaining height
+        scale = Math.max(1, Math.floor(window.innerWidth / W));
+    } else {
+        // Desktop: fit ~28 rows in height, center horizontally
+        scale = Math.max(1, Math.floor(window.innerHeight / (28 * TILE)));
+    }
+    VISIBLE_ROWS = Math.floor(window.innerHeight / (TILE * scale));
+    H = VISIBLE_ROWS * TILE;
+    const pw = W * scale, ph = H * scale;
+    canvas.width = pw; canvas.height = ph;
+    canvas.style.width = pw + 'px';
+    canvas.style.height = ph + 'px';
+    canvas.style.position = 'absolute';
+    canvas.style.left = ((window.innerWidth - pw) / 2) + 'px';
+    canvas.style.top = ((window.innerHeight - ph) / 2) + 'px';
+    ctx.imageSmoothingEnabled = false;
+    ctx.setTransform(scale, 0, 0, scale, 0, 0);
+}
+window.addEventListener('resize', resize);
+resize();
+
+// ══════════════════════════════════════
+// ── DRAW HELPERS ──
+// ══════════════════════════════════════
+
+function tile3D(x, y, base, hl, sh) {
+    ctx.fillStyle = base;
+    ctx.fillRect(x, y, TILE, TILE);
+    ctx.fillStyle = hl;
+    ctx.fillRect(x, y, TILE, 2);
+    ctx.fillRect(x, y, 2, TILE);
+    ctx.fillStyle = sh;
+    ctx.fillRect(x, y + TILE - 2, TILE, 2);
+    ctx.fillRect(x + TILE - 2, y, 2, TILE);
+}
+
+function aliveFace(px, py) {
+    // Scaled for 16px tile (was 12px)
+    ctx.fillStyle = C.springDark;
+    ctx.fillRect(px + 2, py + 3, 4, 4);
+    ctx.fillRect(px + 10, py + 3, 4, 4);
+    ctx.fillStyle = GB.light;
+    ctx.fillRect(px + 3, py + 3, 2, 2);
+    ctx.fillRect(px + 11, py + 3, 2, 2);
+    ctx.fillStyle = 'rgba(255,255,240,0.35)';
+    ctx.fillRect(px + 3, py + 5, 1, 1);
+    ctx.fillRect(px + 11, py + 5, 1, 1);
+    // Mouth
+    ctx.fillStyle = C.springDark;
+    ctx.fillRect(px + 5, py + 10, 2, 1);
+    ctx.fillRect(px + 9, py + 10, 2, 1);
+    ctx.fillRect(px + 7, py + 11, 2, 1);
+}
+
+function springCoil(px, py) {
+    // No longer needed — craggy tiles handle body texture
+    // Kept as fallback if sheets not loaded
+    ctx.fillStyle = C.springHL;
+    ctx.fillRect(px + 3, py + 3, 5, 3);
+    ctx.fillRect(px + 8, py + 7, 5, 3);
+    ctx.fillRect(px + 3, py + 11, 5, 3);
+}
+
+function drawWings(px, py, now, dir) {
+    // 4-frame flapping wings — perpendicular to body direction
+    // dir: 'v' = vertical body (wings left/right), 'h' = horizontal body (wings up/down)
+    dir = dir || 'v';
+    const frame = Math.floor(now / 120) % 4;
+    const cx = px + TILE / 2;
+    const cy = py + TILE / 2;
+
+    // Wing colors — strict GB palette
+    const wBase = GB.light;
+    const wHL   = GB.light;
+    const wSH   = GB.mid;
+    const wTip  = GB.dark;
+
+    const flapOffset = [-5, -3, 0, 3][frame];
+    const flapSpread = [7, 5, 4, 3][frame];
+
+    if (dir === 'v') {
+        // Body is vertical — wings extend left/right
+        // ── LEFT WING ──
+        ctx.fillStyle = wSH;
+        ctx.fillRect(px - flapSpread, cy + flapOffset - 1, flapSpread, 4);
+        ctx.fillStyle = wBase;
+        ctx.fillRect(px - flapSpread, cy + flapOffset - 1, flapSpread, 3);
+        ctx.fillStyle = wHL;
+        ctx.fillRect(px - flapSpread + 1, cy + flapOffset - 1, 3, 1);
+        ctx.fillStyle = wTip;
+        ctx.fillRect(px - flapSpread - 1, cy + flapOffset, 1, 2);
+        ctx.fillRect(px - flapSpread, cy + flapOffset - 2, 1, 1);
+
+        // ── RIGHT WING ──
+        ctx.fillStyle = wSH;
+        ctx.fillRect(px + TILE, cy + flapOffset - 1, flapSpread, 4);
+        ctx.fillStyle = wBase;
+        ctx.fillRect(px + TILE, cy + flapOffset - 1, flapSpread, 3);
+        ctx.fillStyle = wHL;
+        ctx.fillRect(px + TILE + flapSpread - 4, cy + flapOffset - 1, 3, 1);
+        ctx.fillStyle = wTip;
+        ctx.fillRect(px + TILE + flapSpread, cy + flapOffset, 1, 2);
+        ctx.fillRect(px + TILE + flapSpread - 1, cy + flapOffset - 2, 1, 1);
+    } else {
+        // Body is horizontal — wings extend up/down
+        // ── TOP WING ──
+        ctx.fillStyle = wSH;
+        ctx.fillRect(cx + flapOffset - 1, py - flapSpread, 4, flapSpread);
+        ctx.fillStyle = wBase;
+        ctx.fillRect(cx + flapOffset - 1, py - flapSpread, 3, flapSpread);
+        ctx.fillStyle = wHL;
+        ctx.fillRect(cx + flapOffset - 1, py - flapSpread + 1, 1, 3);
+        ctx.fillStyle = wTip;
+        ctx.fillRect(cx + flapOffset, py - flapSpread - 1, 2, 1);
+        ctx.fillRect(cx + flapOffset - 2, py - flapSpread, 1, 1);
+
+        // ── BOTTOM WING ──
+        ctx.fillStyle = wSH;
+        ctx.fillRect(cx + flapOffset - 1, py + TILE, 4, flapSpread);
+        ctx.fillStyle = wBase;
+        ctx.fillRect(cx + flapOffset - 1, py + TILE, 3, flapSpread);
+        ctx.fillStyle = wHL;
+        ctx.fillRect(cx + flapOffset - 1, py + TILE + flapSpread - 4, 1, 3);
+        ctx.fillStyle = wTip;
+        ctx.fillRect(cx + flapOffset, py + TILE + flapSpread, 2, 1);
+        ctx.fillRect(cx + flapOffset - 2, py + TILE + flapSpread - 1, 1, 1);
+    }
+
+    if (frame === 0 && Math.random() < 0.5) {
+        if (dir === 'v') {
+            spawnP(px - flapSpread, cy + flapOffset, GB.light, 1, 15);
+            spawnP(px + TILE + flapSpread, cy + flapOffset, GB.light, 1, 15);
+        } else {
+            spawnP(cx + flapOffset, py - flapSpread, GB.light, 1, 15);
+            spawnP(cx + flapOffset, py + TILE + flapSpread, GB.light, 1, 15);
+        }
+    }
+}
+
+function drawSaw(px, py, now) {
+    const frame = Math.floor(now / 120) % 4;
+    const x = px, y = py;
+
+    // ── Disc body (scaled for 16px) ──
+    ctx.fillStyle = C.sawDark;
+    ctx.fillRect(x+4, y+4, 8, 9);
+    ctx.fillRect(x+3, y+5, 10, 7);
+    ctx.fillRect(x+5, y+3, 6, 10);
+
+    ctx.fillStyle = C.saw;
+    ctx.fillRect(x+4, y+4, 8, 8);
+    ctx.fillRect(x+3, y+5, 10, 6);
+    ctx.fillRect(x+5, y+3, 6, 10);
+
+    ctx.fillStyle = C.sawHL;
+    ctx.fillRect(x+5, y+3, 6, 1);
+    ctx.fillRect(x+4, y+4, 1, 2);
+    ctx.fillRect(x+3, y+5, 1, 4);
+
+    ctx.fillStyle = GB.light;
+    const gp = [[x+5,y+4],[x+10,y+4],[x+10,y+10],[x+5,y+10]][frame];
+    ctx.fillRect(gp[0], gp[1], 2, 1);
+
+    // Teeth
+    const edge = GB.darkest, face = C.sawHL, tip = GB.light;
+    const teethC = [
+        () => { ctx.fillStyle=face; ctx.fillRect(x+6,y+0,3,3); ctx.fillStyle=edge; ctx.fillRect(x+5,y+1,1,2); ctx.fillStyle=tip; ctx.fillRect(x+7,y+0,1,1); },
+        () => { ctx.fillStyle=face; ctx.fillRect(x+13,y+6,3,3); ctx.fillStyle=edge; ctx.fillRect(x+13,y+5,2,1); ctx.fillStyle=tip; ctx.fillRect(x+15,y+7,1,1); },
+        () => { ctx.fillStyle=face; ctx.fillRect(x+6,y+13,3,3); ctx.fillStyle=edge; ctx.fillRect(x+9,y+14,1,2); ctx.fillStyle=C.sawDark; ctx.fillRect(x+6,y+15,3,1); },
+        () => { ctx.fillStyle=face; ctx.fillRect(x+0,y+6,3,3); ctx.fillStyle=edge; ctx.fillRect(x+1,y+9,1,2); ctx.fillStyle=tip; ctx.fillRect(x+0,y+6,1,2); },
+    ];
+    const teethD = [
+        () => { ctx.fillStyle=face; ctx.fillRect(x+12,y+1,3,3); ctx.fillStyle=edge; ctx.fillRect(x+12,y+1,1,2); ctx.fillStyle=tip; ctx.fillRect(x+14,y+1,1,1); },
+        () => { ctx.fillStyle=face; ctx.fillRect(x+12,y+12,3,3); ctx.fillStyle=C.sawDark; ctx.fillRect(x+13,y+13,2,2); ctx.fillStyle=edge; ctx.fillRect(x+12,y+14,1,1); },
+        () => { ctx.fillStyle=face; ctx.fillRect(x+1,y+12,3,3); ctx.fillStyle=C.sawDark; ctx.fillRect(x+1,y+13,2,2); ctx.fillStyle=edge; ctx.fillRect(x+3,y+14,1,1); },
+        () => { ctx.fillStyle=face; ctx.fillRect(x+1,y+1,3,3); ctx.fillStyle=edge; ctx.fillRect(x+1,y+3,1,1); ctx.fillStyle=tip; ctx.fillRect(x+1,y+1,2,1); },
+    ];
+    if (frame === 0 || frame === 2) teethC.forEach(fn => fn());
+    else teethD.forEach(fn => fn());
+
+    // Center bolt
+    ctx.fillStyle = C.sawDark;
+    ctx.fillRect(x+7, y+7, 3, 3);
+    ctx.fillStyle = GB.dark;
+    const bh = [[x+7,y+7],[x+8,y+7],[x+9,y+8],[x+7,y+9]][frame];
+    ctx.fillRect(bh[0], bh[1], 1, 1);
+}
+
+// ══════════════════════════════════════
+// ── DRAW ──
+// ══════════════════════════════════════
+
+function draw() {
+    const now = performance.now();
+    ctx.fillStyle = C.bg;
+    ctx.fillRect(0, 0, W, H);
+
+    // Background stars — parallax behind everything
+    for (const star of bgStars) {
+        const sy = (star.y - cam.y * star.speed) % H;
+        const sx = star.x * W;
+        ctx.globalAlpha = star.alpha;
+        ctx.fillStyle = GB.dark;
+        ctx.fillRect(sx, sy < 0 ? sy + H : sy, star.size, star.size);
+    }
+    ctx.globalAlpha = 1;
+
+    if (state === 'title') {
+        ctx.fillStyle = GB.mid;
+        ctx.font = 'bold 14px monospace';
+        ctx.textAlign = 'center';
+        ctx.fillText('KETZAL', W / 2, H / 2 - 16);
+        ctx.fillStyle = C.text;
+        ctx.font = '6px monospace';
+        ctx.fillText('tap to rise', W / 2, H / 2 + 8);
+        ctx.fillText('swipe to dodge', W / 2, H / 2 + 18);
+        ctx.fillStyle = 'rgba(224,248,208,0.4)';
+        ctx.font = '5px monospace';
+        ctx.fillText('tap or press any key', W / 2, H / 2 + 36);
+        // Animated snake (horizontal, 5 segments)
+        for (let i = 0; i < 5; i++) {
+            const sx = W / 2 - 40 + i * TILE + Math.sin(now / 400 + i) * 3;
+            const sy = H / 2 + 52 + Math.sin(now / 300) * 3 + Math.sin(now / 300 + i * 0.8) * 4;
+            if (SPRITE.head_full_up) {
+                if (i === 0) drawSprite('head_full_left', sx, sy); // facing left
+                else if (i === 4) drawSprite('tail_full_right', sx, sy); // tail pointing right
+                else drawSprite('body_h_full', sx, sy);
+                if (i === 1) drawWings(sx, sy, now, 'h'); // wings on neck, horizontal
+            } else {
+                tile3D(sx, sy, C.spring, C.springHL, C.springDark);
+                if (i === 0) aliveFace(sx, sy);
+                else springCoil(sx, sy);
+            }
+        }
+        return;
+    }
+
+    // Camera — follow upward, keep snake in lower portion of screen
+    if (snake.length > 0) {
+        cam.targetY = snake[0].y * TILE - H * 0.65;
+        cam.targetY = Math.max(0, cam.targetY);
+    }
+    cam.y += (cam.targetY - cam.y) * 0.15;
+
+    cam.sx = screenShake > 0.1 ? (Math.random() - 0.5) * screenShake : 0;
+    cam.sy = screenShake > 0.1 ? (Math.random() - 0.5) * screenShake : 0;
+    screenShake *= 0.85;
+
+    ctx.save();
+    ctx.translate(Math.floor(cam.sx), -Math.floor(cam.y + cam.sy));
+
+    const topR = Math.max(0, Math.floor(cam.y / TILE) - 1);
+    const botR = Math.min(gridRows - 1, Math.floor((cam.y + H) / TILE) + 1);
+
+    // Terrain + spikes
+    for (let r = topR; r <= botR; r++) {
+        for (let c = 0; c < COLS; c++) {
+            const t = grid[r][c];
+            const px = c * TILE, py = r * TILE;
+            if (t === 1) {
+                if (SPRITE.wall_center) {
+                    drawSprite(getWallSprite(r, c), px, py);
+                } else {
+                    tile3D(px, py, C.tile, C.tileHL, C.tileSH);
+                }
+            } else if (t === 2) {
+                if (SPRITE.mine) {
+                    drawSprite('mine', px, py);
+                } else {
+                    ctx.fillStyle = '#383040';
+                    ctx.fillRect(px + 4, py + 4, 8, 8);
+                    ctx.fillStyle = C.spike;
+                    ctx.fillRect(px + 3, py + 3, 3, 3);
+                    ctx.fillRect(px + 10, py + 3, 3, 3);
+                    ctx.fillRect(px + 3, py + 10, 3, 3);
+                    ctx.fillRect(px + 10, py + 10, 3, 3);
+                }
+            } else if (t === 3) {
+                drawSaw(px, py, now);
+            }
+        }
+    }
+
+    // Lava — everything below lavaY
+    const lavaScreenY = lavaY * TILE;
+    if (lavaScreenY < cam.y + H) {
+        const drawY = Math.max(0, lavaScreenY - cam.y);
+        // Lava body — deep red fill to bottom of screen
+        ctx.fillStyle = C.lavaDark;
+        ctx.fillRect(0, drawY + 3, W, H - drawY);
+        ctx.fillStyle = C.lava;
+        ctx.fillRect(0, drawY + 1, W, H - drawY - 2);
+        // Surface — animated bright crust
+        const surfFrame = Math.floor(performance.now() / 200) % 4;
+        for (let c = 0; c < COLS; c++) {
+            const sx = c * TILE;
+            ctx.fillStyle = C.lavaHL;
+            ctx.fillRect(sx, drawY, TILE, 3);
+            // Bright spots that shift
+            if ((c + surfFrame) % 3 === 0) {
+                ctx.fillStyle = C.lavaBright;
+                ctx.fillRect(sx + 2, drawY, 4, 2);
+            }
+            if ((c + surfFrame + 1) % 4 === 0) {
+                ctx.fillStyle = '#FFFFFF';
+                ctx.fillRect(sx + 5, drawY, 2, 1);
+            }
+        }
+        // Glow gradient above surface
+        ctx.globalAlpha = 0.08 + 0.04 * Math.sin(performance.now() / 300);
+        ctx.fillStyle = C.lava;
+        ctx.fillRect(0, Math.max(0, drawY - TILE * 2), W, TILE * 2);
+        ctx.globalAlpha = 1;
+    }
+
+    // Moving saws
+    for (const ms of movingSaws) {
+        const px = ms.x * TILE, py = ms.y * TILE;
+        if (py < cam.y - TILE || py > cam.y + H + TILE) continue; // off-screen cull
+        drawSaw(px, py, now);
+    }
+
+    // Snake
+    if (snakeAlive && snake.length > 0) {
+        for (let i = snake.length - 1; i >= 0; i--) {
+            const s = snake[i];
+            const px = s.x * TILE;
+            let py = s.y * TILE + fallOffset;
+            if (i === 0 && headBob > 0) py += Math.sin(headBob * Math.PI) * -3;
+
+            if (SPRITE.head_full_up) {
+                const len = snake.length;
+                if (len === 1 && i === 0) {
+                    // Single segment — combined head+tail (pre-rotated, no canvas rotation)
+                    drawSprite(getHeadtailDirSprite(snakeDir), px, py);
+                    // Wings on head when length 1
+                    const wDir = (snakeDir.x !== 0) ? 'h' : 'v';
+                    drawWings(px, py, now, wDir);
+                } else if (i === 0) {
+                    // Head — pre-rotated directional sprite (no canvas rotation)
+                    drawSprite(getHeadDirSprite(s, snake[1], len), px, py);
+                } else if (i === len - 1) {
+                    // Tail — pre-rotated directional sprite (no canvas rotation)
+                    drawSprite(getTailDirSprite(s, snake[i - 1], len), px, py);
+                } else {
+                    // Body — direction-aware with L-turns and width tiers
+                    const sprite = getSnakeBodySprite(snake[i-1], s, snake[i+1], i, len);
+                    drawSprite(sprite, px, py);
+                }
+                if (i === 1) {
+                    // Wings on neck — determine direction from head to neck
+                    const dx = snake[0].x - s.x;
+                    const dy = snake[0].y - s.y;
+                    const wDir = (dx !== 0) ? 'h' : 'v';
+                    drawWings(px, py, now, wDir);
+                }
+            } else {
+                tile3D(px, py, C.spring, C.springHL, C.springDark);
+                if (i === 0) aliveFace(px, py);
+                else if (i === 1) { springCoil(px, py); drawWings(px, py, now, 'v'); }
+                else springCoil(px, py);
+            }
+        }
+
+        // Direction ghost
+        if (state === 'playing' && !falling) {
+            const h = snake[0];
+            const nx = h.x + snakeDir.x, ny = h.y + snakeDir.y;
+            if (nx >= 0 && nx < COLS && ny >= 0 && ny < gridRows && !blocked(nx, ny)) {
+                ctx.globalAlpha = 0.15 + 0.08 * Math.sin(now / 300);
+                ctx.fillStyle = C.springHL;
+                ctx.fillRect(nx * TILE + 2, ny * TILE + 2, TILE - 4, TILE - 4);
+                ctx.globalAlpha = 1;
+            }
+        }
+    }
+
+    // Particles
+    for (const p of particles) {
+        ctx.globalAlpha = Math.max(0, p.life / 0.8);
+        ctx.fillStyle = p.color;
+        ctx.fillRect(p.x - p.size / 2, p.y - p.size / 2, p.size, p.size);
+    }
+    ctx.globalAlpha = 1;
+
+    // Severed chunks (tumbling snake bits)
+    for (const ch of chunks) {
+        ctx.globalAlpha = Math.max(0, ch.life / 1.2);
+        ctx.save();
+        ctx.translate(ch.x, ch.y);
+        ctx.rotate(ch.rot);
+        const s = ch.size;
+        if (SPRITE.body_v_med) {
+            drawSprite('body_v_med', -s/2, -s/2);
+        } else {
+            tile3D(-s/2, -s/2, C.spring, C.springHL, C.springDark);
+        }
+        // Red gore at cut end
+        ctx.fillStyle = '#D03040';
+        ctx.fillRect(-s/2, -1, 3, 4);
+        ctx.restore();
+    }
+    ctx.globalAlpha = 1;
+
+    // Float texts
+    for (const ft of floatTexts) {
+        ctx.globalAlpha = Math.max(0, ft.life / 1.5);
+        ctx.fillStyle = ft.color;
+        ctx.font = 'bold 7px monospace';
+        ctx.textAlign = 'center';
+        ctx.fillText(ft.text, ft.x + TILE / 2, ft.y);
+    }
+    ctx.globalAlpha = 1;
+
+    ctx.restore();
+
+    // White flash
+    if (whiteFlash > 0.01) {
+        ctx.globalAlpha = whiteFlash;
+        ctx.fillStyle = GB.light;
+        ctx.fillRect(0, 0, W, H);
+        ctx.globalAlpha = 1;
+    }
+
+    // HUD
+    ctx.fillStyle = C.text;
+    ctx.font = 'bold 7px monospace';
+    ctx.textAlign = 'left';
+    ctx.fillText('LVL ' + currentLevel(), 3, 9);
+    ctx.textAlign = 'center';
+    ctx.fillText('h:' + height, W / 2, 9);
+    ctx.textAlign = 'right';
+    ctx.fillText('len ' + snakeLen, W - 3, 9);
+
+    ctx.fillStyle = 'rgba(224,248,208,0.4)';
+    ctx.font = '5px monospace';
+    ctx.textAlign = 'left';
+    if (deaths > 0) ctx.fillText(deaths + 'd ' + moveCount + 'm', 3, H - 4);
+    if (bestHeight > height) {
+        ctx.textAlign = 'right';
+        ctx.fillText('best ' + bestHeight, W - 3, H - 4);
+    }
+
+    if (moveCount < 5) {
+        ctx.fillStyle = 'rgba(224,248,208,0.25)';
+        ctx.font = '5px monospace';
+        ctx.textAlign = 'center';
+        ctx.fillText('tap=up  swipe=dodge  r=reset', W / 2, H - 12);
+    }
+
+    // Dead overlay
+    if (state === 'dead' && deathTimer <= 0.5) {
+        ctx.fillStyle = 'rgba(208,48,64,0.12)';
+        ctx.fillRect(0, 0, W, H);
+        ctx.fillStyle = C.spike;
+        ctx.font = 'bold 12px monospace';
+        ctx.textAlign = 'center';
+        ctx.fillText('DEAD', W / 2, H / 2 - 10);
+        ctx.fillStyle = C.text;
+        ctx.font = '6px monospace';
+        ctx.fillText('height ' + height, W / 2, H / 2 + 6);
+        if (bestHeight > 0) ctx.fillText('best ' + bestHeight, W / 2, H / 2 + 16);
+        ctx.fillStyle = 'rgba(224,248,208,0.5)';
+        ctx.fillText('tap / key to restart', W / 2, H / 2 + 30);
+    }
+}
+
+// ══════════════════════════════════════
+// ── LOOP ──
+// ══════════════════════════════════════
+
+let lastTime = 0;
+function loop(ts) {
+    const dt = Math.min(0.05, (ts - lastTime) / 1000);
+    lastTime = ts;
+
+    if (headBob > 0) headBob = Math.max(0, headBob - dt * 6);
+    if (deathTimer > 0) deathTimer -= dt;
+    if (whiteFlash > 0) whiteFlash *= 0.88;
+
+    const wasFalling = falling;
+    if (falling) {
+        fallOffset += dt * 400;
+        if (fallOffset >= 0) { fallOffset = 0; falling = false; }
+    }
+
+    for (let i = particles.length - 1; i >= 0; i--) {
+        const p = particles[i];
+        p.x += p.vx * dt; p.y += p.vy * dt;
+        p.vy += 200 * dt; p.life -= dt;
+        if (p.life <= 0) particles.splice(i, 1);
+    }
+    for (let i = floatTexts.length - 1; i >= 0; i--) {
+        const f = floatTexts[i];
+        f.y += f.vy * dt; f.life -= dt;
+        if (f.life <= 0) floatTexts.splice(i, 1);
+    }
+    // Chunk physics — fly, tumble, gravity
+    for (let i = chunks.length - 1; i >= 0; i--) {
+        const ch = chunks[i];
+        ch.x += ch.vx * dt; ch.y += ch.vy * dt;
+        ch.vy += 250 * dt; // gravity
+        ch.rot += ch.vr * dt; // tumble
+        ch.life -= dt;
+        // Trail guts as they fly
+        if (Math.random() < 0.3) {
+            particles.push({
+                x: ch.x, y: ch.y,
+                vx: (Math.random() - 0.5) * 20,
+                vy: (Math.random() - 0.5) * 20,
+                color: Math.random() < 0.7 ? GB.mid : '#D03040',
+                life: 0.2 + Math.random() * 0.3,
+                size: 1 + Math.random()
+            });
+        }
+        if (ch.life <= 0) chunks.splice(i, 1);
+    }
+
+    // Moving saws patrol
+    if (snakeAlive && state === 'playing') {
+        sawTimer += dt;
+        if (sawTimer >= sawTick()) {
+            sawTimer = 0;
+            updateMovingSaws();
+        }
+    }
+
+    // Rising lava
+    if (snakeAlive && state === 'playing') {
+        lavaY -= lavaSpeed() * dt;
+        // Bubble particles at the surface
+        lavaBubbleTimer += dt;
+        if (lavaBubbleTimer > 0.15) {
+            lavaBubbleTimer = 0;
+            const bx = (1 + Math.floor(Math.random() * (COLS - 2))) * TILE + Math.random() * TILE;
+            const by = lavaY * TILE;
+            if (by > cam.y - TILE && by < cam.y + H + TILE) {
+                spawnP(bx, by, C.lavaHL, 1, 20);
+                if (Math.random() < 0.3) spawnP(bx, by, C.lavaBright, 1, 15);
+            }
+        }
+        // Lava kills any segment it touches
+        for (const s of snake) {
+            if (s.y >= lavaY) {
+                SFX.lavaDeath();
+                // Extra lava death particles — sizzle and steam
+                for (const seg of snake) {
+                    const cx = seg.x * TILE + TILE / 2, cy = seg.y * TILE + TILE / 2;
+                    spawnP(cx, cy, C.lava, 5, 80);
+                    spawnP(cx, cy, C.lavaBright, 3, 60);
+                    spawnP(cx, cy - 8, '#FFFFFF', 2, 40); // steam
+                }
+                die();
+                break;
+            }
+        }
+    }
+
+    // Gravity: drop when airborne, that's it
+    if (snakeAlive && state === 'playing' && !falling) {
+        if (!snakeSupported()) {
+            gravityTimer += dt;
+            if (gravityTimer >= GRAVITY_TICK) {
+                gravityTimer = 0;
+                gravityDrop();
+            }
+        }
+    }
+    // Play land sound when fall animation finishes and snake is now on ground
+    if (!falling && wasFalling && snakeAlive && snakeSupported()) {
+        SFX.land();
+        screenShake = 1.5;
+        // Landing dust burst from head
+        const lx = snake[0].x * TILE + TILE / 2, ly = snake[0].y * TILE;
+        spawnP(lx, ly, '#8B7D6B', 4, 40);
+        spawnP(lx, ly, '#A09080', 3, 30);
+        // Check stuck after landing
+        if (isStuck()) {
+            spawnText(snake[0].x * TILE, snake[0].y * TILE - TILE, 'STUCK!', C.spike);
+            SFX.stuck();
+            die();
+        }
+    }
+
+    pollGamepad();
+    draw();
+    drawJoystick();
+    requestAnimationFrame(loop);
+}
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>

@@ -1,0 +1,1562 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>INCHWORM</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+html, body {
+    width: 100%; height: 100%; overflow: hidden;
+    background: #10101E;
+    touch-action: none;
+    user-select: none;
+    -webkit-user-select: none;
+}
+canvas { display: block; image-rendering: pixelated; }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<script>
+const canvas = document.getElementById('c');
+const ctx = canvas.getContext('2d');
+
+// ── Config ──
+const TILE = 12;
+const COLS = 8;
+let VISIBLE_ROWS = 22;
+const START_LENGTH = 4;
+const SECTION_H = 12;
+const TOTAL_SECTIONS = 30; // pre-generate this many sections upward
+const GRID_HEIGHT = TOTAL_SECTIONS * SECTION_H + 20; // total rows
+
+// ── Colors (Sediment palette) ──
+const C = {
+    bg: '#10101E',
+    tile: '#2E3450', tileHL: '#484E6A', tileSH: '#1C2038',
+    spike: '#D03040',
+    spring: '#60C048', springHL: '#B0E890', springDark: '#1C3828',
+    saw: '#888898', sawHL: '#B0B0C0', sawDark: '#484858',
+    text: '#E0D0B8',
+    gold: '#F0A830',
+    lava: '#D03020', lavaHL: '#F06030', lavaDark: '#801810', lavaGlow: '#FF4020'
+};
+
+// ══════════════════════════════════════
+// ── SFX (procedural Web Audio) ──
+// ══════════════════════════════════════
+
+let actx = null, sfxGain = null;
+function ensureAudio() {
+    if (!actx) {
+        actx = new (window.AudioContext || window.webkitAudioContext)();
+        sfxGain = actx.createGain();
+        sfxGain.connect(actx.destination);
+        sfxGain.gain.value = 0.7;
+    }
+    if (actx.state === 'suspended') actx.resume();
+    return actx;
+}
+function dest() { return sfxGain || ensureAudio() && sfxGain; }
+
+const SFX = {
+    move() {
+        const c = ensureAudio(), t = c.currentTime;
+        const o = c.createOscillator(), g = c.createGain();
+        o.connect(g); g.connect(dest());
+        o.type = 'square';
+        o.frequency.setValueAtTime(280, t);
+        o.frequency.exponentialRampToValueAtTime(400, t + 0.04);
+        g.gain.setValueAtTime(0.06, t);
+        g.gain.exponentialRampToValueAtTime(0.001, t + 0.06);
+        o.start(t); o.stop(t + 0.06);
+    },
+    bump() {
+        const c = ensureAudio(), t = c.currentTime;
+        const o = c.createOscillator(), g = c.createGain();
+        o.connect(g); g.connect(dest());
+        o.type = 'triangle';
+        o.frequency.setValueAtTime(160, t);
+        o.frequency.exponentialRampToValueAtTime(80, t + 0.06);
+        g.gain.setValueAtTime(0.08, t);
+        g.gain.exponentialRampToValueAtTime(0.001, t + 0.08);
+        o.start(t); o.stop(t + 0.08);
+    },
+    death() {
+        const c = ensureAudio(), t = c.currentTime;
+        const o = c.createOscillator(), g = c.createGain();
+        o.connect(g); g.connect(dest());
+        o.type = 'sawtooth';
+        o.frequency.setValueAtTime(150, t);
+        o.frequency.exponentialRampToValueAtTime(40, t + 0.2);
+        g.gain.setValueAtTime(0.15, t);
+        g.gain.exponentialRampToValueAtTime(0.001, t + 0.25);
+        o.start(t); o.stop(t + 0.25);
+        const buf = c.createBuffer(1, c.sampleRate * 0.1, c.sampleRate);
+        const d = buf.getChannelData(0);
+        for (let i = 0; i < d.length; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / d.length);
+        const n = c.createBufferSource(); n.buffer = buf;
+        const ng = c.createGain();
+        n.connect(ng); ng.connect(dest());
+        ng.gain.setValueAtTime(0.08, t);
+        ng.gain.exponentialRampToValueAtTime(0.001, t + 0.1);
+        n.start(t);
+    },
+    grow() {
+        const c = ensureAudio(), t = c.currentTime;
+        [523, 659, 784, 1047].forEach((f, i) => {
+            const o = c.createOscillator(), g = c.createGain();
+            o.connect(g); g.connect(dest());
+            o.type = 'square';
+            const st = t + i * 0.08;
+            o.frequency.setValueAtTime(f, st);
+            g.gain.setValueAtTime(0.001, t);
+            g.gain.linearRampToValueAtTime(0.1, st);
+            g.gain.exponentialRampToValueAtTime(0.001, st + 0.15);
+            o.start(st); o.stop(st + 0.15);
+        });
+    },
+    land() {
+        const c = ensureAudio(), t = c.currentTime;
+        const o = c.createOscillator(), g = c.createGain();
+        o.connect(g); g.connect(dest());
+        o.type = 'triangle';
+        o.frequency.setValueAtTime(160, t);
+        o.frequency.exponentialRampToValueAtTime(80, t + 0.06);
+        g.gain.setValueAtTime(0.06, t);
+        g.gain.exponentialRampToValueAtTime(0.001, t + 0.08);
+        o.start(t); o.stop(t + 0.08);
+    },
+    stuck() {
+        const c = ensureAudio(), t = c.currentTime;
+        const o = c.createOscillator(), g = c.createGain();
+        o.connect(g); g.connect(dest());
+        o.type = 'sawtooth';
+        o.frequency.setValueAtTime(200, t);
+        o.frequency.exponentialRampToValueAtTime(60, t + 0.3);
+        g.gain.setValueAtTime(0.1, t);
+        g.gain.exponentialRampToValueAtTime(0.001, t + 0.35);
+        o.start(t); o.stop(t + 0.35);
+    },
+    chop() {
+        const c = ensureAudio(), t = c.currentTime;
+        const o = c.createOscillator(), g = c.createGain();
+        o.connect(g); g.connect(dest());
+        o.type = 'sawtooth';
+        o.frequency.setValueAtTime(900, t);
+        o.frequency.exponentialRampToValueAtTime(120, t + 0.12);
+        g.gain.setValueAtTime(0.14, t);
+        g.gain.exponentialRampToValueAtTime(0.001, t + 0.15);
+        o.start(t); o.stop(t + 0.15);
+        const buf = c.createBuffer(1, c.sampleRate * 0.12, c.sampleRate);
+        const d = buf.getChannelData(0);
+        for (let i = 0; i < d.length; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / d.length, 0.5);
+        const n = c.createBufferSource(); n.buffer = buf;
+        const ng = c.createGain();
+        const flt = c.createBiquadFilter();
+        flt.type = 'lowpass'; flt.frequency.value = 800;
+        n.connect(flt); flt.connect(ng); ng.connect(dest());
+        ng.gain.setValueAtTime(0.15, t);
+        ng.gain.exponentialRampToValueAtTime(0.001, t + 0.12);
+        n.start(t);
+    },
+    swap() {
+        const c = ensureAudio(), t = c.currentTime;
+        const o = c.createOscillator(), g = c.createGain();
+        o.connect(g); g.connect(dest());
+        o.type = 'square';
+        o.frequency.setValueAtTime(500, t);
+        o.frequency.exponentialRampToValueAtTime(800, t + 0.06);
+        g.gain.setValueAtTime(0.08, t);
+        g.gain.exponentialRampToValueAtTime(0.001, t + 0.08);
+        o.start(t); o.stop(t + 0.08);
+    },
+    lavaRise() {
+        const c = ensureAudio(), t = c.currentTime;
+        const o = c.createOscillator(), g = c.createGain();
+        o.connect(g); g.connect(dest());
+        o.type = 'sawtooth';
+        o.frequency.setValueAtTime(60, t);
+        o.frequency.exponentialRampToValueAtTime(40, t + 0.4);
+        g.gain.setValueAtTime(0.04, t);
+        g.gain.exponentialRampToValueAtTime(0.001, t + 0.5);
+        o.start(t); o.stop(t + 0.5);
+    },
+    lavaBurn() {
+        const c = ensureAudio(), t = c.currentTime;
+        const o = c.createOscillator(), g = c.createGain();
+        o.connect(g); g.connect(dest());
+        o.type = 'sawtooth';
+        o.frequency.setValueAtTime(300, t);
+        o.frequency.exponentialRampToValueAtTime(80, t + 0.3);
+        g.gain.setValueAtTime(0.15, t);
+        g.gain.exponentialRampToValueAtTime(0.001, t + 0.35);
+        o.start(t); o.stop(t + 0.35);
+        // Sizzle noise
+        const buf = c.createBuffer(1, c.sampleRate * 0.15, c.sampleRate);
+        const d = buf.getChannelData(0);
+        for (let i = 0; i < d.length; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / d.length, 0.3);
+        const n = c.createBufferSource(); n.buffer = buf;
+        const ng = c.createGain();
+        n.connect(ng); ng.connect(dest());
+        ng.gain.setValueAtTime(0.1, t);
+        ng.gain.exponentialRampToValueAtTime(0.001, t + 0.15);
+        n.start(t);
+    }
+};
+
+// ══════════════════════════════════════
+// ── JUICE ──
+// ══════════════════════════════════════
+
+let screenShake = 0, whiteFlash = 0;
+let particles = [], floatTexts = [];
+
+function spawnP(x, y, color, n, spread) {
+    for (let i = 0; i < n; i++) {
+        particles.push({
+            x, y,
+            vx: (Math.random() - 0.5) * spread,
+            vy: (Math.random() - 0.5) * spread - spread * 0.3,
+            color, life: 0.4 + Math.random() * 0.4,
+            size: 1 + Math.random() * 2
+        });
+    }
+}
+function spawnText(x, y, text, color) {
+    floatTexts.push({ x, y, text, color, life: 1.5, vy: -30 });
+}
+
+let chunks = [];
+function spawnChunk(x, y) {
+    const angle = Math.random() * Math.PI * 2;
+    const speed = 60 + Math.random() * 80;
+    chunks.push({
+        x, y,
+        vx: Math.cos(angle) * speed,
+        vy: Math.sin(angle) * speed - 80,
+        rot: 0,
+        vr: (Math.random() - 0.5) * 15,
+        life: 1.2 + Math.random() * 0.6,
+        size: TILE * 0.7 + Math.random() * 3,
+    });
+}
+
+// ══════════════════════════════════════
+// ── STATE ──
+// ══════════════════════════════════════
+
+let W, H, scale;
+let state = 'title';
+let wormLen = START_LENGTH;
+let deaths = 0, moveCount = 0;
+let height = 0, maxHeight = 0;
+let bestHeight = parseInt(localStorage.getItem('inchwormBest') || '0');
+
+let grid = [], gridRows = 0, sectionsGenerated = 0;
+let worm = [], wormAlive = true;
+let activeEnd = 0;
+let wormDir = { x: 0, y: -1 };
+let startRow = 0;
+
+let cam = { y: 0, targetY: 0, sx: 0, sy: 0 };
+let headBob = 0, tailBob = 0, deathTimer = 0;
+let fallOffset = 0, falling = false;
+let gravityTimer = 0;
+const GRAVITY_TICK = 0.15;
+
+// LAVA — rises from below, no mercy
+let lavaRow = 0; // current lava surface (fractional row)
+const LAVA_START_DELAY = 3; // seconds before lava starts rising
+const LAVA_BASE_SPEED = 0.4; // rows per second
+let lavaTimer = 0;
+let lavaStarted = false;
+
+// Growth tracking
+let nextGrowth = 0;
+
+// ══════════════════════════════════════
+// ── MOVING SAWS ──
+// ══════════════════════════════════════
+
+let movingSaws = [];
+
+function spawnMovingSaw(col, rowMin, rowMax, speed) {
+    movingSaws.push({
+        x: col,
+        y: (rowMin + rowMax) / 2,
+        minR: rowMin, maxR: rowMax,
+        speed: speed, // rows per second
+        dir: 1, // 1 = moving down, -1 = moving up
+    });
+}
+
+function updateMovingSaws(dt) {
+    for (const ms of movingSaws) {
+        ms.y += ms.dir * ms.speed * dt;
+        if (ms.y >= ms.maxR) { ms.y = ms.maxR; ms.dir = -1; }
+        if (ms.y <= ms.minR) { ms.y = ms.minR; ms.dir = 1; }
+    }
+}
+
+function checkMovingSawCollision() {
+    if (!wormAlive) return;
+    for (const ms of movingSaws) {
+        const sawRow = Math.round(ms.y);
+        const sawCol = ms.x;
+        // Check head
+        const head = getHead();
+        if (head.x === sawCol && head.y === sawRow) { die(); return; }
+        // Check body — trim from tail side
+        const headIdx = activeEnd === 0 ? 0 : worm.length - 1;
+        if (activeEnd === 0) {
+            for (let i = 1; i < worm.length; i++) {
+                if (worm[i].x === sawCol && worm[i].y === sawRow) {
+                    const cut = worm.splice(i);
+                    wormLen = worm.length;
+                    for (const s of cut) {
+                        const cx = s.x * TILE + TILE / 2, cy = s.y * TILE + TILE / 2;
+                        spawnP(cx, cy, '#40A030', 6, 100);
+                        spawnP(cx, cy, '#80E060', 4, 80);
+                        spawnChunk(cx, cy);
+                    }
+                    spawnText(head.x * TILE, head.y * TILE - TILE, 'SLICED! -' + cut.length, '#80E060');
+                    SFX.chop(); screenShake = 6;
+                    if (worm.length < 2) die();
+                    return;
+                }
+            }
+        } else {
+            for (let i = worm.length - 2; i >= 0; i--) {
+                if (worm[i].x === sawCol && worm[i].y === sawRow) {
+                    const cut = worm.splice(0, i + 1);
+                    wormLen = worm.length;
+                    for (const s of cut) {
+                        const cx = s.x * TILE + TILE / 2, cy = s.y * TILE + TILE / 2;
+                        spawnP(cx, cy, '#40A030', 6, 100);
+                        spawnP(cx, cy, '#80E060', 4, 80);
+                        spawnChunk(cx, cy);
+                    }
+                    spawnText(head.x * TILE, head.y * TILE - TILE, 'SLICED! -' + cut.length, '#80E060');
+                    SFX.chop(); screenShake = 6;
+                    if (worm.length < 2) die();
+                    return;
+                }
+            }
+        }
+    }
+}
+
+// ══════════════════════════════════════
+// ── LEVEL GEN (guaranteed passable) ──
+// ══════════════════════════════════════
+
+function initWorld() {
+    grid = []; gridRows = 0; sectionsGenerated = 0;
+    movingSaws = [];
+
+    gridRows = GRID_HEIGHT;
+    for (let r = 0; r < gridRows; r++) {
+        grid[r] = new Array(COLS).fill(0);
+        grid[r][0] = 1;
+        grid[r][COLS - 1] = 1;
+    }
+
+    // Floor at the very bottom
+    for (let c = 0; c < COLS; c++) grid[gridRows - 1][c] = 1;
+
+    // Starting platform (wide, safe)
+    startRow = gridRows - 3;
+    for (let c = 1; c < COLS - 1; c++) grid[startRow + 1][c] = 1;
+
+    generateClimbingSections();
+}
+
+function generateClimbingSections() {
+    const inner = COLS - 2; // columns 1 through COLS-2
+    const topLimit = 6;
+    let curRow = startRow; // current "floor" the worm is on
+    let side = Math.random() < 0.5 ? 0 : 1; // 0 = left-biased, 1 = right-biased
+    let sectionNum = 0;
+
+    while (curRow - 4 > topLimit) {
+        const diff = Math.min(sectionNum, 30);
+        const wLen = START_LENGTH + Math.floor(sectionNum / 3);
+        // Vertical gap: how far up the next platform is
+        // Must be reachable: gap <= wLen (worm can bridge vertically by its length)
+        const maxStep = Math.max(2, Math.min(wLen - 1, 5));
+        const step = 2 + Math.floor(Math.random() * Math.min(maxStep - 1, 3));
+        const platRow = curRow - step;
+        if (platRow <= topLimit) break;
+
+        // Alternate sides for zigzag climbing pattern
+        // Platform covers part of the width
+        const platW = 2 + Math.floor(Math.random() * Math.max(1, inner - 3));
+        let platStart;
+        if (side === 0) {
+            platStart = 1; // left side
+        } else {
+            platStart = COLS - 1 - platW; // right side
+        }
+        // Clamp
+        platStart = Math.max(1, Math.min(platStart, COLS - 1 - platW));
+
+        const platEnd = platStart + platW; // exclusive
+        for (let c = platStart; c < platEnd; c++) {
+            grid[platRow][c] = 1;
+        }
+
+        // Find path columns: columns that are OPEN on BOTH the upper platform (platRow)
+        // and the lower platform (curRow). These are the only way through — never block them all.
+        // A column is "path" if it's not a wall and not part of either platform
+        const pathCols = [];
+        const safeCols = new Set(); // columns we must keep at least 2 of clear
+        for (let c = 1; c < COLS - 1; c++) {
+            // Open above the new platform AND open below it (between platforms)
+            const openAbovePlat = grid[platRow][c] !== 1;
+            const openBelowPlat = (curRow >= gridRows || grid[curRow][c] !== 1);
+            // A path column is one where the worm could pass vertically
+            if (openAbovePlat) pathCols.push(c);
+            // Also track columns open on the lower platform edge
+            if (openBelowPlat) safeCols.add(c);
+        }
+        // Combine: columns that are open exits from EITHER end of the gap
+        const protectedCols = new Set([...pathCols, ...safeCols]);
+
+        // Add static saws after section 3, but NEVER in protected columns
+        if (diff > 3) {
+            const nSaws = Math.min(Math.floor((diff - 3) * 0.2) + 1, 2);
+            for (let s = 0; s < nSaws; s++) {
+                const sawR = platRow + 1 + Math.floor(Math.random() * Math.max(1, step - 2));
+                // Pick from non-protected columns only
+                const candidates = [];
+                for (let c = 1; c < COLS - 1; c++) {
+                    if (!protectedCols.has(c)) candidates.push(c);
+                }
+                if (candidates.length === 0) continue; // no safe spot, skip
+                const sawC = candidates[Math.floor(Math.random() * candidates.length)];
+                if (sawR < curRow && grid[sawR][sawC] === 0 &&
+                    (sawR > 0 && grid[sawR-1][sawC] !== 1) &&
+                    (sawR < gridRows - 1 && grid[sawR+1][sawC] !== 1)) {
+                    grid[sawR][sawC] = 3;
+                }
+            }
+        }
+
+        // Add moving saws after section 6, also avoiding protected columns
+        if (diff > 6 && Math.random() < 0.4) {
+            const candidates = [];
+            for (let c = 1; c < COLS - 1; c++) {
+                if (protectedCols.has(c)) continue;
+                let clear = true;
+                for (let r = platRow + 1; r < curRow; r++) {
+                    if (grid[r][c] === 1 || grid[r][c] === 3) { clear = false; break; }
+                }
+                if (clear) candidates.push(c);
+            }
+            if (candidates.length > 0 && curRow - platRow > 3) {
+                const mSawCol = candidates[Math.floor(Math.random() * candidates.length)];
+                const speed = 1.5 + diff * 0.15;
+                spawnMovingSaw(mSawCol, platRow + 1, curRow - 1, speed);
+            }
+        }
+
+        side = 1 - side; // alternate
+        curRow = platRow;
+        sectionNum++;
+    }
+
+    // Victory platform at the top
+    for (let c = 1; c < COLS - 1; c++) grid[topLimit][c] = 1;
+    // Crown marker
+    grid[topLimit - 1][Math.floor(COLS / 2)] = 4; // 4 = victory crown
+}
+
+// ══════════════════════════════════════
+// ── WORM ──
+// ══════════════════════════════════════
+
+function initWorm() {
+    worm = [];
+    const col = Math.floor(COLS / 2);
+    for (let i = 0; i < wormLen; i++) {
+        worm.push({ x: col, y: startRow - i });
+    }
+    activeEnd = 0;
+    wormDir = { x: 0, y: -1 };
+    wormAlive = true;
+    fallOffset = 0; falling = false;
+    gravityTimer = 0;
+    lavaRow = startRow + 5; // lava starts below the starting platform
+    lavaTimer = 0;
+    lavaStarted = false;
+    nextGrowth = SECTION_H * 2;
+}
+
+// Check if worm reached the victory crown
+function checkVictory() {
+    for (const s of worm) {
+        if (s.y >= 0 && s.y < gridRows && grid[s.y][s.x] === 4) {
+            state = 'victory';
+            deathTimer = 0;
+            screenShake = 8;
+            whiteFlash = 0.3;
+            SFX.grow();
+            // Celebration particles
+            for (let i = 0; i < 30; i++) {
+                const cx = s.x * TILE + TILE / 2, cy = s.y * TILE + TILE / 2;
+                spawnP(cx, cy, C.gold, 1, 150);
+                spawnP(cx, cy, '#FFFFF0', 1, 100);
+            }
+            return true;
+        }
+    }
+    return false;
+}
+
+function getHead() { return activeEnd === 0 ? worm[0] : worm[worm.length - 1]; }
+function getTail() { return activeEnd === 0 ? worm[worm.length - 1] : worm[0]; }
+
+function blocked(x, y) {
+    if (x < 0 || x >= COLS || y < 0 || y >= gridRows) return true;
+    return grid[y][x] === 1;
+}
+
+function isSaw(x, y) {
+    return y >= 0 && y < gridRows && grid[y][x] === 3;
+}
+
+function checkSaws() {
+    const head = getHead();
+    if (isSaw(head.x, head.y)) { die(); return; }
+
+    // Body saws = trim. Trim from the TAIL side (opposite of active end)
+    if (activeEnd === 0) {
+        // Active head is index 0, trim from the back
+        for (let i = 1; i < worm.length; i++) {
+            if (isSaw(worm[i].x, worm[i].y)) {
+                const cut = worm.splice(i);
+                wormLen = worm.length;
+                for (const s of cut) {
+                    const cx = s.x * TILE + TILE / 2, cy = s.y * TILE + TILE / 2;
+                    spawnP(cx, cy, '#40A030', 6, 100);
+                    spawnP(cx, cy, '#80E060', 4, 80);
+                    spawnP(cx, cy, '#1C5018', 3, 40);
+                    spawnChunk(cx, cy);
+                }
+                spawnText(head.x * TILE, head.y * TILE - TILE, 'CHOPPED! -' + cut.length, '#80E060');
+                SFX.chop(); screenShake = 6;
+                if (worm.length < 2) { die(); }
+                return;
+            }
+        }
+    } else {
+        // Active head is last index, trim from the front
+        for (let i = worm.length - 2; i >= 0; i--) {
+            if (isSaw(worm[i].x, worm[i].y)) {
+                const cut = worm.splice(0, i + 1);
+                wormLen = worm.length;
+                for (const s of cut) {
+                    const cx = s.x * TILE + TILE / 2, cy = s.y * TILE + TILE / 2;
+                    spawnP(cx, cy, '#40A030', 6, 100);
+                    spawnP(cx, cy, '#80E060', 4, 80);
+                    spawnP(cx, cy, '#1C5018', 3, 40);
+                    spawnChunk(cx, cy);
+                }
+                spawnText(head.x * TILE, head.y * TILE - TILE, 'CHOPPED! -' + cut.length, '#80E060');
+                SFX.chop(); screenShake = 6;
+                if (worm.length < 2) { die(); }
+                return;
+            }
+        }
+    }
+}
+
+function wormSupported() {
+    for (const s of worm) {
+        const b = s.y + 1;
+        if (b >= gridRows) return true;
+        if (grid[b][s.x] === 1) return true;
+        // Supported by another worm segment below
+    }
+    return false;
+}
+
+function gravityDrop() {
+    if (!wormAlive || wormSupported()) return false;
+
+    let canFall = true;
+    for (const s of worm) {
+        const b = s.y + 1;
+        if (b >= gridRows || grid[b][s.x] === 1) { canFall = false; break; }
+    }
+    if (!canFall) return false;
+
+    // Check self-collision during fall
+    for (const s of worm) s.y++;
+
+    // Height update (height = how far above start)
+    updateHeight();
+
+    // Saw check
+    const head = getHead();
+    if (isSaw(head.x, head.y)) { die(); return true; }
+    checkSaws();
+
+    fallOffset = -TILE;
+    falling = true;
+
+    return true;
+}
+
+function updateHeight() {
+    // Height = startRow - highest worm segment row (lower row = higher position)
+    let minRow = gridRows;
+    for (const s of worm) {
+        if (s.y < minRow) minRow = s.y;
+    }
+    height = startRow - minRow;
+    if (height > maxHeight) {
+        maxHeight = height;
+        if (maxHeight > bestHeight) {
+            bestHeight = maxHeight;
+            localStorage.setItem('inchwormBest', bestHeight);
+        }
+        // height progress tracked for lava pacing
+    }
+}
+
+function moveWorm(dx, dy) {
+    if (!wormAlive || state !== 'playing') return;
+
+    const headIdx = activeEnd === 0 ? 0 : worm.length - 1;
+    const head = worm[headIdx];
+    const secondIdx = activeEnd === 0 ? 1 : worm.length - 2;
+
+    // Reverse check — if heading into second segment and worm is straight, flip
+    if (worm.length >= 2) {
+        const second = worm[secondIdx];
+        if (head.x + dx === second.x && head.y + dy === second.y) {
+            // Check if straight
+            const allSameX = worm.every(s => s.x === worm[0].x);
+            const allSameY = worm.every(s => s.y === worm[0].y);
+            if (allSameX || allSameY) {
+                moveCount++;
+                // Flip active end instead of reversing array
+                activeEnd = activeEnd === 0 ? 1 : 0;
+                wormDir = { x: dx, y: dy };
+                SFX.swap();
+                headBob = 1;
+                tailBob = 1;
+                gravityTimer = 0;
+                return;
+            }
+            SFX.bump(); screenShake = 2; return;
+        }
+    }
+
+    const hx = head.x + dx, hy = head.y + dy;
+
+    if (blocked(hx, hy)) { SFX.bump(); screenShake = 2; return; }
+
+    // Self collision (tail end vacates)
+    for (let i = 0; i < worm.length - 1; i++) {
+        if (worm[i].x === hx && worm[i].y === hy) {
+            // Allow if it's the very last segment (it vacates)
+            if ((activeEnd === 0 && i === worm.length - 1) ||
+                (activeEnd === 1 && i === 0)) continue;
+            SFX.bump(); screenShake = 2; return;
+        }
+    }
+    // Also check last segment explicitly
+    const lastCheck = activeEnd === 0 ? worm.length - 1 : 0;
+    // The tail-end segment vacates, so skip collision with it
+    for (let i = 0; i < worm.length; i++) {
+        if (i === headIdx || i === lastCheck) continue;
+        if (worm[i].x === hx && worm[i].y === hy) {
+            SFX.bump(); screenShake = 2; return;
+        }
+    }
+
+    moveCount++;
+
+    // Move: shift segments from tail toward head, then place head
+    if (activeEnd === 0) {
+        for (let i = worm.length - 1; i > 0; i--) {
+            worm[i].x = worm[i - 1].x;
+            worm[i].y = worm[i - 1].y;
+        }
+        worm[0].x = hx; worm[0].y = hy;
+    } else {
+        for (let i = 0; i < worm.length - 1; i++) {
+            worm[i].x = worm[i + 1].x;
+            worm[i].y = worm[i + 1].y;
+        }
+        worm[worm.length - 1].x = hx;
+        worm[worm.length - 1].y = hy;
+    }
+
+    wormDir = { x: dx, y: dy };
+    SFX.move();
+    if (activeEnd === 0) headBob = 1;
+    else tailBob = 1;
+
+    updateHeight();
+
+    // Saw check (static + moving)
+    if (isSaw(hx, hy)) { die(); return; }
+    checkSaws();
+    if (!wormAlive) return;
+    checkMovingSawCollision();
+    if (!wormAlive) return;
+
+    // Growth by height milestones
+    if (height >= nextGrowth) {
+        wormLen++;
+        // Add segment at tail end
+        const tailIdx = activeEnd === 0 ? worm.length - 1 : 0;
+        const tail = worm[tailIdx];
+        if (activeEnd === 0) {
+            worm.push({ x: tail.x, y: tail.y });
+        } else {
+            worm.unshift({ x: tail.x, y: tail.y });
+        }
+        nextGrowth += SECTION_H * 2;
+        spawnText(head.x * TILE, head.y * TILE - TILE, 'GREW TO ' + wormLen + '!', C.gold);
+        SFX.grow(); screenShake = 3;
+    }
+
+    gravityTimer = 0;
+}
+
+function swapEnds() {
+    activeEnd = activeEnd === 0 ? 1 : 0;
+    SFX.swap();
+    headBob = 1;
+    tailBob = 1;
+}
+
+function die() {
+    wormAlive = false; state = 'dead';
+    deathTimer = 1.5; deaths++;
+    screenShake = 12; whiteFlash = 0.5;
+    SFX.death();
+    for (const s of worm) {
+        const cx = s.x * TILE + TILE / 2, cy = s.y * TILE + TILE / 2;
+        spawnP(cx, cy, '#40A030', 8, 120);
+        spawnP(cx, cy, '#80E060', 5, 100);
+        spawnP(cx, cy, '#1C5018', 4, 60);
+        spawnP(cx, cy, '#D03040', 3, 90);
+        spawnP(cx, cy, '#F06070', 2, 70);
+        spawnChunk(cx, cy);
+    }
+}
+
+function isStuck() {
+    if (!wormAlive || !wormSupported()) return false;
+    // Try all 4 directions from current active head
+    const dirs = [[0,1],[0,-1],[1,0],[-1,0]];
+    const headIdx = activeEnd === 0 ? 0 : worm.length - 1;
+    const head = worm[headIdx];
+    const secondIdx = activeEnd === 0 ? 1 : worm.length - 2;
+
+    for (const [dx, dy] of dirs) {
+        const hx = head.x + dx, hy = head.y + dy;
+        if (worm.length >= 2) {
+            const second = worm[secondIdx];
+            if (hx === second.x && hy === second.y) {
+                const allSameX = worm.every(s => s.x === worm[0].x);
+                const allSameY = worm.every(s => s.y === worm[0].y);
+                if (allSameX || allSameY) return false; // can flip
+                continue;
+            }
+        }
+        if (blocked(hx, hy)) continue;
+        if (isSaw(hx, hy)) continue;
+        let selfHit = false;
+        const tailEnd = activeEnd === 0 ? worm.length - 1 : 0;
+        for (let i = 0; i < worm.length; i++) {
+            if (i === headIdx || i === tailEnd) continue;
+            if (worm[i].x === hx && worm[i].y === hy) { selfHit = true; break; }
+        }
+        if (selfHit) continue;
+        return false;
+    }
+    // Also check if swapping ends would help
+    const otherHeadIdx = activeEnd === 0 ? worm.length - 1 : 0;
+    const otherHead = worm[otherHeadIdx];
+    for (const [dx, dy] of dirs) {
+        const hx = otherHead.x + dx, hy = otherHead.y + dy;
+        if (blocked(hx, hy)) continue;
+        if (isSaw(hx, hy)) continue;
+        let selfHit = false;
+        for (let i = 0; i < worm.length; i++) {
+            if (i === otherHeadIdx || i === (activeEnd === 0 ? 0 : worm.length - 1)) continue;
+            if (worm[i].x === hx && worm[i].y === hy) { selfHit = true; break; }
+        }
+        if (!selfHit) return false;
+    }
+    return true;
+}
+
+function startGame() {
+    wormLen = START_LENGTH; deaths = 0; moveCount = 0; chunks = [];
+    height = 0; maxHeight = 0;
+    nextGrowth = SECTION_H * 2;
+    initWorld(); initWorm();
+    state = 'playing';
+    cam.y = startRow * TILE - H * 0.65;
+    cam.targetY = cam.y;
+}
+
+// ══════════════════════════════════════
+// ── LAVA ──
+// ══════════════════════════════════════
+
+function updateLava(dt) {
+    if (!lavaStarted) {
+        lavaTimer += dt;
+        if (lavaTimer >= LAVA_START_DELAY) {
+            lavaStarted = true;
+            SFX.lavaRise();
+        }
+        return;
+    }
+    // Lava rises faster as you climb higher, but always threatens
+    const heightFactor = 1 + maxHeight * 0.003;
+    lavaRow -= LAVA_BASE_SPEED * heightFactor * dt;
+
+    // Lava bubbles particles
+    if (Math.random() < dt * 3) {
+        const bx = (1 + Math.random() * (COLS - 2)) * TILE;
+        const by = lavaRow * TILE;
+        spawnP(bx, by, C.lavaHL, 1, 30);
+        spawnP(bx, by, C.lavaGlow, 1, 20);
+    }
+}
+
+function checkLavaCollision() {
+    if (!wormAlive || !lavaStarted) return;
+    const lavaLine = Math.floor(lavaRow);
+    for (const s of worm) {
+        if (s.y >= lavaLine) {
+            // BURN
+            SFX.lavaBurn();
+            // Fire particles on every segment
+            for (const seg of worm) {
+                const cx = seg.x * TILE + TILE / 2, cy = seg.y * TILE + TILE / 2;
+                spawnP(cx, cy, C.lavaGlow, 4, 80);
+                spawnP(cx, cy, '#FF8040', 3, 60);
+                spawnP(cx, cy, '#FFD060', 2, 40);
+            }
+            die();
+            return;
+        }
+    }
+}
+
+function drawLava(now) {
+    const lavaY = lavaRow * TILE;
+    // Fill everything below lava line
+    const fillTop = Math.floor(lavaY);
+    const fillBot = gridRows * TILE;
+
+    // Lava body (deep red)
+    ctx.fillStyle = C.lavaDark;
+    ctx.fillRect(0, fillTop + 4, W, fillBot - fillTop);
+
+    // Lava surface (animated)
+    for (let c = 0; c < COLS; c++) {
+        const wave = Math.sin(now / 300 + c * 1.5) * 2;
+        const sx = c * TILE, sy = fillTop + wave;
+
+        // Surface glow
+        ctx.fillStyle = C.lavaHL;
+        ctx.fillRect(sx, sy, TILE, 4);
+        ctx.fillStyle = C.lava;
+        ctx.fillRect(sx, sy + 2, TILE, 3);
+
+        // Bright crust highlights
+        if ((c + Math.floor(now / 500)) % 3 === 0) {
+            ctx.fillStyle = C.lavaGlow;
+            ctx.fillRect(sx + 2, sy, TILE - 4, 2);
+        }
+        // Dark cracks
+        if ((c + Math.floor(now / 700)) % 4 === 0) {
+            ctx.fillStyle = C.lavaDark;
+            ctx.fillRect(sx + 4, sy + 1, 3, 1);
+        }
+    }
+
+    // Glow above lava (ambient heat)
+    const grad = ctx.createLinearGradient(0, fillTop - TILE * 3, 0, fillTop);
+    grad.addColorStop(0, 'rgba(208,48,32,0)');
+    grad.addColorStop(1, 'rgba(208,48,32,0.15)');
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, fillTop - TILE * 3, W, TILE * 3);
+}
+
+// ══════════════════════════════════════
+// ── INPUT ──
+// ══════════════════════════════════════
+
+let touchRef = null, touchSwiped = false, lastSwipeTime = 0;
+let touchEndId = -1; // which end the touch is near
+const SWIPE_THRESHOLD = 40;
+const SWIPE_COOLDOWN = 100;
+
+function screenToGrid(clientX, clientY) {
+    const rect = canvas.getBoundingClientRect();
+    const gx = (clientX - rect.left) / scale;
+    const gy = (clientY - rect.top) / scale + cam.y;
+    return { col: Math.floor(gx / TILE), row: Math.floor(gy / TILE) };
+}
+
+function distToEnd(clientX, clientY, endIdx) {
+    const rect = canvas.getBoundingClientRect();
+    const seg = worm[endIdx];
+    const sx = seg.x * TILE * scale + TILE * scale / 2 + rect.left;
+    const sy = (seg.y * TILE - cam.y) * scale + TILE * scale / 2 + rect.top;
+    const dx = clientX - sx, dy = clientY - sy;
+    return Math.sqrt(dx * dx + dy * dy);
+}
+
+function pickNearestEnd(clientX, clientY) {
+    if (worm.length === 0) return 0;
+    const d0 = distToEnd(clientX, clientY, 0);
+    const d1 = distToEnd(clientX, clientY, worm.length - 1);
+    return d0 <= d1 ? 0 : 1;
+}
+
+document.addEventListener('keydown', e => {
+    if (state === 'title') { ensureAudio(); startGame(); return; }
+    if (state === 'dead' && deathTimer <= 0) { startGame(); return; }
+    if (state === 'victory') { startGame(); return; }
+    if (state !== 'playing') return;
+
+    // Tab or Space to swap active end
+    if (e.key === 'Tab' || e.key === ' ') {
+        swapEnds();
+        e.preventDefault();
+        return;
+    }
+
+    switch (e.key) {
+        case 'ArrowLeft': case 'a': case 'A': moveWorm(-1, 0); break;
+        case 'ArrowRight': case 'd': case 'D': moveWorm(1, 0); break;
+        case 'ArrowDown': case 's': case 'S': moveWorm(0, 1); break;
+        case 'ArrowUp': case 'w': case 'W': moveWorm(0, -1); break;
+        case 'r': case 'R': startGame(); break;
+    }
+    e.preventDefault();
+});
+
+canvas.addEventListener('touchstart', e => {
+    e.preventDefault();
+    if (state === 'title') { ensureAudio(); startGame(); return; }
+    if (state === 'dead' && deathTimer <= 0) { startGame(); return; }
+    if (state === 'victory') { startGame(); return; }
+    const t = e.touches[0];
+    touchRef = { x: t.clientX, y: t.clientY };
+    touchSwiped = false;
+
+    // Pick which end is closer to the touch
+    if (worm.length > 0) {
+        const nearest = pickNearestEnd(t.clientX, t.clientY);
+        if (nearest !== activeEnd) {
+            activeEnd = nearest;
+            SFX.swap();
+            headBob = 1;
+        }
+    }
+});
+
+canvas.addEventListener('touchmove', e => {
+    e.preventDefault();
+    if (!touchRef || state !== 'playing') return;
+    const now = performance.now();
+    if (now - lastSwipeTime < SWIPE_COOLDOWN) return;
+    const t = e.touches[0];
+    const dx = t.clientX - touchRef.x;
+    const dy = t.clientY - touchRef.y;
+    if (Math.abs(dx) >= SWIPE_THRESHOLD || Math.abs(dy) >= SWIPE_THRESHOLD) {
+        touchSwiped = true;
+        lastSwipeTime = now;
+        if (Math.abs(dx) > Math.abs(dy)) {
+            moveWorm(dx > 0 ? 1 : -1, 0);
+        } else if (dy < 0) {
+            moveWorm(0, -1);
+        } else {
+            moveWorm(0, 1);
+        }
+        touchRef = { x: t.clientX, y: t.clientY };
+    }
+});
+
+canvas.addEventListener('touchend', e => {
+    e.preventDefault();
+    if (!touchRef || state !== 'playing') { touchRef = null; return; }
+    if (!touchSwiped) {
+        // Tap: move toward tap relative to active head
+        const head = getHead();
+        const rect = canvas.getBoundingClientRect();
+        const headScreenX = rect.left + head.x * TILE * scale + TILE * scale / 2;
+        const headScreenY = rect.top + (head.y * TILE - cam.y) * scale + TILE * scale / 2;
+        const tx = e.changedTouches[0].clientX - headScreenX;
+        const ty = e.changedTouches[0].clientY - headScreenY;
+        if (Math.abs(tx) > Math.abs(ty)) moveWorm(tx > 0 ? 1 : -1, 0);
+        else moveWorm(0, ty > 0 ? 1 : -1);
+    }
+    touchRef = null;
+});
+
+// ══════════════════════════════════════
+// ── RESIZE ──
+// ══════════════════════════════════════
+
+function resize() {
+    W = COLS * TILE;
+    const portrait = window.innerHeight > window.innerWidth;
+    if (portrait) {
+        scale = Math.max(1, Math.floor(window.innerWidth / W));
+    } else {
+        scale = Math.max(1, Math.floor(window.innerHeight / (28 * TILE)));
+    }
+    VISIBLE_ROWS = Math.floor(window.innerHeight / (TILE * scale));
+    H = VISIBLE_ROWS * TILE;
+    const pw = W * scale, ph = H * scale;
+    canvas.width = pw; canvas.height = ph;
+    canvas.style.width = pw + 'px';
+    canvas.style.height = ph + 'px';
+    canvas.style.position = 'absolute';
+    canvas.style.left = ((window.innerWidth - pw) / 2) + 'px';
+    canvas.style.top = ((window.innerHeight - ph) / 2) + 'px';
+    ctx.imageSmoothingEnabled = false;
+    ctx.setTransform(scale, 0, 0, scale, 0, 0);
+}
+window.addEventListener('resize', resize);
+resize();
+
+// ══════════════════════════════════════
+// ── DRAW HELPERS ──
+// ══════════════════════════════════════
+
+function tile3D(x, y, base, hl, sh) {
+    ctx.fillStyle = base;
+    ctx.fillRect(x, y, TILE, TILE);
+    ctx.fillStyle = hl;
+    ctx.fillRect(x, y, TILE, 1);
+    ctx.fillRect(x, y, 1, TILE);
+    ctx.fillStyle = sh;
+    ctx.fillRect(x, y + TILE - 1, TILE, 1);
+    ctx.fillRect(x + TILE - 1, y, 1, TILE);
+}
+
+function wormFace(px, py, lookDir, blink) {
+    // Two big eyes with pupils that look in the move direction
+    const eyeOffX = lookDir.x;
+    const eyeOffY = lookDir.y;
+
+    // Eye whites (3x3 each)
+    ctx.fillStyle = C.springDark;
+    ctx.fillRect(px + 1, py + 2, 3, 3);
+    ctx.fillRect(px + 7, py + 2, 3, 3);
+
+    if (!blink) {
+        // Pupils (1px, shifted by look direction)
+        ctx.fillStyle = '#FFFFF0';
+        ctx.fillRect(px + 2 + eyeOffX, py + 3 + eyeOffY, 1, 1);
+        ctx.fillRect(px + 8 + eyeOffX, py + 3 + eyeOffY, 1, 1);
+        // Catchlight
+        ctx.fillStyle = 'rgba(255,255,240,0.35)';
+        ctx.fillRect(px + 2, py + 4, 1, 1);
+        ctx.fillRect(px + 8, py + 4, 1, 1);
+    } else {
+        // Blink: horizontal line
+        ctx.fillStyle = '#FFFFF0';
+        ctx.fillRect(px + 1, py + 3, 3, 1);
+        ctx.fillRect(px + 7, py + 3, 3, 1);
+    }
+
+    // Mouth: small smile
+    ctx.fillStyle = C.springDark;
+    ctx.fillRect(px + 4, py + 7, 1, 1);
+    ctx.fillRect(px + 7, py + 7, 1, 1);
+    ctx.fillRect(px + 5, py + 8, 2, 1);
+}
+
+function wormFaceBack(px, py, lookDir, blink) {
+    // Back face — slightly different expression (maybe more chill/sleepy)
+    const eyeOffX = -lookDir.x; // looks opposite direction
+    const eyeOffY = -lookDir.y;
+
+    ctx.fillStyle = C.springDark;
+    ctx.fillRect(px + 1, py + 2, 3, 3);
+    ctx.fillRect(px + 7, py + 2, 3, 3);
+
+    if (!blink) {
+        ctx.fillStyle = '#FFFFF0';
+        ctx.fillRect(px + 2 + eyeOffX, py + 3 + eyeOffY, 1, 1);
+        ctx.fillRect(px + 8 + eyeOffX, py + 3 + eyeOffY, 1, 1);
+        ctx.fillStyle = 'rgba(255,255,240,0.35)';
+        ctx.fillRect(px + 2, py + 4, 1, 1);
+        ctx.fillRect(px + 8, py + 4, 1, 1);
+    } else {
+        ctx.fillStyle = '#FFFFF0';
+        ctx.fillRect(px + 1, py + 3, 3, 1);
+        ctx.fillRect(px + 7, py + 3, 3, 1);
+    }
+
+    // Back face mouth: open O (surprised)
+    ctx.fillStyle = C.springDark;
+    ctx.fillRect(px + 5, py + 7, 2, 2);
+}
+
+function springCoil(px, py) {
+    ctx.fillStyle = C.springHL;
+    ctx.fillRect(px + 2, py + 2, 4, 2);
+    ctx.fillRect(px + 6, py + 5, 4, 2);
+    ctx.fillRect(px + 2, py + 8, 4, 2);
+}
+
+function drawSaw(px, py, now) {
+    const frame = Math.floor(now / 120) % 4;
+    const x = px, y = py;
+
+    ctx.fillStyle = C.sawDark;
+    ctx.fillRect(x+3, y+3, 6, 7);
+    ctx.fillRect(x+2, y+4, 8, 5);
+    ctx.fillRect(x+4, y+2, 4, 8);
+
+    ctx.fillStyle = C.saw;
+    ctx.fillRect(x+3, y+3, 6, 6);
+    ctx.fillRect(x+2, y+4, 8, 4);
+    ctx.fillRect(x+4, y+2, 4, 8);
+
+    ctx.fillStyle = C.sawHL;
+    ctx.fillRect(x+4, y+2, 4, 1);
+    ctx.fillRect(x+3, y+3, 1, 1);
+    ctx.fillRect(x+2, y+4, 1, 3);
+
+    ctx.fillStyle = '#D0D0E0';
+    const glintPos = [
+        [x+4, y+3], [x+7, y+3], [x+7, y+7], [x+4, y+7]
+    ][frame];
+    ctx.fillRect(glintPos[0], glintPos[1], 1, 1);
+
+    const edge = '#303040';
+    const face = C.sawHL;
+    const tip  = '#D0D0E0';
+
+    const teethCardinal = [
+        () => { ctx.fillStyle = face; ctx.fillRect(x+5, y+0, 2, 2); ctx.fillStyle = edge; ctx.fillRect(x+4, y+1, 1, 1); ctx.fillStyle = tip; ctx.fillRect(x+5, y+0, 1, 1); },
+        () => { ctx.fillStyle = face; ctx.fillRect(x+10, y+5, 2, 2); ctx.fillStyle = edge; ctx.fillRect(x+10, y+4, 1, 1); ctx.fillStyle = tip; ctx.fillRect(x+11, y+5, 1, 1); },
+        () => { ctx.fillStyle = face; ctx.fillRect(x+5, y+10, 2, 2); ctx.fillStyle = edge; ctx.fillRect(x+7, y+10, 1, 1); ctx.fillStyle = C.sawDark; ctx.fillRect(x+5, y+11, 2, 1); },
+        () => { ctx.fillStyle = face; ctx.fillRect(x+0, y+5, 2, 2); ctx.fillStyle = edge; ctx.fillRect(x+1, y+7, 1, 1); ctx.fillStyle = tip; ctx.fillRect(x+0, y+5, 1, 1); },
+    ];
+    const teethDiagonal = [
+        () => { ctx.fillStyle = face; ctx.fillRect(x+9, y+1, 2, 2); ctx.fillStyle = edge; ctx.fillRect(x+9, y+1, 1, 1); ctx.fillStyle = tip; ctx.fillRect(x+10, y+1, 1, 1); },
+        () => { ctx.fillStyle = face; ctx.fillRect(x+9, y+9, 2, 2); ctx.fillStyle = C.sawDark; ctx.fillRect(x+10, y+10, 1, 1); ctx.fillStyle = edge; ctx.fillRect(x+9, y+10, 1, 1); },
+        () => { ctx.fillStyle = face; ctx.fillRect(x+1, y+9, 2, 2); ctx.fillStyle = C.sawDark; ctx.fillRect(x+1, y+10, 1, 1); ctx.fillStyle = edge; ctx.fillRect(x+2, y+10, 1, 1); },
+        () => { ctx.fillStyle = face; ctx.fillRect(x+1, y+1, 2, 2); ctx.fillStyle = edge; ctx.fillRect(x+1, y+2, 1, 1); ctx.fillStyle = tip; ctx.fillRect(x+1, y+1, 1, 1); },
+    ];
+
+    if (frame === 0 || frame === 2) teethCardinal.forEach(fn => fn());
+    else teethDiagonal.forEach(fn => fn());
+
+    ctx.fillStyle = C.sawDark;
+    ctx.fillRect(x+5, y+5, 2, 2);
+    ctx.fillStyle = '#606070';
+    const boltHL = [[x+5,y+5],[x+6,y+5],[x+6,y+6],[x+5,y+6]][frame];
+    ctx.fillRect(boltHL[0], boltHL[1], 1, 1);
+}
+
+// ══════════════════════════════════════
+// ── DRAW ──
+// ══════════════════════════════════════
+
+function draw() {
+    const now = performance.now();
+    const blinkCycle = Math.floor(now / 3000) % 8;
+    const blink = blinkCycle === 0 && (now % 3000) < 150;
+
+    ctx.fillStyle = C.bg;
+    ctx.fillRect(0, 0, W, H);
+
+    if (state === 'title') {
+        ctx.fillStyle = C.spring;
+        ctx.font = 'bold 10px monospace';
+        ctx.textAlign = 'center';
+        ctx.fillText('INCH', W / 2, H / 2 - 22);
+        ctx.fillText('WORM', W / 2, H / 2 - 10);
+        ctx.fillStyle = C.text;
+        ctx.font = '5px monospace';
+        ctx.fillText('grab either end', W / 2, H / 2 + 8);
+        ctx.fillText('outrun the lava', W / 2, H / 2 + 16);
+        ctx.fillStyle = 'rgba(224,208,184,0.5)';
+        ctx.font = '4px monospace';
+        ctx.fillText('tab/space = swap ends', W / 2, H / 2 + 26);
+        ctx.fillStyle = 'rgba(224,208,184,0.4)';
+        ctx.fillText('tap or press any key', W / 2, H / 2 + 36);
+
+        // Animated two-headed worm
+        for (let i = 0; i < 4; i++) {
+            const sx = W / 2 - 24 + i * TILE + Math.sin(now / 400 + i) * 2;
+            const sy = H / 2 + 50 + Math.sin(now / 300) * 2 + Math.sin(now / 300 + i * 0.8) * 3;
+            tile3D(sx, sy, C.spring, C.springHL, C.springDark);
+            if (i === 0) wormFace(sx, sy, {x:-1,y:0}, blink);
+            else if (i === 3) wormFace(sx, sy, {x:1,y:0}, blink);
+            else springCoil(sx, sy);
+        }
+        return;
+    }
+
+    // Camera — follow the active head, biased upward (we're climbing)
+    if (worm.length > 0) {
+        const head = getHead();
+        cam.targetY = head.y * TILE - H * 0.55; // keep head in upper portion
+        cam.targetY = Math.max(0, cam.targetY);
+    }
+    cam.y += (cam.targetY - cam.y) * 0.12;
+
+    cam.sx = screenShake > 0.1 ? (Math.random() - 0.5) * screenShake : 0;
+    cam.sy = screenShake > 0.1 ? (Math.random() - 0.5) * screenShake : 0;
+    screenShake *= 0.85;
+
+    ctx.save();
+    ctx.translate(Math.floor(cam.sx), -Math.floor(cam.y + cam.sy));
+
+    const topR = Math.max(0, Math.floor(cam.y / TILE) - 1);
+    const botR = Math.min(gridRows - 1, Math.floor((cam.y + H) / TILE) + 1);
+
+    // Terrain
+    for (let r = topR; r <= botR; r++) {
+        for (let c = 0; c < COLS; c++) {
+            const t = grid[r][c];
+            const px = c * TILE, py = r * TILE;
+            if (t === 1) {
+                tile3D(px, py, C.tile, C.tileHL, C.tileSH);
+            } else if (t === 3) {
+                drawSaw(px, py, now);
+            } else if (t === 4) {
+                // Victory crown
+                ctx.fillStyle = C.gold;
+                ctx.fillRect(px + 2, py + 4, 8, 6);
+                ctx.fillRect(px + 1, py + 2, 2, 4);
+                ctx.fillRect(px + 5, py + 1, 2, 3);
+                ctx.fillRect(px + 9, py + 2, 2, 4);
+                ctx.fillStyle = '#FFD060';
+                ctx.fillRect(px + 3, py + 5, 2, 2);
+                ctx.fillRect(px + 7, py + 5, 2, 2);
+                // Sparkle
+                if (Math.sin(now / 200) > 0.5) {
+                    ctx.fillStyle = '#FFFFF0';
+                    ctx.fillRect(px + 5, py + 1, 1, 1);
+                }
+            }
+        }
+    }
+
+    // Moving saws (drawn on top of terrain)
+    for (const ms of movingSaws) {
+        const px = ms.x * TILE;
+        const py = ms.y * TILE;
+        // Only draw if visible
+        if (py + TILE > cam.y && py < cam.y + H) {
+            drawSaw(px, py, now);
+            // Danger trail
+            ctx.globalAlpha = 0.08;
+            ctx.fillStyle = C.spike;
+            for (let tr = ms.minR; tr <= ms.maxR; tr++) {
+                ctx.fillRect(ms.x * TILE + 3, tr * TILE + 3, TILE - 6, TILE - 6);
+            }
+            ctx.globalAlpha = 1;
+        }
+    }
+
+    // LAVA
+    if (lavaStarted) {
+        drawLava(now);
+    }
+
+    // Worm
+    if (wormAlive && worm.length > 0) {
+        const frontIdx = 0;
+        const backIdx = worm.length - 1;
+
+        // Glow indicator on active end
+        const activeIdx = activeEnd === 0 ? frontIdx : backIdx;
+        const activeSeg = worm[activeIdx];
+        ctx.globalAlpha = 0.15 + 0.1 * Math.sin(now / 300);
+        ctx.fillStyle = '#FFFFF0';
+        const glowPx = activeSeg.x * TILE - 2;
+        const glowPy = activeSeg.y * TILE + fallOffset - 2;
+        ctx.fillRect(glowPx, glowPy, TILE + 4, TILE + 4);
+        ctx.globalAlpha = 1;
+
+        for (let i = worm.length - 1; i >= 0; i--) {
+            const s = worm[i];
+            const px = s.x * TILE;
+            let py = s.y * TILE + fallOffset;
+            if (i === frontIdx && headBob > 0) py += Math.sin(headBob * Math.PI) * -2;
+            if (i === backIdx && tailBob > 0) py += Math.sin(tailBob * Math.PI) * -2;
+
+            tile3D(px, py, C.spring, C.springHL, C.springDark);
+
+            if (i === frontIdx) {
+                // Front face
+                const isActive = activeEnd === 0;
+                if (isActive) {
+                    wormFace(px, py, wormDir, blink);
+                } else {
+                    wormFaceBack(px, py, wormDir, blink);
+                }
+            } else if (i === backIdx) {
+                // Back face
+                const isActive = activeEnd === 1;
+                if (isActive) {
+                    wormFace(px, py, wormDir, blink);
+                } else {
+                    wormFaceBack(px, py, wormDir, blink);
+                }
+            } else {
+                springCoil(px, py);
+            }
+        }
+
+        // Direction ghost from active head
+        if (state === 'playing' && !falling) {
+            const h = getHead();
+            const nx = h.x + wormDir.x, ny = h.y + wormDir.y;
+            if (nx >= 0 && nx < COLS && ny >= 0 && ny < gridRows && !blocked(nx, ny)) {
+                ctx.globalAlpha = 0.15 + 0.08 * Math.sin(now / 300);
+                ctx.fillStyle = C.springHL;
+                ctx.fillRect(nx * TILE + 2, ny * TILE + 2, TILE - 4, TILE - 4);
+                ctx.globalAlpha = 1;
+            }
+        }
+    }
+
+    // Particles
+    for (const p of particles) {
+        ctx.globalAlpha = Math.max(0, p.life / 0.8);
+        ctx.fillStyle = p.color;
+        ctx.fillRect(p.x - p.size / 2, p.y - p.size / 2, p.size, p.size);
+    }
+    ctx.globalAlpha = 1;
+
+    // Severed chunks
+    for (const ch of chunks) {
+        ctx.globalAlpha = Math.max(0, ch.life / 1.2);
+        ctx.save();
+        ctx.translate(ch.x, ch.y);
+        ctx.rotate(ch.rot);
+        const s = ch.size;
+        tile3D(-s/2, -s/2, C.spring, C.springHL, C.springDark);
+        ctx.fillStyle = C.springDark;
+        ctx.fillRect(-1, -1, 2, 2);
+        ctx.fillStyle = '#D03040';
+        ctx.fillRect(-s/2, -1, 2, 3);
+        ctx.restore();
+    }
+    ctx.globalAlpha = 1;
+
+    // Float texts
+    for (const ft of floatTexts) {
+        ctx.globalAlpha = Math.max(0, ft.life / 1.5);
+        ctx.fillStyle = ft.color;
+        ctx.font = 'bold 5px monospace';
+        ctx.textAlign = 'center';
+        ctx.fillText(ft.text, ft.x + TILE / 2, ft.y);
+    }
+    ctx.globalAlpha = 1;
+
+    ctx.restore();
+
+    // White flash
+    if (whiteFlash > 0.01) {
+        ctx.globalAlpha = whiteFlash;
+        ctx.fillStyle = '#FFFFF0';
+        ctx.fillRect(0, 0, W, H);
+        ctx.globalAlpha = 1;
+    }
+
+    // HUD
+    ctx.fillStyle = C.text;
+    ctx.font = 'bold 5px monospace';
+    ctx.textAlign = 'left';
+    ctx.fillText('height ' + height, 2, 7);
+    ctx.textAlign = 'right';
+    ctx.fillText('len ' + wormLen, W - 2, 7);
+
+    // Active end indicator
+    ctx.fillStyle = 'rgba(224,208,184,0.5)';
+    ctx.font = '4px monospace';
+    ctx.textAlign = 'center';
+    ctx.fillText(activeEnd === 0 ? '▲ front' : '▼ back', W / 2, 7);
+
+    ctx.fillStyle = 'rgba(224,208,184,0.4)';
+    ctx.font = '4px monospace';
+    ctx.textAlign = 'left';
+    if (deaths > 0) ctx.fillText(deaths + 'd ' + moveCount + 'm', 2, H - 3);
+    if (bestHeight > maxHeight) {
+        ctx.textAlign = 'right';
+        ctx.fillText('best ' + bestHeight, W - 2, H - 3);
+    }
+
+    if (moveCount < 8) {
+        ctx.fillStyle = 'rgba(224,208,184,0.25)';
+        ctx.font = '4px monospace';
+        ctx.textAlign = 'center';
+        ctx.fillText('swipe/arrows  tab=swap  r=reset', W / 2, H - 10);
+    }
+
+    // Lava proximity warning
+    if (lavaStarted && worm.length > 0) {
+        const lowestWorm = Math.max(...worm.map(s => s.y));
+        const gap = Math.floor(lavaRow) - lowestWorm;
+        if (gap < 8) {
+            ctx.fillStyle = C.lavaGlow;
+            ctx.globalAlpha = 0.5 + 0.4 * Math.sin(now / 150);
+            ctx.font = 'bold 5px monospace';
+            ctx.textAlign = 'center';
+            ctx.fillText(gap <= 3 ? 'LAVA!!!' : 'LAVA!', W / 2, 14);
+            ctx.globalAlpha = 1;
+        }
+    }
+
+    // Victory overlay
+    if (state === 'victory') {
+        ctx.fillStyle = 'rgba(240,168,48,0.08)';
+        ctx.fillRect(0, 0, W, H);
+        ctx.fillStyle = C.gold;
+        ctx.font = 'bold 8px monospace';
+        ctx.textAlign = 'center';
+        ctx.fillText('SUMMIT!', W / 2, H / 2 - 12);
+        ctx.fillStyle = C.text;
+        ctx.font = '5px monospace';
+        ctx.fillText('height ' + maxHeight, W / 2, H / 2 + 2);
+        ctx.fillText('moves ' + moveCount, W / 2, H / 2 + 10);
+        ctx.fillText('deaths ' + deaths, W / 2, H / 2 + 18);
+        ctx.fillStyle = 'rgba(224,208,184,0.5)';
+        ctx.font = '4px monospace';
+        ctx.fillText('tap / key to play again', W / 2, H / 2 + 30);
+    }
+
+    // Dead overlay
+    if (state === 'dead' && deathTimer <= 0.5) {
+        ctx.fillStyle = 'rgba(208,48,64,0.12)';
+        ctx.fillRect(0, 0, W, H);
+        ctx.fillStyle = C.spike;
+        ctx.font = 'bold 8px monospace';
+        ctx.textAlign = 'center';
+        ctx.fillText('DEAD', W / 2, H / 2 - 8);
+        ctx.fillStyle = C.text;
+        ctx.font = '4px monospace';
+        ctx.fillText('height ' + maxHeight, W / 2, H / 2 + 4);
+        if (bestHeight > 0) ctx.fillText('best ' + bestHeight, W / 2, H / 2 + 12);
+        ctx.fillStyle = 'rgba(224,208,184,0.5)';
+        ctx.fillText('tap / key to restart', W / 2, H / 2 + 24);
+    }
+}
+
+// ══════════════════════════════════════
+// ── LOOP ──
+// ══════════════════════════════════════
+
+let lastTime = 0;
+function loop(ts) {
+    const dt = Math.min(0.05, (ts - lastTime) / 1000);
+    lastTime = ts;
+
+    if (headBob > 0) headBob = Math.max(0, headBob - dt * 6);
+    if (tailBob > 0) tailBob = Math.max(0, tailBob - dt * 6);
+    if (deathTimer > 0) deathTimer -= dt;
+    if (whiteFlash > 0) whiteFlash *= 0.88;
+
+    const wasFalling = falling;
+    if (falling) {
+        fallOffset += dt * 400;
+        if (fallOffset >= 0) { fallOffset = 0; falling = false; }
+    }
+
+    for (let i = particles.length - 1; i >= 0; i--) {
+        const p = particles[i];
+        p.x += p.vx * dt; p.y += p.vy * dt;
+        p.vy += 200 * dt; p.life -= dt;
+        if (p.life <= 0) particles.splice(i, 1);
+    }
+    for (let i = floatTexts.length - 1; i >= 0; i--) {
+        const f = floatTexts[i];
+        f.y += f.vy * dt; f.life -= dt;
+        if (f.life <= 0) floatTexts.splice(i, 1);
+    }
+    for (let i = chunks.length - 1; i >= 0; i--) {
+        const ch = chunks[i];
+        ch.x += ch.vx * dt; ch.y += ch.vy * dt;
+        ch.vy += 250 * dt;
+        ch.rot += ch.vr * dt;
+        ch.life -= dt;
+        if (Math.random() < 0.3) {
+            particles.push({
+                x: ch.x, y: ch.y,
+                vx: (Math.random() - 0.5) * 20,
+                vy: (Math.random() - 0.5) * 20,
+                color: Math.random() < 0.7 ? '#40A030' : '#D03040',
+                life: 0.2 + Math.random() * 0.3,
+                size: 1 + Math.random()
+            });
+        }
+        if (ch.life <= 0) chunks.splice(i, 1);
+    }
+
+    // LAVA
+    if (wormAlive && state === 'playing') {
+        updateLava(dt);
+        checkLavaCollision();
+    }
+
+    // Moving saws
+    if (state === 'playing' || state === 'dead') {
+        updateMovingSaws(dt);
+    }
+    if (wormAlive && state === 'playing') {
+        checkMovingSawCollision();
+    }
+
+    // Gravity
+    if (wormAlive && state === 'playing' && !falling) {
+        if (!wormSupported()) {
+            gravityTimer += dt;
+            if (gravityTimer >= GRAVITY_TICK) {
+                gravityTimer = 0;
+                gravityDrop();
+            }
+        }
+    }
+
+    if (!falling && wasFalling && wormAlive && wormSupported()) {
+        SFX.land();
+        if (isStuck()) {
+            const head = getHead();
+            spawnText(head.x * TILE, head.y * TILE - TILE, 'STUCK!', C.spike);
+            SFX.stuck();
+            die();
+        }
+    }
+
+    // Victory check
+    if (wormAlive && state === 'playing') {
+        checkVictory();
+    }
+
+
+    draw();
+    requestAnimationFrame(loop);
+}
+requestAnimationFrame(loop);
+
+</script>
+</body>
+</html>

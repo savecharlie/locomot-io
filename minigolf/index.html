@@ -1,0 +1,723 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>Minigolf Hockey</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    background: #0a1a0a;
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    height: 100vh; overflow: hidden;
+    touch-action: none;
+    font-family: monospace; color: #8f8;
+}
+#score {
+    font-size: 20px; padding: 8px 0;
+    text-align: center; letter-spacing: 4px;
+    position: relative; z-index: 1;
+}
+canvas { display: block; }
+</style>
+</head>
+<body>
+<div id="score">AI 0 - 0 YOU</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/cannon.js/0.6.2/cannon.min.js"></script>
+<script type="importmap">
+{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/"}}
+</script>
+<script type="module">
+import * as THREE from 'three';
+
+// === CONSTANTS ===
+const CW = 10;   // court width (tiles/units)
+const CH = 18;   // court depth (tiles/units)
+const WALL_H = 2; // wall height
+const BLOCK_H = 1.5;
+const RAMP_H = 1.2;
+const BALL_R = 0.25;
+const GOAL_START = 3, GOAL_END = 7;
+const PADDLE_W = 1, PADDLE_D = 0.5, PADDLE_H = 0.7;
+
+// === RENDERER ===
+const maxW = Math.min(window.innerWidth, 600);
+const maxH = window.innerHeight - 50;
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setSize(maxW, maxH);
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.setClearColor(0x0a1a0a);
+document.body.appendChild(renderer.domElement);
+
+// === SCENE ===
+const scene = new THREE.Scene();
+scene.fog = new THREE.Fog(0x0a1a0a, 30, 50);
+
+// === CAMERA (near top-down with subtle 3D tilt) ===
+const aspect = maxW / maxH;
+const frustum = 24; // show full 10x18 court with margin
+const camera = new THREE.OrthographicCamera(
+    -frustum * aspect / 2, frustum * aspect / 2,
+    frustum / 2, -frustum / 2, 0.1, 100
+);
+// Nearly overhead, tiny offset for depth perception
+camera.position.set(CW / 2, 30, CH / 2 + 3);
+camera.lookAt(CW / 2, 0, CH / 2);
+
+// === LIGHTS ===
+const ambient = new THREE.AmbientLight(0x446644, 0.6);
+scene.add(ambient);
+
+const dirLight = new THREE.DirectionalLight(0xffffff, 1.2);
+dirLight.position.set(8, 15, 5);
+dirLight.castShadow = true;
+dirLight.shadow.mapSize.set(2048, 2048);
+dirLight.shadow.camera.left = -15;
+dirLight.shadow.camera.right = 15;
+dirLight.shadow.camera.top = 25;
+dirLight.shadow.camera.bottom = -5;
+dirLight.shadow.camera.far = 50;
+scene.add(dirLight);
+
+// === COLORS ===
+const C = {
+    floor: 0x5caa38,
+    floorGrid: 0x4a9030,
+    wall: 0x2a6620,
+    wallTop: 0x3a8830,
+    block: 0x3a8830,
+    blockTop: 0x4aaa40,
+    ramp: 0x4a9940,
+    rampSlope: 0x5ab04a,
+    playerPaddle: 0x38ff28,
+    aiPaddle: 0xe27b35,
+    ball: 0xeaf0e8,
+    goal: 0x080808,
+};
+
+function mat(color, opts = {}) {
+    return new THREE.MeshStandardMaterial({
+        color, roughness: opts.rough ?? 0.7, metalness: opts.metal ?? 0.05
+    });
+}
+
+// === CANNON PHYSICS ===
+const physWorld = new CANNON.World();
+physWorld.gravity.set(0, -20, 0);
+physWorld.broadphase = new CANNON.NaiveBroadphase();
+physWorld.solver.iterations = 10;
+
+// Materials
+const floorMat = new CANNON.Material('floor');
+const wallMat = new CANNON.Material('wall');
+const ballMat = new CANNON.Material('ball');
+const paddleMat = new CANNON.Material('paddle');
+
+physWorld.addContactMaterial(new CANNON.ContactMaterial(ballMat, floorMat, {
+    friction: 0.3, restitution: 0.3
+}));
+physWorld.addContactMaterial(new CANNON.ContactMaterial(ballMat, wallMat, {
+    friction: 0.05, restitution: 0.9
+}));
+physWorld.addContactMaterial(new CANNON.ContactMaterial(ballMat, paddleMat, {
+    friction: 0.1, restitution: 1.1
+}));
+
+// === BUILD COURT ===
+
+// Floor
+const floorGeo = new THREE.PlaneGeometry(CW, CH);
+const floorMesh = new THREE.Mesh(floorGeo, mat(C.floor));
+floorMesh.rotation.x = -Math.PI / 2;
+floorMesh.position.set(CW / 2, 0, CH / 2);
+floorMesh.receiveShadow = true;
+scene.add(floorMesh);
+
+// Floor grid lines
+const gridGroup = new THREE.Group();
+const lineMat = new THREE.LineBasicMaterial({ color: C.floorGrid, transparent: true, opacity: 0.4 });
+for (let i = 0; i <= CW; i++) {
+    const pts = [new THREE.Vector3(i, 0.01, 0), new THREE.Vector3(i, 0.01, CH)];
+    gridGroup.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts), lineMat));
+}
+for (let j = 0; j <= CH; j++) {
+    const pts = [new THREE.Vector3(0, 0.01, j), new THREE.Vector3(CW, 0.01, j)];
+    gridGroup.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts), lineMat));
+}
+scene.add(gridGroup);
+
+// Physics floor
+const floorBody = new CANNON.Body({ mass: 0, material: floorMat });
+floorBody.addShape(new CANNON.Plane());
+floorBody.quaternion.setFromAxisAngle(new CANNON.Vec3(1, 0, 0), -Math.PI / 2);
+physWorld.addBody(floorBody);
+
+// Goal panels (dark floor)
+for (let tx = GOAL_START; tx < GOAL_END; tx++) {
+    for (const gz of [0.5, CH - 0.5]) {
+        const g = new THREE.Mesh(
+            new THREE.PlaneGeometry(1, 1),
+            mat(C.goal, { rough: 0.9 })
+        );
+        g.rotation.x = -Math.PI / 2;
+        g.position.set(tx + 0.5, 0.02, gz);
+        scene.add(g);
+    }
+}
+
+// --- Walls ---
+function addWall(x, z, w, d) {
+    const geo = new THREE.BoxGeometry(w, WALL_H, d);
+    const m = new THREE.Mesh(geo, [
+        mat(C.wall), mat(C.wall),
+        mat(C.wallTop), mat(C.wall),
+        mat(C.wall), mat(C.wall)
+    ]);
+    m.position.set(x, WALL_H / 2, z);
+    m.castShadow = true;
+    m.receiveShadow = true;
+    scene.add(m);
+
+    const body = new CANNON.Body({ mass: 0, material: wallMat });
+    body.addShape(new CANNON.Box(new CANNON.Vec3(w / 2, WALL_H / 2, d / 2)));
+    body.position.set(x, WALL_H / 2, z);
+    physWorld.addBody(body);
+}
+
+// Left wall
+addWall(-0.25, CH / 2, 0.5, CH);
+// Right wall
+addWall(CW + 0.25, CH / 2, 0.5, CH);
+// Top wall (AI side, z=0) with goal gap
+const goalW = GOAL_END - GOAL_START;
+const leftW = GOAL_START;
+const rightW = CW - GOAL_END;
+if (leftW > 0) addWall(leftW / 2, -0.25, leftW, 0.5);
+if (rightW > 0) addWall(GOAL_END + rightW / 2, -0.25, rightW, 0.5);
+// Bottom wall (player side, z=CH)
+if (leftW > 0) addWall(leftW / 2, CH + 0.25, leftW, 0.5);
+if (rightW > 0) addWall(GOAL_END + rightW / 2, CH + 0.25, rightW, 0.5);
+
+// === OBSTACLES ===
+const OBSTACLE_POOL = [
+    { tx: 2, tz: 4, kind: 'ramp', dir: 'e' },
+    { tx: 7, tz: 4, kind: 'ramp', dir: 'w' },
+    { tx: 5, tz: 3, kind: 'ramp', dir: 's' },
+    { tx: 3, tz: 6, kind: 'block' },
+    { tx: 8, tz: 5, kind: 'block' },
+    { tx: 2, tz: 8, kind: 'block' },
+    { tx: 4, tz: 9, kind: 'block' },
+    { tx: 7, tz: 8, kind: 'block' },
+    { tx: 5, tz: 7, kind: 'ramp', dir: 'n' },
+    { tx: 3, tz: 10, kind: 'ramp', dir: 'e' },
+    { tx: 6, tz: 10, kind: 'ramp', dir: 'w' },
+    { tx: 2, tz: 13, kind: 'ramp', dir: 'e' },
+    { tx: 7, tz: 13, kind: 'ramp', dir: 'w' },
+    { tx: 5, tz: 14, kind: 'ramp', dir: 'n' },
+    { tx: 6, tz: 11, kind: 'block' },
+    { tx: 4, tz: 12, kind: 'block' },
+];
+
+const MAX_ACTIVE = 4;
+const CYCLE_INTERVAL = 8000;
+const ANIM_DURATION = 800;
+const UNDERGROUND_PAUSE = 500;
+
+let activeObs = [];
+let inactiveIndices = [];
+let lastCycleTime = 0;
+
+function makeBlockMesh() {
+    const geo = new THREE.BoxGeometry(0.85, BLOCK_H, 0.85);
+    return new THREE.Mesh(geo, [
+        mat(C.block), mat(C.block),
+        mat(C.blockTop), mat(C.block),
+        mat(C.block), mat(C.block)
+    ]);
+}
+
+function makeRampMesh(dir) {
+    // Wedge geometry: 6 vertices, 8 triangles
+    const geo = new THREE.BufferGeometry();
+    const hw = 0.5, hd = 0.5, h = RAMP_H;
+
+    // Vertices laid out so slope face normals point outward
+    // Convention: v0-v1 = south-bottom pair, v2-v3 = north-bottom, v4-v5 = raised pair
+    let verts, idx;
+
+    switch (dir) {
+        case 'n': // high edge at -z (north), low edge at +z (south)
+            verts = new Float32Array([
+                -hw, 0,  hd,   hw, 0,  hd,   // 0,1: south bottom (low)
+                -hw, 0, -hd,   hw, 0, -hd,   // 2,3: north bottom
+                -hw, h, -hd,   hw, h, -hd    // 4,5: north top (high)
+            ]);
+            idx = [
+                0,2,1, 1,2,3,   // bottom face
+                2,4,5, 2,5,3,   // north vertical face
+                0,1,5, 0,5,4,   // slope face (south-low to north-high)
+                0,4,2,           // left side triangle
+                1,3,5            // right side triangle
+            ];
+            break;
+        case 's': // high edge at +z (south), low edge at -z (north)
+            verts = new Float32Array([
+                -hw, 0,  hd,   hw, 0,  hd,   // 0,1: south bottom
+                -hw, 0, -hd,   hw, 0, -hd,   // 2,3: north bottom (low)
+                -hw, h,  hd,   hw, h,  hd    // 4,5: south top (high)
+            ]);
+            idx = [
+                2,0,3, 3,0,1,   // bottom face
+                0,4,5, 0,5,1,   // south vertical face
+                2,3,5, 2,5,4,   // slope face (north-low to south-high)
+                0,2,4,           // left side triangle
+                1,5,3            // right side triangle
+            ];
+            break;
+        case 'e': // high edge at +x (east), low edge at -x (west)
+            verts = new Float32Array([
+                -hw, 0, -hd,  -hw, 0,  hd,   // 0,1: west bottom (low)
+                 hw, 0, -hd,   hw, 0,  hd,   // 2,3: east bottom
+                 hw, h, -hd,   hw, h,  hd    // 4,5: east top (high)
+            ]);
+            idx = [
+                0,1,3, 0,3,2,   // bottom face
+                2,3,5, 2,5,4,   // east vertical face
+                0,4,1, 1,4,5,   // slope face (west-low to east-high) — 2 tris
+                0,2,4,           // north side triangle
+                1,5,3            // south side triangle
+            ];
+            break;
+        case 'w': // high edge at -x (west), low edge at +x (east)
+            verts = new Float32Array([
+                -hw, 0, -hd,  -hw, 0,  hd,   // 0,1: west bottom
+                 hw, 0, -hd,   hw, 0,  hd,   // 2,3: east bottom (low)
+                -hw, h, -hd,  -hw, h,  hd    // 4,5: west top (high)
+            ]);
+            idx = [
+                0,1,3, 0,3,2,   // bottom face
+                0,4,5, 0,5,1,   // west vertical face
+                2,5,4, 2,3,5,   // slope face (east-low to west-high) — 2 tris
+                0,2,4,           // north side triangle (0=NW-bot, 2=NE-bot, 4=NW-top)
+                1,5,3            // south side triangle (1=SW-bot, 5=SW-top, 3=SE-bot)
+            ];
+            break;
+    }
+
+    geo.setAttribute('position', new THREE.BufferAttribute(verts, 3));
+    geo.setIndex(idx);
+    geo.computeVertexNormals();
+
+    return new THREE.Mesh(geo, mat(C.rampSlope, { rough: 0.5 }));
+}
+
+// --- Ramp surface height + slope force (replaces buggy Trimesh collision) ---
+function rampSurfaceHeight(obs, ballX, ballZ) {
+    // Return surface Y at ball position, or -1 if ball not over this ramp
+    if (obs.kind !== 'ramp' || obs.state !== 'active') return -1;
+    const cx = obs.tx + 0.5, cz = obs.tz + 0.5;
+    const lx = ballX - cx, lz = ballZ - cz; // local coords, -0.5 to +0.5
+    if (Math.abs(lx) > 0.5 || Math.abs(lz) > 0.5) return -1;
+
+    // t = 0 at low edge, 1 at high edge
+    let t;
+    switch (obs.dir) {
+        case 'n': t = (0.5 - lz);  break; // high at -z
+        case 's': t = (0.5 + lz);  break; // high at +z
+        case 'e': t = (0.5 + lx);  break; // high at +x
+        case 'w': t = (0.5 - lx);  break; // high at -x
+    }
+    t = Math.max(0, Math.min(1, t));
+    return t * RAMP_H;
+}
+
+function rampDownhillForce(dir) {
+    // Gravity component along slope: g * sin(angle) in the downhill direction
+    const angle = Math.atan2(RAMP_H, 1);
+    const force = 20 * Math.sin(angle); // gravity=20
+    switch (dir) {
+        case 'n': return { x: 0, z: force };   // downhill = +z (south)
+        case 's': return { x: 0, z: -force };   // downhill = -z (north)
+        case 'e': return { x: -force, z: 0 };   // downhill = -x (west)
+        case 'w': return { x: force, z: 0 };    // downhill = +x (east)
+    }
+}
+
+function createObsPhysics(obs) {
+    if (obs.kind === 'block') {
+        const body = new CANNON.Body({ mass: 0, material: wallMat });
+        body.addShape(new CANNON.Box(new CANNON.Vec3(0.425, BLOCK_H / 2, 0.425)));
+        body.position.set(obs.tx + 0.5, BLOCK_H / 2, obs.tz + 0.5);
+        physWorld.addBody(body);
+        obs.body = body;
+    }
+    // Ramps: no physics body — handled by force-based slope in game loop
+}
+
+function removeObsPhysics(obs) {
+    if (obs.body) { physWorld.remove(obs.body); obs.body = null; }
+}
+
+function initObstacles() {
+    const indices = Array.from({ length: OBSTACLE_POOL.length }, (_, i) => i);
+    for (let i = indices.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [indices[i], indices[j]] = [indices[j], indices[i]];
+    }
+    for (let i = 0; i < MAX_ACTIVE; i++) {
+        const idx = indices[i];
+        const def = OBSTACLE_POOL[idx];
+        const mesh = def.kind === 'block' ? makeBlockMesh() : makeRampMesh(def.dir);
+        mesh.castShadow = true;
+        mesh.receiveShadow = true;
+        mesh.position.set(def.tx + 0.5, -3, def.tz + 0.5); // start underground
+        scene.add(mesh);
+
+        activeObs.push({
+            poolIdx: idx, tx: def.tx, tz: def.tz,
+            kind: def.kind, dir: def.dir || null,
+            mesh, body: null,
+            state: 'rising', progress: 0,
+            animStart: performance.now() + i * 500,
+            targetY: def.kind === 'block' ? BLOCK_H / 2 : 0,
+        });
+    }
+    inactiveIndices = indices.slice(MAX_ACTIVE);
+    lastCycleTime = performance.now() + 4000;
+}
+
+function swapObstacle(obs) {
+    if (inactiveIndices.length === 0) return;
+    inactiveIndices.push(obs.poolIdx);
+    const newIdx = inactiveIndices.splice(Math.floor(Math.random() * inactiveIndices.length), 1)[0];
+    const def = OBSTACLE_POOL[newIdx];
+
+    scene.remove(obs.mesh);
+    obs.mesh.geometry.dispose();
+
+    obs.poolIdx = newIdx;
+    obs.tx = def.tx;
+    obs.tz = def.tz;
+    obs.kind = def.kind;
+    obs.dir = def.dir || null;
+    obs.targetY = def.kind === 'block' ? BLOCK_H / 2 : 0;
+
+    const mesh = def.kind === 'block' ? makeBlockMesh() : makeRampMesh(def.dir);
+    mesh.castShadow = true;
+    mesh.receiveShadow = true;
+    mesh.position.set(def.tx + 0.5, -3, def.tz + 0.5);
+    scene.add(mesh);
+    obs.mesh = mesh;
+
+    obs.state = 'rising';
+    obs.progress = 0;
+    obs.animStart = performance.now();
+}
+
+function updateObstacles(now) {
+    for (const obs of activeObs) {
+        if (obs.state === 'rising') {
+            if (now < obs.animStart) { obs.progress = 0; continue; }
+            obs.progress = Math.min(1, (now - obs.animStart) / ANIM_DURATION);
+            const t = 1 - Math.pow(1 - obs.progress, 3); // ease out
+            obs.mesh.position.x = obs.tx + 0.5;
+            obs.mesh.position.z = obs.tz + 0.5;
+            obs.mesh.position.y = -3 + (3 + obs.targetY) * t;
+            if (obs.progress >= 1) {
+                obs.state = 'active';
+                obs.mesh.position.y = obs.targetY;
+                createObsPhysics(obs);
+            }
+        } else if (obs.state === 'sinking') {
+            obs.progress = Math.max(0, 1 - (now - obs.animStart) / ANIM_DURATION);
+            const t = Math.pow(obs.progress, 2); // ease in
+            obs.mesh.position.y = -3 + (3 + obs.targetY) * t;
+            if (obs.progress <= 0) {
+                obs.state = 'underground';
+                obs.undergroundStart = now;
+            }
+        } else if (obs.state === 'underground') {
+            if (now - obs.undergroundStart > UNDERGROUND_PAUSE) {
+                swapObstacle(obs);
+            }
+        }
+    }
+
+    if (now - lastCycleTime > CYCLE_INTERVAL && inactiveIndices.length > 0) {
+        lastCycleTime = now;
+        const ready = activeObs.filter(o => o.state === 'active');
+        if (ready.length > 0) {
+            const victim = ready[Math.floor(Math.random() * ready.length)];
+            removeObsPhysics(victim);
+            victim.state = 'sinking';
+            victim.animStart = now;
+        }
+    }
+}
+
+// === Apply ramp forces to ball ===
+function applyRampPhysics() {
+    const bx = ballBody.position.x, bz = ballBody.position.z;
+    for (const obs of activeObs) {
+        const surfY = rampSurfaceHeight(obs, bx, bz);
+        if (surfY < 0) continue;
+
+        // Ball is over this ramp
+        const ballBottom = ballBody.position.y - BALL_R;
+        if (ballBottom < surfY + 0.05) {
+            // Constrain ball to ramp surface
+            ballBody.position.y = surfY + BALL_R;
+            if (ballBody.velocity.y < 0) ballBody.velocity.y = 0;
+
+            // Apply downhill force (gravity component along slope)
+            const f = rampDownhillForce(obs.dir);
+            ballBody.velocity.x += f.x * (1 / 60);
+            ballBody.velocity.z += f.z * (1 / 60);
+        }
+    }
+}
+
+// === BALL ===
+const ballGeo = new THREE.SphereGeometry(BALL_R, 16, 16);
+const ballMesh = new THREE.Mesh(ballGeo, mat(C.ball, { rough: 0.3, metal: 0.1 }));
+ballMesh.castShadow = true;
+scene.add(ballMesh);
+
+const ballBody = new CANNON.Body({ mass: 0.5, material: ballMat });
+ballBody.addShape(new CANNON.Sphere(BALL_R));
+ballBody.position.set(CW / 2, BALL_R + 0.1, CH / 2);
+ballBody.linearDamping = 0.1;
+ballBody.angularDamping = 0.3;
+physWorld.addBody(ballBody);
+
+// === PADDLES ===
+function makePaddleMesh(color) {
+    const group = new THREE.Group();
+    const boxGeo = new THREE.BoxGeometry(PADDLE_W * 0.6, PADDLE_H, PADDLE_D);
+    const cylGeo = new THREE.CylinderGeometry(PADDLE_D / 2, PADDLE_D / 2, PADDLE_H, 8);
+    const m = mat(color, { rough: 0.4, metal: 0.1 });
+    const box = new THREE.Mesh(boxGeo, m);
+    const cylL = new THREE.Mesh(cylGeo, m);
+    const cylR = new THREE.Mesh(cylGeo, m);
+    cylL.position.x = -PADDLE_W * 0.3;
+    cylR.position.x = PADDLE_W * 0.3;
+    group.add(box, cylL, cylR);
+    group.children.forEach(c => { c.castShadow = true; c.receiveShadow = true; });
+    return group;
+}
+
+const playerMesh = makePaddleMesh(C.playerPaddle);
+playerMesh.position.set(CW / 2, PADDLE_H / 2, CH - 2.5);
+scene.add(playerMesh);
+
+const playerBody = new CANNON.Body({ mass: 0, material: paddleMat, type: CANNON.Body.KINEMATIC });
+playerBody.addShape(new CANNON.Box(new CANNON.Vec3(PADDLE_W / 2, PADDLE_H / 2, PADDLE_D / 2)));
+playerBody.position.set(CW / 2, PADDLE_H / 2, CH - 2.5);
+physWorld.addBody(playerBody);
+
+const aiMesh = makePaddleMesh(C.aiPaddle);
+aiMesh.position.set(CW / 2, PADDLE_H / 2, 2.5);
+scene.add(aiMesh);
+
+const aiBody = new CANNON.Body({ mass: 0, material: paddleMat, type: CANNON.Body.KINEMATIC });
+aiBody.addShape(new CANNON.Box(new CANNON.Vec3(PADDLE_W / 2, PADDLE_H / 2, PADDLE_D / 2)));
+aiBody.position.set(CW / 2, PADDLE_H / 2, 2.5);
+physWorld.addBody(aiBody);
+
+// === GAME STATE ===
+let aiScore = 0, playerScore = 0;
+let scoring = false;
+let playerTargetX = CW / 2;
+const playerHomeZ = CH - 2.5;
+const aiHomeZ = 2.5;
+
+// Bump
+const BUMP_DURATION = 150;
+const BUMP_DIST = 0.8;
+const BUMP_COOLDOWN = 400;
+const playerBump = { active: false, start: 0, cd: 0 };
+const aiBump = { active: false, start: 0, cd: 0 };
+
+function triggerBump(b) { if (b.cd <= 0 && !b.active) { b.active = true; b.start = performance.now(); b.cd = BUMP_COOLDOWN; } }
+
+function bumpOffset(b, dir, now) {
+    if (b.cd > 0) b.cd -= 16.67;
+    if (!b.active) return 0;
+    const e = now - b.start;
+    if (e >= BUMP_DURATION) { b.active = false; return 0; }
+    return dir * Math.sin((e / BUMP_DURATION) * Math.PI) * BUMP_DIST;
+}
+
+// === CONTROLS ===
+let touchStartX = 0, touchStartY = 0, touchStartTime = 0;
+const canvasEl = renderer.domElement;
+
+function inputToWorldX(clientX) {
+    const rect = canvasEl.getBoundingClientRect();
+    const nx = (clientX - rect.left) / rect.width;
+    return nx * CW;
+}
+
+canvasEl.addEventListener('touchstart', e => {
+    e.preventDefault();
+    const t = e.touches[0];
+    touchStartX = t.clientX; touchStartY = t.clientY;
+    touchStartTime = performance.now();
+    playerTargetX = inputToWorldX(t.clientX);
+});
+canvasEl.addEventListener('touchmove', e => {
+    e.preventDefault();
+    playerTargetX = inputToWorldX(e.touches[0].clientX);
+});
+canvasEl.addEventListener('touchend', e => {
+    e.preventDefault();
+    const t = e.changedTouches[0];
+    const el = performance.now() - touchStartTime;
+    const dx = Math.abs(t.clientX - touchStartX);
+    const dy = t.clientY - touchStartY;
+    if ((el < 200 && dx < 15) || dy < -30) triggerBump(playerBump);
+});
+canvasEl.addEventListener('mousemove', e => { playerTargetX = inputToWorldX(e.clientX); });
+canvasEl.addEventListener('click', () => triggerBump(playerBump));
+document.addEventListener('keydown', e => {
+    if (e.key === ' ') { e.preventDefault(); triggerBump(playerBump); }
+});
+
+// === AI ===
+function updateAI(now) {
+    const bv = ballBody.velocity;
+    let targetX;
+    if (bv.z < -1) { // ball heading toward AI
+        targetX = ballBody.position.x;
+        if (Math.abs(ballBody.position.z - aiHomeZ) < 3 && Math.random() < 0.02)
+            triggerBump(aiBump);
+    } else {
+        targetX = CW / 2;
+    }
+    const dx = targetX - aiBody.position.x;
+    const move = Math.max(-0.12, Math.min(0.12, dx * 0.04));
+    const newX = Math.max(1, Math.min(CW - 1, aiBody.position.x + move));
+    // FIX: AI bumps toward +z (toward center/player), not -z
+    const bz = bumpOffset(aiBump, 1, now);
+    aiBody.position.set(newX, PADDLE_H / 2, aiHomeZ + bz);
+    aiBody.velocity.set(move * 60, 0, bz * 60);
+}
+
+// === SCORING (distance-based, replaces unreliable cannon.js sensors) ===
+function checkGoals() {
+    if (scoring) return;
+    const bx = ballBody.position.x, bz = ballBody.position.z;
+    const inGoalX = bx >= GOAL_START && bx <= GOAL_END;
+
+    if (bz < -0.5 && inGoalX) {
+        // Ball passed through top goal (AI side) — player scores
+        playerScore++;
+        onScore(-1);
+    } else if (bz > CH + 0.5 && inGoalX) {
+        // Ball passed through bottom goal (player side) — AI scores
+        aiScore++;
+        onScore(1);
+    } else if (bz < -2 || bz > CH + 2) {
+        // Ball escaped off-court but NOT through goal — reset to center
+        resetBall(bz < CH / 2 ? 1 : -1);
+    }
+}
+
+function onScore(dir) {
+    scoring = true;
+    document.getElementById('score').textContent = `AI ${aiScore} - ${playerScore} YOU`;
+    setTimeout(() => resetBall(dir), 800);
+}
+
+function resetBall(dir) {
+    scoring = false;
+    ballBody.position.set(CW / 2, BALL_R + 0.5, CH / 2);
+    ballBody.velocity.set((Math.random() - 0.5) * 3, 0, dir * 5);
+    ballBody.angularVelocity.set(0, 0, 0);
+}
+
+// === BALL MANAGEMENT ===
+function manageBall() {
+    const v = ballBody.velocity;
+    const spd = Math.sqrt(v.x * v.x + v.z * v.z);
+
+    // Keep ball on floor
+    if (ballBody.position.y < BALL_R) {
+        ballBody.position.y = BALL_R;
+        if (v.y < 0) ballBody.velocity.y = 0;
+    }
+    // Cap height
+    if (ballBody.position.y > 4) {
+        ballBody.position.y = 3;
+        ballBody.velocity.y = -2;
+    }
+
+    // Speed management
+    const maxSpd = 10, minSpd = 1.5;
+    if (spd > maxSpd) {
+        const r = maxSpd / spd;
+        ballBody.velocity.x *= r;
+        ballBody.velocity.z *= r;
+    } else if (spd < minSpd && !scoring) {
+        const dir = ballBody.position.z < CH / 2 ? 1 : -1;
+        const a = Math.atan2(v.z || dir, v.x || (Math.random() - 0.5));
+        ballBody.velocity.x = Math.cos(a) * minSpd;
+        ballBody.velocity.z = Math.sin(a) * minSpd;
+    }
+
+    // Keep in X bounds
+    const x = ballBody.position.x;
+    if (x < 0.5) { ballBody.position.x = 0.5; ballBody.velocity.x = Math.abs(v.x); }
+    if (x > CW - 0.5) { ballBody.position.x = CW - 0.5; ballBody.velocity.x = -Math.abs(v.x); }
+}
+
+// === GAME LOOP ===
+function animate() {
+    const now = performance.now();
+
+    // Player paddle
+    const dx = playerTargetX - playerBody.position.x;
+    const move = dx * 0.2;
+    const newX = Math.max(1, Math.min(CW - 1, playerBody.position.x + move));
+    const bz = bumpOffset(playerBump, 1, now);
+    // Player bumps toward -z (toward center)
+    playerBody.position.set(newX, PADDLE_H / 2, playerHomeZ - bz);
+    playerBody.velocity.set(move * 60, 0, -bz * 60);
+
+    updateAI(now);
+
+    // Physics step
+    physWorld.step(1 / 60);
+
+    // Apply ramp slope physics (force-based, not Trimesh)
+    applyRampPhysics();
+
+    manageBall();
+
+    // Check goals (distance-based)
+    checkGoals();
+
+    // Sync meshes
+    ballMesh.position.copy(ballBody.position);
+    ballMesh.quaternion.copy(ballBody.quaternion);
+    playerMesh.position.copy(playerBody.position);
+    aiMesh.position.copy(aiBody.position);
+
+    // Obstacles
+    updateObstacles(now);
+
+    renderer.render(scene, camera);
+    requestAnimationFrame(animate);
+}
+
+// === START ===
+initObstacles();
+resetBall(Math.random() > 0.5 ? 1 : -1);
+animate();
+</script>
+</body>
+</html>

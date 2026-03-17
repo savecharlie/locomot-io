@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html><head>
+<meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no">
+<style>
+* { margin:0; padding:0; }
+body { background:#000; overflow:hidden; }
+video { display:block; width:100vw; height:100vh; object-fit:cover; transform:scaleX(-1); }
+</style>
+</head><body>
+<video id="v" playsinline muted></video>
+<script>
+const video = document.getElementById('v');
+
+async function startCam() {
+    const devices = await navigator.mediaDevices.enumerateDevices();
+    const cams = devices.filter(d => d.kind === 'videoinput');
+
+    const constraints = { video: { width: { ideal: 1280 }, height: { ideal: 720 } } };
+    if (cams.length > 1) {
+        constraints.video.deviceId = { exact: cams[1].deviceId };
+    }
+    const stream = await navigator.mediaDevices.getUserMedia(constraints);
+    video.srcObject = stream;
+    video.play();
+}
+startCam();
+</script>
+</body></html>
