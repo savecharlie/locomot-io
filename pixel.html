@@ -6404,7 +6404,12 @@ Canvas: ${state.canvasWidth}x${state.canvasHeight}`;
 
         function applyColorEditor() {
             const hex = hslToHex(colorEditorCurrentHsl.h, colorEditorCurrentHsl.s, colorEditorCurrentHsl.l);
+            if (!state.palette.includes(hex)) {
+                state.palette.push(hex);
+                document.getElementById('paletteSelect').value = 'custom';
+            }
             state.currentColor = hex;
+            renderPalette();
             updateCurrentColor();
             document.getElementById('colorEditorModal').classList.remove('active');
         }
