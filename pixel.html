@@ -344,6 +344,25 @@
             border-color: white;
         }
 
+        .palette-add-btn {
+            aspect-ratio: 1;
+            border: 2px dashed var(--text-dim);
+            border-radius: 4px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 20px;
+            color: var(--text-dim);
+            background: transparent;
+        }
+
+        .palette-add-btn:hover {
+            border-color: var(--accent);
+            color: var(--accent);
+            transform: scale(1.1);
+        }
+
         .current-colors {
             display: flex;
             gap: 8px;
@@ -540,6 +559,26 @@
 
         .mobile-palette-color.active {
             border-color: white;
+        }
+
+        .mobile-palette-add-btn {
+            width: 36px;
+            height: 36px;
+            border-radius: 6px;
+            border: 2px dashed var(--text-dim);
+            flex-shrink: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 18px;
+            color: var(--text-dim);
+            background: transparent;
+            cursor: pointer;
+        }
+
+        .mobile-palette-add-btn:hover {
+            border-color: var(--accent);
+            color: var(--accent);
         }
 
         /* Mobile dither colors */
@@ -3030,6 +3069,21 @@
                 mDiv.onclick = () => selectColor(color);
                 mobile.appendChild(mDiv);
             });
+
+            // Desktop "+" button
+            const addBtn = document.createElement('div');
+            addBtn.className = 'palette-add-btn';
+            addBtn.textContent = '+';
+            addBtn.title = 'Add color';
+            addBtn.onclick = openColorEditor;
+            grid.appendChild(addBtn);
+
+            // Mobile "+" button
+            const mAddBtn = document.createElement('div');
+            mAddBtn.className = 'mobile-palette-add-btn';
+            mAddBtn.textContent = '+';
+            mAddBtn.onclick = openColorEditor;
+            mobile.appendChild(mAddBtn);
 
             updateCurrentColor();
         }
